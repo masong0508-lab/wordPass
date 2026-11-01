@@ -132,10 +132,15 @@ decrease colour effect on the bitmap layer, windowed to the board strip with
 the card cut out), so no CPU time goes into dimming or snapshotting. The hot
 blitters (fills, gem blits, glyphs,
 outlines, particles, backdrop, board, panel) live in ITCM and the gem sprite
-cache, particles and popups in DTCM; the backdrop is skipped under gems that
-are fully redrawn, glyphs and gems are written directly after a single
-bounds test, and fills and blits use word-aligned 32-bit stores (the
-left-hand layout starts the grid on an even x for the same reason). Build
+cache, particles and popups in DTCM; every letter is pre-composited onto its
+gem (and onto a diamond) once per theme, so a resting gem is twenty 48-byte
+row moves, the backdrop is skipped under gems that are fully redrawn, glyphs
+and gems are written directly after a single bounds test, and fills and blits
+use word-aligned 32-bit stores (the left-hand layout starts the grid on an
+even x for the same reason). The floor glow is painted into the backdrop and
+only added over the three gems that reach into it, the note table is built
+from one octave of integers (no libm), and the HUD counters use a local itoa
+with the integer-only `siprintf` for the rest. Build
 with `-DWP_PROFILE` to expose per-stage timings in `dbgT[]`.
 
 ## Building

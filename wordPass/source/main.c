@@ -20,7 +20,7 @@ static void startShelf(void)
     gfxFadeIn();
     musicNewShelf(G.shelf, G.lockdown);
     char s[32];
-    sprintf(s, "FIND THE %d LETTER PASS", G.passLen);
+    siprintf(s, "FIND THE %d LETTER PASS", G.passLen);
     setMsg(s, 180);
 }
 
@@ -114,7 +114,7 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
                 gfxPopup(c, r, "FOUND", 1);
                 musicReveal(true);
                 if (boardPassComplete(&G)) {
-                    char s[32]; sprintf(s, "SHELF %d CLEARED", G.shelf); setMsg(s, 400);
+                    char s[32]; siprintf(s, "SHELF %d CLEARED", G.shelf); setMsg(s, 400);
                 } else setMsg("PASS LETTER FOUND", 90);
             } else if (res == 1) musicReveal(false);
             else if (res == 3) { setMsg("SCORCHED", 60); gfxBurst(c, r, BURST_SCORCH); gfxShake(6); }
@@ -146,12 +146,12 @@ submit:;
         int gained = boardSubmit(&G);
         if (gained > 0) {
             for (int i = 0; i < cn; i++) gfxBurst(cc[i], cr[i], BURST_SHATTER);
-            char ps[12]; sprintf(ps, "+%d", gained);
+            char ps[12]; siprintf(ps, "+%d", gained);
             gfxPopup(cc[cn / 2], cr[cn / 2], ps, 1);
             musicWord(G.lastWordLen, gained);
             char s[32];
             const char *tag = G.lastWordLen >= 8 ? "SPECTACULAR" : G.lastWordLen >= 7 ? "EXCELLENT" : G.lastWordLen >= 5 ? "GOOD" : "";
-            if (tag[0]) { sprintf(s, "%s!", tag); setMsg(s, 60); }
+            if (tag[0]) { siprintf(s, "%s!", tag); setMsg(s, 60); }
             if (G.fail) enterFail();
         } else if (G.chainLen >= 3) {
             setMsg("NOT IN THE LIBRARY", 45);

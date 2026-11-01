@@ -1,7 +1,6 @@
 // Dynamic chiptune: a fixed four-bar hook with stems mixed by game state.
 // Uses the DS PSG channels directly, no samples, so stems mute for free.
 #include "game.h"
-#include <math.h>
 #include <stdlib.h>
 
 #define STEP_FRAMES 8          // one 16th note = 8 frames (112.5 BPM)
@@ -60,7 +59,13 @@ static void setVoice(int v, int note, int vol)
 
 void musicInit(void)
 {
-    for (int n = 0; n < 128; n++) noteHz[n] = (u16)(440.0 * pow(2.0, (n - 69) / 12.0) + 0.5);
+    // equal-tempered table from one octave of integer frequencies: each lower octave is a
+    // rounded halving, each higher one a doubling (no pow(), no libm): C4 = 262, A4 = 440
+    static const u16 OCT8[12] = { 4186, 4435, 4699, 4978, 5274, 5588, 5920, 6272, 6645, 7040, 7459, 7902 };
+    for (int n = 0; n < 128; n++) {
+        int s = 9 - n / 12;            // C8 (4186 Hz) is MIDI note 108
+        noteHz[n] = s > 0 ? (u16)((OCT8[n % 12] + (1 << (s - 1))) >> s) : (u16)(OCT8[n % 12] << -s);
+    }
     soundEnable();
     static const DutyCycle duty[NVOICE] = {
         DutyCycle_25, DutyCycle_12, DutyCycle_50, DutyCycle_37, DutyCycle_12, DutyCycle_50, DutyCycle_50

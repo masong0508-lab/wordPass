@@ -23,7 +23,8 @@ check visuals. Coordinates: CLASSIC button (52,147), DAILY (120,147), OPTIONS (8
 cell centres via `e.center(c, r)`.
 
 ## Rules
-- Keep play at 60 fps: `Emu.fps()` must return 120 for 120 cycles in play. Build with
-  `-DWP_PROFILE` (add to CFLAGS) to read per-stage timings from `dbgT`.
+- Keep play at 60 fps: `Emu.fps()` must return 120 for 120 cycles in play. Build a copy of
+  the tree with `-DWP_PROFILE` (add to CFLAGS) and run `python3 tools/emu/prof.py <copy>`
+  to read the per-stage timings in `dbgT` (board stage: ~73k idle, effects ~6k with fire).
 - `debugSync()` in `source/debug.c` must be kept in sync if you add state the tests need.
 - Commit after each verified change with a descriptive message.

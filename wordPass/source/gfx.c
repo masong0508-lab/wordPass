@@ -176,8 +176,9 @@ static void roundRect(int x, int y, int w, int h, u16 col)
     fillRect(x + 1, y + 1, w - 2, h - 2, col);
 }
 
-// blend two RGB15 colours, t in 0..16
-static u16 lerp15(u16 a, u16 b, int t)
+// blend two RGB15 colours, t in 0..16 (signed, truncating division: the gem gradients and
+// every cached sprite depend on this exact rounding)
+static inline u16 lerp15(u16 a, u16 b, int t)
 {
     int ar = a & 31, ag = (a >> 5) & 31, ab = (a >> 10) & 31;
     int br = b & 31, bg = (b >> 5) & 31, bb = (b >> 10) & 31;
@@ -240,6 +241,20 @@ static void drawText(int x, int y, const char *s, u16 col, int scale)
 {
     if (y >= clipY1 || y + 7 * scale <= clipY0) return;   // whole line outside the slice
     for (; *s; s++) { drawChar(x, y, *s, col, scale); x += 6 * scale; }
+}
+
+// decimal itoa for the per-frame HUD counters (siprintf, the integer-only newlib formatter,
+// stays for the multi-field overlay strings: no float printf or dtoa in the ROM)
+static char *fmtInt(char *buf, int v)
+{
+    char tmp[12]; int n = 0;
+    unsigned u = v < 0 ? 0u - (unsigned)v : (unsigned)v;
+    do { tmp[n++] = (char)('0' + u % 10); u /= 10; } while (u);
+    char *p = buf;
+    if (v < 0) *p++ = '-';
+    while (n) *p++ = tmp[--n];
+    *p = 0;
+    return buf;
 }
 
 static int textWidth(const char *s, int scale) { return (int)strlen(s) * 6 * scale - scale; }
@@ -323,11 +338,26 @@ static const GemPal *GEM_PALS[NGEMPAL];
 static ALIGN(4) u16 plaqueCache[PLAQUE_H][PLAQUE_W];
 _Static_assert((PLAQUE_W * 2) % 4 == 0, "plaque rows must be word multiples");
 
-static int gemIndex(const GemPal *p)
+// gem cache index per letter (replaces groupFor + a palette search in the board loop)
+static u8 palOf[26];
+// heat bar gradient, one entry per bar pixel, rebuilt when the frame colours change
+#define HEAT_W 70
+static u16 heatTop[HEAT_W], heatBody[HEAT_W];
+static void buildHeatTables(void)
 {
-    for (int i = 0; i < NGEMPAL; i++) if (GEM_PALS[i] == p) return i;
-    return 0;
+    for (int i = 0; i < HEAT_W; i++) {
+        heatTop[i] = lerp15(GOLD, FIRE1, i * 16 / HEAT_W);
+        heatBody[i] = lerp15(GOLD_DK, FIRE1, i * 16 / HEAT_W);
+    }
 }
+// Letter-on-gem composites: rows 1..20 of every letter gem and every diamond letter,
+// fully opaque, copied to the board with 12-word row moves. Rows 0 and 21 are left to the
+// backdrop because the accent dot grid is painted after the per-cell fills and shows
+// through those (transparent) rows; columns 0 and 23 are black, which matches the
+// backdrop since no dot column coincides with a gem edge column in either hand layout.
+#define COMP_ROWS 20
+typedef struct { u32 w[TILE_W / 2]; } GemRow;
+static ALIGN(4) GemRow gemLetter[26][COMP_ROWS], diamondLetter[26][COMP_ROWS];
 
 static void setupTheme(void)
 {
@@ -340,26 +370,73 @@ static void setupTheme(void)
         case FRAME_ACCENT: frameMid = accent; frameDk = lerp15(accent, BLACK, 9); frameLt = lerp15(accent, WHITE, 8); break;
         default:           frameMid = C(28,22,6); frameDk = C(16,11,2); frameLt = C(31,29,18); break;
     }
+    static const u8 groupToPal[5] = { 0, 1, 3, 4, 2 };   // letter group -> GEM_PALS slot
+    for (int l = 0; l < 26; l++) palOf[l] = groupToPal[groupFor(l)];
+    buildHeatTables();
 }
 
+static void drawLetter(int x, int y, int letter, u16 col, u16 shadow);
+
+// clear a w x h block at the top-left of the render target to 0 (transparent)
+static void clearScratch(int w, int h)
+{
+    for (int j = 0; j < h; j++) for (int k = 0; k < w; k++) cur[j * SCREEN_W + k] = 0;
+}
+
+// render one letter gem at (0,0) and keep rows 1..20 as an opaque composite
+static void buildComposite(GemRow *out, const GemPal *p, int letter, u16 col, u16 shadow)
+{
+    clearScratch(TILE_W, TILE_H);
+    drawGemSized(0, 0, TILE_W, TILE_H, p, false);
+    drawLetter(0, 0, letter, col, shadow);
+    for (int j = 0; j < COMP_ROWS; j++) {
+        u16 *row = (u16 *)out[j].w;
+        const u16 *src = cur + (j + 1) * SCREEN_W;
+        for (int k = 0; k < TILE_W; k++) row[k] = src[k] ? src[k] : BLACK;
+    }
+}
+
+// Sprites are rendered into the hidden VRAM bank at (0,0) and copied out; the next frame
+// repaints the whole bank, so no RAM scratch buffer is needed.
 static void buildGemCache(void)
 {
     setupTheme();
-    _Static_assert(PLAQUE_H >= TILE_H, "scratch must hold the tallest cached sprite");
-    static u16 scratch[PLAQUE_H][SCREEN_W];   // row stride must match SCREEN_W for the primitives
     u16 *saved = cur;
+    int c0 = clipY0, c1 = clipY1;
+    cur = vramBack; clipY0 = 0; clipY1 = SCREEN_H;
     for (int i = 0; i < NGEMPAL; i++) {
-        cur = &scratch[0][0];
-        for (int j = 0; j < TILE_H; j++) for (int k = 0; k < TILE_W; k++) scratch[j][k] = 0;   // 0 = transparent
+        clearScratch(TILE_W, TILE_H);
         drawGemSized(0, 0, TILE_W, TILE_H, GEM_PALS[i], false);
-        for (int j = 0; j < TILE_H; j++) for (int k = 0; k < TILE_W; k++) gemCache[i][j][k] = scratch[j][k];
+        for (int j = 0; j < TILE_H; j++) for (int k = 0; k < TILE_W; k++) gemCache[i][j][k] = cur[j * SCREEN_W + k];
     }
-    cur = &scratch[0][0];
-    for (int j = 0; j < PLAQUE_H; j++) for (int k = 0; k < PLAQUE_W; k++) scratch[j][k] = 0;
+    clearScratch(PLAQUE_W, PLAQUE_H);
     drawGemSized(0, 0, PLAQUE_W, PLAQUE_H, &GEM_DIAMOND, false);
-    for (int j = 0; j < PLAQUE_H; j++) for (int k = 0; k < PLAQUE_W; k++) plaqueCache[j][k] = scratch[j][k];
-    cur = saved;
+    for (int j = 0; j < PLAQUE_H; j++) for (int k = 0; k < PLAQUE_W; k++) plaqueCache[j][k] = cur[j * SCREEN_W + k];
+    for (int l = 0; l < 26; l++) {
+        const GemPal *p = GEM_PALS[palOf[l]];
+        buildComposite(gemLetter[l], p, l, C(31,31,29), p->dark);
+        buildComposite(diamondLetter[l], &GEM_DIAMOND, l, C(4,6,10), C(20,22,26));
+    }
+    cur = saved; clipY0 = c0; clipY1 = c1;
     gemCacheReady = true;
+}
+
+// copy a 20-row composite to (x, y): x is even in both layouts, so every row is one
+// aligned 48-byte move (two ldm/stm pairs); the caller has checked the clip band
+static ITCM_CODE __attribute__((noinline)) void blitComposite(const GemRow *src, int x, int y)
+{
+    u32 *d = (u32 *)(cur + y * SCREEN_W + x);
+    const u32 *sp = (const u32 *)src;
+    for (int j = 0; j < COMP_ROWS; j++, d += SCREEN_W / 2) {
+        u32 *dd = d, r0, r1, r2, r3, r4, r5;
+        asm volatile(
+            "ldmia %0!, {%2, %3, %4, %5, %6, %7}\n\t"
+            "stmia %1!, {%2, %3, %4, %5, %6, %7}\n\t"
+            "ldmia %0!, {%2, %3, %4, %5, %6, %7}\n\t"
+            "stmia %1, {%2, %3, %4, %5, %6, %7}"
+            : "+r"(sp), "+r"(dd), "=&r"(r0), "=&r"(r1), "=&r"(r2), "=&r"(r3), "=&r"(r4), "=&r"(r5)
+            : : "memory");
+    }
 }
 
 // blit a cached gem; colour 0 is transparent (the rounded corners)
@@ -620,11 +697,9 @@ int gfxOptionRowAt(int x, int y)
 
 // ---------------------------------------------------------------- board
 
-static bool inChain(const Game *g, int c, int r)
-{
-    for (int i = 0; i < g->chainLen; i++) if (g->chainC[i] == c && g->chainR[i] == r) return true;
-    return false;
-}
+// chain membership as a bit set (bit c*ROWS+r), built once per frame in gfxFrame
+static u64 chainMask;
+static inline bool inChain(int c, int r) { return (u32)(chainMask >> (c * ROWS + r)) & 1; }
 
 static void drawLetter(int x, int y, int letter, u16 col, u16 shadow)
 {
@@ -636,7 +711,28 @@ static void drawLetter(int x, int y, int letter, u16 col, u16 shadow)
     }
 }
 
-static bool inChain(const Game *g, int c, int r);
+// Floor glow as fire gets low: red added to the bottom twelve rows of the strip. Where the
+// band is backdrop it is painted as a fill in drawBackdrop (no VRAM reads); the three
+// odd-column bottom gems that reach into it get an additive pass in drawDanger.
+#define DANGER_ROWS 12
+#define DANGER_W 169                 // x BX(2) .. BX(170): 21 quads + 1 pixel
+static u8 dangerA[DANGER_ROWS];      // red to add per band row j (y = SCREEN_H - 2 - j)
+static int dangerRows;               // active rows this frame (0 = no glow)
+
+static void dangerSetup(const Game *g)
+{
+    dangerRows = 0;
+    if (g->state != ST_PLAY) return;
+    int low = boardLowestFireRow(g);
+    if (low < 4) return;
+    int strength = (low - 3) * 4 + ((frame & 16) ? 2 : 0);   // 4..18
+    for (int j = 0; j < DANGER_ROWS; j++) {
+        int a = (strength * (DANGER_ROWS - j)) / DANGER_ROWS;
+        if (a <= 0) break;
+        dangerA[j] = (u8)(a > 12 ? 12 : a);
+        dangerRows = j + 1;
+    }
+}
 
 // N+ dot grid behind the gems (dots under solid gems are hidden anyway)
 static ITCM_CODE __attribute__((noinline)) void drawBoardDots(void)
@@ -672,18 +768,18 @@ static ITCM_CODE __attribute__((noinline)) void drawBackdrop(const Game *g)
             const Cell *cl = &g->cell[c][r];
             int y = top + r * TILE_H;
             bool solid = (cl->state == CELL_TILE || cl->state == CELL_SECRET) && cl->yoff == 0 && !cl->squash && !cl->flash
-                         && !g->peekHeld && !inChain(g, c, r);
+                         && !g->peekHeld && !inChain(c, r);
             if (solid) {
-                // only the rounded-corner pixels and the one-pixel rim show through
+                // drawBoard paints such a cell with an opaque 20-row composite (rows 1..20,
+                // edge columns included), so only rows 0 and 21 are left to the backdrop
                 fillRect(x, y, TILE_W, 1, BLACK); fillRect(x, y + TILE_H - 1, TILE_W, 1, BLACK);
-                for (int j = 1; j < TILE_H - 1; j++) { cur[(y + j) * SCREEN_W + x] = BLACK; cur[(y + j) * SCREEN_W + x + TILE_W - 1] = BLACK; }
-                cur[(y + 1) * SCREEN_W + x + 1] = BLACK; cur[(y + 1) * SCREEN_W + x + TILE_W - 2] = BLACK;
-                cur[(y + TILE_H - 2) * SCREEN_W + x + 1] = BLACK; cur[(y + TILE_H - 2) * SCREEN_W + x + TILE_W - 2] = BLACK;
             } else {
                 fillRect(x, y, TILE_W, TILE_H, BLACK);
             }
         }
     }
+    // floor glow over the backdrop (gems drawn later cover their part of it)
+    for (int j = 0; j < dangerRows; j++) fillRect(BX(2), SCREEN_H - 2 - j, DANGER_W, 1, C(1 + dangerA[j], 1, 2));
     drawBoardDots();
 }
 
@@ -695,7 +791,7 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
             const Cell *cl = &g->cell[c][r];
             int x, y; cellOrigin(c, r, &x, &y);
             int yd = y + YOFF_PX(cl);
-            bool lit = inChain(g, c, r);
+            bool lit = inChain(c, r);
             if (lit) yd -= 2;
             int sq = cl->squash;           // landing squash: shorter, sits on the slot floor
             if (sq == SQUASH_MAX && g->state == ST_PLAY) {
@@ -721,9 +817,13 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
                     break;
                 }
                 case CELL_SECRET: {
-                    if (sq) drawGemSized(x, yd + sq, TILE_W, TILE_H - sq, &GEM_DIAMOND, lit);
-                    else { blitGem(x, yd, 5); if (lit) { rectOutline(x, yd, TILE_W, TILE_H, WHITE); rectOutline(x + 1, yd + 1, TILE_W - 2, TILE_H - 2, WHITE); } }
-                    drawLetter(x, yd + sq / 2, cl->letter, C(4,6,10), C(20,22,26));
+                    if (!sq && !lit && !cl->flash && yd + 1 >= clipY0 && yd + 1 + COMP_ROWS <= clipY1) {
+                        blitComposite(diamondLetter[cl->letter], x, yd + 1);   // gem and letter in one move
+                    } else {
+                        if (sq) drawGemSized(x, yd + sq, TILE_W, TILE_H - sq, &GEM_DIAMOND, lit);
+                        else { blitGem(x, yd, 5); if (lit) { rectOutline(x, yd, TILE_W, TILE_H, WHITE); rectOutline(x + 1, yd + 1, TILE_W - 2, TILE_H - 2, WHITE); } }
+                        drawLetter(x, yd + sq / 2, cl->letter, C(4,6,10), C(20,22,26));
+                    }
                     // travelling sparkle across the diamond
                     int sx = x + 3 + ((frame + c * 5 + r * 9) % 40) / 2;
                     if (sx < x + TILE_W - 3) { px(sx, yd + 2, WHITE); px(sx - 1, yd + 3, WHITE); }
@@ -756,11 +856,14 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
                         drawGemOutline(x, yd);
                         drawChar(x + 10, yd + 8, 'A' + cl->letter, DIM, 1);
                         if (cl->letter == 'q' - 'a') drawChar(x + 15, yd + 8, 'U', DIM, 1);
+                    } else if (!sq && !lit && !cl->flash && yd + 1 >= clipY0 && yd + 1 + COMP_ROWS <= clipY1) {
+                        blitComposite(gemLetter[cl->letter], x, yd + 1);   // the common case: one 48-byte move per row
                     } else {
-                        const GemPal *p = gemFor(cl->letter);
+                        int pal = palOf[cl->letter];
+                        const GemPal *p = GEM_PALS[pal];
                         if (sq) drawGemSized(x, yd + sq, TILE_W, TILE_H - sq, p, lit);
                         else {
-                            blitGem(x, yd, gemIndex(p));
+                            blitGem(x, yd, pal);
                             if (lit) { rectOutline(x, yd, TILE_W, TILE_H, WHITE); rectOutline(x + 1, yd + 1, TILE_W - 2, TILE_H - 2, lerp15(WHITE, p->light, 8)); }
                         }
                         drawLetter(x, yd + sq / 2, cl->letter, lit ? WHITE : C(31,31,29), p->dark);
@@ -792,17 +895,41 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
     }
 }
 
-// red glow creeping up from the floor as fire gets low
-static void drawDanger(const Game *g)
+typedef struct { u32 w[4]; } Quad;
+// add a (same value in both halves) to the red channel of two pixels, saturating at 31
+static inline u32 glow2(u32 v, u32 a2)
 {
-    int low = boardLowestFireRow(g);
-    if (low < 4 || g->state != ST_PLAY) return;
-    int strength = (low - 3) * 4 + ((frame & 16) ? 2 : 0);   // 4..18
-    for (int j = 0; j < 12; j++) {
-        int a = (strength * (12 - j)) / 12;
-        if (a <= 0) continue;
-        int y = SCREEN_H - 2 - j;
-        for (int x = BX(2); x < BX(171); x += 1 + (j & 1)) px(x, y, lerp15(cur[y * SCREEN_W + x], FIRE1, a > 16 ? 16 : a));
+    u32 r = (v & 0x001F001Fu) + a2;                  // at most 31 + 12 per half: no carry across
+    u32 m = r & 0x00200020u;                         // overflow bit per half ...
+    r = (r | (m - (m >> 5))) & 0x001F001Fu;          // ... becomes a 0x1F saturation mask
+    return (v & 0xFFE0FFE0u) | r;
+}
+// Additive glow over the gems that reach into the band: only the odd-column bottom row
+// does (composite rows y+1..y+20 = 168..187; the band starts at 179). A gem drawn through
+// the opaque path (composite, or a burning gem with its full rim) is tinted in place; a
+// lit, squashed or flashing gem there briefly goes untinted rather than reading more VRAM.
+static ITCM_CODE __attribute__((noinline)) void drawDanger(const Game *g)
+{
+    if (!dangerRows || g->peekHeld) return;
+    for (int c = 1; c < COLS; c += 2) {
+        const Cell *cl = &g->cell[c][ROWS - 1];
+        bool gem = cl->state == CELL_TILE || cl->state == CELL_SECRET || cl->state == CELL_BURN;
+        bool opaque = gem && !cl->squash && !cl->flash && (cl->state == CELL_BURN || !inChain(c, ROWS - 1));
+        if (!opaque) continue;
+        int x, y; cellOrigin(c, ROWS - 1, &x, &y);
+        int top = y + YOFF_PX(cl) + 1, bot = y + YOFF_PX(cl) + COMP_ROWS;   // first and last opaque row
+        for (int j = 0; j < dangerRows; j++) {
+            int yy = SCREEN_H - 2 - j;
+            if (yy > bot || yy < top) continue;
+            u32 a2 = dangerA[j] | ((u32)dangerA[j] << 16);
+            Quad *p = (Quad *)(cur + yy * SCREEN_W + x);           // x is even: aligned quads
+            for (int i = 0; i < TILE_W / 8; i++) {                 // eight pixels per ldm/stm burst
+                Quad q = p[i];
+                q.w[0] = glow2(q.w[0], a2); q.w[1] = glow2(q.w[1], a2);
+                q.w[2] = glow2(q.w[2], a2); q.w[3] = glow2(q.w[3], a2);
+                p[i] = q;
+            }
+        }
     }
 }
 
@@ -814,9 +941,8 @@ static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
     else fillRect(PANEL_X - 2, 0, SCREEN_W - PANEL_X + 2, SCREEN_H, BLACK);
     drawLogo(PANEL_X, 6, 1);
     char s[32];
-    sprintf(s, "%d", g->score);
-    drawTextShadow(PANEL_X, 22, s, GOLD, 2);
-    sprintf(s, "SHELF %d", g->shelf);
+    drawTextShadow(PANEL_X, 22, fmtInt(s, g->score), GOLD, 2);
+    strcpy(s, "SHELF "); fmtInt(s + 6, g->shelf);
     drawText(PANEL_X, 42, s, INK, 1);
     if (g->mode == MODE_DAILY) drawText(PANEL_X, 52, "DAILY", GOLD_LT, 1);
     else drawText(PANEL_X, 52, g->lockdown ? "LOCKDOWN" : "CLASSIC", g->lockdown ? FIRE1 : ACCENT, 1);
@@ -829,9 +955,13 @@ static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
 
     // heat: small flame glyph grows with the bar
     drawText(PANEL_X, 98, "HEAT", DIM, 1);
-    int hw = 70 * g->heat / (g->heatThreshold ? g->heatThreshold : 1);
+    int hw = HEAT_W * g->heat / (g->heatThreshold ? g->heatThreshold : 1);
+    if (hw > HEAT_W) hw = HEAT_W;
     rectOutline(PANEL_X, 108, 72, 6, DIM);
-    for (int i = 0; i < hw; i++) px(PANEL_X + 1 + i, 109, lerp15(GOLD, FIRE1, i * 16 / 70)), fillRect(PANEL_X + 1 + i, 110, 1, 3, lerp15(GOLD_DK, FIRE1, i * 16 / 70));
+    {   // rows 109..112, precomputed gradient (the panel is always inside the touch screen)
+        u16 *row = cur + 109 * SCREEN_W + PANEL_X + 1;
+        for (int i = 0; i < hw; i++) { row[i] = heatTop[i]; row[SCREEN_W + i] = heatBody[i]; row[2 * SCREEN_W + i] = heatBody[i]; row[3 * SCREEN_W + i] = heatBody[i]; }
+    }
     if (hw > 50 && (frame & 8)) drawText(PANEL_X + 30, 98, "!", FIRE2, 1);
 
     // submit button: jeweled, pulses when a valid word is chained
@@ -869,8 +999,8 @@ static void drawTopTitle(void)
         drawTextCenter(128, 108, "FIRE SETS HOW FAST THE SHELF BURNS", INK, 1);
         drawTextCenter(128, 130, "TAP A ROW OR USE THE D-PAD", DIM, 1);
         char s[40];
-        if (S.bestClassic) { sprintf(s, "BEST CLASSIC %d  SHELF %d", S.bestClassic, S.bestClassicShelf); drawTextCenter(128, 150, s, DIM, 1); }
-        if (S.bestDaily)   { sprintf(s, "BEST DAILY %d ON %d", S.bestDaily, S.bestDailyDate); drawTextCenter(128, 160, s, DIM, 1); }
+        if (S.bestClassic) { siprintf(s, "BEST CLASSIC %d  SHELF %d", S.bestClassic, S.bestClassicShelf); drawTextCenter(128, 150, s, DIM, 1); }
+        if (S.bestDaily)   { siprintf(s, "BEST DAILY %d ON %d", S.bestDaily, S.bestDailyDate); drawTextCenter(128, 160, s, DIM, 1); }
         return;
     }
     drawTipCard((frame / 150) % 3);
@@ -912,11 +1042,10 @@ static void drawTop(const Game *g)
 
     drawLogo(16, 16, 2);
     char s[40];
-    if (g->mode == MODE_DAILY) sprintf(s, "DAILY %d", g->dailySeed % 10000);   // MMDD
-    else sprintf(s, "SHELF %d", g->shelf);
+    if (g->mode == MODE_DAILY) { strcpy(s, "DAILY "); fmtInt(s + 6, g->dailySeed % 10000); }   // MMDD
+    else { strcpy(s, "SHELF "); fmtInt(s + 6, g->shelf); }
     drawText(170, 18, s, INK, 1);
-    sprintf(s, "%d", g->score);
-    drawText(170, 28, s, GOLD, 1);
+    drawText(170, 28, fmtInt(s, g->score), GOLD, 1);
 
     // the pass: gem-cut blanks that pop when found
     int n = g->passLen, bw = PLAQUE_W, gap = 4;
@@ -950,7 +1079,7 @@ static void drawTop(const Game *g)
         char lw[16]; strcpy(lw, g->lastWord);
         for (char *p = lw; *p; p++) *p -= 32;
         drawTextCenter(SCREEN_W / 2, 100, lw, INK, 2);
-        sprintf(s, "+%d", g->lastWordScore);
+        s[0] = '+'; fmtInt(s + 1, g->lastWordScore);
         drawTextCenter(SCREEN_W / 2, 118, s, GOLD, 1);
     }
 
@@ -1012,8 +1141,8 @@ static void drawTitle(const Game *g)
     rectOutline(BX(54), TB_Y + 26, 64, 20, DIM);
     drawTextCenter(BX(86), TB_Y + 32, "OPTIONS", INK, 1);
     char s[32];
-    if (S.bestClassic) { sprintf(s, "BEST %d", S.bestClassic); drawText(BX(20), 180, s, DIM, 1); }
-    if (S.bestDaily)   { sprintf(s, "DAILY %d", S.bestDaily); drawText(BX(152) - textWidth(s, 1), 180, s, DIM, 1); }
+    if (S.bestClassic) { siprintf(s, "BEST %d", S.bestClassic); drawText(BX(20), 180, s, DIM, 1); }
+    if (S.bestDaily)   { siprintf(s, "DAILY %d", S.bestDaily); drawText(BX(152) - textWidth(s, 1), 180, s, DIM, 1); }
 }
 
 static const char *const OPT_NAMES[OPT_ROWS] = { "THEME", "FRAME", "ACCENT", "HAND", "FIRE", "MUSIC" };
@@ -1042,7 +1171,7 @@ static void drawOptions(const Game *g)
         }
         if (i == sel) { fillRect(BX(12), y - 2, 148, OPT_DY - 1, lerp15(BLACK, ACCENT, 4)); rectOutline(BX(12), y - 2, 148, OPT_DY - 1, ACCENT); }
         drawText(BX(18), y + 2, OPT_NAMES[i], i == sel ? WHITE : INK, 1);
-        char v[16]; sprintf(v, "< %s >", val);
+        char v[16]; siprintf(v, "< %s >", val);
         drawText(BX(154) - textWidth(v, 1), y + 2, v, i == sel ? ACCENT : INK, 1);
     }
     // swatches: the five letter gems in the current theme
@@ -1141,19 +1270,19 @@ static void drawOverlay(const Game *g)
         for (char *p = lw; *p; p++) if (*p >= 'a') *p -= 32;
         drawText(BX(lx), rowy, "BEST WORD", DIM, 1);
         drawText(BX(rx - textWidth(lw, 1)), rowy, lw, WHITE, 1); rowy += 10;
-        sprintf(s, "+%d", g->bestWordScore);
+        siprintf(s, "+%d", g->bestWordScore);
         drawText(BX(rx - textWidth(s, 1)), rowy, s, GOLD, 1); rowy += 14;
-        drawText(BX(lx), rowy, "WORDS", DIM, 1); sprintf(s, "%d", g->wordsThisShelf);
+        drawText(BX(lx), rowy, "WORDS", DIM, 1); siprintf(s, "%d", g->wordsThisShelf);
         drawText(BX(rx - textWidth(s, 1)), rowy, s, WHITE, 1); rowy += 10;
-        drawText(BX(lx), rowy, "PEELS", DIM, 1); sprintf(s, "%d", g->peels);
+        drawText(BX(lx), rowy, "PEELS", DIM, 1); siprintf(s, "%d", g->peels);
         drawText(BX(rx - textWidth(s, 1)), rowy, s, g->peels <= g->passLen + 2 ? ACCENT : WHITE, 1); rowy += 10;
-        drawText(BX(lx), rowy, "TURNS", DIM, 1); sprintf(s, "%d", g->turn);
+        drawText(BX(lx), rowy, "TURNS", DIM, 1); siprintf(s, "%d", g->turn);
         drawText(BX(rx - textWidth(s, 1)), rowy, s, WHITE, 1); rowy += 14;
         hline(BX(lx), rowy - 5, cw - 20, DIM);
-        drawText(BX(lx), rowy, "SHELF BONUS", DIM, 1); sprintf(s, "+%d", 500 * g->shelf);
+        drawText(BX(lx), rowy, "SHELF BONUS", DIM, 1); siprintf(s, "+%d", 500 * g->shelf);
         drawText(BX(rx - textWidth(s, 1)), rowy, s, GOLD_LT, 1); rowy += 14;
-        if (g->mode == MODE_DAILY) { sprintf(s, "FINAL %d", g->score); drawTextCenter(BX(cx), rowy, s, GOLD_LT, 1); }
-        else { sprintf(s, "SHELF %d OPEN", g->shelf + 1); drawTextCenter(BX(cx), rowy, s, ACCENT, 1); }
+        if (g->mode == MODE_DAILY) { siprintf(s, "FINAL %d", g->score); drawTextCenter(BX(cx), rowy, s, GOLD_LT, 1); }
+        else { siprintf(s, "SHELF %d OPEN", g->shelf + 1); drawTextCenter(BX(cx), rowy, s, ACCENT, 1); }
         if (t > 30 && (frame & 32)) drawTextCenter(BX(cx), cy + ch - 12, "TAP TO CONTINUE", INK, 1);
     } else if (g->state == ST_FAIL) {
         overlayCard(BX(16), 66, 140, 60);
@@ -1195,8 +1324,14 @@ void gfxFrame(const Game *g)
 {
     frame++;
     accent = S.accent ? SHELF_ACCENTS[(S.accent - 1) % 8] : SHELF_ACCENTS[(g->shelf > 0 ? g->shelf - 1 : 0) % 8];
-    if (S.frame == FRAME_ACCENT) { frameMid = accent; frameDk = lerp15(accent, BLACK, 9); frameLt = lerp15(accent, WHITE, 8); }
+    if (S.frame == FRAME_ACCENT && frameMid != accent) {   // the shelf accent changed
+        frameMid = accent; frameDk = lerp15(accent, BLACK, 9); frameLt = lerp15(accent, WHITE, 8);
+        buildHeatTables();
+    }
     boardChainWord(g, chainWordNow);
+    dangerSetup(g);
+    chainMask = 0;
+    for (int i = 0; i < g->chainLen; i++) chainMask |= (u64)1 << (g->chainC[i] * ROWS + g->chainR[i]);
     chainValidNow = g->chainLen >= 3 && dictLookup(chainWordNow, strlen(chainWordNow));
     // per-letter pop timers for the pass plaque
     for (int i = 0; i < g->passLen; i++) {
