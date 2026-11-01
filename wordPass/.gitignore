@@ -5,3 +5,4 @@ build/
 # Remove the next line if you prefer to commit it.
 !wordPass.nds
 
+__pycache__/
