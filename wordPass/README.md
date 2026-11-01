@@ -186,14 +186,28 @@ three. Daily Pass has no bookmarks: one attempt.
 | Tap the last gem again | submit a valid word (it wears a gold ring) |
 | Tap an earlier gem | cut the chain back to it |
 | Tap a gem away from the chain | start a new chain there |
-| A / SUBMIT button | submit word |
-| B / CLEAR button | clear chain |
+| A / SUBMIT button | submit word (with the d-pad cursor shown: chain the gem under it) |
+| B | step the chain back one gem; hold 20 frames to clear it |
+| CLEAR button / Y | clear chain |
+| D-pad | move the hex cursor (see below) |
 | Hold L or R | peek mode (touch a gem to arm it, lift to peel it; slide away to cancel) |
-| X / PEEK button | latch peek on for one peel (press again to cancel) |
+| X / PEEK button | latch peek on for one peel (press again to cancel); with the cursor shown, A then peels the gem under it |
 | START | pause (then START resume, SELECT restart shelf for one bookmark, B quit to title) |
 | Y (title) | options |
 | X (title) | THE LEDGER |
 | SELECT (title) | Daily Pass |
+
+### Playing with buttons only
+
+The whole game plays without the stylus. Press the d-pad and a cursor appears
+on the board (a white and accent rim with a notch above it); up and down move
+it a row, left and right a column, and it steps half a gem when the column
+changes parity. **A** chains the gem under the cursor (it must touch the tail:
+a flash of red says it does not), and **A** on the tail of a chain of three or
+more submits it. **B** takes the last gem back, hold it for 20 frames to clear
+the lot, **Y** clears at once. **X** latches peek, and **A** on the cursor then
+peels that gem straight away; under a flame the rim turns amber. Touch the
+screen and the cursor goes away and the stylus takes over again.
 
 ![wordPass](screenshot.png) ![fire](screenshot-fire.png) ![results](screenshot-results.png)
 

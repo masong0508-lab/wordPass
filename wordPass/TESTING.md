@@ -45,7 +45,7 @@ via `e.center(c, r)`, cell rectangles on the screenshot via `e.cell_rect(c, r)`.
 `_Static_assert`; `wp.py` has the same numbers in `OFF = {'state': 8, ..., 'chainR': 442}`
 and `state()` reads through it (no hand-walked slices). Adding a field means: append it
 to `DebugView`, add its `PIN(...)`, bump the size assert, add it to `OFF`, and read it in
-`state()`. `state()` returns the scalars (`peek` (peekHeld or the latch), `armed`, `armC`, `armR` (the armed peel), `state, mode, shelf, score, fail, turn, heat,
+`state()`. `state()` returns the scalars (`peek` (peekHeld or the latch), `armed`, `armC`, `armR` (the armed peel), `curC`, `curR`, `curOn` (the d-pad cursor), `state, mode, shelf, score, fail, turn, heat,
 chainLen, peels, lockdown, bestWordScore, dailySeed, passLen, lastWordTier, rareWords,
 library, heatThreshold, burnEvery, burnTimer, optRow, pulseEvery, lockTier, overtime,
 chainScore, speedBonus, peelBonus, passBonusKind, ledgerN, newBest, lives, passTheme,
@@ -107,3 +107,7 @@ completion) for exact score assertions.
 ## Peek input
 
 A peek touch only arms a gem; the peel happens when the stylus lifts (`keysUp() & KEY_TOUCH`). `Emu.peel(c, r)` holds L, touches for 5 frames and lifts, so it keeps working. A test that wants the peel on a frame must lift the stylus first. Avoid pokes that make an all-one-letter board in a scenario that peels: the OUT OF WORDS search over such a board takes many frames. The `peek input` scenarios (both hands) cover arm, slide-off, shoulder release, the X latch, the PEEK button and take the readability screenshots.
+
+## Button play
+
+B steps the chain back one gem (hold it 20 frames to clear all) and Y clears, so a test that wants an empty chain presses `Y`, not `B`. The `d-pad play` scenarios use `goto(c, r)` to walk the cursor and cover the clamps, A to chain and submit, B, Y, X plus A to peel, and a touch hiding the cursor.

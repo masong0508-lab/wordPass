@@ -92,6 +92,7 @@ typedef struct {
     int  stateTimer;
     int  peekHeld;            // peeking this frame: a shoulder held or the latch on
     int  peekLatch;           // X or the PEEK button latched peek on (one peel, then off)
+    int  curC, curR, curOn;   // d-pad cursor (hex cell) and whether it is shown
     int  armed, armC, armR;   // a peek touch is down on this gem; the peel happens on release
     int  wordsThisShelf;
     int  lastWordLen, lastWordScore;

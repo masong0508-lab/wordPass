@@ -42,7 +42,8 @@ typedef struct {
     s32 statWords, statGames, streak;       // 516, 520, 524: S.wordsSpelled, S.gamesPlayed, S.dailyStreak
     s32 dailyPlayed, dailyLast, dailyLastScore;   // 528, 532, 536: S.dailyPlayedDate, S.dailyLastDate, S.dailyLastScore
     s32 peek, armed, armC, armR;            // 540, 544, 548, 552: peekHeld || peekLatch, the armed peel and its cell
-} DebugView;                                // total 556
+    s32 curC, curR, curOn;                  // 556, 560, 564: the d-pad cursor
+} DebugView;                                // total 568
 
 #define PIN(field, off) _Static_assert(offsetof(DebugView, field) == (off), "DebugView." #field " moved: update tools/emu/wp.py OFF")
 PIN(magic, 0); PIN(frame, 4); PIN(state, 8); PIN(mode, 12); PIN(shelf, 16); PIN(score, 20);
@@ -60,8 +61,9 @@ PIN(chainScore, 464); PIN(speedBonus, 468); PIN(peelBonus, 472); PIN(passBonusKi
 PIN(lives, 488); PIN(passTheme, 492); PIN(twist, 496); PIN(spelling, 500);
 PIN(practice, 504); PIN(dailyMod, 508); PIN(clockOk, 512); PIN(statWords, 516); PIN(statGames, 520); PIN(streak, 524);
 PIN(dailyPlayed, 528); PIN(dailyLast, 532); PIN(dailyLastScore, 536);
+PIN(curC, 556); PIN(curR, 560); PIN(curOn, 564);
 PIN(peek, 540); PIN(armed, 544); PIN(armC, 548); PIN(armR, 552);
-_Static_assert(sizeof(DebugView) == 556, "DebugView size changed: update tools/emu/wp.py");
+_Static_assert(sizeof(DebugView) == 568, "DebugView size changed: update tools/emu/wp.py");
 
 volatile DebugView DBG;
 
@@ -142,6 +144,7 @@ void debugSync(Game *g)
     DBG.lives = g->lives; DBG.passTheme = g->passTheme; DBG.twist = g->twist;
     DBG.practice = g->practice; DBG.dailyMod = g->dailyMod; DBG.clockOk = g->clockOk;
     DBG.peek = g->peekHeld; DBG.armed = g->armed; DBG.armC = g->armC; DBG.armR = g->armR;
+    DBG.curC = g->curC; DBG.curR = g->curR; DBG.curOn = g->curOn;
     DBG.statWords = S.wordsSpelled; DBG.statGames = S.gamesPlayed; DBG.streak = S.dailyStreak;
     DBG.dailyPlayed = S.dailyPlayedDate; DBG.dailyLast = S.dailyLastDate; DBG.dailyLastScore = S.dailyLastScore;
 }

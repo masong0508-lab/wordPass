@@ -70,6 +70,7 @@ static bool newGame(int mode)
     G.shelf = 1;
     G.score = 0;
     G.hintShown = 0;
+    G.curC = 3; G.curR = 3; G.curOn = 0;
     G.lives = 3;
     G.twist = 0; G.lastTwist = 0;
     memset(G.recentPass, 0, sizeof(G.recentPass)); G.recentHead = 0;
@@ -222,7 +223,21 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
     if (!peekNow) G.armed = 0;
 
     if (down & KEY_START) { G.armed = 0; G.state = ST_PAUSE; return; }   // a held chain survives the pause
-    if (down & KEY_B) boardClearChain(&G);
+    // B steps the chain back one gem, held for 20 frames it clears it; Y clears at once
+    static int bHeld;
+    if (held & KEY_B) { if (++bHeld == 20) boardClearChain(&G); } else bHeld = 0;
+    if ((down & KEY_B) && G.chainLen > 0) G.chainLen--;
+    if (down & KEY_Y) boardClearChain(&G);
+
+    // the d-pad moves a hex cursor; a real touch hands control back to the stylus
+    if (down & (KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT)) {
+        if (down & KEY_UP)    { if (G.curR > 0) G.curR--; }
+        if (down & KEY_DOWN)  { if (G.curR < ROWS - 1) G.curR++; }
+        if (down & KEY_LEFT)  { if (G.curC > 0) G.curC--; }
+        if (down & KEY_RIGHT) { if (G.curC < COLS - 1) G.curC++; }
+        G.curOn = 1;
+    }
+    if (down & KEY_TOUCH) G.curOn = 0;
 
     int c, r;
     bool touching = (held & KEY_TOUCH) != 0;
@@ -236,7 +251,8 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
         else if (G.armed && touching && !(down & KEY_TOUCH)) {
             if (!gfxCellAt(t->px, t->py, &c, &r) || c != G.armC || r != G.armR) G.armed = 0;
         }
-        if ((keysUp() & KEY_TOUCH) && G.armed) { peel = true; c = G.armC; r = G.armR; G.armed = 0; G.peekLatch = 0; }
+        if ((down & KEY_A) && G.curOn) { peel = true; c = G.curC; r = G.curR; G.armed = 0; G.peekLatch = 0; }   // A on the cursor arms and peels at once
+        else if ((keysUp() & KEY_TOUCH) && G.armed) { peel = true; c = G.armC; r = G.armR; G.armed = 0; G.peekLatch = 0; }
         if (peel) {
             int letter = G.cell[c][r].letter;
             int res = boardPeel(&G, c, r);
@@ -315,7 +331,16 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
         }
         lastTx = t->px; lastTy = t->py; wasTouching = true;
     }
-    if (down & KEY_A) submitChain();
+    if (down & KEY_A) {
+        if (G.curOn) {
+            int tc = G.chainLen ? G.chainC[G.chainLen - 1] : -1, tr = G.chainLen ? G.chainR[G.chainLen - 1] : -1;
+            if (G.chainLen >= 3 && tc == G.curC && tr == G.curR) submitChain();
+            else {
+                enum ChainTouch ct = boardChainTouch(&G, G.curC, G.curR, G.chainLen == 0);
+                if (ct == CT_NOT_ADJACENT || ct == CT_RESTARTED) gfxNope(G.curC, G.curR);
+            }
+        } else submitChain();
+    }
     // first-shelf nudge: three words in and no peek yet
     if (G.shelf == 1 && G.mode == MODE_CLASSIC && !G.hintShown && G.peels == 0 && G.wordsThisShelf >= 3) {
         G.hintShown = 1;

@@ -912,6 +912,15 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
         }
         clipY0 = outerClip;
     }
+    // the d-pad cursor: a 2 px rim alternating white and accent, with a notch above it
+    if (g->curOn) {
+        int x, y; cellOrigin(g->curC, g->curR, &x, &y);
+        bool risk = peek && g->curR > 0 && g->cell[g->curC][g->curR - 1].state == CELL_BURN;
+        u16 cc = risk ? FIRE2 : ((frame >> 3) & 1) ? ACCENT : WHITE;
+        rectOutline(x, y, TILE_W, TILE_H, cc);
+        rectOutline(x + 1, y + 1, TILE_W - 2, TILE_H - 2, cc);
+        fillRect(x + TILE_W / 2 - 2, y - 2, 4, 2, cc);
+    }
     // the armed peel: a pulsing double rim and a PEEL label that the release will act on
     if (g->armed) {
         int x, y; cellOrigin(g->armC, g->armR, &x, &y);

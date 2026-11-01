@@ -52,14 +52,15 @@ OFF = {
     'practice': 504, 'dailyMod': 508, 'clockOk': 512, 'statWords': 516, 'statGames': 520, 'streak': 524,
     'dailyPlayed': 528, 'dailyLast': 532, 'dailyLastScore': 536,
     'peek': 540, 'armed': 544, 'armC': 548, 'armR': 552,
+    'curC': 556, 'curR': 560, 'curOn': 564,
 }
-DBG_SIZE = 556
+DBG_SIZE = 568
 I32_FIELDS = ['state', 'mode', 'shelf', 'score', 'fail', 'turn', 'heat', 'chainLen', 'peels', 'lockdown',
               'bestWordScore', 'dailySeed', 'passLen', 'lastWordTier', 'rareWords', 'library',
               'heatThreshold', 'burnEvery', 'burnTimer', 'optRow', 'pulseEvery', 'lockTier', 'overtime',
               'chainScore', 'speedBonus', 'peelBonus', 'passBonusKind', 'ledgerN', 'newBest',
               'lives', 'passTheme', 'twist', 'spelling', 'practice', 'dailyMod', 'clockOk', 'statWords', 'statGames',
-              'streak', 'dailyPlayed', 'dailyLast', 'dailyLastScore', 'peek', 'armed', 'armC', 'armR']
+              'streak', 'dailyPlayed', 'dailyLast', 'dailyLastScore', 'peek', 'armed', 'armC', 'armR', 'curC', 'curR', 'curOn']
 PASS_THEMES = ['BINDERY', 'INK', 'VERSE', 'TALES', 'ATLAS', 'ARCHIVE', 'LAMP', 'STUDY']
 TWIST_NONE, TWIST_INK, TWIST_DAMP, TWIST_BURIED = range(4)
 VOWELS = {0, 4, 8, 14, 20}; RARE = {9, 16, 23, 25}   # a e i o u; j q x z

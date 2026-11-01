@@ -38,7 +38,7 @@ def ensure_play():
         elif g['state'] == ST_PAUSE: e.press('START', settle=30)
         elif g['state'] == ST_OPTIONS: e.press('B', settle=30)
     g = e.state(); assert g['state'] == ST_PLAY, f'not in play: state {g["state"]}'
-    e.press('B', settle=5)
+    e.press('Y', settle=5)
     e.set_heat(0); e.set_burn(0, 99)          # no spontaneous ignition, no fire advance on submits
     e.set_turn(0)                             # no overtime heat
     for c in range(COLS):
@@ -215,7 +215,7 @@ def _():
     e.chain([(C, 1), (C, 2), (C, 3)], release=False)
     e.chain([(C, 1)], release=False); g = e.state()          # a held jump two gems back retraces the gems it crosses
     assert g['chain'] == [(C, 0), (C, 1)], f'retrace: {g["chain"]}'
-    e.emu.input.touch_release(); e.run(3); e.press('B', settle=5)
+    e.emu.input.touch_release(); e.run(3); e.press('Y', settle=5)
 
 @scenario('shatter shards after an all-vowel word are ruby-dominant')
 def _():
@@ -866,7 +866,7 @@ def check_chain_input(tag):
     ox, oy = e.center(0, 0)
     e.tap(ox + 10, oy - 1); g = e.state()
     assert g['chain'] == [(0, 0)], f'{tag}: a tap near the right edge of (0,0): {g["chain"]}'
-    e.press('B', settle=5)
+    e.press('Y', settle=5)
     e.tap(30 + e.bx, 14); assert e.state()['chainLen'] == 0, f'{tag}: the gap between hexes must be dead'
     # a stroke down column 3, then tap an earlier gem: the chain is cut back to it
     for r in range(4):
@@ -876,12 +876,12 @@ def check_chain_input(tag):
     x, y = e.center(C, 1); e.tap(x, y)
     g = e.state(); assert g['chain'] == [(C, 0), (C, 1)], f'{tag}: tap an earlier gem should cut back: {g["chain"]}'
     # a fast stylus: one jump over two gems still chains them, and never restarts mid-drag
-    e.press('B', settle=5)
+    e.press('Y', settle=5)
     x, y = e.center(C, 0); touch(x - e.bx, y)
     x, y = e.center(C, 3); touch(x - e.bx, y)
     g = e.state(); assert g['chain'][:1] == [(C, 0)] and g['chainLen'] == 4, f'{tag}: fast drag {g["chain"]}'
     # past a hole the stylus has no gem to bridge through: the held chain is kept and the gem flashes red
-    untouch(); e.press('B', settle=5)
+    untouch(); e.press('Y', settle=5)
     e.set_cell(C, 6, HOLE, 'a'); e.run(3)
     x, y = e.center(C, 4); touch(x - e.bx, y)
     x, y = e.center(C, 7); touch(x - e.bx, y, 4)
@@ -897,7 +897,7 @@ def check_chain_input(tag):
     e.tap(*e.center(6, 6))
     g = e.state(); assert g['chain'] == [(6, 6)], f'{tag}: a tap elsewhere should restart: {g["chain"]}'
     # a valid word: gold ring on the tail, tail tap submits, and the stylus does not start a new chain
-    e.press('B', settle=5)
+    e.press('Y', settle=5)
     for r in range(3):
         x, y = e.center(C, r); touch(x - e.bx, y)
     untouch()
@@ -976,6 +976,76 @@ def _():
 def _():
     set_hand(False); e.start_classic()
     check_peek('right')
+
+# ---- button-only play (item 15) ----------------------------------------------------------
+def goto(c, r):
+    """Move the d-pad cursor to (c, r)."""
+    for _ in range(20):
+        g = e.state()
+        if (g['curC'], g['curR']) == (c, r): return
+        k = 'LEFT' if g['curC'] > c else 'RIGHT' if g['curC'] < c else 'UP' if g['curR'] > r else 'DOWN'
+        e.press(k, hold=3, settle=3)
+    raise AssertionError(f'cursor stuck at {(g["curC"], g["curR"])} going to {(c, r)}')
+
+def check_dpad(tag):
+    g = fresh_shelf(); e.set_heat(0); e.set_burn(0, 99); e.set_turn(0)
+    for c, r in e.burn_cells(g): e.set_cell(c, r, TILE, 'e')
+    g = e.state(); assert (g['curC'], g['curR'], g['curOn']) == (3, 3, 0), f'{tag}: cursor init {(g["curC"], g["curR"], g["curOn"])}'
+    e.press('RIGHT', settle=3); g = e.state()
+    assert (g['curC'], g['curR'], g['curOn']) == (4, 3, 1), f'{tag}: RIGHT {(g["curC"], g["curR"], g["curOn"])}'
+    for _ in range(8): e.press('LEFT', hold=3, settle=2)
+    for _ in range(10): e.press('UP', hold=3, settle=2)
+    g = e.state(); assert (g['curC'], g['curR']) == (0, 0), f'{tag}: the cursor must clamp at the corner: {(g["curC"], g["curR"])}'
+    for _ in range(9): e.press('RIGHT', hold=3, settle=2)
+    for _ in range(10): e.press('DOWN', hold=3, settle=2)
+    g = e.state(); assert (g['curC'], g['curR']) == (COLS - 1, ROWS - 1), f'{tag}: far clamp {(g["curC"], g["curR"])}'
+    for r, l in enumerate('bed'): e.set_cell(C, r, TILE, l)
+    e.run(3)
+    # A chains under the cursor, on the tail it submits
+    goto(C, 0); e.press('A', settle=3)
+    e.press('DOWN', settle=3); e.press('A', settle=3); e.press('DOWN', settle=3); e.press('A', settle=3)
+    g = e.state(); assert g['chain'] == [(C, 0), (C, 1), (C, 2)], f'{tag}: A chain {g["chain"]}'
+    e.run(10); e.shot(f'{out}/rules_cursor_{tag}.png')
+    # B steps back one gem, a long hold clears, Y clears
+    e.press('B', hold=3, settle=3); assert e.state()['chainLen'] == 2, f'{tag}: B should step back one'
+    e.press('A', settle=3)                      # the cursor is on (C,2): not the tail now, adjacent: chains again
+    assert e.state()['chainLen'] == 3, f'{tag}: A on the next gem'
+    e.hold('B', True); e.run(30); e.hold('B', False); e.run(3)
+    assert e.state()['chainLen'] == 0, f'{tag}: holding B should clear the chain'
+    e.press('A', settle=3); e.press('UP', settle=3); e.press('A', settle=3); e.press('UP', settle=3); e.press('A', settle=3)
+    assert e.state()['chainLen'] == 3
+    e.press('Y', settle=3); assert e.state()['chainLen'] == 0, f'{tag}: Y should clear'
+    # a word: chain it with A and submit it with A on the tail
+    goto(C, 0); e.press('A', settle=3); e.press('DOWN', settle=3); e.press('A', settle=3); e.press('DOWN', settle=3); e.press('A', settle=3)
+    sc = e.state()['score']
+    e.press('A', settle=40)
+    g = e.state(); assert g['lastWord'] == 'bed' and g['score'] > sc and g['chainLen'] == 0, f'{tag}: A on the tail should submit: {g["lastWord"]!r} {g["score"]}'
+    # a far gem: not adjacent, the chain is kept
+    goto(C, 4); e.press('A', settle=3)
+    goto(0, 7); e.press('A', settle=3)
+    g = e.state(); assert g['chain'] == [(C, 4)], f'{tag}: A on a far gem must not restart: {g["chain"]}'
+    e.press('Y', settle=3)
+    # peek: X latches, A on the cursor peels it at once
+    g = e.state()
+    plain = [r for r in range(1, 7) if not g['back'][C][r] and g['cell'][C][r][1] == TILE]
+    goto(C, plain[0]); e.press('X', settle=3); assert e.state()['peek'] == 1
+    e.run(8); e.shot(f'{out}/rules_cursor_peek_{tag}.png')
+    e.press('A', settle=20)
+    g = e.state(); assert g['peels'] == 1 and g['cell'][C][plain[0]][1] == HOLE and g['peek'] == 0, f'{tag}: A should peel the cursor gem: peels {g["peels"]} peek {g["peek"]}'
+    # a touch hands the board back to the stylus
+    e.tap(*e.center(0, 0)); assert e.state()['curOn'] == 0, f'{tag}: a touch should hide the cursor'
+    e.press('Y', settle=3)
+    assert e.fps() == 120, f'{tag}: fps'
+
+@scenario('d-pad play (left hand): cursor moves and clamps, A chains and submits, B steps back, X + A peels')
+def _():
+    set_hand(True); e.start_classic()
+    check_dpad('left')
+
+@scenario('d-pad play (right hand): cursor moves and clamps, A chains and submits, B steps back, X + A peels')
+def _():
+    set_hand(False); e.start_classic()
+    check_dpad('right')
 
 print('RULES OK' if not fails else f'RULES FAILED: {fails}')
 sys.exit(fails)
