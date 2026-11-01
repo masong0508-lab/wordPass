@@ -55,7 +55,8 @@ enum {
     ST_FAIL,
     ST_PAUSE,
     ST_OPTIONS,       // 5
-    ST_STATS          // 6: THE LEDGER, the lifetime stats screen (entered from the title)
+    ST_STATS,         // 6: THE LEDGER, the lifetime stats screen (entered from the title)
+    ST_GUIDE          // 7: HOW TO PLAY, the in-game guide (from the title or the pause menu)
 };
 
 enum {
@@ -137,14 +138,90 @@ typedef struct {
     int  pauseArmId;          // which row that was (PAUSE_RESTART or PAUSE_QUIT)
     // ---- the guided first shelf (item 14)
     int  tutorStep;           // TUTOR_*: where the Classic shelf-1 guide has got to (TUTOR_DONE = off)
+    // ---- the in-game guide (item 19)
+    int  guidePage;           // 0..GUIDE_PAGES-1
+    int  guideFrom;           // the state the guide returns to: ST_TITLE or ST_PAUSE
+    // ---- the in-world cues of the guided first shelf: a ring and a pointer on what to act on, and a ghost drag
+    int  cue;                 // CUE_*: what is being pointed at this frame (CUE_NONE while the player is busy)
+    int  cueAge;              // frames since the cue began
+    int  ghostDone;           // the idle ghost drag has been shown on this shelf
+    int  idleFrames;          // frames without a touch or a key while the guide waits for a word
+    int  hintLen;             // gems in hintC/hintR: a real, common word on the real board (0 = none)
+    u8   hintC[8], hintR[8];
 } Game;
+enum { CUE_NONE = 0, CUE_GHOST, CUE_TAIL, CUE_PEEKBTN, CUE_ARMED };   // ghost drag, tail gem of a valid chain, the PEEK button, the armed cell
+#define GHOST_IDLE_FRAMES 180   // idle this long before the ghost drag traces a word
+#define GHOST_GEM_FRAMES   18   // frames the ghost pointer spends on each gem (and 30 more resting on the tail)
 
 enum { TUTOR_DRAG = 0, TUTOR_PEEK, TUTOR_FIND, TUTOR_REST, TUTOR_DONE };   // drag a word, peek, find the first pass letter, the closing tip, off
 
-// pause menu rows; the visible ones are listed by pauseRows (Daily has no RESTART)
-enum { PAUSE_RESUME = 0, PAUSE_RESTART, PAUSE_QUIT, PAUSE_ROW_IDS };
-#define PAUSE_ROWS_MAX 4        // room for the HOW TO PLAY row a later item adds
+// pause menu rows; the visible ones are listed by pauseRows, in the order RESUME, RESTART SHELF, HOW TO PLAY, QUIT
+// TO TITLE (Daily has no RESTART)
+enum { PAUSE_RESUME = 0, PAUSE_RESTART, PAUSE_QUIT, PAUSE_GUIDE, PAUSE_ROW_IDS };
+#define PAUSE_ROWS_MAX 4
 int  pauseRows(const Game *g, int ids[PAUSE_ROWS_MAX]);   // main.c: the visible rows in order; returns how many
+
+// ---- the rules' numbers, in one place. board.c and main.c score, pay and set up shelves from these, and the
+// in-game guide (guide.c) prints them, so a page can never say something the rules do not do.
+#define SCORE_UNIT                10    // a word is worth (letter values) x (length multiplier) x this
+#define LONG_WORD_LEN              7    // this many letters and up add LONG_WORD_BONUS
+#define LONG_WORD_BONUS          200
+#define BURN_BONUS_PER_LETTER     30    // a word through a flame
+#define DIAMOND_CAP                2    // diamonds that count in one word; each adds half again
+#define PASS_LETTER_PER_SHELF    100    // every pass letter found pays this x the shelf
+#define SHELF_BONUS_PER_SHELF   1000
+#define SPEED_TURNS               40    // the speed bonus pays for every turn under this
+#define SPEED_PER_SHELF_TURN      25
+#define PERFECT_PER_SHELF        400    // every peel found a pass letter
+#define CLEAN_PER_SHELF          150    // at most CLEAN_EXTRA_PEELS wasted peels
+#define CLEAN_EXTRA_PEELS          2
+#define BOOKMARKS_MAX              3
+#define OVERTIME_TURNS            24    // past this many turns on a shelf every turn adds heat of its own
+#define OVERTIME_TURNS_LOCKDOWN   16
+#define LOCKDOWN_FROM_SHELF        6
+#define LOCKDOWN_TWIN_FIRE_TIER    2    // from this Lockdown tier every ignition lights two columns
+#define INK_SPILL_HOLES            3
+#define TWIST_DAMP_SLOWER          1    // DAMP: the fire creeps this many turns slower ...
+#define TWIST_DAMP_METER           2    // ... but the meter is this much shorter
+#define TWIST_BURIED_EXTRA         1    // BURIED: the pass is this many letters longer ...
+#define TWIST_BURIED_ROW           5    // ... and lies in this row and below
+#define DAILY_LONG_LEN             7    // the Daily modifier LONG asks for this pass length
+
+typedef struct { bool lockdown; int tier, threshold, burnEvery, pulseEvery, minRow; } ShelfRules;
+void boardShelfRules(int shelf, ShelfRules *out);   // a Classic shelf on FIRE NORMAL with no twist: Lockdown, tier, meter, fire speed, pulse, shallowest pass row
+void boardDailyRules(int mod, ShelfRules *out);     // the same for a Daily with modifier DAILYMOD_*
+int  boardPassLenFor(int shelf);                    // the pass length a Classic shelf asks for (4, 5, 6, 7, 8)
+bool boardTwistShelf(int shelf);                    // does a Classic shelf carry a twist (4, 7, 10 ...)
+int  boardPeelHeat(bool lockdown);                  // heat a peel adds: 1, or 2 in Lockdown
+int  boardOvertimeTurns(bool lockdown);             // turns before overtime heat starts
+int  boardWordPoints(int base, int len, bool burn, int diamonds, bool repeat);   // the scoring curve; base = the gems' letter values added up
+int  boardPassLetterReward(int shelf);              // paid on the spot for every pass letter found
+int  boardShelfBonus(int shelf);
+int  boardSpeedBonus(int shelf, int turn);
+int  boardPeelBonus(int shelf, int peels, int passLen, int *kind);   // kind: 0 none, 1 CLEAN, 2 PERFECT
+const char *boardFailName(int fail);                // "LIBRARY LOST", "PASS DESTROYED", "OUT OF WORDS"
+const char *boardFailWhy(int fail);                 // "FIRE REACHED THE FLOOR" ...
+const char *boardLockdownName(int tier);            // "LOCKDOWN", "LOCKDOWN II" ...
+
+// ---- guide.c: the pages of HOW TO PLAY. Text is built from the rules above; \001..\006 switch the colour
+// (accent, gold, fire, base, dim, white). No visible line is longer than GUIDE_MAX_CHARS.
+#define GUIDE_PAGES      8
+#define GUIDE_MAX_LINES 16
+#define GUIDE_LINE_BUF  64
+#define GUIDE_MAX_CHARS 38
+#define GUIDE_LINE_H    10      // pixels a line takes on screen, and a gap (an empty line) GUIDE_GAP_H
+#define GUIDE_GAP_H      4
+#define GUIDE_MAX_H    139      // the tallest page: 29 px below the title to the buttons
+#define GM_ACCENT "\001"
+#define GM_GOLD   "\002"
+#define GM_FIRE   "\003"
+#define GM_BASE   "\004"
+#define GM_DIM    "\005"
+#define GM_WHITE  "\006"
+const char *guideTitle(int page);
+int  guideLines(int page, char out[GUIDE_MAX_LINES][GUIDE_LINE_BUF]);   // the page's lines ("" is a gap); returns how many
+int  guideVisibleLen(const char *line);                // characters on screen (colour codes do not count)
+void guideStrip(char *dst, const char *line);          // the line without colour codes
 
 enum { DAILYMOD_STANDARD = 0, DAILYMOD_EMBER, DAILYMOD_DEEP, DAILYMOD_LONG, DAILYMOD_COUNT };
 
@@ -212,6 +289,12 @@ void gfxTipFlip(int dir);             // the title's tip card: -1 previous, +1 n
 int  gfxTipIndex(void);               // debug: which tip card shows
 bool gfxInTitleOptions(int px, int py);
 bool gfxInTitleLedger(int px, int py);   // the BEST line under the title buttons: opens THE LEDGER
+bool gfxInTitleGuide(int px, int py);    // the GUIDE button in the title's top corner
+enum { GH_NONE = -1, GH_BACK = 0, GH_PREV, GH_NEXT, GH_DOT };
+void gfxGuideNavReset(void);             // test channel: the prev/next buttons pulse again
+void gfxGuideSkip(void);                 // a key or a tap: the page's words finish typing in at once
+int  gfxGuideAge(void);                  // debug: frames the page has been open (the typing runs over the first ~50)
+int  gfxGuideHit(int px, int py);        // the guide's touch targets: GH_BACK, GH_PREV, GH_NEXT or GH_DOT + page; GH_NONE elsewhere
 
 extern Game G;
 
@@ -244,6 +327,7 @@ bool boardIsChainable(const Game *g, int c, int r);
 int  boardNeighbors(int c, int r, int outC[6], int outR[6]);
 int  boardBackNumber(const Game *g, int c, int r);
 bool boardHasWords(const Game *g);
+int  boardHintChain(const Game *g, u8 *outC, u8 *outR, int max);   // a path spelling a common word of 3 to 5 letters on this board: its length, 0 if none
 bool boardWordOk(const char *w, int len);     // accepted under the current LIBRARY setting
 int  boardWordSpelling(const char *w, int len);    // 0 none, 1 American-only spelling, 2 British-only, that the SPELLING setting rejects
 int  boardWordTier(const char *w, int len);   // raw dictionary tier: 0 none, 1 common, 2 rare

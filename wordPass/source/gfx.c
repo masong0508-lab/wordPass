@@ -63,6 +63,8 @@ static Callout callout;
 static int shownScore;          // the score on the HUD: it is g->score except while the results tally counts up
 static int tallyPrev = -1, cardFlash;   // the state last frame; frames of white card border left
 static int tipIndex, tipTimer;  // the title's tip card and the frames it has been up
+static char lastMsg[MSG_LEN];   // the message line as last frame saw it, and how long it has stood (the sticky prompts slide in)
+static int msgAge;
 static bool rainAlive;          // the title's gem rain may have particles in flight
 
 #define C(r,g,b) ARGB16(1,(r),(g),(b))
@@ -240,6 +242,22 @@ static ITCM_CODE __attribute__((noinline)) void drawGlyph(int x, int y, const u8
                     for (int i = 0; i < 5; i++, p += scale)
                         if (bits & (0x10 >> i)) for (int k = 0; k < scale; k++) p[k] = col;
                 }
+            }
+        }
+        return;
+    }
+    if (x >= 0 && x + gw <= SCREEN_W) {
+        // inside the screen sideways but cut by the clip band (a glyph on a slice boundary): write the rows
+        // that fall inside the band directly instead of one clipped rect per lit pixel
+        for (int j = 0; j < 7; j++) {
+            u8 bits = gl[j];
+            if (!bits) continue;
+            for (int sy = 0; sy < scale; sy++) {
+                int yy = y + j * scale + sy;
+                if (yy < clipY0 || yy >= clipY1) continue;
+                u16 *p = cur + yy * SCREEN_W + x;
+                for (int i = 0; i < 5; i++, p += scale)
+                    if (bits & (0x10 >> i)) for (int k = 0; k < scale; k++) p[k] = col;
             }
         }
         return;
@@ -741,6 +759,10 @@ bool gfxInTitleClassic(int x, int y) { return x >= BX(20) && x < BX(84) && y >= 
 bool gfxInTitleDaily(int x, int y)   { return x >= BX(88) && x < BX(152) && y >= TB_Y && y < TB_Y + 22; }
 bool gfxInTitleOptions(int x, int y) { return x >= BX(54) && x < BX(118) && y >= TB_Y + 26 && y < TB_Y + 46; }
 bool gfxInTitleLedger(int x, int y)  { return x >= BX(12) && x < BX(160) && y >= TB_Y + 46 && y < SCREEN_H - 1; }   // the BEST line, just under OPTIONS
+// the GUIDE button sits in the free corner above the logo band (it ends at BX 162, y 6..24); its touch zone is a little roomier
+#define GUIDE_BTN_X 112
+#define GUIDE_BTN_W 50
+bool gfxInTitleGuide(int x, int y)   { return x >= BX(GUIDE_BTN_X - 4) && x < BX(GUIDE_BTN_X + GUIDE_BTN_W + 4) && y >= 3 && y < 28; }
 
 // Options list rows on the touch screen. The list sits at a fixed x (never BX): flipping HAND must
 // not move it under the stylus. Each row has a left half (previous value) and a right half (next).
@@ -1215,7 +1237,7 @@ static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
 }
 
 // the title, options and ledger screens: no board, no panel, the title layout on the top screen
-static inline bool menuState(int st) { return st == ST_TITLE || st == ST_OPTIONS || st == ST_STATS; }
+static inline bool menuState(int st) { return st == ST_TITLE || st == ST_OPTIONS || st == ST_STATS || st == ST_GUIDE; }
 
 // ---------------------------------------------------------------- top screen
 // Everything below draws on the top screen, which is never mirrored for the left hand:
@@ -1301,6 +1323,7 @@ static void drawTopTitle(void)
     }
     drawTipCard(tipIndex);
     if (G.msg[0]) drawTextCenter(128, 158, G.msg, GOLD_LT, 1);   // e.g. SET THE DS CLOCK FOR DAILY
+    else if (!S.tutorDone) drawTextCenter(128, 158, "NEW HERE? TAP GUIDE", ACCENT, 1);   // until the first guided shelf is done
 }
 
 // accent dot grid over the whole top screen, restricted to the slice being drawn
@@ -1314,9 +1337,751 @@ static void drawTopDots(void)
     }
 }
 
+// ---------------------------------------------------------------- motion helpers (the guide and the guided-shelf cues)
+// Everything here is drawn from the game's own palette with its own primitives. Easing is fixed point, 0..16.
+static int ease16(int num, int den)      // ease-out cubic: fast start, soft landing
+{
+    if (num <= 0) return 0;
+    if (num >= den) return 16;
+    int x = 16 - 16 * num / den;
+    return 16 - x * x * x / 256;
+}
+
+static int tri16(int phase, int period)  // a triangle wave 0..16 over `period` frames: breathing, never faster than the period says
+{
+    int h = period / 2, p = phase % period;
+    return 16 * (p < h ? p : period - p) / h;
+}
+
+// the board's own drop (boardAnimate): 10/16 px per frame of gravity, terminal 10 px, a squash on a hard landing
+static void gDrop(int age, int height, int *dy, int *sq)
+{
+    int yoff = -height * 16, yv = 0, squash = 0;
+    for (int f = 0; f < age && f < 60; f++) {
+        if (yoff < 0) {
+            yv += 10; if (yv > 160) yv = 160;
+            yoff += yv;
+            if (yoff >= 0) { yoff = 0; squash = yv > 60 ? SQUASH_MAX : (yv > 30 ? 3 : 0); yv = 0; }
+        } else if (squash) squash--;
+    }
+    *dy = yoff >> 4; *sq = squash;
+}
+
+static void gRing(int cx, int cy, int r, u16 col)
+{
+    static const s8 dx[16] = { 8, 7, 6, 3, 0, -3, -6, -7, -8, -7, -6, -3, 0, 3, 6, 7 };
+    static const s8 dy[16] = { 0, 3, 6, 7, 8, 7, 6, 3, 0, -3, -6, -7, -8, -7, -6, -3 };
+    for (int i = 0; i < 16; i++) px(cx + dx[i] * r / 8, cy + dy[i] * r / 8, col);
+}
+
+static void gRipple(int cx, int cy, int age)   // the press ripple: a ring that opens and fades over five ticks
+{
+    if (age < 0 || age > 4) return;
+    u16 col = lerp15(BLACK, WHITE, 16 - age * 3);
+    gRing(cx, cy, 3 + age * 3, col);
+    if (age) gRing(cx, cy, 2 + age * 3, col);
+}
+
+static void gPointer(int x, int y, bool down)   // a stylus: the tip at (x, y), the body running down and to the right
+{
+    for (int i = 2; i < 13; i++) {
+        u16 c = i < 5 ? ACCENT : (i < 10 ? WHITE : INK);
+        px(x + i, y + i, c); px(x + i + 1, y + i, lerp15(BLACK, c, 9)); px(x + i, y + i + 1, lerp15(BLACK, c, 6));
+    }
+    px(x, y, WHITE); px(x + 1, y + 1, WHITE); px(x + 1, y, ACCENT); px(x, y + 1, ACCENT);
+    if (down) { px(x - 1, y, GOLD_LT); px(x, y - 1, GOLD_LT); px(x - 1, y - 1, GOLD_LT); }
+}
+
+static void gSparkle(int x, int y, int salt)    // the board's travelling diamond sparkle (it needs no more than the frame counter)
+{
+    int sx = x + 3 + (((frame + salt) & 31) * 17) / 32;
+    if (sx < x + TILE_W - 3) { px(sx, y + 2, WHITE); px(sx - 1, y + 3, WHITE); }
+}
+
+static void drawTextBox(int x, int y, const char *s, u16 col, int scale, int x0, int x1)   // only the whole glyphs inside [x0, x1)
+{
+    for (; *s; s++, x += 6 * scale) if (x >= x0 && x + 5 * scale <= x1) drawChar(x, y, *s, col, scale);
+}
+
+// ---------------------------------------------------------------- the guide (HOW TO PLAY)
+// Touch screen: the page's words, typed in line by line (guide.c builds them from the rules). Top screen: a
+// looping story per page drawn with the board's own helpers (blitGem, drawLetter, the hole, burning and ghost
+// cells, the plaque diamonds, the heat bar) in the usual 48-row slices. The loop advances every fourth frame: the
+// four slices of one refresh cycle share a value of frame >> 2, so they always show the same moment, and while a
+// diagram is drawn `frame` itself is replaced by the loop's tick, so every pulse in the game's own helpers loops
+// with it. GUIDE_LOOP ticks is a power of two dividing the 32 frame pulses: the loop closes seamlessly.
+#define GUIDE_LOOP 64                      // ticks of four frames: just over four seconds
+static int guideBase;                      // frame >> 2 when the page opened
+static int guidePageSeen = -1;             // the page the top screen was last laid out for
+static int guideAge;                       // frames since the page opened: the words type in over the first ~50
+static int guideNavUsed;                   // the prev/next buttons pulse until one has been used
+static char guideCache[GUIDE_MAX_LINES][GUIDE_LINE_BUF];
+static int guideCachePage = -1;
+
+static int gTick(void) { return ((frame >> 2) - guideBase) & (GUIDE_LOOP - 1); }
+void gfxGuideNavReset(void) { guideNavUsed = 0; }
+void gfxGuideSkip(void) { guideAge = 999; }          // a key or a tap finishes the typing at once
+int gfxGuideAge(void) { return guideAge; }
+
+// ---- the touch screen
+#define GD_TEXT_X   14                     // 38 characters run from x 14 to 241
+#define GD_TEXT_Y   29
+#define GD_BACK_W   40
+#define GD_NAV_Y    168                    // the prev/next buttons (24 x 20) and the page dots
+#define GD_DOT_C0   79                     // centre of the first of eight dots, 14 apart (they centre on x 128)
+static int guideBackX(void) { return S.hand == HAND_LEFT ? 6 : SCREEN_W - 6 - GD_BACK_W; }   // BACK sits on the stylus side
+
+int gfxGuideHit(int x, int y)
+{
+    int bx = guideBackX();
+    if (y < 27 && x >= bx - 6 && x < bx + GD_BACK_W + 6) return GH_BACK;
+    if (y >= GD_NAV_Y - 4) {
+        if (x < 40) return GH_PREV;
+        if (x >= SCREEN_W - 40) return GH_NEXT;
+        int i = (x - (GD_DOT_C0 - 7)) / 14;
+        if (x >= GD_DOT_C0 - 7 && i < GUIDE_PAGES) return GH_DOT + i;
+    }
+    return GH_NONE;
+}
+
+// one line with colour codes (guide.c GM_*): accent for key terms, gold numbers, fire warnings. `a` is how far the
+// line has faded in (0..16): the colours come up from black.
+static void drawMarked(int x, int y, const char *s, int a)
+{
+    u16 col = INK;
+    for (; *s; s++) {
+        switch (*s) {
+            case 1: col = ACCENT; continue;
+            case 2: col = GOLD_LT; continue;
+            case 3: col = FIRE2; continue;
+            case 4: col = INK; continue;
+            case 5: col = DIM_TEXT; continue;
+            case 6: col = WHITE; continue;
+        }
+        drawChar(x, y, *s, a >= 16 ? col : lerp15(BLACK, col, a), 1);
+        x += 6;
+    }
+}
+
+static void drawGuide(const Game *g)
+{
+    int page = g->guidePage;
+    fillRect(0, 0, SCREEN_W, SCREEN_H, BLACK);
+    drawTopDots();
+    rectOutline(0, 0, SCREEN_W, SCREEN_H, GOLD_DK);
+    rectOutline(1, 1, SCREEN_W - 2, SCREEN_H - 2, GOLD);
+    if (guideCachePage != page) { guideLines(page, guideCache); guideCachePage = page; }
+
+    const char *title = guideTitle(page);
+    drawTextShadow(SCREEN_W / 2 - textWidth(title, 2) / 2, 8, title, GOLD_LT, 2);
+    int bx = guideBackX();
+    rectOutline(bx, 6, GD_BACK_W, 15, DIM);
+    drawTextCenter(bx + GD_BACK_W / 2, 10, "BACK", INK, 1);
+    char cnt[8]; fmtInt(cnt, page + 1); strcat(cnt, "/"); fmtInt(cnt + strlen(cnt), GUIDE_PAGES);
+    drawText(S.hand == HAND_LEFT ? SCREEN_W - 8 - textWidth(cnt, 1) : 8, 10, cnt, DIM_TEXT, 1);   // the page counter takes the other corner
+    hline(GD_TEXT_X, 25, SCREEN_W - 2 * GD_TEXT_X, GOLD_DK);
+
+    int y = GD_TEXT_Y;
+    for (int i = 0; i < GUIDE_MAX_LINES; i++) {
+        if (!guideCache[i][0]) { y += GUIDE_GAP_H; continue; }
+        int a = (guideAge - 3 * i - 2) * 16 / 6;               // each line fades up over six frames, three after the one above
+        if (a > 16) a = 16;
+        if (a > 0) drawMarked(GD_TEXT_X + (16 - a) * 6 / 16, y, guideCache[i], a);   // and settles in from a few pixels to the right
+        y += GUIDE_LINE_H;
+    }
+
+    u16 nav = guideNavUsed ? ACCENT : lerp15(ACCENT, WHITE, tri16(frame, 48));        // a gentle pulse until used once
+    rectOutline(6, GD_NAV_Y, 24, 20, nav);
+    drawChar(13, GD_NAV_Y + 3, '<', INK, 2);
+    rectOutline(SCREEN_W - 30, GD_NAV_Y, 24, 20, nav);
+    drawChar(SCREEN_W - 23, GD_NAV_Y + 3, '>', INK, 2);
+    int breathe = tri16(frame, 48) / 8;                                                // 0..2: the active dot breathes
+    for (int i = 0; i < GUIDE_PAGES; i++) {
+        int cx = GD_DOT_C0 + 14 * i, cy = GD_NAV_Y + 10;
+        if (i == page) {
+            fillRect(cx - 3, cy - 3, 7, 7, GOLD_LT);
+            rectOutline(cx - 5 - breathe / 2, cy - 5 - breathe / 2, 11 + breathe, 11 + breathe, ACCENT);
+            if (guideAge < 10) { int e = guideAge / 2; rectOutline(cx - 5 - e, cy - 5 - e, 11 + 2 * e, 11 + 2 * e, lerp15(BLACK, WHITE, 16 - e * 3)); }   // a ring opens on the page just reached
+        } else rectOutline(cx - 2, cy - 2, 5, 5, DIM_TEXT);
+    }
+}
+
+// ---- the top screen: shared pieces
+static void gGem(int x, int y, int letter, bool lit)        // a letter gem as the board draws it; lit = chained (lifted, white rims)
+{
+    int pal = palOf[letter];
+    const GemPal *p = GEM_PALS[pal];
+    if (lit) {
+        blitGem(x, y - 2, pal);
+        rectOutline(x, y - 2, TILE_W, TILE_H, WHITE);
+        rectOutline(x + 1, y - 1, TILE_W - 2, TILE_H - 2, lerp15(WHITE, p->light, 8));
+        drawLetter(x, y - 2, letter, WHITE, p->dark);
+    } else {
+        blitGem(x, y, pal);
+        drawLetter(x, y, letter, C(31,31,29), p->dark);
+    }
+}
+
+// a gem dropping into its slot with the board's own fall and landing squash; `age` is frames since it was let go
+// (negative: not yet), `top` the first row it may be seen on, so it never shows above the frame it falls in
+static void gGemDrop(int x, int y, int letter, int age, int top)
+{
+    if (age < 0) return;
+    int dy, sq;
+    gDrop(age, 56, &dy, &sq);
+    if (!dy && !sq) { gGem(x, y, letter, false); return; }
+    int c0 = clipY0;
+    if (clipY0 < top) clipY0 = top;
+    if (clipY0 < clipY1) {
+        int pal = palOf[letter];
+        const GemPal *p = GEM_PALS[pal];
+        if (sq) drawGemSized(x, y + sq, TILE_W, TILE_H - sq, p, false);
+        else blitGem(x, y + dy, pal);
+        drawLetter(x, y + dy + sq / 2, letter, C(31,31,29), p->dark);
+    }
+    clipY0 = c0;
+}
+
+static void gDiamond(int x, int y, int letter)
+{
+    blitGem(x, y, 5);
+    drawLetter(x, y, letter, C(4,6,10), C(20,22,26));
+    gSparkle(x, y, x * 3 + y);
+}
+
+// the chain rope from gem origin to gem origin, drawn `steps` of its 10 links; a spark rides the head while it grows
+static void gRope(int x0, int y0, int x1, int y1, bool valid, int steps)
+{
+    u16 dk = valid ? lerp15(ACCENT, BLACK, 8) : GOLD_DK, lt = valid ? ACCENT : GOLD_LT;
+    x0 += TILE_W / 2; y0 += TILE_H / 2 - 2; x1 += TILE_W / 2; y1 += TILE_H / 2 - 2;
+    for (int t = 0; t <= steps && t <= 10; t++) {
+        int xx = x0 + (x1 - x0) * t / 10, yy = y0 + (y1 - y0) * t / 10;
+        fillRect(xx - 2, yy - 2, 4, 4, dk);
+        fillRect(xx - 1, yy - 1, 2, 2, ((t + (frame >> 2)) & 3) == 0 ? WHITE : lt);
+    }
+    if (steps < 10) { int xx = x0 + (x1 - x0) * steps / 10, yy = y0 + (y1 - y0) * steps / 10; fillRect(xx - 2, yy - 2, 4, 4, WHITE); }   // the spark
+}
+
+static void gShards(int cx, int cy, int age, int letter)          // a gem breaking up, age 0..11 ticks
+{
+    static const s8 vx[8] = { -6, -4, -2, 0, 2, 4, 6, 3 }, vy[8] = { -5, -8, -10, -6, -9, -7, -4, -11 };
+    if (age > 10) return;
+    const GemPal *p = GEM_PALS[palOf[letter]];
+    for (int k = 0; k < 8; k++)
+        fillRect(cx + vx[k] * age / 2, cy + vy[k] * age / 2 + age * age / 2, 2, 2, (k & 1) ? p->light : p->mid);
+}
+
+static void gPatchFrame(int ox, int oy, int cols, int rows)       // the framed patch of board the diagrams draw gems in (the screen is already black: every fill that is not needed costs a slice a lot of VRAM time)
+{
+    int w = cols * TILE_W, h = rows * TILE_H + ODD_SHIFT;
+    rectOutline(ox - 4, oy - 4, w + 8, h + 8, GOLD_DK);
+    rectOutline(ox - 3, oy - 3, w + 6, h + 6, GOLD);
+    u16 dot = lerp15(BLACK, ACCENT, 3);
+    for (int y = oy + 6; y < oy + h; y += 8)
+        if (y >= clipY0 && y < clipY1) for (int x = ox + 6; x < ox + w; x += 8) px(x, y, dot);
+}
+
+static void gCaption(const char *txt, u16 col) { drawTextCenter(SCREEN_W / 2, 166, txt, col, 1); }
+#define HX(ox, c)     ((ox) + (c) * TILE_W)
+#define HY(oy, c, r)  ((oy) + (r) * TILE_H + (((c) & 1) ? ODD_SHIFT : 0))
+
+// ---- 1 THE BOARD: gems drop in, a stylus drags I, N, K (the rope grows with a spark), the word glows, a tap cashes it in
+static void gdBoard(int t)
+{
+    static const char PATCH[5][2] = { { 'I', 'S' }, { 'N', 'R' }, { 'E', 'K' }, { 'A', 'T' }, { 'D', 'E' } };   // [column][row]
+    static const u8 pc[3] = { 0, 1, 2 }, pr[3] = { 0, 0, 1 };                                                    // the path I, N, K
+    static const u8 tl[3] = { 12, 18, 24 };                                                                      // the tick each gem joins the chain
+    const int ox = 68, oy = 36;      // two rows keep the patch above y 96, so its gems sit in two slices only
+    int n = t >= tl[2] ? 3 : t >= tl[1] ? 2 : t >= tl[0] ? 1 : 0;
+    bool gone = t >= 40 && t < 52, valid = t >= 26 && t < 40;
+    gPatchFrame(ox, oy, 5, 2);
+    for (int c = 0; c < 5; c++)
+        for (int r = 0; r < 2; r++) {
+            int k = -1;
+            for (int j = 0; j < 3; j++) if (pc[j] == c && pr[j] == r) k = j;
+            int x = HX(ox, c), y = HY(oy, c, r), letter = PATCH[c][r] - 'A';
+            if (k >= 0 && gone) continue;                                                 // cashed in: the gem is gone
+            if (k >= 0 && t >= tl[k] && t < 40) { gGem(x, y, letter, true); continue; }
+            // the first drop at the loop's start, a refill after the cash-in
+            int age = (k >= 0 && t >= 52) ? (t - 52) * 4 - k * 3 : (t < 14 ? (t - c) * 4 - r * 3 : 99);
+            gGemDrop(x, y, letter, age, oy - 3);
+        }
+    for (int k = 0; k < 2; k++) {
+        if (t < tl[k] || t >= 40) continue;
+        int steps = t >= tl[k + 1] ? 10 : 10 * ease16(t - tl[k], tl[k + 1] - tl[k]) / 16;
+        gRope(HX(ox, pc[k]), HY(oy, pc[k], pr[k]), HX(ox, pc[k + 1]), HY(oy, pc[k + 1], pr[k + 1]), valid, steps);
+    }
+    if (valid) {         // a good word: the gold ring on the tail gem, breathing
+        int x = HX(ox, pc[2]), y = HY(oy, pc[2], pr[2]) - 2, e = tri16(t * 4, 32) / 12;
+        rectOutline(x - e, y - e, TILE_W + 2 * e, TILE_H + 2 * e, GOLD_LT); rectOutline(x + 1, y + 1, TILE_W - 2, TILE_H - 2, GOLD_LT);
+    }
+    if (gone) for (int k = 0; k < 3; k++) gShards(HX(ox, pc[k]) + 12, HY(oy, pc[k], pr[k]) + 11, t - 40, PATCH[pc[k]][pr[k]] - 'A');
+    // the stylus: it slides in, presses I and drags along, lifts off the tail and taps it, then leaves
+    int cxk[3], cyk[3];
+    for (int k = 0; k < 3; k++) { cxk[k] = HX(ox, pc[k]) + 10; cyk[k] = HY(oy, pc[k], pr[k]) + 10; }
+    int sx = cxk[0], sy = cyk[0]; bool down = false;
+    if (t < tl[0]) { int e = ease16(t - 4, tl[0] - 4); sx = cxk[0] - 30 + 30 * e / 16; sy = cyk[0] + 40 - 40 * e / 16; }
+    else if (t < tl[2]) { int k = t < tl[1] ? 0 : 1, e = ease16(t - tl[k], tl[k + 1] - tl[k]); sx = cxk[k] + (cxk[k + 1] - cxk[k]) * e / 16; sy = cyk[k] + (cyk[k + 1] - cyk[k]) * e / 16; down = true; }
+    else if (t < 40) { sx = cxk[2]; sy = cyk[2] - (t >= 34 && t < 37 ? 5 : 0); down = t >= 37; }
+    else { int e = ease16(t - 40, 10); sx = cxk[2] + 36 * e / 16; sy = cyk[2] + 30 * e / 16; }
+    if (t >= 4 && t < 50) gPointer(sx, sy, down);
+    gRipple(cxk[0], cyk[0], t - tl[0]);
+    gRipple(cxk[2], cyk[2], t - 37);
+    // the word on the line below, and once it is cashed in what it paid
+    {
+        int ink = letterValue('i' - 'a') + letterValue('n' - 'a') + letterValue('k' - 'a');
+        char sc[12]; sc[0] = '+'; fmtInt(sc + 1, boardWordPoints(ink, 3, false, 0, false) * ease16(t - 40, 6) / 16);
+        int ww = n * 12 - 2, sw = textWidth(sc, 2), total = t >= 40 ? 3 * 12 - 2 + 14 + sw : ww;
+        int wx = SCREEN_W / 2 - total / 2;
+        for (int i = 0; i < n; i++) drawChar2Shadow(wx + i * 12, 106, PATCH[pc[i]][pr[i]], valid || t >= 40 ? GOLD_LT : WHITE, DIM2);
+        if (t >= 40) drawTextShadow(wx + 3 * 12 - 2 + 14, 106, sc, GOLD_LT, 2);
+    }
+    gCaption(t < 26 ? "DRAG ACROSS TOUCHING GEMS" : t < 40 ? "A GOOD WORD WEARS A GOLD RING: TAP IT" : "CASHED IN", t < 40 ? INK : ACCENT);
+}
+
+// ---- 2 SCORING: Qu, I, Z drop in and each floats up its value, the sum meets the length multiplier, the total counts up
+static void gdScoring(int t)
+{
+    static const u8 L[3] = { 'q' - 'a', 'i' - 'a', 'z' - 'a' };
+    static const u8 cc[3] = { 0, 1, 2 }, rr[3] = { 0, 0, 1 }, tl[3] = { 12, 18, 24 };
+    const int ox = 84, oy = 44;
+    int sum = 0, vals[3];
+    for (int i = 0; i < 3; i++) { vals[i] = letterValue(L[i]); sum += vals[i]; }
+    int len = 4, mult = boardLenMult(len), total = boardWordPoints(sum, len, false, 0, false);
+    int n = t >= tl[2] ? 3 : t >= tl[1] ? 2 : t >= tl[0] ? 1 : 0;
+    for (int i = 1; i < n; i++) gRope(HX(ox, cc[i - 1]), HY(oy, cc[i - 1], rr[i - 1]), HX(ox, cc[i]), HY(oy, cc[i], rr[i]), false, 10);
+    for (int i = 0; i < 3; i++) {
+        int x = HX(ox, cc[i]), y = HY(oy, cc[i], rr[i]);
+        if (t >= tl[i]) gGem(x, y, L[i], true); else gGemDrop(x, y, L[i], t < 12 ? (t - i) * 4 : 99, 30);
+        if (t >= tl[i]) {   // the value rises off its gem on an ease and settles
+            char v[4]; fmtInt(v, vals[i]);
+            int e = ease16(t - tl[i], 6), rise = 8 * e / 16;
+            drawTextShadow(x + 12 - textWidth(v, 1) / 2, y - 9 - rise, v, lerp15(BLACK, GOLD_LT, e), 1);
+        }
+    }
+    char a[24], b[12];
+    a[0] = 0;
+    for (int i = 0; i < n; i++) { if (i) strcat(a, " + "); fmtInt(a + strlen(a), vals[i]); }
+    b[0] = 0;
+    if (t >= 28) { strcpy(b, " = "); fmtInt(b + 3, sum); }
+    int w = textWidth(a, 1) + (b[0] ? textWidth(b, 1) + 6 : 0);
+    if (n) { drawText(SCREEN_W / 2 - w / 2, 100, a, WHITE, 1); if (b[0]) drawText(SCREEN_W / 2 - w / 2 + textWidth(a, 1) + 6, 100, b, lerp15(BLACK, GOLD_LT, ease16(t - 28, 3)), 1); }
+    if (t >= 32) {       // the length badge opens from its middle
+        char m[24]; fmtInt(m, len); strcat(m, " LETTERS = X"); fmtInt(m + strlen(m), mult);
+        int e = ease16(t - 32, 4), bw = 104 * e / 16;
+        if (bw > 8) rectOutline(SCREEN_W / 2 - bw / 2, 112, bw, 14, ACCENT);
+        if (e >= 14) drawTextCenter(SCREEN_W / 2, 116, m, ACCENT, 1);
+    }
+    if (t >= 38) {       // the total counts up, fast then slow
+        char s[12]; s[0] = '+'; fmtInt(s + 1, total * ease16(t - 38, 14) / 16);
+        drawTextShadow(SCREEN_W / 2 - textWidth(s, 2) / 2, 134, s, GOLD_LT, 2);
+    }
+    char cap[40];
+    if (t < 28) strcpy(cap, "EACH GEM HAS A VALUE");
+    else if (t < 38) strcpy(cap, "ADD THEM UP, THEN APPLY THE LENGTH");
+    else { strcpy(cap, "X "); fmtInt(cap + 2, SCORE_UNIT); strcat(cap, ": THE WORD IS WORTH +"); fmtInt(cap + strlen(cap), total); }
+    gCaption(cap, t < 38 ? INK : ACCENT);
+}
+
+// ---- 3 PEEKING: gems drop in, L is held and they go to outlines, a stylus reads the numbers and stops at the gem that would scorch.
+// The numbers are worked out from two hidden pass letters with the game's own neighbour function, so every digit on
+// the diagram is the digit the game would show
+static void gdPeek(int t)
+{
+    enum { K_GHOST, K_HOLE, K_DIAMOND, K_BURN, K_RISK };
+    static const u8 kind[5][3] = { { K_BURN, K_RISK, K_GHOST }, { K_GHOST, K_HOLE, K_HOLE }, { K_HOLE, K_DIAMOND, K_HOLE },
+                                   { K_HOLE, K_GHOST, K_GHOST }, { K_GHOST, K_HOLE, K_GHOST } };
+    static const char LT[5][3] = { { 'R', 'S', 'A' }, { 'E', 'N', 'T' }, { 'O', 'B', 'L' }, { 'M', 'T', 'O' }, { 'D', 'I', 'E' } };
+    static const u8 hidC[2] = { 2, 3 }, hidR[2] = { 1, 1 };         // the two pass letters: the diamond (found) and one still under a gem
+    static const u8 rc[3] = { 1, 2, 0 }, rrw[3] = { 1, 2, 1 };      // where the stylus reads: a 1, a 2, the gem that would scorch
+    const int ox = 68, oy = 46;
+    bool peek = t >= 14;
+    gPatchFrame(ox, oy, 5, 3);
+    for (int c = 0; c < 5; c++)
+        for (int r = 0; r < 3; r++) {
+            int x = HX(ox, c), y = HY(oy, c, r), letter = LT[c][r] - 'A', k = kind[c][r];
+            if (k == K_GHOST || k == K_RISK) {
+                if (!peek) gGemDrop(x, y, letter, t < 12 ? (t - c) * 4 - r * 3 : 99, oy - 3);
+                else drawGhostCell(x, y, letter, k == K_RISK);
+            } else if (k == K_BURN) drawBurnCell(x, y, 0, letter, (t + c * 7) & 15, false, peek);
+            else if (k == K_DIAMOND) gDiamond(x, y, letter);
+            else {
+                int nc[6], nr[6], m = boardNeighbors(c, r, nc, nr), d = 0;
+                for (int i = 0; i < m; i++) for (int h = 0; h < 2; h++) if (nc[i] == hidC[h] && nr[i] == hidR[h]) d++;
+                drawHoleCell(x, y, d, false, false);
+            }
+        }
+    // the L key, held from tick 14 (it sinks and fills)
+    rectOutline(20, 42 + (peek ? 1 : 0), 32, 12, peek ? lerp15(ACCENT, WHITE, tri16(t * 4, 32) / 2) : DIM_TEXT);
+    if (peek) fillRect(21, 44, 30, 9, lerp15(BLACK, ACCENT, 6));
+    drawTextCenter(36, 45 + (peek ? 1 : 0), "L", peek ? WHITE : INK, 1);
+    int seg = peek ? (t - 14) / 16 : 0;
+    if (seg > 2) seg = 2;
+    int x = HX(ox, rc[seg]), y = HY(oy, rc[seg], rrw[seg]);
+    if (peek) {
+        u16 ac = seg == 2 ? FIRE2 : lerp15(ACCENT, WHITE, tri16(t * 4, 32));
+        rectOutline(x - 2, y - 2, TILE_W + 4, TILE_H + 4, ac);
+    }
+    int tp = (t - 14) - 16 * seg;                       // ticks into this reading
+    int px0 = peek && seg > 0 ? HX(ox, rc[seg - 1]) : 20, py0 = peek && seg > 0 ? HY(oy, rc[seg - 1], rrw[seg - 1]) : 60;
+    int e = peek ? ease16(tp, 5) : 0;
+    int sx = (peek ? px0 + (x - px0) * e / 16 : 36) + 4, sy = (peek ? py0 + (y - py0) * e / 16 : 60) + 8;
+    if (t >= 4) gPointer(sx, sy, peek && tp >= 5 && tp < 8);
+    if (peek) gRipple(sx, sy, tp - 5);
+    if (!peek) gCaption("HOLD L OR R TO PEEK", INK);
+    else if (seg < 2) {
+        int nc[6], nr[6], m = boardNeighbors(rc[seg], rrw[seg], nc, nr), d = 0;
+        for (int i = 0; i < m; i++) for (int h = 0; h < 2; h++) if (nc[i] == hidC[h] && nr[i] == hidR[h]) d++;
+        char cap[40]; strcpy(cap, "A "); fmtInt(cap + 2, d); strcat(cap, " HERE: "); strcat(cap, d == 1 ? "ONE PASS LETTER TOUCHES IT" : "TWO PASS LETTERS TOUCH IT");
+        gCaption(cap, INK);
+    } else gCaption("RED RIM: PEELING IT SCORCHES THE PASS", FIRE2);
+}
+
+// ---- 4 THE PASS: the slots fill with diamonds one by one; the plaque cycles three themes, and the slot count,
+// the letters and the prizes are the game's (boardPassLenFor, poolWord, boardPassLetterReward, boardShelfBonus)
+static void gdPass(int t)
+{
+    static const u8 SHELVES[3] = { 1, 9, 18 };
+    int ph = t / 21; if (ph > 2) ph = 2;
+    int tp = t - ph * 21, shelf = SHELVES[ph];
+    int theme = (shelf - 1) % (poolThemeCount() > 0 ? poolThemeCount() : 1), len = boardPassLenFor(shelf);
+    char word[12];
+    poolWord(theme, len, 0, word);
+    if (!word[0]) { strcpy(word, "password"); word[len] = 0; }
+    int found = tp < 3 ? 0 : (tp - 3) / 2 + 1; if (found > len) found = len;
+    rectOutline(24, 34, 208, 70, GOLD_DK); rectOutline(25, 35, 206, 68, GOLD);
+    char s[40]; strcpy(s, "PASS - "); strcat(s, poolName(theme));
+    int le = ease16(tp, 4), lx = SCREEN_W / 2 - textWidth(s, 1) / 2 + (16 - le);      // the plaque's name slides in from the right
+    drawTextBox(lx, 42, s, lerp15(BLACK, DIM_TEXT, le), 1, 28, 228);
+    int gap = len >= 9 ? 1 : 4, bw = PLAQUE_W, x0 = ((SCREEN_W - (len * bw + (len - 1) * gap)) / 2) & ~1, y0 = 58;
+    static const s8 POP[5] = { 4, 5, 2, 1, 0 };                                       // the grow of a diamond as it lands: over, then settle
+    for (int i = 0; i < len; i++) {
+        int x = x0 + i * (bw + gap);
+        if (i < found) {
+            int age = tp - (3 + 2 * i), g = age >= 0 && age < 5 ? POP[age] : 0;
+            if (g) drawGemSized(x - g, y0 - g, bw + 2 * g, PLAQUE_H + 2 * g, &GEM_DIAMOND, true); else blitPlaque(x, y0);
+            drawChar(x + 6, y0 + 6, (char)(word[i] - 32), C(4,6,10), 2);
+            gSparkle(x, y0 + 2, i * 7);
+        } else {
+            rectOutline(x, y0, bw, 26, GOLD_DK);
+            fillRect(x + 4, y0 + 22, bw - 8, 1, GOLD);
+            if (i == found && tp >= 1) fillRect(x + 4 + ((tp * 4) % (bw - 10)), y0 + 22, 2, 1, GOLD_LT);   // a glint travels along the next blank
+        }
+    }
+    strcpy(s, "SHELF "); fmtInt(s + 6, shelf); strcat(s, ": "); fmtInt(s + strlen(s), len); strcat(s, " LETTERS");
+    drawTextCenter(SCREEN_W / 2, 112, s, lerp15(BLACK, ACCENT, le), 1);
+    strcpy(s, "EACH LETTER PAYS +"); fmtInt(s + strlen(s), boardPassLetterReward(shelf));
+    if (found > 0) drawTextCenter(SCREEN_W / 2, 124, s, INK, 1);
+    int up = ease16(tp - (3 + 2 * (len - 1)) - 1, 4);
+    if (found >= len && up > 0) {
+        strcpy(s, "SHELF CLEARED! +"); fmtInt(s + strlen(s), boardShelfBonus(shelf) * up / 16);
+        drawTextCenter(SCREEN_W / 2, 140, s, (tp & 4) ? GOLD_LT : WHITE, 1);
+    }
+    gCaption("FIND EVERY LETTER TO CLEAR THE SHELF", INK);
+}
+
+// ---- 5 FIRE: short words fill the heat meter, the top gem of a column ignites, the flame slides a tile at a time (the board's
+// own flame cell, new gems dropping in behind it) until a diamond stops it. Heat per word is boardHeatFor, the meter boardShelfRules(1)
+static void gdFire(int t)
+{
+    static const char *const WORDS[4] = { "CAT", "ODE", "RATE", "EAT" };
+    static const u8 COL[4] = { 's' - 'a', 'e' - 'a', 'a' - 'a', 't' - 'a' };
+    static const u8 TW[4] = { 6, 14, 22, 30 }, SLIDE[3] = { 44, 52, 58 };
+    ShelfRules sr; boardShelfRules(1, &sr);
+    const int cx = 40, cy = 36;
+    int heat16 = 0, shown = 0;                                      // heat in sixteenths
+    for (int i = 0; i < 4; i++)
+        if (t >= TW[i]) { heat16 += boardHeatFor((int)strlen(WORDS[i])) * ease16(t - TW[i], 4); shown = i + 1; }
+    bool lit = t >= 36;
+    if (lit) heat16 = heat16 * (16 - ease16(t - 36, 4)) / 16;       // the meter empties as the gem catches
+    int pos = 0;                                                    // the flame's place, in sixteenths of a row
+    for (int k = 0; k < 3; k++) if (t >= SLIDE[k]) pos = 16 * k + ease16(t - SLIDE[k], 4);
+    for (int r = 0; r < 4; r++) {
+        int y = cy + r * TILE_H;
+        bool left = r < 3 && t >= SLIDE[r];                         // the flame has left this row: a new gem drops into it
+        if (left) gGemDrop(cx, y, COL[(r + 1) & 3], (t - SLIDE[r]) * 4, cy);
+        else if (!lit || pos < 16 * r) gGem(cx, y, COL[r], false);  // not reached yet
+    }
+    if (lit) drawBurnCell(cx, cy + pos * TILE_H / 16, 0, COL[(pos / 16) & 3], t & 15, false, false);
+    gDiamond(cx, cy + 4 * TILE_H, 'k' - 'a');
+    drawText(cx + TILE_W + 6, cy + 4 * TILE_H + 7, "< NEVER BURNS", ACCENT, 1);
+    drawText(112, 38, "HEAT", DIM_TEXT, 1);
+    int hv = heat16 > sr.threshold * 16 ? sr.threshold * 16 : heat16;
+    char s[16]; fmtInt(s, hv / 16); strcat(s, "/"); fmtInt(s + strlen(s), sr.threshold);
+    drawText(236 - textWidth(s, 1), 38, s, lit ? DIM_TEXT : FIRE2, 1);
+    int hw = HEAT_W * hv / (sr.threshold * 16);
+    rectOutline(112, 48, 72, 6, DIM);
+    for (int i = 0; i < hw; i++) { fillRect(113 + i, 49, 1, 1, heatTop[i]); fillRect(113 + i, 50, 1, 3, heatBody[i]); }
+    if (hw > 1 && hw < HEAT_W && ((t / 5) & 1)) fillRect(113 + hw - 1, 49, 1, 4, GOLD_LT);          // the tip of the bar flickers (about 3 Hz at most)
+    for (int i = 0; i < shown; i++) {                           // the words that fed it slide in from the right
+        int len = (int)strlen(WORDS[i]), h = boardHeatFor(len), e = ease16(t - TW[i], 4), dx = (16 - e) * 2;
+        char hs[8]; hs[0] = '+'; fmtInt(hs + 1, h);
+        drawTextBox(112 + dx, 64 + 11 * i, WORDS[i], lerp15(BLACK, WHITE, e), 1, 112, 236);
+        drawTextBox(112 + 30 + dx, 64 + 11 * i, hs, lerp15(BLACK, h ? FIRE2 : ACCENT, e), 1, 112, 236);
+    }
+    if (lit && ((t / 5) & 1)) drawText(112, 114, "A FLAME!", FIRE1, 1);
+    gCaption(t < 36 ? "SHORT WORDS FILL THE HEAT METER" : t < 44 ? "A FULL METER LIGHTS A TOP GEM" : "IT FALLS UNTIL A DIAMOND STOPS IT", t < 36 ? INK : FIRE2);
+}
+
+// ---- 6 SHELVES: bookmarks (one is lost, one won back), a twist banner sliding in, and the Lockdown tiers with their numbers
+static int tierShelf(int tier)                  // the first Classic shelf of a Lockdown tier
+{
+    for (int s = 1; s <= 60; s++) { ShelfRules r; boardShelfRules(s, &r); if (r.lockdown && r.tier >= tier) return s; }
+    return 0;
+}
+
+static void gdShelves(int t)
+{
+    for (int i = 0; i < BOOKMARKS_MAX; i++) {                  // the HUD's bookmarks at 2x
+        int bx = 28 + i * 18, by = 34;
+        bool last = i == BOOKMARKS_MAX - 1;
+        int h = 16, sh = 0;
+        if (last && t >= 16 && t < 44) { h = t < 20 ? 16 : 0; if (t < 20) sh = (t & 1) ? 1 : -1; }   // lost on tick 16: it shakes, then drops out of the row
+        if (last && t >= 44) h = 16 * ease16(t - 44, 4) / 16;                                         // won back on tick 44: it grows up from the shelf
+        if (h > 0) {
+            fillRect(bx + sh, by + 16 - h, 10, h, GOLD); fillRect(bx + 2 + sh, by + 16 - h, 2, h, GOLD_DK);
+            if (h > 4) { px(bx + 6 + sh, by + 18 - h, GOLD_LT); px(bx + 7 + sh, by + 18 - h, GOLD_LT); }
+        }
+        if (h < 16) rectOutline(bx, by, 10, 16, DIM);
+    }
+    drawText(28, 54, "BOOKMARKS", ACCENT, 1);
+    if (t >= 16 && t < 44) drawText(28, 64, "A LOST SHELF: -1", lerp15(BLACK, FIRE2, ease16(t - 16, 4)), 1);
+    else if (t >= 44) drawText(28, 64, "LOCKDOWN CLEARED: +1", lerp15(BLACK, GOLD_LT, ease16(t - 44, 4)), 1);
+    int i = t / 21; if (i > 2) i = 2;                           // the twist banner as it arrives
+    int shelf = 4;
+    for (int k = 0, s2 = 1; s2 <= 60 && k <= i; s2++) if (boardTwistShelf(s2)) { shelf = s2; k++; }
+    int tp = t - 21 * i, e = ease16(tp, 4), dx = (16 - e) * 5;
+    char s[24]; strcpy(s, "SHELF "); fmtInt(s + 6, shelf); strcat(s, ":");
+    rectOutline(140, 34, 96, 26, GOLD);
+    drawTextBox(188 - textWidth(s, 1) / 2 + dx, 40, s, GOLD_LT, 1, 142, 234);
+    drawTextBox(188 - textWidth(boardTwistName(TWIST_INK + i), 1) / 2 + dx, 50, boardTwistName(TWIST_INK + i), ACCENT, 1, 142, 234);
+    drawText(28, 84, "LOCKDOWN", DIM_TEXT, 1);
+    static const char *const H[4] = { "SHELF", "METER", "PULSE", "FIRES" };
+    static const int HXS[4] = { 124, 157, 190, 223 };
+    for (int c = 0; c < 4; c++) drawTextCenter(HXS[c], 84, H[c], DIM_TEXT, 1);
+    int hi = t / 16, from = (hi + 3) & 3, hp = ease16(t - 16 * hi, 4);       // the highlight slides from tier to tier
+    int hy = (98 + 13 * from) + (13 * (hi - from)) * hp / 16;
+    if (hi == 0) hy = 98 + 13 * 3 + (13 * (0 - 3)) * hp / 16;
+    fillRect(22, hy - 3, 216, 13, lerp15(BLACK, FIRE1, 3)); rectOutline(22, hy - 3, 216, 13, FIRE1);
+    for (int tier = 0; tier < 4; tier++) {
+        int y = 98 + 13 * tier, sh = tierShelf(tier);
+        ShelfRules r; boardShelfRules(sh, &r);
+        bool on = tier == hi;
+        drawText(28, y, boardLockdownName(tier), on ? WHITE : FIRE2, 1);
+        char v[8];
+        fmtInt(v, sh); strcat(v, "+"); drawTextCenter(HXS[0], y, v, on ? WHITE : INK, 1);
+        fmtInt(v, r.threshold); drawTextCenter(HXS[1], y, v, on ? WHITE : INK, 1);
+        fmtInt(v, r.pulseEvery); drawTextCenter(HXS[2], y, v, on ? WHITE : INK, 1);
+        fmtInt(v, r.tier >= LOCKDOWN_TWIN_FIRE_TIER ? 2 : 1); drawTextCenter(HXS[3], y, v, r.tier >= LOCKDOWN_TWIN_FIRE_TIER ? FIRE2 : (on ? WHITE : INK), 1);
+    }
+    gCaption("EACH TIER BURNS HOTTER", INK);
+}
+
+// ---- 7 MODES: a stylus taps the title's two buttons, the Daily's calendar tile shows its modifier (sliding between them), a streak fills
+static void gdModes(const Game *g, int t)
+{
+    int cls = t >= 8 && t < 32, dly = t >= 34;                  // which button the stylus has pressed
+    int press = (t >= 12 && t < 15) || (t >= 38 && t < 41);     // a button sinks for a moment
+    roundRect(52, 34 + (cls && press ? 1 : 0), 64, 22, GOLD);
+    drawTextCenter(84, 41 + (cls && press ? 1 : 0), "CLASSIC", BLACK, 1);
+    roundRect(140, 34 + (dly && press ? 1 : 0), 64, 22, DIM);
+    rectOutline(140, 34 + (dly && press ? 1 : 0), 64, 22, GOLD_DK);
+    int day = g->clockOk ? g->dailySeed % 100 : 12;
+    char s[24];
+    siprintf(s, "DAILY %02d%02d", g->clockOk ? g->dailySeed / 100 % 100 : 11, day);
+    drawTextCenter(172, 37 + (dly && press ? 1 : 0), s, GOLD_LT, 1);
+    int mod = (t / 16) & 3, tp = t & 15, e = ease16(tp, 4);   // the modifier changes every 16 ticks and slides in
+    drawTextCenter(172, 46 + (dly && press ? 1 : 0), boardDailyModName(mod), INK, 1);
+    if (cls) rectOutline(51, 33, 66, 24, tri16(t * 4, 40) > 8 ? WHITE : ACCENT);
+    if (dly) rectOutline(139, 33, 66, 24, tri16(t * 4, 40) > 8 ? WHITE : ACCENT);
+    // the calendar tile
+    rectOutline(52, 70, 56, 56, GOLD);
+    fillRect(53, 71, 54, 13, ACCENT);
+    drawTextCenter(80, 74, "DAILY", BLACK, 1);
+    fmtInt(s, day); if (day < 10) { s[1] = s[0]; s[0] = '0'; s[2] = 0; }
+    drawTextCenter(80, 92, s, GOLD_LT, 3);
+    drawTextBox(80 - textWidth(boardDailyModName(mod), 1) / 2 + (16 - e) * 2, 116, boardDailyModName(mod), ACCENT, 1, 54, 106);
+    // what the modifier does, from the Daily rules
+    ShelfRules r; boardDailyRules(mod, &r);
+    char l1[28], l2[28];
+    if (mod == DAILYMOD_EMBER) { strcpy(l1, "METER "); fmtInt(l1 + 6, r.threshold); strcpy(l2, r.burnEvery == 1 ? "FIRE EVERY TURN" : "FIRE SLOWER"); }
+    else if (mod == DAILYMOD_DEEP) { strcpy(l1, "PASS IN THE BOTTOM"); fmtInt(l2, ROWS - r.minRow); strcat(l2, " ROWS"); }
+    else if (mod == DAILYMOD_LONG) { strcpy(l1, "A "); fmtInt(l1 + 2, DAILY_LONG_LEN); strcat(l1, " LETTER PASS"); strcpy(l2, "(OR THE NEAREST)"); }
+    else { strcpy(l1, "NOTHING EXTRA:"); strcpy(l2, "THE PLAIN SHELF"); }
+    int dx = (16 - e) * 3;
+    drawTextBox(124 + dx, 74, boardDailyModName(mod), lerp15(BLACK, GOLD_LT, e), 2, 124, 236);
+    drawTextBox(124 + dx, 94, l1, lerp15(BLACK, INK, e), 1, 124, 236);
+    drawTextBox(124 + dx, 104, l2, lerp15(BLACK, INK, e), 1, 124, 236);
+    // seven days: the streak builds, each box popping as it fills
+    int streak = (t - 6) / 8; if (streak > 5) streak = 5; if (t < 6) streak = 0;
+    for (int i = 0; i < 7; i++) {
+        int x = 64 + i * 18;
+        if (i < streak) { fillRect(x, 138, 14, 10, ACCENT); if (i == streak - 1 && ((t - 6) & 7) < 2) rectOutline(x - 1, 137, 16, 12, WHITE); }
+        else rectOutline(x, 138, 14, 10, DIM);
+    }
+    if (streak >= 2) { strcpy(s, "STREAK "); fmtInt(s + 7, streak); drawTextCenter(SCREEN_W / 2, 152, s, GOLD_LT, 1); }
+    // the stylus: to CLASSIC, a tap, then to DAILY, a tap
+    int sx, sy;
+    if (t < 34) { int ee = ease16(t - 2, 8); sx = 150 + (84 - 150) * ee / 16; sy = 90 + (44 - 90) * ee / 16; }
+    else { int ee = ease16(t - 30, 6); sx = 84 + (172 - 84) * ee / 16; sy = 44; }
+    if (t >= 2 && t < 52) gPointer(sx + 10, sy + 6, press);
+    gRipple(94, 50, t - 12);
+    gRipple(182, 50, t - 38);
+    gCaption("ONE SCORED DAILY A DAY, THEN PRACTICE", INK);
+}
+
+// ---- 8 CONTROLS: the DS, each control pressed in turn (it sinks, a ripple opens) with what it does; the stylus draws a trail on the screen
+static void gdControls(int t)
+{
+    static const char *const CAP[8] = {
+        "STYLUS: DRAG TO CHAIN, TAP TO SUBMIT", "D-PAD: MOVE THE CURSOR", "A: CHAIN, OR SUBMIT ON THE TAIL",
+        "B: BACK ONE GEM, HOLD TO CLEAR", "X: LATCH PEEK, THEN A PEELS", "Y: CLEAR THE CHAIN", "HOLD L OR R: PEEK", "START: PAUSE"
+    };
+    int hi = (t / 8) & 7, tp = t & 7;
+    u16 body = C(5,5,7), lit = lerp15(ACCENT, WHITE, tri16(t * 4, 32));
+    fillRect(25, 32, 206, 124, body);          // one fill (roundRect paints the middle three times: too dear for a top-screen slice)
+    fillRect(24, 33, 1, 122, body); fillRect(231, 33, 1, 122, body);
+    rectOutline(24, 32, 208, 124, DIM_TEXT);
+    // shoulders L and R: both sink while held
+    for (int k = 0; k < 2; k++) {
+        int x = k ? 188 : 28, sink = hi == 6 ? 1 : 0;
+        bool on = hi == 6;
+        fillRect(x, 35 + sink, 40, 11, on ? ACCENT : DIM2); rectOutline(x, 35 + sink, 40, 11, on ? lit : DIM_TEXT);
+        drawTextCenter(x + 20, 37 + sink, k ? "R" : "L", on ? BLACK : INK, 1);
+    }
+    // the touch screen, with the stylus trail inside it
+    bool st = hi == 0;
+    rectOutline(90, 56, 76, 57, st ? lit : ACCENT);
+    fillRect(91, 57, 74, 55, BLACK);
+    if (!st) { drawTextCenter(128, 80, "TOUCH", DIM_TEXT, 1); drawTextCenter(128, 90, "SCREEN", DIM_TEXT, 1); }
+    else {
+        static const u8 TX[5] = { 100, 112, 124, 136, 148 }, TY[5] = { 98, 74, 96, 72, 94 };
+        for (int k = 0; k < 4; k++) {               // the trail grows segment by segment, the pointer at its head
+            int seg = tp * 4 / 8 + 1;               // 1..4 segments over the eight ticks
+            if (k >= seg) break;
+            for (int s2 = 0; s2 <= 6; s2++) fillRect(TX[k] + (TX[k + 1] - TX[k]) * s2 / 6, TY[k] + (TY[k + 1] - TY[k]) * s2 / 6, 2, 2, GOLD_LT);
+        }
+        int seg = tp / 2, ee = ease16(tp & 1, 2) ;
+        if (seg > 3) seg = 3;
+        int hx = TX[seg] + (TX[seg + 1] - TX[seg]) * ee / 16, hy = TY[seg] + (TY[seg + 1] - TY[seg]) * ee / 16;
+        gPointer(hx, hy, true);
+    }
+    // the d-pad
+    bool dp = hi == 1, dpress = dp ? 1 : 0;
+    fillRect(42, 86 + dpress, 24, 8, dp ? ACCENT : DIM2); fillRect(50, 78 + dpress, 8, 24, dp ? ACCENT : DIM2);
+    rectOutline(42, 86 + dpress, 24, 8, dp ? lit : DIM_TEXT); rectOutline(50, 78 + dpress, 8, 24, dp ? lit : DIM_TEXT);
+    fillRect(51, 87 + dpress, 6, 6, dp ? ACCENT : DIM2);
+    if (dp) gRipple(54, 90, tp);
+    // A B X Y on a diamond
+    static const char BN[4] = { 'X', 'Y', 'A', 'B' };
+    static const u8 bxp[4] = { 196, 180, 212, 196 }, byp[4] = { 70, 86, 86, 102 }, bid[4] = { 4, 5, 2, 3 };
+    for (int k = 0; k < 4; k++) {
+        bool on = hi == bid[k];
+        int sink = on ? 1 : 0;
+        roundRect(bxp[k], byp[k] + sink, 14, 14, on ? ACCENT : DIM2);
+        rectOutline(bxp[k], byp[k] + sink, 14, 14, on ? lit : DIM_TEXT);
+        drawChar(bxp[k] + 4, byp[k] + 4 + sink, BN[k], on ? BLACK : INK, 1);
+        if (on) gRipple(bxp[k] + 7, byp[k] + 7, tp);
+    }
+    // START and SELECT
+    bool sp = hi == 7;
+    fillRect(190, 126 + (sp ? 1 : 0), 24, 8, sp ? ACCENT : DIM2); rectOutline(190, 126 + (sp ? 1 : 0), 24, 8, sp ? lit : DIM_TEXT);
+    fillRect(190, 138, 24, 8, DIM2); rectOutline(190, 138, 24, 8, DIM_TEXT);
+    drawText(150, 126, "START", sp ? ACCENT : DIM_TEXT, 1);
+    drawText(138, 138, "SELECT", DIM_TEXT, 1);
+    if (sp) gRipple(202, 130, tp);
+    gCaption(CAP[hi], ACCENT);
+}
+
+static void drawTopGuide(const Game *g)
+{
+    drawTopDots();
+    rectOutline(8, 8, 240, 176, GOLD_DK);
+    rectOutline(9, 9, 238, 174, GOLD);
+    drawTextCenter(SCREEN_W / 2, 15, "HOW TO PLAY", GOLD_LT, 1);
+    hline(16, 25, 224, GOLD_DK);
+    int t = gTick(), sf = frame;
+    frame = t * 4;                              // the game's pulses (hole digits, flames, sparkles) now follow the loop, not the clock
+    switch (g->guidePage) {
+        case 0: gdBoard(t); break;
+        case 1: gdScoring(t); break;
+        case 2: gdPeek(t); break;
+        case 3: gdPass(t); break;
+        case 4: gdFire(t); break;
+        case 5: gdShelves(t); break;
+        case 6: gdModes(g, t); break;
+        default: gdControls(t); break;
+    }
+    frame = sf;
+}
+
+// ---- the guided first shelf's in-world cues (touch screen, over the board): a breathing ring and a bobbing pointer on what
+// to act on, and a ghost drag that traces a real word once. All of it comes from G.cue / G.cueAge, which main.c keeps:
+// they vanish the instant the player acts and never show while the stylus is down.
+static void drawCues(const Game *g)
+{
+    if (!g->cue || g->state != ST_PLAY) return;
+    int age = g->cueAge;
+    int bob = tri16(age, 36) / 5;                          // 0..3 px, 36 frames a bob (under 2 Hz)
+    int breathe = tri16(age, 48);                          // the ring's breath: 48 frames
+    u16 rc = lerp15(ACCENT, WHITE, breathe);
+    int fade = age < 8 ? age * 2 : 16;                     // cues come up from black instead of popping
+    switch (g->cue) {
+        case CUE_TAIL: {
+            int x, y; cellOrigin(g->chainC[g->chainLen - 1], g->chainR[g->chainLen - 1], &x, &y);
+            y -= 2;
+            int e = 2 + breathe / 6;
+            rectOutline(x - e, y - e, TILE_W + 2 * e, TILE_H + 2 * e, lerp15(BLACK, rc, fade));
+            gPointer(x + TILE_W - 8, y + TILE_H - 4 + bob, false);   // the tip rests on the gem's lower right: the letter stays clear
+            break;
+        }
+        case CUE_PEEKBTN: {
+            int e = 1 + breathe / 8;
+            rectOutline(PANEL_X - e, 174 - e, 76 + 2 * e, 16 + 2 * e, lerp15(BLACK, rc, fade));
+            gPointer(PANEL_X + 58, 172 + bob, false);               // beside the label, never over it
+            break;
+        }
+        case CUE_ARMED: {
+            int x, y; cellOrigin(g->armC, g->armR, &x, &y);
+            int lift = (age % 36) < 18 ? (age % 36) / 3 : 6;        // the stylus lifts off the armed gem: that is the peel
+            gPointer(x + TILE_W - 8, y + TILE_H - 4 - lift, true);
+            break;
+        }
+        case CUE_GHOST: {
+            int n = g->hintLen;
+            if (n < 3) break;
+            int seg = age / GHOST_GEM_FRAMES, within = age % GHOST_GEM_FRAMES;
+            if (seg > n - 1) { seg = n - 1; within = GHOST_GEM_FRAMES; }
+            u16 dk = lerp15(BLACK, ACCENT, 8) , lt = lerp15(BLACK, ACCENT, 14);
+            for (int i = 0; i < n; i++) {
+                if (i > seg) break;
+                int x, y; cellOrigin(g->hintC[i], g->hintR[i], &x, &y);
+                rectOutline(x + 1, y + 1, TILE_W - 2, TILE_H - 2, lerp15(BLACK, rc, fade));
+                if (i == 0) continue;
+                int px0, py0, px1, py1; cellOrigin(g->hintC[i - 1], g->hintR[i - 1], &px0, &py0); px0 += TILE_W / 2; py0 += TILE_H / 2;
+                px1 = x + TILE_W / 2; py1 = y + TILE_H / 2;
+                int steps = (i < seg || (age >= n * GHOST_GEM_FRAMES)) ? 10 : 10 * ease16(within, GHOST_GEM_FRAMES) / 16;
+                for (int s2 = 0; s2 <= steps; s2++) {
+                    int xx = px0 + (px1 - px0) * s2 / 10, yy = py0 + (py1 - py0) * s2 / 10;
+                    fillRect(xx - 1, yy - 1, 3, 3, dk); px(xx, yy, lt);
+                }
+            }
+            int cx0, cy0, cx1, cy1;
+            cellOrigin(g->hintC[seg > 0 ? seg - 1 : 0], g->hintR[seg > 0 ? seg - 1 : 0], &cx0, &cy0);
+            cellOrigin(g->hintC[seg], g->hintR[seg], &cx1, &cy1);
+            int e = seg > 0 ? ease16(within, GHOST_GEM_FRAMES - 4) : 16;
+            int hx = cx0 + (cx1 - cx0) * e / 16 + TILE_W / 2 + 5, hy = cy0 + (cy1 - cy0) * e / 16 + TILE_H / 2 + 4;
+            gPointer(hx, hy, true);
+            if (within < 6 && age < n * GHOST_GEM_FRAMES) gRing(cx1 + TILE_W / 2, cy1 + TILE_H / 2, 4 + within, lerp15(BLACK, WHITE, 16 - within * 2));
+            break;
+        }
+    }
+}
+
 static void drawTop(const Game *g)
 {
     fillRect(0, 0, SCREEN_W, SCREEN_H, BLACK);
+    if (g->state == ST_GUIDE) { drawTopGuide(g); return; }
     if (menuState(g->state)) {
         drawTopDots();
         drawTopTitle();
@@ -1340,12 +2105,11 @@ static void drawTop(const Game *g)
     drawLogo(16, 16, 2);
     char s[40];
     {   // the mode under the logo: CLASSIC, LOCKDOWN (tiers), DAILY <modifier> or PRACTICE <modifier>, then the twist for a moment
-        static const char *const TIER[4] = { "LOCKDOWN", "LOCKDOWN II", "LOCKDOWN III", "LOCKDOWN IV" };
         const char *ml; u16 mc;
         if (g->mode == MODE_DAILY) {
             strcpy(s, g->practice ? "PRACTICE " : "DAILY "); strcat(s, boardDailyModName(g->dailyMod));
             ml = s; mc = g->practice ? DIM_TEXT : GOLD_LT;
-        } else if (g->lockdown) { ml = TIER[g->lockTier & 3]; mc = FIRE1; }
+        } else if (g->lockdown) { ml = boardLockdownName(g->lockTier); mc = FIRE1; }
         else { ml = "CLASSIC"; mc = ACCENT; }
         drawText(16, 36, ml, mc, 1);
         if (g->twist && shelfAge < 120) drawText(16 + (int)(strlen(ml) + 1) * 6, 36, boardTwistName(g->twist), GOLD_LT, 1);   // 131 px at most with LOCKDOWN III
@@ -1466,7 +2230,14 @@ static void drawTop(const Game *g)
     // message: pops in at double size, then settles
     if (g->msg[0]) {
         int sc = (g->msgTimer > 46 && textWidth(g->msg, 2) <= 230) ? 2 : 1;
-        drawTextShadow(SCREEN_W / 2 - textWidth(g->msg, sc) / 2, sc == 2 ? 162 : 166, g->msg, g->msgTimer != 0 ? GOLD_LT : INK, sc);   // msgTimer -1 is a sticky prompt
+        int mx = SCREEN_W / 2 - textWidth(g->msg, sc) / 2, mc = g->msgTimer != 0 ? 1 : 0;
+        u16 col = mc ? GOLD_LT : INK;
+        if (g->msgTimer < 0 && msgAge < 20) {     // a sticky prompt slides in from the right with a little overshoot, fading up, and settles (it refreshes at 15 Hz: five steps)
+            int e = msgAge * 16 / 20, dx = (16 - e) * 10 / 16 - (e > 12 ? (e - 12) : 0);
+            if (mx + dx + textWidth(g->msg, sc) > 240) dx = 240 - textWidth(g->msg, sc) - mx;
+            mx += dx; col = lerp15(BLACK, col, e);
+        }
+        drawTextShadow(mx, sc == 2 ? 162 : 166, g->msg, col, sc);   // msgTimer -1 is a sticky prompt
     }
 }
 
@@ -1479,7 +2250,6 @@ static void drawTitle(const Game *g)
     drawBoardFrame();
     drawParticles();     // the gem rain falls behind the band, the card and the buttons: it never covers the logo
     // The logo band: a solid black strip with gold rules, the logo gems riding inside it.
-    // (A GUIDE button belongs in the free corner at BX(144)..BX(162), y 6..24.)
     fillRect(BX(8), 30, 157, 44, BLACK);
     hline(BX(8), 30, 157, GOLD_DK); hline(BX(8), 73, 157, GOLD_DK);
     static const char *letters = "wordPASS";
@@ -1493,6 +2263,13 @@ static void drawTitle(const Game *g)
         char ch = letters[i];
         if (ch >= 'a') drawGlyph(BX(x + 5), y + 5, font5x7[fontLogoIndex(ch)], WHITE, 2);
         else drawChar(BX(x + 5), y + 5, ch, C(4,6,10), 2);
+    }
+    {   // GUIDE: pulses until the first guided shelf has been done (S.tutorDone), then rests
+        bool cue = !S.tutorDone;
+        int pp = (frame & 31) < 16 ? (frame & 15) : 15 - (frame & 15);
+        fillRect(BX(GUIDE_BTN_X), 7, GUIDE_BTN_W, 17, cue ? lerp15(BLACK, ACCENT, pp / 3) : BLACK);
+        rectOutline(BX(GUIDE_BTN_X), 7, GUIDE_BTN_W, 17, cue ? lerp15(GOLD_DK, WHITE, pp) : GOLD_DK);
+        drawTextCenter(BX(GUIDE_BTN_X + GUIDE_BTN_W / 2), 12, "? GUIDE", cue ? lerp15(ACCENT, WHITE, pp / 2) : INK, 1);
     }
     fillRect(BX(16), 76, 140, 56, BLACK);
     rectOutline(BX(16), 76, 140, 56, GOLD);
@@ -1778,7 +2555,7 @@ static void drawResultsCard(const Game *g)
     drawStatRow(lx, rx, cy + 81, "TURNS", DIM_TEXT, s, WHITE);
     hline(BX(lx), cy + 90, cw - 20, DIM);
     // the three bonus rows count up with the score on the panel: shelf first, then speed, then the peel bonus
-    int shelfB = 1000 * g->shelf, shown[3];
+    int shelfB = boardShelfBonus(g->shelf), shown[3];
     boardTallySplit(shownScore - (g->score - shelfB - g->speedBonus - g->peelBonus), shelfB, g->speedBonus, g->peelBonus, shown);
     siprintf(s, "+%d", shown[0]);
     drawStatRow(lx, rx, cy + 93, "SHELF BONUS", DIM_TEXT, s, GOLD_LT);
@@ -1809,9 +2586,9 @@ static void drawFailCard(const Game *g)
     overlayCard(BX(cx - cw / 2), cy, cw, ch);
     rectOutline(BX(cx - cw / 2), cy, cw, ch, (frame & 8) ? FIRE1 : FIRE2);
     rectOutline(BX(cx - cw / 2 + 2), cy + 2, cw - 4, ch - 4, lerp15(FIRE1, BLACK, 8));
-    const char *title = g->fail == FAIL_FIRE ? "LIBRARY LOST" : g->fail == FAIL_SCORCH ? "PASS DESTROYED" : "OUT OF WORDS";
+    const char *title = boardFailName(g->fail);
     drawTextShadow(BX(cx - textWidth(title, 1) / 2), cy + 8, title, FIRE2, 1);
-    const char *why = g->fail == FAIL_FIRE ? "FIRE REACHED THE FLOOR" : g->fail == FAIL_SCORCH ? "A PASS LETTER BURNED" : "NO WORDS LEFT TO SPELL";
+    const char *why = boardFailWhy(g->fail);
     drawTextCenter(BX(cx), cy + 20, why, INK, 1);
     drawPassDiamonds(g, cy + 34, true);
     char s[40];
@@ -1840,8 +2617,8 @@ static void drawFailCard(const Game *g)
     if (t > 45 && (frame & 32)) drawTextCenter(BX(cx), cy + 141, (g->mode == MODE_CLASSIC && !runOver) ? "TAP TO RETRY" : "TAP FOR TITLE", WHITE, 1);
 }
 
-// The pause menu: a card with one 16 px row per entry (RESUME, RESTART SHELF, QUIT TO TITLE; room for a
-// fourth). The highlighted row is boxed; RESTART and QUIT ask for a second tap within 90 frames.
+// The pause menu: a card with one 16 px row per entry (RESUME, RESTART SHELF, HOW TO PLAY, QUIT TO TITLE).
+// The highlighted row is boxed; RESTART and QUIT ask for a second tap within 90 frames.
 #define PAUSE_X0 26
 #define PAUSE_Y0 88
 #define PAUSE_W 120
@@ -1862,7 +2639,7 @@ static void drawPauseCard(const Game *g)
     for (int i = 0; i < n; i++) {
         int y = PAUSE_Y0 + 16 * i, id = ids[i];
         bool sel = i == g->pauseRow, armed = g->pauseArm > 0 && g->pauseArmId == id;
-        const char *label = id == PAUSE_RESUME ? "RESUME" : id == PAUSE_RESTART ? "RESTART SHELF" : "QUIT TO TITLE";
+        const char *label = id == PAUSE_RESUME ? "RESUME" : id == PAUSE_RESTART ? "RESTART SHELF" : id == PAUSE_GUIDE ? "HOW TO PLAY" : "QUIT TO TITLE";
         u16 col = sel ? WHITE : INK;
         if (id == PAUSE_RESTART && g->mode == MODE_CLASSIC && g->lives <= 1) {      // the last bookmark cannot be spent
             label = refused ? "LAST BOOKMARK" : "RESTART SHELF"; col = refused ? FIRE2 : DIM_TEXT;
@@ -1878,6 +2655,7 @@ static void drawOverlay(const Game *g)
     if (g->state == ST_TITLE) { drawTitle(g); return; }
     if (g->state == ST_OPTIONS) { drawOptions(g); return; }
     if (g->state == ST_STATS) { drawStats(g); return; }
+    if (g->state == ST_GUIDE) { drawGuide(g); return; }
     if (g->state == ST_PASSED) drawResultsCard(g);
     else if (g->state == ST_FAIL) drawFailCard(g);
     else if (g->state == ST_PAUSE) drawPauseCard(g);
@@ -1899,7 +2677,7 @@ static void stepTally(const Game *g)
     if (g->state != ST_PASSED) { shownScore = g->score; tallyPrev = g->state; return; }
     if (tallyPrev != ST_PASSED) {
         tallyPrev = ST_PASSED;
-        shownScore = g->score - (1000 * g->shelf + g->speedBonus + g->peelBonus);
+        shownScore = g->score - (boardShelfBonus(g->shelf) + g->speedBonus + g->peelBonus);
         if (shownScore < 0) shownScore = 0;
     }
     if (g->stateTimer >= 18 && shownScore < g->score) {
@@ -1967,6 +2745,19 @@ void gfxFrame(const Game *g)
         for (int i = 0; i < MAXP; i++) if (P[i].kind == P_RAIN) P[i].life = 0;
         rainAlive = false;
     }
+    if (g->state == ST_GUIDE) {      // a new page restarts its loop, relays the whole top screen, dips the brightness for ~6 frames and sparks at its dot
+        if (guidePageSeen < 0) for (int i = 0; i < MAXP; i++) P[i].life = 0;     // nothing left over from the board drifts across the guide
+        if (g->guidePage != guidePageSeen) {
+            if (guidePageSeen >= 0) {
+                guideNavUsed = 1;
+                for (int i = 0; i < 6; i++) spawn(P_SPARK, GD_DOT_C0 + 14 * g->guidePage + (i - 3), GD_NAV_Y + 8, (i - 3) * 3, -(i & 1) * 3 - 4, 12 + (i & 3) * 2, (i & 1) ? WHITE : GOLD_LT);
+            }
+            bright = -12;
+            guidePageSeen = g->guidePage; guideBase = frame >> 2; guideAge = 0; topBurst = 2;
+        } else if (guideAge < 600) guideAge++;
+    } else guidePageSeen = -1;
+    if (strcmp(g->msg, lastMsg)) { strcpy(lastMsg, g->msg); msgAge = 0; }    // a new prompt slides in; the same one just settles
+    else if (msgAge < 100) msgAge++;
     stepTally(g);
     stepParticles();
     stepPopups();
@@ -1994,7 +2785,7 @@ void gfxFrame(const Game *g)
         PROF(0); PROF(1); PROF(2); PROF(3);
         drawOverlay(g);   PROF(4);
         if (g->state != ST_TITLE) drawParticles();       // the title draws its own rain behind the band
-        drawPopups();
+        if (g->state != ST_GUIDE) drawPopups();
     } else if (g->state == ST_PLAY) {
         drawBackdrop(g);  PROF(0);
         drawBoard(g);     PROF(1);
@@ -2003,7 +2794,7 @@ void gfxFrame(const Game *g)
         drawCallout(g);
         drawDanger(g);    PROF(2);
         drawPanel(g);     PROF(3);
-        PROF(4);
+        drawCues(g);      PROF(4);
     } else {
         // pause / results / fail: the live board (gems keep falling and flashing) under a
         // card. The strip is dimmed by the 2D engine at vblank, so this costs the same as
@@ -2066,7 +2857,7 @@ void gfxFrame(const Game *g)
     // layout changes (title/options <-> in-game) all four slices are redrawn, two per
     // frame, so the screen updates at once while each vblank stays well under budget.
     cur = vramSub;
-    int kind = menuState(g->state);
+    int kind = menuState(g->state) ? (g->state == ST_GUIDE ? 2 : 1) : 0;   // title/options/ledger, the guide, in-game
     if (kind != lastTopKind) { lastTopKind = kind; topBurst = 2; }
     int s0 = frame & 3, s1 = s0;
     if (topBurst) { topBurst--; s0 = topBurst ? 0 : 2; s1 = s0 + 1; }

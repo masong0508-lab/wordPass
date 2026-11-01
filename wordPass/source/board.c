@@ -11,6 +11,17 @@ static const char *const TWIST_NAMES[4] = { "", "INK SPILL", "DAMP", "BURIED" };
 const char *boardPassTheme(const Game *g) { return poolName(g->passTheme); }
 const char *boardTwistName(int twist) { return TWIST_NAMES[(twist >= 0 && twist < 4) ? twist : 0]; }
 
+const char *boardFailName(int fail) { return fail == FAIL_FIRE ? "LIBRARY LOST" : fail == FAIL_SCORCH ? "PASS DESTROYED" : "OUT OF WORDS"; }
+const char *boardFailWhy(int fail)
+{
+    return fail == FAIL_FIRE ? "FIRE REACHED THE FLOOR" : fail == FAIL_SCORCH ? "A PASS LETTER BURNED" : "NO WORDS LEFT TO SPELL";
+}
+const char *boardLockdownName(int tier)
+{
+    static const char *const names[4] = { "LOCKDOWN", "LOCKDOWN II", "LOCKDOWN III", "LOCKDOWN IV" };
+    return names[(tier >= 0 && tier < 4) ? tier : 0];
+}
+
 // ---- board RNG: xorshift32, seeded per shelf (from the Daily date or libc rand()). Every
 // board decision draws from it and nothing cosmetic does, so a Daily board, its refills and
 // its fire are identical for everyone whatever the frame timing of sparks and shakes.
@@ -157,9 +168,62 @@ const char *boardDailyModName(int mod)
 // shelf (4, 5, 6, 7, 8), the pool's nearest length stands in when a pool lacks it (the
 // longer neighbour on ties), and the last eight passes are avoided while that leaves a
 // choice. Daily: theme and length come from a hash of the date, no RNG draws.
-static int passTargetLen(int shelf)
+int boardPassLenFor(int shelf)
 {
     return shelf <= 2 ? 4 : shelf <= 5 ? 5 : shelf <= 8 ? 6 : shelf <= 12 ? 7 : 8;
+}
+
+bool boardTwistShelf(int shelf) { return shelf >= 4 && shelf % 3 == 1; }
+
+// What a Classic shelf is on FIRE NORMAL with no twist, and what a Daily modifier makes of it. boardNewShelf
+// starts from these and then applies the FIRE setting and the twist; the guide prints them.
+void boardShelfRules(int shelf, ShelfRules *out)
+{
+    out->lockdown = shelf >= LOCKDOWN_FROM_SHELF;
+    // Lockdown tiers: shelves 6-8, 9-11, 12-14, 15+ tighten the threshold and the pulse
+    out->tier = out->lockdown ? (shelf - LOCKDOWN_FROM_SHELF) / 3 : 0;
+    if (out->tier > 3) out->tier = 3;
+    out->threshold = (shelf <= 2) ? 10 : (shelf <= 5) ? 7 : 5 - out->tier / 2;
+    if (out->threshold < 3) out->threshold = 3;
+    out->burnEvery = (shelf <= 3) ? 2 : 1;
+    out->pulseEvery = 6 - out->tier;
+    if (out->pulseEvery < 3) out->pulseEvery = 3;
+    // deeper shelves bury the pass lower in the board
+    out->minRow = (shelf <= 2) ? 1 : (shelf <= 5) ? 3 : (shelf <= 11) ? 4 : 5;
+}
+
+// One fixed shelf for everyone today: medium pressure, pass buried mid-board
+void boardDailyRules(int mod, ShelfRules *out)
+{
+    out->lockdown = false; out->tier = 0; out->pulseEvery = 6;
+    out->threshold = mod == DAILYMOD_EMBER ? 8 : 7;
+    out->burnEvery = mod == DAILYMOD_EMBER ? 1 : 2;
+    out->minRow = mod == DAILYMOD_DEEP ? 5 : 3;
+}
+
+int boardPeelHeat(bool lockdown) { return lockdown ? 2 : 1; }
+int boardOvertimeTurns(bool lockdown) { return lockdown ? OVERTIME_TURNS_LOCKDOWN : OVERTIME_TURNS; }
+int boardPassLetterReward(int shelf) { return PASS_LETTER_PER_SHELF * shelf; }
+int boardShelfBonus(int shelf) { return SHELF_BONUS_PER_SHELF * shelf; }
+int boardSpeedBonus(int shelf, int turn) { int left = SPEED_TURNS - turn; return SPEED_PER_SHELF_TURN * shelf * (left > 0 ? left : 0); }
+int boardPeelBonus(int shelf, int peels, int passLen, int *kind)
+{
+    int k = 0, b = 0;
+    if (peels == passLen) { k = 2; b = PERFECT_PER_SHELF * shelf; }
+    else if (peels <= passLen + CLEAN_EXTRA_PEELS) { k = 1; b = CLEAN_PER_SHELF * shelf; }
+    if (kind) *kind = k;
+    return b;
+}
+
+// The scoring curve: the letter values added up (`base`) x the length multiplier x SCORE_UNIT, a flat bonus for
+// a long word, so much per letter for a word through a flame, half again per diamond (DIAMOND_CAP at most), and
+// half of it all for a word already in this shelf's ledger.
+int boardWordPoints(int base, int len, bool burn, int diamonds, bool repeat)
+{
+    if (diamonds > DIAMOND_CAP) diamonds = DIAMOND_CAP;
+    int gained = base * boardLenMult(len) * SCORE_UNIT + (len >= LONG_WORD_LEN ? LONG_WORD_BONUS : 0) + (burn ? BURN_BONUS_PER_LETTER * len : 0);
+    gained += gained * diamonds / 2;
+    return repeat ? gained / 2 : gained;
 }
 
 // How many words from the front of a pool (the familiar end) a shelf may pick from.
@@ -191,13 +255,13 @@ static void pickPass(Game *g, int extraLen)
     if (g->mode == MODE_DAILY) {
         u32 hash = (u32)((u32)g->dailySeed * 2654435761u) >> 8;
         theme = hash % themes;
-        len = nearestPoolLen(theme, g->dailyMod == DAILYMOD_LONG ? 7 : (hash & 8) ? 6 : 5);
+        len = nearestPoolLen(theme, g->dailyMod == DAILYMOD_LONG ? DAILY_LONG_LEN : (hash & 8) ? 6 : 5);
         n = poolCount(theme, len);
         if (n > 200) n = 200;      // Daily stays on familiar words
         idx = hash % n;
     } else {
         theme = (g->shelf - 1) % themes;
-        len = nearestPoolLen(theme, passTargetLen(g->shelf) + extraLen);
+        len = nearestPoolLen(theme, boardPassLenFor(g->shelf) + extraLen);
         n = poolCount(theme, len);
         if (n > passWindow(g->shelf)) n = passWindow(g->shelf);
         int fresh = 0;
@@ -220,7 +284,7 @@ static void pickPass(Game *g, int extraLen)
 // INK SPILL: three holes in rows 2..6 over empty back cells, as if peeled before you came.
 static void spillInk(Game *g)
 {
-    for (int k = 0, guard = 0; k < 3 && guard < 200; guard++) {
+    for (int k = 0, guard = 0; k < INK_SPILL_HOLES && guard < 200; guard++) {
         int c = boardRand() % COLS, r = 2 + boardRand() % 5;
         if (g->back[c][r] || g->cell[c][r].state == CELL_HOLE) continue;
         g->cell[c][r].state = CELL_HOLE;
@@ -235,18 +299,18 @@ void boardNewShelf(Game *g)
     if (g->mode == MODE_DAILY) g->dailyMod = boardDailyMod(g->dailySeed);   // before any boardRand() draw
     // twists: Classic shelves 4, 7, 10 ... get one of three, never the same one twice running
     g->twist = TWIST_NONE;
-    if (g->mode == MODE_CLASSIC && g->shelf >= 4 && g->shelf % 3 == 1) {
+    if (g->mode == MODE_CLASSIC && boardTwistShelf(g->shelf)) {
         g->twist = 1 + boardRand() % 3;
         if (g->twist == g->lastTwist) g->twist = 1 + boardRand() % 3;
         g->lastTwist = g->twist;
     }
-    pickPass(g, g->twist == TWIST_BURIED ? 1 : 0);
+    pickPass(g, g->twist == TWIST_BURIED ? TWIST_BURIED_EXTRA : 0);
+    ShelfRules rules;
+    if (g->mode == MODE_DAILY) boardDailyRules(g->dailyMod, &rules); else boardShelfRules(g->shelf, &rules);
     memset(g->found, 0, sizeof(g->found));
     memset(g->scorched, 0, sizeof(g->scorched));
-    // deeper shelves bury the pass lower in the board
-    int minRow = (g->shelf <= 2) ? 1 : (g->shelf <= 5) ? 3 : (g->shelf <= 11) ? 4 : 5;
-    if (g->mode == MODE_DAILY) minRow = g->dailyMod == DAILYMOD_DEEP ? 5 : 3;
-    if (g->twist == TWIST_BURIED) minRow = 5;
+    int minRow = rules.minRow;
+    if (g->twist == TWIST_BURIED) minRow = TWIST_BURIED_ROW;
     rareRot = boardRand() & 3;
     for (int attempt = 0; attempt < 10; attempt++) {
         boardBagReset();
@@ -269,15 +333,11 @@ void boardNewShelf(Game *g)
     g->heat = 0;
     g->overtime = false;
     g->fireN = 0;
-    g->lockdown = g->shelf > 5;
-    // Lockdown tiers: shelves 6-8, 9-11, 12-14, 15+ tighten the threshold and the pulse
-    g->lockTier = g->lockdown ? (g->shelf - 6) / 3 : 0;
-    if (g->lockTier > 3) g->lockTier = 3;
-    g->heatThreshold = (g->shelf <= 2) ? 10 : (g->shelf <= 5) ? 7 : 5 - g->lockTier / 2;
-    if (g->heatThreshold < 3) g->heatThreshold = 3;
-    g->burnEvery = (g->shelf <= 3) ? 2 : 1;
-    g->pulseEvery = 6 - g->lockTier;
-    if (g->pulseEvery < 3) g->pulseEvery = 3;
+    g->lockdown = rules.lockdown;
+    g->lockTier = rules.tier;
+    g->heatThreshold = rules.threshold;
+    g->burnEvery = rules.burnEvery;
+    g->pulseEvery = rules.pulseEvery;
     g->burnTimer = 0;
     g->fail = FAIL_NONE;
     g->wordsThisShelf = 0;
@@ -293,13 +353,7 @@ void boardNewShelf(Game *g)
     g->lastWordDiamonds = 0; g->lastWordRepeat = 0; g->lastWordBurn = 0;
     g->speedBonus = 0; g->peelBonus = 0; g->passBonusKind = 0;
     if (g->mode == MODE_DAILY) {
-        // one fixed shelf for everyone today: medium pressure, pass buried mid-board
-        g->lockdown = false;
-        g->lockTier = 0;
-        g->pulseEvery = 6;
-        g->heatThreshold = 7;
-        g->burnEvery = 2;
-        if (g->dailyMod == DAILYMOD_EMBER) { g->burnEvery = 1; g->heatThreshold = 8; }
+        // one fixed shelf for everyone today: the Daily rules above stand, whatever FIRE says
     } else if (S.fire == FIRE_RELAXED) {
         g->burnEvery += 1;
         g->heatThreshold += 3;
@@ -309,8 +363,8 @@ void boardNewShelf(Game *g)
         if (g->heatThreshold < 4) g->heatThreshold = 4;
     }
     if (g->twist == TWIST_DAMP) {   // a damp shelf: the fire creeps slower but catches sooner
-        g->burnEvery += 1;
-        g->heatThreshold -= 2;
+        g->burnEvery += TWIST_DAMP_SLOWER;
+        g->heatThreshold -= TWIST_DAMP_METER;
         if (g->heatThreshold < 3) g->heatThreshold = 3;
     }
 }
@@ -488,7 +542,7 @@ static bool spawnFire(Game *g)
 {
     g->fireN = 0;
     if (!igniteColumn(g, -1)) return false;
-    if (g->lockTier >= 2) igniteColumn(g, g->fireC[0]);
+    if (g->lockTier >= LOCKDOWN_TWIN_FIRE_TIER) igniteColumn(g, g->fireC[0]);
     return true;
 }
 
@@ -562,7 +616,7 @@ int boardTurnHeat(const Game *g, int baseHeat)
 {
     int turn = g->turn + 1, heat = baseHeat;
     if (g->lockdown && g->pulseEvery > 0 && (turn % g->pulseEvery) == 0) heat += 2;   // Lockdown pulse
-    int over = turn - (g->lockdown ? 16 : 24);                                        // shelf overtime
+    int over = turn - boardOvertimeTurns(g->lockdown);                                // shelf overtime
     if (over > 0) heat += 1 + over / 24;
     return heat;
 }
@@ -576,7 +630,7 @@ static void endTurn(Game *g, int heatAdd)
     int add = boardTurnHeat(g, heatAdd);
     g->turn++;
     g->heat += add;
-    g->overtime = g->turn > (g->lockdown ? 16 : 24);
+    g->overtime = g->turn > boardOvertimeTurns(g->lockdown);
 
     int spawned = applyGravity(g);
     g->burnTimer++;
@@ -690,12 +744,9 @@ static int chainScoreDetail(const Game *g, char *w, int *lenOut, int *tierOut, i
         if (cl->state == CELL_BURN) usedBurn = 1;
         if (cl->state == CELL_SECRET) diamonds++;
     }
-    if (diamonds > 2) diamonds = 2;
-    int mult = boardLenMult(len);
-    int gained = base * mult * 10 + (len >= 7 ? 200 : 0) + 30 * len * usedBurn;
-    gained += gained * diamonds / 2;
+    if (diamonds > DIAMOND_CAP) diamonds = DIAMOND_CAP;
     int repeat = ledgerHas(g, w) ? 1 : 0;
-    if (repeat) gained /= 2;
+    int gained = boardWordPoints(base, len, usedBurn != 0, diamonds, repeat != 0);
     *lenOut = len; *tierOut = tier; *diamondsOut = diamonds; *burnOut = usedBurn; *repeatOut = repeat;
     return gained;
 }
@@ -757,7 +808,7 @@ int boardPeel(Game *g, int c, int r)
     // drop a chained tile from the chain
     g->chainLen = 0;
     int secret = g->back[c][r];
-    int peelHeat = g->lockdown ? 2 : 1;      // a peel is a turn and warms the shelf
+    int peelHeat = boardPeelHeat(g->lockdown);      // a peel is a turn and warms the shelf
     if (scorch) {
         g->scorched[c][r] = 1;
         cl->state = CELL_HOLE;
@@ -834,6 +885,42 @@ static bool dfsWords(const Game *g, int c, int r, char *w, int n, bool used[COLS
     }
     used[c][r] = false;
     return false;
+}
+
+// A path that spells a common (not obscure) word, shortest first, for the guide's ghost drag.
+static bool hintDfs(const Game *g, int c, int r, char *w, int n, int maxLen, int depth, u8 *pc, u8 *pr, bool used[COLS][ROWS])
+{
+    int l = g->cell[c][r].letter;
+    w[n++] = 'a' + l;
+    if (l == 'q' - 'a') w[n++] = 'u';
+    pc[depth] = (u8)c; pr[depth] = (u8)r;
+    depth++;
+    if (depth >= 3 && depth == maxLen && dictLookup(w, n) == 1 && wordAccepted(w, n)) return true;
+    if (depth >= maxLen) return false;
+    used[c][r] = true;
+    int nc[6], nr[6], k = boardNeighbors(c, r, nc, nr);
+    for (int i = 0; i < k; i++) {
+        if (used[nc[i]][nr[i]] || !boardIsChainable(g, nc[i], nr[i])) continue;
+        if (hintDfs(g, nc[i], nr[i], w, n, maxLen, depth, pc, pr, used)) { used[c][r] = false; return true; }
+    }
+    used[c][r] = false;
+    return false;
+}
+
+int boardHintChain(const Game *g, u8 *outC, u8 *outR, int max)
+{
+    char w[16];
+    u8 pc[8], pr[8];
+    for (int len = 3; len <= 5 && len <= max; len++) {
+        bool used[COLS][ROWS] = {{false}};
+        for (int c = 0; c < COLS; c++)
+            for (int r = 0; r < ROWS; r++)
+                if (g->cell[c][r].state == CELL_TILE && hintDfs(g, c, r, w, 0, len, 0, pc, pr, used)) {
+                    for (int i = 0; i < len; i++) { outC[i] = pc[i]; outR[i] = pr[i]; }
+                    return len;
+                }
+    }
+    return 0;
 }
 
 bool boardHasWords(const Game *g)

@@ -32,7 +32,8 @@ IMAGE = 'devkitpro/devkitarm:20240511'
 # cell states and fail codes as the ROM numbers them
 EMPTY, TILE, BURN, HOLE, SECRET = 0, 1, 2, 3, 4
 FAIL_NONE, FAIL_FIRE, FAIL_SCORCH, FAIL_WORDS = 0, 1, 2, 3
-ST_TITLE, ST_PLAY, ST_PASSED, ST_FAIL, ST_PAUSE, ST_OPTIONS, ST_STATS = range(7)
+CUE_NONE, CUE_GHOST, CUE_TAIL, CUE_PEEKBTN, CUE_ARMED = range(5)
+ST_TITLE, ST_PLAY, ST_PASSED, ST_FAIL, ST_PAUSE, ST_OPTIONS, ST_STATS, ST_GUIDE = range(8)
 
 # byte offsets into DebugView (source/debug.c pins every one of these with _Static_assert)
 OFF = {
@@ -56,8 +57,9 @@ OFF = {
     'calloutLife': 568, 'pressBits': 572, 'callout': 576,
     'shownScore': 596, 'pauseRow': 600, 'pauseArm': 604,
     'tutorStep': 608, 'tutorDone': 612, 'tipIndex': 616, 'msgTimer': 620,
+    'guidePage': 624, 'guideFrom': 628, 'cue': 632, 'cueAge': 636, 'hintLen': 640,
 }
-DBG_SIZE = 624
+DBG_SIZE = 644
 I32_FIELDS = ['state', 'mode', 'shelf', 'score', 'fail', 'turn', 'heat', 'chainLen', 'peels', 'lockdown',
               'bestWordScore', 'dailySeed', 'passLen', 'lastWordTier', 'rareWords', 'library',
               'heatThreshold', 'burnEvery', 'burnTimer', 'optRow', 'pulseEvery', 'lockTier', 'overtime',
@@ -65,14 +67,14 @@ I32_FIELDS = ['state', 'mode', 'shelf', 'score', 'fail', 'turn', 'heat', 'chainL
               'lives', 'passTheme', 'twist', 'spelling', 'practice', 'dailyMod', 'clockOk', 'statWords', 'statGames',
               'streak', 'dailyPlayed', 'dailyLast', 'dailyLastScore', 'peek', 'armed', 'armC', 'armR', 'curC', 'curR', 'curOn',
               'calloutLife', 'pressBits', 'shownScore', 'pauseRow', 'pauseArm',
-              'tutorStep', 'tutorDone', 'tipIndex', 'msgTimer']
+              'tutorStep', 'tutorDone', 'tipIndex', 'msgTimer', 'guidePage', 'guideFrom', 'cue', 'cueAge', 'hintLen']
 PASS_THEMES = ['BINDERY', 'INK', 'VERSE', 'TALES', 'ATLAS', 'ARCHIVE', 'LAMP', 'STUDY']
 TWIST_NONE, TWIST_INK, TWIST_DAMP, TWIST_BURIED = range(4)
 VOWELS = {0, 4, 8, 14, 20}; RARE = {9, 16, 23, 25}   # a e i o u; j q x z
 # letter values (board.c letterValue), Q stands for Qu
 LETTER_VALUE = [1,3,3,2,1,4,2,4,1,8,5,1,3,1,1,3,10,1,1,1,1,4,4,8,4,10]
 # poke commands (debug.c applyPoke)
-POKE_CELL, POKE_BACK, POKE_HEAT, POKE_BURN, POKE_FIRESTEP, POKE_TURN, POKE_LIVES, POKE_SCORE, POKE_SPELL, POKE_CLOCK, POKE_DAILY, POKE_PASS, POKE_TUTOR = range(1, 14)
+POKE_CELL, POKE_BACK, POKE_HEAT, POKE_BURN, POKE_FIRESTEP, POKE_TURN, POKE_LIVES, POKE_SCORE, POKE_SPELL, POKE_CLOCK, POKE_DAILY, POKE_PASS, POKE_TUTOR, POKE_GUIDENAV = range(1, 15)
 
 def symbol(elf, name):
     """Address of a symbol via arm-none-eabi-nm inside the toolchain container."""

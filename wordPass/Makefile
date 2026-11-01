@@ -94,10 +94,10 @@ variants:
 	python3 tools/gen_dict.py --variants tools/words/us_only.txt tools/words/uk_only.txt data/variants.bin
 	python3 tools/gen_dict.py --verify-variants data/variants.bin tools/words/us_only.txt tools/words/uk_only.txt
 
-# Native rule tests: board.c, dict.c, pools.c and music.c under gcc with the stubs in tools/check/stub,
+# Native rule tests: board.c, dict.c, pools.c, music.c, guide.c and font.c under gcc with the stubs in tools/check/stub,
 # after settings.c on its own (stub fat.h, a scratch file for the card). The last line is CHECK OK.
 #   make check
-CHECK_SRC := tools/check/board_test.c tools/check/stubs.c source/board.c source/dict.c source/pools.c source/music.c
+CHECK_SRC := tools/check/board_test.c tools/check/stubs.c source/board.c source/dict.c source/pools.c source/music.c source/guide.c source/font.c
 check:
 	@mkdir -p $(BUILD)
 	gcc -std=gnu11 -Wall -Wextra -Wshadow -I tools/check/stub -I source -DCFG_PATH='"$(BUILD)/settings_test.cfg"' \

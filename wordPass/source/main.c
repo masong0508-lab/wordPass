@@ -94,6 +94,7 @@ static void clearSticky(void)
 static void startShelf(void)
 {
     G.armed = 0; G.peekLatch = 0;
+    G.cue = CUE_NONE; G.cueAge = 0; G.ghostDone = 0; G.idleFrames = 0; G.hintLen = 0;
     boardNewShelf(&G);
     G.newBest = 0;
     gfxFadeIn();
@@ -138,7 +139,7 @@ static bool newGame(int mode)
     G.score = 0;
     G.hintShown = 0;
     G.curC = 3; G.curR = 3; G.curOn = 0;
-    G.lives = 3;
+    G.lives = BOOKMARKS_MAX;
     G.tutorStep = (mode == MODE_CLASSIC && !S.tutorDone) ? TUTOR_DRAG : TUTOR_DONE;
     G.twist = 0; G.lastTwist = 0;
     memset(G.recentPass, 0, sizeof(G.recentPass)); G.recentHead = 0;
@@ -204,8 +205,17 @@ int pauseRows(const Game *g, int ids[PAUSE_ROWS_MAX])
     int n = 0;
     ids[n++] = PAUSE_RESUME;
     if (g->mode != MODE_DAILY) ids[n++] = PAUSE_RESTART;
+    ids[n++] = PAUSE_GUIDE;
     ids[n++] = PAUSE_QUIT;
     return n;
+}
+
+// HOW TO PLAY: from the title or the pause menu, back to wherever it was opened from
+static void openGuide(int from)
+{
+    G.guideFrom = from;
+    G.guidePage = 0;
+    G.state = ST_GUIDE;
 }
 
 static void quitToTitle(void)
@@ -322,12 +332,46 @@ static void pauseActivate(int id)
             if (G.mode == MODE_CLASSIC) G.lives--;
             G.score = G.shelfStartScore; startShelf(); G.state = ST_PLAY;
             break;
+        case PAUSE_GUIDE:
+            G.pauseArm = 0;
+            openGuide(ST_PAUSE);
+            break;
         case PAUSE_QUIT:
             if (!armed) { G.pauseArm = 90; G.pauseArmId = id; break; }
             G.pauseArm = 0;
             quitToTitle();
             break;
     }
+}
+
+// The guided first shelf also points at things in the world: a breathing ring and a bobbing pointer on the tail
+// gem of a valid chain, on the PEEK button, on the armed cell, and once after a few idle seconds a ghost drag that
+// traces a real word on the real board. A cue lasts only until the player does the thing, and never shows while the
+// stylus is down.
+static void updateCue(u32 held)
+{
+    int want = CUE_NONE;
+    bool touching = (held & KEY_TOUCH) != 0;
+    if (G.state == ST_PLAY && tutorOn() && !G.fail) {
+        if (held & (KEY_TOUCH | KEY_A | KEY_B | KEY_X | KEY_Y | KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT | KEY_L | KEY_R)) G.idleFrames = 0;
+        else G.idleFrames++;
+        if (G.tutorStep == TUTOR_DRAG && !touching) {
+            char w[WORD_BUF];
+            if (G.chainLen >= 3) { boardChainWord(&G, w); if (boardWordOk(w, (int)strlen(w))) want = CUE_TAIL; }
+            else if (G.chainLen == 0 && (!G.ghostDone || G.cue == CUE_GHOST) && G.idleFrames >= GHOST_IDLE_FRAMES) want = CUE_GHOST;   // once: it keeps going until its own end
+        } else if (G.tutorStep == TUTOR_PEEK && !touching && G.chainLen == 0) {
+            if (G.armed) want = CUE_ARMED;
+            else if (!G.peekHeld) want = CUE_PEEKBTN;
+        } else if (G.tutorStep == TUTOR_PEEK && G.armed) want = CUE_ARMED;
+    } else G.idleFrames = 0;
+    if (want == CUE_GHOST && G.cue != CUE_GHOST) {
+        G.hintLen = boardHintChain(&G, G.hintC, G.hintR, 5);
+        G.ghostDone = 1;                         // shown once: whatever happens next
+        if (!G.hintLen) want = CUE_NONE;
+    }
+    if (want != G.cue) { G.cue = want; G.cueAge = 0; }
+    else G.cueAge++;
+    if (G.cue == CUE_GHOST && G.cueAge > G.hintLen * GHOST_GEM_FRAMES + 30) { G.cue = CUE_NONE; G.cueAge = 0; }
 }
 
 static void handlePlay(u32 down, u32 held, touchPosition *t)
@@ -375,7 +419,7 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
             int res = boardPeel(&G, c, r);
             if (res == 2) {
                 gfxBurst(c, r, BURST_REVEAL, letter);
-                int reward = 100 * G.shelf;              // every pass letter pays
+                int reward = boardPassLetterReward(G.shelf);   // every pass letter pays
                 G.score += reward;
                 char ps[12]; siprintf(ps, "+%d", reward);
                 gfxPopup(c, r, ps, 1);
@@ -396,14 +440,11 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
                 boardClearChain(&G);
                 G.peekHeld = 0; G.armed = 0; G.peekLatch = 0; musicPeek(false);
                 // shelf bonus, a speed bonus for a quick pass, and a bonus for a tidy peel count
-                int shelfBonus = 1000 * G.shelf;
-                int left = 40 - G.turn;
-                G.speedBonus = 25 * G.shelf * (left > 0 ? left : 0);
-                if (G.peels == G.passLen) { G.passBonusKind = 2; G.peelBonus = 400 * G.shelf; }
-                else if (G.peels <= G.passLen + 2) { G.passBonusKind = 1; G.peelBonus = 150 * G.shelf; }
-                else { G.passBonusKind = 0; G.peelBonus = 0; }
+                int shelfBonus = boardShelfBonus(G.shelf);
+                G.speedBonus = boardSpeedBonus(G.shelf, G.turn);
+                G.peelBonus = boardPeelBonus(G.shelf, G.peels, G.passLen, &G.passBonusKind);
                 G.score += shelfBonus + G.speedBonus + G.peelBonus;
-                if (G.lockdown && G.mode == MODE_CLASSIC && G.lives < 3) G.lives++;   // a Lockdown shelf earns a bookmark back
+                if (G.lockdown && G.mode == MODE_CLASSIC && G.lives < BOOKMARKS_MAX) G.lives++;   // a Lockdown shelf earns a bookmark back
                 if (G.passBonusKind == 2)                // a perfect pass: every diamond sparkles
                     for (int dc = 0; dc < COLS; dc++)
                         for (int dr = 0; dr < ROWS; dr++)
@@ -498,13 +539,28 @@ int main(void)
                     else if (gfxInTitleDaily(t.px, t.py)) newGame(MODE_DAILY);
                     else if (gfxInTitleClassic(t.px, t.py)) newGame(MODE_CLASSIC);
                     else if (gfxInTitleLedger(t.px, t.py)) G.state = ST_STATS;
+                    else if (gfxInTitleGuide(t.px, t.py)) openGuide(ST_TITLE);
                 } else if (down & (KEY_START | KEY_A)) { srand(seedCounter); newGame(MODE_CLASSIC); }
                 else if (down & (KEY_LEFT | KEY_L)) gfxTipFlip(-1);
                 else if (down & (KEY_RIGHT | KEY_R)) gfxTipFlip(1);
                 else if (down & KEY_SELECT) newGame(MODE_DAILY);
                 else if (down & KEY_Y) { G.state = ST_OPTIONS; G.optRow = 0; }
                 else if (down & KEY_X) G.state = ST_STATS;
+                else if (down & KEY_B) openGuide(ST_TITLE);
                 break;
+            case ST_GUIDE: {     // eight pages: LEFT/RIGHT or L/R or the buttons or a page dot flip them; B, START or BACK leaves
+                int hit = (down & KEY_TOUCH) ? gfxGuideHit(t.px, t.py) : GH_NONE, dir = 0;
+                if (down & (KEY_TOUCH | KEY_A | KEY_B | KEY_X | KEY_Y | KEY_START | KEY_SELECT | KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT | KEY_L | KEY_R)) gfxGuideSkip();   // any press finishes the typing (a page flip then starts the next page's)
+                if ((down & (KEY_B | KEY_START)) || hit == GH_BACK) { G.state = G.guideFrom; break; }
+                if (down & (KEY_RIGHT | KEY_R)) dir = 1;
+                else if (down & (KEY_LEFT | KEY_L)) dir = -1;
+                else if (down & KEY_A) { if (G.guidePage == GUIDE_PAGES - 1) { G.state = G.guideFrom; break; } dir = 1; }   // A reads on, and closes after the last page
+                else if (hit == GH_NEXT) dir = 1;
+                else if (hit == GH_PREV) dir = -1;
+                else if (hit >= GH_DOT && hit < GH_DOT + GUIDE_PAGES) G.guidePage = hit - GH_DOT;
+                if (dir) G.guidePage = (G.guidePage + GUIDE_PAGES + dir) % GUIDE_PAGES;
+                break;
+            }
             case ST_STATS:       // THE LEDGER: B, X, A, START or any tap leaves
                 if (down & (KEY_B | KEY_X | KEY_A | KEY_START | KEY_TOUCH)) G.state = ST_TITLE;
                 break;
@@ -521,6 +577,7 @@ int main(void)
             }
             case ST_PLAY:
                 handlePlay(down, held, &t);
+                updateCue(held);
                 break;
             case ST_PASSED:
                 G.stateTimer++;
@@ -559,6 +616,7 @@ int main(void)
                 break;
             }
         }
+        if (G.state != ST_PLAY) { G.cue = CUE_NONE; G.cueAge = 0; }
         if (G.msgTimer > 0 && --G.msgTimer == 0) {
             G.msg[0] = 0;
             if (pendingMsg[0]) { setMsg(pendingMsg, pendingFrames); pendingMsg[0] = 0; }

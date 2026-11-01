@@ -197,11 +197,59 @@ three. Daily Pass has no bookmarks: one attempt.
 | D-pad | move the hex cursor (see below) |
 | Hold L or R | peek mode (touch a gem to arm it, lift to peel it; slide away to cancel) |
 | X / PEEK button | latch peek on for one peel (press again to cancel); with the cursor shown, A then peels the gem under it |
-| START / the II button on the panel | pause menu: RESUME, RESTART SHELF (costs a bookmark) and QUIT TO TITLE. Up and down move the highlight, A or a tap on the lit row picks it (a tap on another row lights it first); RESTART and QUIT ask for a second pick within 90 frames. START or B resumes |
+| START / the II button on the panel | pause menu: RESUME, RESTART SHELF (costs a bookmark), HOW TO PLAY and QUIT TO TITLE. Up and down move the highlight, A or a tap on the lit row picks it (a tap on another row lights it first); RESTART and QUIT ask for a second pick within 90 frames. START or B resumes |
 | LEFT / RIGHT or L / R (title) | flip the tip cards on the top screen |
 | Y (title) | options |
 | X (title) | THE LEDGER |
+| B (title) / the GUIDE button | HOW TO PLAY, the in-game guide (see *Guide* below) |
 | SELECT (title) | Daily Pass |
+
+### Guide
+
+HOW TO PLAY is eight pages of the rules you need, on the device. Open it with
+the **? GUIDE** button in the title's top corner (or **B** on the title), or with the
+HOW TO PLAY row of the pause menu in the middle of a shelf. Until the first
+guided shelf has been done the GUIDE button pulses and the title's tip card says
+NEW HERE? TAP GUIDE; the guided first shelf is the short form of the same
+lesson, the guide is the long one.
+
+| Page | What it teaches |
+| --- | --- |
+| 1 THE BOARD | dragging a chain, the gold ring, tapping the last gem (or SUBMIT or A), undo and cut back, with INK worth +70 |
+| 2 SCORING | gem values, the length multiplier ladder, the flat +200 at seven letters, flames, diamonds, repeats, with Qu+I+Z worked out |
+| 3 PEEKING | the shoulder buttons, X and the PEEK button, arm and lift, the hole numbers and their colours, diamonds, the red gems that scorch |
+| 4 THE PASS | the hidden letters and their themes, the pass length by shelf, what a letter pays, the shelf, speed, PERFECT and CLEAN bonuses |
+| 5 FIRE | the heat each word adds, what a peel adds, how a flame falls, chimneys and firebreaks, the three ways to lose a shelf |
+| 6 SHELVES | bookmarks, the three twists, Lockdown and its tiers, overtime |
+| 7 MODES | Classic, the Daily Pass (one scored try, then practice, the modifiers, the streak), THE LEDGER |
+| 8 CONTROLS | touch, d-pad, buttons, and the options that matter |
+
+The touch screen holds the words (key terms in the accent colour, numbers in
+gold, warnings in amber), typed in line by line over about a second (any key
+or tap finishes them at once) with a big NEXT and PREV button in the bottom
+corners (they pulse until the first time you use one), eight page dots (the
+active one breathes and rings when you arrive; tap one to jump), a BACK box
+and a page counter. The two corners at the top swap with HAND: BACK takes the
+stylus side. The top screen is a looping story per page, a little over four
+seconds long, drawn with the board's own gems, holes, flames, diamonds and
+heat bar and with a drawn stylus that does what the page teaches, with a ripple
+where it presses: gems drop in with the board's own fall and squash, a stylus
+drags I, N, K and the rope grows behind it with a spark, then taps the gold ring
+and the gems shatter; Qu, I and Z each float up their value, the sum meets the
+multiplier and the total counts up; the stylus reads the numbers of a peeled
+patch (worked out from two hidden letters) while L is held; the pass slots fill
+for three themes; heat fills a meter, a flame slides down a column a tile at a
+time with new gems dropping in behind it, and a diamond stops it; a bookmark is
+lost and won back, a twist banner slides in, the Lockdown tiers take the
+highlight in turn; the stylus taps the title's buttons and the Daily's
+calendar tile changes its modifier; the DS has each control pressed in turn.
+Changing page dips the brightness for a few frames and sparks from the new dot.
+LEFT and RIGHT, L and R, A, the buttons and the dots all flip pages (they wrap;
+A on the last page closes), and B, START or BACK returns to the title or the
+pause menu. Every number on a page is printed from
+the same tables the rules run on (the multiplier ladder, the heat table, the
+bonus and shelf constants, the pass length ladder), and `make check` fails if a
+page drifts from them or a line outruns its width.
 
 ### Playing with buttons only
 
@@ -237,7 +285,8 @@ flame tongues and shed sparks, callouts pop in at double size, shelves fade
 in, and a failed run flashes and shakes the screen. The gold frames carry a
 travelling shimmer and the submit gem breathes while a valid word is chained.
 The title is a gold-ruled band of logo gems over a slow rain of falling gems in
-the theme's colours; the pause menu is a card with the highlighted row boxed.
+the theme's colours; the pause menu is a card with the highlighted row boxed (its four rows are
+RESUME, RESTART SHELF, HOW TO PLAY and QUIT TO TITLE).
 The title screen's top half turns three illustrated tip cards every seven
 seconds (LEFT and RIGHT, or L and R, flip them; the dots show which), the
 first Classic shelf is guided (see below), and a nudge appears if you haven't
@@ -263,7 +312,13 @@ a plain gem however the palette is tuned (the Clear theme is built for it).
 The first Classic shelf is guided until you have done each thing once: sticky
 prompts on the top screen ask you to drag a word, then to peek, say what the
 first hole's number means, and call out the first pass letter you find; a
-callout takes the line for its moment and the prompt comes back. The guide ends
+callout takes the line for its moment and the prompt comes back. A prompt slides
+in from the right and settles. Each prompt also points at what to do on the
+board itself: after three idle seconds a ghost stylus traces a real word on your
+actual board, once; a valid chain gets a breathing ring and a bobbing stylus on
+its tail gem; the PEEK button gets a ring until you start peeking; an armed gem
+gets a stylus that lifts off it. A cue is gone the moment you act on it and
+never shows while the stylus is down. The guide ends
 for good once the closing tip has run or the shelf is cleared (the card
 remembers). Hints name the shoulder under your idle hand: HOLD L when you play
 right-handed, HOLD R when left-handed.
@@ -405,6 +460,7 @@ source/dict.c    packed dictionary lookup
 source/gfx.c     software renderer for both screens
 source/music.c   PSG sequencer and adaptive stems
 source/font.c    5x7 bitmap font
+source/guide.c   the eight HOW TO PLAY pages, built from the rules' own tables
 source/settings.c options, records, stats, checksummed FAT save, Daily clock and streak
 source/debug.c   fixed-layout state mirror and poke channel for the test harness
 tools/gen_dict.py  WPD2 dictionary builder and --verify round trip

@@ -60,6 +60,7 @@ const u8 font5x7[][7] = {
     {0x08,0x04,0x02,0x02,0x02,0x04,0x08}, // ) (54)
     {0x19,0x19,0x02,0x04,0x08,0x13,0x13}, // % (55)
     {0x00,0x00,0x00,0x00,0x0C,0x04,0x08}, // , (56)
+    {0x00,0x00,0x1F,0x00,0x1F,0x00,0x00}, // = (57)
 };
 
 int fontLogoIndex(char ch)
@@ -79,7 +80,7 @@ int fontIndex(char ch)
         case '_': return 43; case '/': return 44; case '@': return 45;
         case '\'': return 46;
         case '<': return 51; case '>': return 52;
-        case '(': return 53; case ')': return 54; case '%': return 55; case ',': return 56;
+        case '(': return 53; case ')': return 54; case '%': return 55; case ',': return 56; case '=': return 57;
         default:  return 36;
     }
 }

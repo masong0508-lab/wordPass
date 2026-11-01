@@ -6,7 +6,7 @@ exit status is the number of failures. Screenshots land in outdir (default /tmp)
 import sys, os, traceback
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from wp import Emu, COLS, ROWS, EMPTY, TILE, BURN, HOLE, SECRET, ST_TITLE, ST_PLAY, ST_PASSED, ST_FAIL, ST_PAUSE, ST_OPTIONS, \
-    FAIL_FIRE, FAIL_SCORCH, FAIL_WORDS, Keys, keymask, load_words, POKE_SPELL, ST_STATS
+    FAIL_FIRE, FAIL_SCORCH, FAIL_WORDS, Keys, keymask, load_words, POKE_SPELL, ST_STATS, ST_GUIDE, POKE_GUIDENAV
 
 rom = sys.argv[1]; out = sys.argv[2] if len(sys.argv) > 2 else '/tmp'
 e = Emu(rom)
@@ -41,6 +41,7 @@ def ensure_play():
         elif g['state'] == ST_TITLE: e.start_classic()
         elif g['state'] == ST_PAUSE: e.press('START', settle=30)
         elif g['state'] == ST_OPTIONS: e.press('B', settle=30)
+        elif g['state'] == ST_GUIDE: e.press('B', settle=30)
     g = e.state(); assert g['state'] == ST_PLAY, f'not in play: state {g["state"]}'
     e.press('Y', settle=5)
     e.set_heat(0); e.set_burn(0, 99)          # no spontaneous ignition, no fire advance on submits
@@ -50,8 +51,8 @@ def ensure_play():
             if g['cell'][c][r][1] == BURN: e.set_cell(c, r, TILE, 'e')
 
 def pause_rows():
-    """The pause menu's rows for the current mode (Daily has no RESTART)."""
-    return ['RESUME', 'QUIT'] if e.state()['mode'] == 1 else ['RESUME', 'RESTART', 'QUIT']
+    """The pause menu's rows for the current mode (Daily has no RESTART). GUIDE is HOW TO PLAY."""
+    return ['RESUME', 'GUIDE', 'QUIT'] if e.state()['mode'] == 1 else ['RESUME', 'RESTART', 'GUIDE', 'QUIT']
 
 def pause_do(name, settle=30):
     """From play: open the pause menu, walk the d-pad to the row `name` and press A (twice for RESTART and
@@ -673,8 +674,9 @@ def _():
     r = play_turn(shortest); assert r, 'no word to spell'
     g = e.state(); assert g['statWords'] == words0 + 1, f'scored Daily word counted: {g["statWords"]} (was {words0})'
     e.press('START', settle=10)
-    g = e.state(); assert g['state'] == ST_PAUSE and pause_rows() == ['RESUME', 'QUIT'], f'Daily pause: state {g["state"]} rows {pause_rows()}'
-    e.press('DOWN', settle=3); assert e.state()['pauseRow'] == 1, 'Daily pause: DOWN goes to QUIT'
+    g = e.state(); assert g['state'] == ST_PAUSE and pause_rows() == ['RESUME', 'GUIDE', 'QUIT'], f'Daily pause: state {g["state"]} rows {pause_rows()}'
+    e.press('DOWN', settle=3); assert e.state()['pauseRow'] == 1, 'Daily pause: DOWN goes to HOW TO PLAY'
+    e.press('DOWN', settle=3); assert e.state()['pauseRow'] == 2, 'Daily pause: DOWN goes to QUIT'
     e.press('DOWN', settle=3); assert e.state()['pauseRow'] == 0, 'Daily pause has no RESTART row: DOWN wraps to RESUME'
     e.shot(f'{out}/rules_daily_pause.png')
     e.press('START', settle=30); assert e.state()['state'] == ST_PLAY
@@ -1255,18 +1257,18 @@ def check_pause(tag):
     e.press('START', settle=20); assert e.state()['state'] == ST_PLAY, f'{tag}: START did not resume'
     # the d-pad walks the rows and wraps
     e.press('START', settle=10); rows = []
-    for k in 'DOWN', 'DOWN', 'DOWN', 'UP': e.press(k, settle=3); rows.append(e.state()['pauseRow'])
-    assert rows == [1, 2, 0, 2], f'{tag}: pause rows {rows}'
+    for k in 'DOWN', 'DOWN', 'DOWN', 'DOWN', 'UP': e.press(k, settle=3); rows.append(e.state()['pauseRow'])
+    assert rows == [1, 2, 3, 0, 3], f'{tag}: pause rows {rows}'
     # a tap on another row only highlights it; a tap on the highlighted row arms QUIT, a second one within 90 frames quits
     e.tap(x, pause_row_y(0), settle=6); g = e.state()
     assert g['state'] == ST_PAUSE and g['pauseRow'] == 0, f'{tag}: a tap on RESUME while QUIT was lit must only highlight: {g["state"]} {g["pauseRow"]}'
-    e.tap(x, pause_row_y(2), settle=6); g = e.state()
-    assert g['state'] == ST_PAUSE and g['pauseRow'] == 2 and g['pauseArm'] == 0, f'{tag}: tap on QUIT highlights it: row {g["pauseRow"]} arm {g["pauseArm"]}'
-    e.tap(x, pause_row_y(2), settle=6); g = e.state()
+    e.tap(x, pause_row_y(3), settle=6); g = e.state()
+    assert g['state'] == ST_PAUSE and g['pauseRow'] == 3 and g['pauseArm'] == 0, f'{tag}: tap on QUIT highlights it: row {g["pauseRow"]} arm {g["pauseArm"]}'
+    e.tap(x, pause_row_y(3), settle=6); g = e.state()
     assert g['state'] == ST_PAUSE and g['pauseArm'] > 60, f'{tag}: the first QUIT activation must only arm: state {g["state"]} arm {g["pauseArm"]}'
     e.shot(f'{out}/rules_pause_quit_{tag}.png')
     e.run(95); assert e.state()['pauseArm'] == 0, f'{tag}: the confirmation never expired'
-    e.tap(x, pause_row_y(2), settle=6); assert e.state()['state'] == ST_PAUSE, f'{tag}: after the timeout one tap must arm again, not quit'
+    e.tap(x, pause_row_y(3), settle=6); assert e.state()['state'] == ST_PAUSE, f'{tag}: after the timeout one tap must arm again, not quit'
     e.press('UP', settle=3); assert e.state()['pauseArm'] == 0, f'{tag}: moving the highlight must disarm'
     e.press('DOWN', settle=3); e.press('A', settle=3); e.press('A', settle=30)
     g = e.state(); assert g['state'] == ST_TITLE, f'{tag}: the second activation did not quit: {g["state"]}'
@@ -1662,6 +1664,293 @@ def _():
         lit = sum(px[e.bx + 109, 192 + 112 + 1]) > 100
         assert lit == left, f'title tagline for the {"left" if left else "right"} hand: lit={lit}'
     set_hand(False)
+
+# ---- the in-game guide (item 19) ---------------------------------------------------------------
+GUIDE_PAGES = 8
+def guide_dot(i): return (79 + 14 * i, 178)           # the page dots (centres), 14 apart on the bottom row
+GUIDE_PREV, GUIDE_NEXT = (18, 178), (238, 178)         # the 24 x 20 buttons in the bottom corners
+def guide_back(left): return (26, 13) if left else (230, 13)   # BACK takes the stylus-side corner
+def guide_open_from_title():
+    e.tap(e.bx + 137, 15, settle=20)
+    g = e.state(); assert g['state'] == ST_GUIDE and g['guideFrom'] == ST_TITLE and g['guidePage'] == 0, f'GUIDE did not open: {g["state"]} from {g["guideFrom"]} page {g["guidePage"]}'
+
+def guide_margins(tag, page, ticks=60):
+    """Watch a whole four second loop of both screens (a screenshot per tick) and fail on any lit pixel where text must
+    not be: the touch screen's body keeps clear of the frame and the buttons, the top screen's captions and diagrams
+    clear of the plaque border and of everything outside it."""
+    bad = []
+    for k in range(ticks):
+        e.run(4); px = e.pixels()
+        for y in range(0, 192):                                   # top screen: nothing outside the plaque, nor in the two columns inside its border
+            for x in list(range(0, 8)) + list(range(248, 256)) + ([10, 11, 244, 245] if 10 <= y < 182 else []):
+                if sum(px[x, y]) > 200: bad.append(('top', x, y, k))
+        for x in range(0, 256):                                   # ... nor in the rows above and below it, nor just inside its border
+            for y in list(range(0, 8)) + list(range(184, 192)) + ([10, 11, 180, 181] if 10 <= x < 246 else []):
+                if sum(px[x, y]) > 200: bad.append(('top', x, y, k))
+        if bad: break
+        if k % 10 == 0:                                           # the touch screen's text is static: a sample is enough
+            for y in range(192 + 28, 192 + 164):
+                for x in list(range(2, 12)) + list(range(243, 254)):
+                    if sum(px[x, y]) > 200: bad.append(('touch', x, y - 192, k))
+            for y in (192 + 165, 192 + 166, 192 + 167):
+                for x in range(2, 254):
+                    if sum(px[x, y]) > 200: bad.append(('touch', x, y - 192, k))
+        if bad: break
+    assert not bad, f'{tag} page {page + 1}: text out of bounds, first {bad[:4]}'
+
+def check_guide(left):
+    tag = 'left' if left else 'right'
+    set_hand(left); to_title(); e.set_tutor(1); e.run(20)
+    guide_open_from_title(); g = e.state()
+    # eight pages with the NEXT button; every page screenshotted, animated, inside its bounds, at 60 fps
+    prev = None
+    for page in range(GUIDE_PAGES):
+        g = e.state(); assert g['guidePage'] == page, f'{tag}: expected page {page}, on {g["guidePage"]}'
+        e.run(50); e.shot(f'{out}/rules_guide_{tag}_{page + 1}.png'); a = e.pixels()
+        e.run(36); b = e.pixels()
+        moved = sum(1 for y in range(30, 160) for x in range(10, 246) if a[x, y] != b[x, y])
+        assert moved > 20, f'{tag} page {page + 1}: the top-screen diagram does not move ({moved} px changed)'
+        assert e.fps() == 120, f'{tag} page {page + 1}: fps {e.fps()}'
+        guide_margins(tag, page)
+        if page < GUIDE_PAGES - 1: e.tap(*GUIDE_NEXT, settle=10)
+    # BACK sits on the stylus side: the other corner does nothing
+    other = guide_back(not left)
+    e.tap(*other, settle=10); assert e.state()['state'] == ST_GUIDE, f'{tag}: the far corner must not leave the guide'
+    e.tap(*guide_back(left), settle=15); g = e.state(); assert g['state'] == ST_TITLE, f'{tag}: BACK did not return to the title: {g["state"]}'
+    e.set_hand(left)
+
+@scenario('guide (right hand): GUIDE opens it, eight animated pages with NEXT, 60 fps, nothing outside its bounds, BACK returns')
+def _():
+    check_guide(False)
+
+@scenario('guide (left hand): the same; BACK and the page counter swap corners')
+def _():
+    check_guide(True)
+    set_hand(False)
+
+@scenario('guide navigation: d-pad, L/R, PREV, NEXT, the dots and A flip pages (wrapping); B, START and BACK return; B on the title opens it')
+def _():
+    set_hand(False); to_title(); e.set_tutor(1); e.run(20)
+    guide_open_from_title()
+    def page(): return e.state()['guidePage']
+    e.press('RIGHT', settle=8); assert page() == 1, f'RIGHT: {page()}'
+    e.press('LEFT', settle=8); assert page() == 0, f'LEFT: {page()}'
+    e.press('LEFT', settle=8); assert page() == GUIDE_PAGES - 1, f'LEFT wraps to the last page: {page()}'
+    e.press('RIGHT', settle=8); assert page() == 0, f'RIGHT wraps to the first page: {page()}'
+    e.press('R', settle=8); e.press('R', settle=8); assert page() == 2, f'R: {page()}'
+    e.press('L', settle=8); assert page() == 1, f'L: {page()}'
+    e.tap(*GUIDE_NEXT, settle=8); assert page() == 2, f'NEXT: {page()}'
+    e.tap(*GUIDE_PREV, settle=8); e.tap(*GUIDE_PREV, settle=8); assert page() == 0, f'PREV: {page()}'
+    e.tap(*GUIDE_PREV, settle=8); assert page() == GUIDE_PAGES - 1, f'PREV on the first page wraps: {page()}'
+    for i in (3, 0, 7, 5, 1):
+        e.tap(*guide_dot(i), settle=8); assert page() == i, f'dot {i}: {page()}'
+    e.tap(*guide_dot(7), settle=8); e.tap(128 - 4, 130, settle=8); assert page() == 7 and e.state()['state'] == ST_GUIDE, 'a tap on the text does nothing'
+    e.press('A', settle=15); g = e.state(); assert g['state'] == ST_TITLE, f'A on the last page closes the guide: {g["state"]}'
+    guide_open_from_title(); e.press('A', settle=8); assert page() == 1, f'A reads on: {page()}'
+    e.press('B', settle=15); assert e.state()['state'] == ST_TITLE, 'B returns to the title'
+    e.press('B', settle=15); g = e.state(); assert g['state'] == ST_GUIDE and g['guideFrom'] == ST_TITLE and g['guidePage'] == 0, f'B on the title opens the guide on its first page: {g["state"]} page {g["guidePage"]}'
+    e.press('START', settle=15); assert e.state()['state'] == ST_TITLE, 'START returns to the title'
+    # the other title buttons are untouched by the new corner
+    e.tap(e.bx + 86, 170, settle=10); assert e.state()['state'] == ST_OPTIONS; e.press('B', settle=20)
+    e.press('X', settle=10); assert e.state()['state'] == ST_STATS; e.press('B', settle=20)
+    assert e.state()['state'] == ST_TITLE
+
+@scenario('guide cue: the GUIDE button pulses and the tip line says NEW HERE? until tutorDone, then both rest')
+def _():
+    for left in (False, True):
+        set_hand(left); to_title(); e.run(20)
+        def sample(n=14):
+            seen = set()
+            for _ in range(n):
+                px = e.pixels(); seen.add((px[e.bx + 130, 192 + 7], px[e.bx + 120, 192 + 15])); e.run(3)
+            return seen
+        def cue_text():
+            px = e.pixels(); return sum(1 for y in range(156, 168) for x in range(40, 216) if sum(px[x, y]) > 250)
+        e.set_tutor(0); e.run(8)
+        assert e.state()['tutorDone'] == 0
+        pulsing = sample(); assert len(pulsing) >= 4, f'{"left" if left else "right"}: the GUIDE button should pulse until tutorDone: {len(pulsing)} colours'
+        assert cue_text() > 60, 'NEW HERE? TAP GUIDE is missing from the title tip card'
+        e.shot(f'{out}/rules_guide_cue_{"left" if left else "right"}.png')
+        e.set_tutor(1); e.run(8)
+        assert len(sample()) == 1, f'{"left" if left else "right"}: the GUIDE button should rest once the guide is done'
+        assert cue_text() == 0, 'the NEW HERE cue should be gone once tutorDone is set'
+    set_hand(False)
+
+@scenario('guide from the pause menu: HOW TO PLAY row, B and START return to the pause menu, the shelf is untouched')
+def _():
+    for left in (False, True):
+        set_hand(left); e.start_classic(); calm(); e.set_lives(3)
+        x = e.bx + 86
+        g0 = e.state()
+        e.press('START', settle=10); assert pause_rows() == ['RESUME', 'RESTART', 'GUIDE', 'QUIT']
+        e.shot(f'{out}/rules_pause_guide_{"left" if left else "right"}.png')
+        e.press('DOWN', settle=3); e.press('DOWN', settle=3); e.press('A', settle=15)
+        g = e.state(); assert g['state'] == ST_GUIDE and g['guideFrom'] == ST_PAUSE and g['guidePage'] == 0, f'the pause row did not open the guide: {g["state"]} from {g["guideFrom"]}'
+        e.press('RIGHT', settle=8); e.press('RIGHT', settle=8); assert e.state()['guidePage'] == 2
+        e.run(40); e.shot(f'{out}/rules_guide_from_pause_{"left" if left else "right"}.png')
+        e.press('B', settle=15); g = e.state(); assert g['state'] == ST_PAUSE and g['pauseRow'] == 2, f'B returns to the pause menu on its HOW TO PLAY row: {g["state"]} row {g["pauseRow"]}'
+        for k in ('score', 'turn', 'lives', 'peels', 'chainLen', 'heat'): assert g[k] == g0[k], f'the guide changed {k}: {g0[k]} -> {g[k]}'
+        assert g['cell'] == g0['cell'], 'the guide changed the board'
+        # a tap: the first tap on the row lights it (it is already lit), so one tap opens; START returns
+        e.tap(x, pause_row_y(2), settle=15); assert e.state()['state'] == ST_GUIDE, 'a tap on the lit HOW TO PLAY row opens the guide'
+        e.press('START', settle=15); assert e.state()['state'] == ST_PAUSE, 'START in the guide returns to the pause menu'
+        e.tap(240, 100, settle=5)                       # a tap in the pause menu away from the rows does nothing
+        assert e.state()['state'] == ST_PAUSE
+        assert e.fps() == 120, 'pause fps after the guide'
+        e.press('START', settle=20); assert e.state()['state'] == ST_PLAY, 'RESUME after the guide'
+        # a Daily pause menu has no RESTART: GUIDE is its second row
+        to_title(); e.set_clock(20260115); e.set_daily(0, 0, 0)
+        e.press('SELECT', settle=120); assert e.state()['mode'] == 1
+        e.press('START', settle=10); assert pause_rows() == ['RESUME', 'GUIDE', 'QUIT']
+        e.press('DOWN', settle=3); e.press('A', settle=15); g = e.state()
+        assert g['state'] == ST_GUIDE and g['guideFrom'] == ST_PAUSE, f'Daily pause GUIDE row: {g["state"]}'
+        e.press('B', settle=15); assert e.state()['state'] == ST_PAUSE
+        e.press('START', settle=20); assert e.state()['state'] == ST_PLAY
+        to_title(); e.set_clock(0)
+    set_hand(False)
+
+# ---- the guide's and the guided shelf's motion (amendment to item 19) -----------------------------
+def top_bytes():
+    """The diagram region of the top screen (inside the plaque, under the header rule) as raw bytes."""
+    return e.emu.screenshot().convert('RGB').crop((12, 28, 244, 164)).tobytes()
+
+def body_lit():
+    """Lit pixels in the touch screen's text area (the words of the page)."""
+    px = e.pixels()
+    return sum(1 for y in range(192 + 29, 192 + 165) for x in range(12, 244) if sum(px[x, y]) > 150)
+
+@scenario('guide animation: every page moves frame to frame, the loop closes exactly after 64 ticks, 60 fps on every page')
+def _():
+    set_hand(False); to_title(); e.set_tutor(1); e.run(20)
+    guide_open_from_title()
+    for page in range(GUIDE_PAGES):
+        e.tap(*guide_dot(page), settle=40)
+        assert e.state()['guidePage'] == page
+        seq = []
+        for k in range(64): e.run(4); seq.append(top_bytes())
+        again = []
+        for k in range(64): e.run(4); again.append(top_bytes())
+        distinct = len(set(seq)); changes = sum(1 for a, b in zip(seq, seq[1:]) if a != b)
+        assert distinct >= 12 and changes >= 20, f'page {page + 1}: the diagram barely moves: {distinct} distinct pictures, {changes} changes over 64 ticks'
+        bad = [k for k in range(64) if seq[k] != again[k]]
+        assert not bad, f'page {page + 1}: the loop does not close: pictures differ after exactly 256 frames at ticks {bad[:6]}'
+        assert e.fps() == 120, f'page {page + 1}: fps {e.fps()}'
+    # screenshots of the start, middle and end of each loop, in both hands, for reading
+    for left in (False, True):
+        if left: e.press('B', settle=20); set_hand(True); to_title(); e.run(20); guide_open_from_title()
+        for page in range(GUIDE_PAGES):
+            e.tap(*guide_dot(page), settle=2)
+            for name, frames in (('start', 14), ('mid', 100), ('end', 110)):
+                e.run(frames); e.shot(f'{out}/rules_guide_anim_{"left" if left else "right"}_{page + 1}_{name}.png')
+    e.press('B', settle=20); set_hand(False)
+
+@scenario('guide text: the words type in line by line, any key or tap finishes them at once, a page flip starts again')
+def _():
+    set_hand(False); to_title(); e.set_tutor(1); e.run(20)
+    guide_open_from_title(); e.run(100)
+    full = body_lit(); assert full > 300, f'the page shows no text: {full}'
+    e.tap(*GUIDE_NEXT, settle=0); e.run(9); early = body_lit()
+    assert early < full * 0.3, f'the words should still be typing in 9 frames after a flip: {early} of {full}'
+    e.run(120); assert body_lit() > 300
+    e.tap(*GUIDE_NEXT, settle=0); e.run(100); full2 = body_lit()
+    e.tap(*GUIDE_NEXT, settle=0); e.run(10); half = body_lit()
+    e.press('X', hold=2, settle=3); e.run(3); skipped = body_lit()           # X does nothing in the guide but finish the typing
+    assert e.state()['state'] == ST_GUIDE
+    assert skipped > half * 1.6 and skipped > 300, f'a key press must finish the typing at once: {half} -> {skipped}'
+    e.run(120); assert abs(body_lit() - skipped) < 20, 'the skipped page should be the finished page'
+    e.press('B', settle=20)
+
+@scenario('guide buttons: PREV and NEXT pulse until one is used, the dots show the page and ring on a flip')
+def _():
+    set_hand(False); to_title(); e.set_tutor(1); e.run(20)
+    e.poke(POKE_GUIDENAV)                        # as on a fresh boot: the buttons have not been used yet
+    guide_open_from_title(); e.run(90)
+    def nav_colours():
+        seen = set()
+        for _ in range(16):
+            px = e.pixels(); seen.add(px[6, 192 + 175]); e.run(3)
+        return seen
+    first = nav_colours()
+    assert len(first) >= 3, f'the nav buttons should pulse before first use: {len(first)} colours'
+    e.tap(*GUIDE_NEXT, settle=100)
+    assert len(nav_colours()) == 1, 'the nav buttons should rest after being used once'
+    e.press('B', settle=20)
+    guide_open_from_title(); e.run(90)
+    assert len(nav_colours()) == 1, 'the pulse stays off for the session once used'
+    e.press('B', settle=20)
+
+def cue_ring_pixels(x0, y0, x1, y1):
+    px = e.pixels()
+    return sum(1 for y in range(192 + y0, 192 + y1) for x in range(x0, x1) if sum(px[x, y]) > 360)
+
+@scenario('guided shelf cues: a ghost drag once after idle seconds, a ring and pointer on the tail gem, the PEEK button, the armed cell')
+def _():
+    for left in (False, True):
+        set_hand(left); to_title(); e.set_tutor(0); e.start_classic(); e.set_lives(3)
+        tag = 'left' if left else 'right'
+        assert e.state()['cue'] == 0, 'no cue in the first seconds'
+        # the ghost drag: after about three idle seconds, once, tracing a real word of three or more gems
+        n = 0
+        while e.state()['cue'] != 1 and n < 700: e.run(4); n += 4
+        g = e.state(); assert g['cue'] == 1 and g['hintLen'] >= 3, f'{tag}: no ghost drag after idling ({g["cue"]}, hint {g["hintLen"]})'
+        assert g['tutorStep'] == 0 and g['chainLen'] == 0
+        e.run(10); e.shot(f'{out}/rules_cue_ghost_{tag}.png'); assert e.fps(60) == 60, f'{tag}: fps during the ghost drag'
+        assert e.state()['cue'] == 1
+        e.run(60 + 3 * 18); assert e.state()['cue'] == 0, f'{tag}: the ghost drag should end by itself'
+        e.run(500); assert e.state()['cue'] == 0, f'{tag}: the ghost drag shows once per shelf'
+        # touching during a fresh ghost cancels it at once
+        fresh_shelf(); e.set_tutor(0); e.set_lives(3); n = 0
+        while e.state()['cue'] != 1 and n < 700: e.run(4); n += 4
+        assert e.state()['cue'] == 1
+        e.emu.input.touch_set_pos(*e.center(0, 0)); e.run(3)
+        assert e.state()['cue'] == 0, f'{tag}: a touch must stop the ghost drag'
+        e.emu.input.touch_release(); e.run(5)
+        # a valid chain: no cue while the stylus is down, a ring and a pointer on the tail gem once it lifts
+        fresh_shelf(); e.set_tutor(0); e.set_heat(0); e.set_burn(0, 99); e.set_turn(0)
+        path = spell_cells('bed'); e.chain(path, release=False); e.run(6)
+        g = e.state(); assert g['chainLen'] == 3 and g['cue'] == 0, f'{tag}: no cue under a held chain: {g["cue"]}'
+        e.emu.input.touch_release(); e.run(14)
+        g = e.state(); assert g['cue'] == 2, f'{tag}: the tail gem of a valid chain should be pointed at: {g["cue"]}'
+        e.shot(f'{out}/rules_cue_tail_{tag}.png'); assert e.fps() == 120, f'{tag}: fps with the tail cue'
+        c, r = path[-1]; x0, y0, x1, y1 = e.cell_rect(c, r)
+        ring = cue_ring_pixels(x0 - 4, y0 - 6 - 192, x1 + 4, y1 + 4 - 192)
+        e.press('A', settle=10)                       # the word scores: the cue stops the moment it is done
+        g = e.state(); assert g['tutorStep'] == 1, f'{tag}: the word did not score'
+        assert g['cue'] == 3, f'{tag}: the PEEK button should be pointed at now: {g["cue"]}'
+        e.run(10); e.shot(f'{out}/rules_cue_peek_{tag}.png'); assert e.fps() == 120, f'{tag}: fps with the PEEK cue'
+        X = panel_x()
+        assert cue_ring_pixels(X - 3, 172, X + 80, 192) > 40, f'{tag}: no ring drawn around the PEEK button'
+        e.hold('L', True); e.run(8)
+        assert e.state()['cue'] == 0, f'{tag}: the PEEK cue should stop once peek is held'
+        e.emu.input.touch_set_pos(*e.center(C, 2)); e.run(10)
+        g = e.state(); assert g['armed'] == 1 and g['cue'] == 4, f'{tag}: the armed cell should be pointed at: armed {g["armed"]} cue {g["cue"]}'
+        e.shot(f'{out}/rules_cue_armed_{tag}.png'); assert e.fps() == 120, f'{tag}: fps with the armed cue'
+        e.emu.input.touch_release(); e.run(30); e.hold('L', False); e.run(10)
+        g = e.state(); assert g['cue'] == 0 and g['tutorStep'] >= 2, f'{tag}: after the peel the cue is gone: {g["cue"]} step {g["tutorStep"]}'
+        # a finished guide shows no cues at all
+        to_title(); e.set_tutor(1); e.start_classic(); e.run(500)
+        assert e.state()['cue'] == 0, f'{tag}: a finished guide must not point at things'
+    set_hand(False)
+
+@scenario('guided prompt: a sticky prompt slides in and settles instead of popping')
+def _():
+    set_hand(False); to_title(); e.set_tutor(0); e.start_classic(); e.set_lives(3); e.run(260)
+    e.set_heat(0); e.set_burn(0, 99); e.set_turn(0)
+    path = spell_cells('bed'); e.chain(path); e.press('A', settle=2)
+    n = 0
+    while not (e.state()['msgTimer'] == -1 and e.state()['msg'].startswith('HOLD')) and n < 400: e.run(1); n += 1
+    assert n < 400, 'the peek prompt never came'
+    def left_edge():
+        px = e.pixels(); xs = [x for y in range(163, 175) for x in range(12, 244) if sum(px[x, y]) > 120]
+        return min(xs) if xs else None, max(xs) if xs else None
+    seen = []
+    for _ in range(14): seen.append(left_edge()); e.run(2)
+    e.run(60); settled = left_edge()
+    xs = [a for a, b in seen if a is not None]
+    assert xs and max(xs) >= settled[0] + 4, f'the prompt should start off to the right of its place: edges {seen} settled {settled}'
+    assert len(set(xs)) >= 3, f'the prompt should glide through several positions: {xs}'
+    assert settled[1] <= 242, f'the settled prompt touches the border: {settled}'
+    e.shot(f'{out}/rules_prompt_slide.png')
 
 print('RULES OK' if not fails else f'RULES FAILED: {fails}')
 sys.exit(fails)

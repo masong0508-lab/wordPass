@@ -763,6 +763,160 @@ int main(int argc, char **argv)
         memset(&S, 0, sizeof(S)); S.music = 1;
     }
 
+    // ---- the in-game guide (item 19): every page fits, every number comes from the rules
+    {
+        static char pg[GUIDE_PAGES][GUIDE_MAX_LINES][GUIDE_LINE_BUF];
+        int cnt[GUIDE_PAGES];
+        bool fits = true, tall = true, glyphs = true, titles = true;
+        for (int p = 0; p < GUIDE_PAGES; p++) {
+            cnt[p] = guideLines(p, pg[p]);
+            int h = 0;
+            if (cnt[p] < 5 || cnt[p] >= GUIDE_MAX_LINES) fits = false;           // 5 lines at least; one slot always spare, so an overflowing page is caught
+            for (int i = 0; i < cnt[p]; i++) {
+                int v = guideVisibleLen(pg[p][i]);
+                h += v ? GUIDE_LINE_H : GUIDE_GAP_H;
+                if (v > GUIDE_MAX_CHARS) { fits = false; printf("   page %d line %d is %d characters: %s\n", p + 1, i, v, pg[p][i]); }
+                char plain[GUIDE_LINE_BUF]; guideStrip(plain, pg[p][i]);
+                for (const char *c = plain; *c; c++) if (*c != ' ' && fontIndex(*c) == fontIndex('~')) { glyphs = false; printf("   page %d: no glyph for '%c' in %s\n", p + 1, *c, plain); }
+            }
+            if (h > GUIDE_MAX_H) { tall = false; printf("   page %d is %d px tall (max %d)\n", p + 1, h, GUIDE_MAX_H); }
+            if (!guideTitle(p)[0] || strlen(guideTitle(p)) * 12 > 150) titles = false;     // a 2x title stays clear of BACK and the counter
+        }
+        CHECK("guide: eight pages, no visible line over 38 characters", fits && GUIDE_PAGES == 8);
+        CHECK("guide: every page fits its 139 px of text", tall);
+        CHECK("guide: every character has a glyph, every title fits at 2x", glyphs && titles);
+
+        // the text of a page with the colour codes taken out, lines joined by '|'
+        static char all[GUIDE_PAGES][1600];
+        for (int p = 0; p < GUIDE_PAGES; p++) {
+            all[p][0] = 0;
+            for (int i = 0; i < cnt[p]; i++) { char plain[GUIDE_LINE_BUF]; guideStrip(plain, pg[p][i]); strcat(all[p], plain); strcat(all[p], "|"); }
+        }
+        // the multiplier ladder, heat table and pass ladder as the tables give them
+        char want[160], num[16];
+        want[0] = 0;
+        for (int a = 3; a <= MAX_CHAIN;) {
+            int b = a; while (b < MAX_CHAIN && boardLenMult(b + 1) == boardLenMult(a)) b++;
+            if (a > 3) strcat(want, "  ");
+            sprintf(num, "%d", a); strcat(want, num);
+            if (b == MAX_CHAIN) strcat(want, "+"); else if (b > a) { sprintf(num, "-%d", b); strcat(want, num); }
+            sprintf(num, " X%d", boardLenMult(a)); strcat(want, num);
+            a = b + 1;
+        }
+        CHECK("guide SCORING prints the length multiplier ladder of boardLenMult", strstr(all[1], want) != NULL && strstr(want, "9+ X4") != NULL);
+        CHECK("guide SCORING prints +200 at 7 letters, +30 a letter through a flame, two diamonds",
+              strstr(all[1], "7+ LETTERS ADD A FLAT +200") && strstr(all[1], "+30 PER LETTER") && strstr(all[1], "(2 MAX)"));
+        CHECK("guide FIRE prints the heat table of boardHeatFor", boardHeatFor(3) == 3 && boardHeatFor(4) == 2 && boardHeatFor(5) == 1 && boardHeatFor(6) == 1 && boardHeatFor(7) == 0 && boardHeatFor(MAX_CHAIN) == 0 &&
+              strstr(all[4], "3 LETTERS +3, 4 +2, 5-6 +1, 7+ FREE") != NULL);
+        want[0] = 0;
+        for (int a = 1; a <= 20;) {
+            int b = a; while (b < 20 && boardPassLenFor(b + 1) == boardPassLenFor(a)) b++;
+            if (a > 1) strcat(want, "  ");
+            sprintf(num, "%d", a); strcat(want, num);
+            if (b == 20) strcat(want, "+"); else if (b > a) { sprintf(num, "-%d", b); strcat(want, num); }
+            sprintf(num, ":%d", boardPassLenFor(a)); strcat(want, num);
+            a = b + 1;
+        }
+        CHECK("guide THE PASS prints the pass-length ladder of boardPassLenFor", strstr(all[3], want) != NULL && strstr(want, "1-2:4  3-5:5  6-8:6  9-12:7  13+:8") != NULL);
+        sprintf(want, "%s, %s, %s", poolName(0), poolName(8), poolName(17));
+        sprintf(num, "%d IN ALL", poolThemeCount());
+        CHECK("guide THE PASS names three themes and counts them from the pools", strstr(all[3], "BINDERY, BEASTS, WEATHER") && strstr(all[3], num) && !strcmp(want, "BINDERY, BEASTS, WEATHER"));
+        CHECK("guide THE PASS prints the pass-letter reward and the shelf bonuses",
+              strstr(all[3], "PAYS 100 X SHELF") && strstr(all[3], "+1000 X SHELF") && strstr(all[3], "+25 X SHELF") && strstr(all[3], "UNDER 40") &&
+              strstr(all[3], "PERFECT, NO WASTED PEEK: +400 X SHELF") && strstr(all[3], "CLEAN, 2 SPARE PEEKS: +150 X SHELF") &&
+              boardPassLetterReward(3) == 300 && boardShelfBonus(3) == 3000 && boardSpeedBonus(2, 30) == 500 && boardSpeedBonus(2, 50) == 0);
+        int kind;
+        CHECK("bonus helpers: perfect, clean and none", boardPeelBonus(2, 5, 5, &kind) == 800 && kind == 2 && boardPeelBonus(2, 7, 5, &kind) == 300 && kind == 1 && boardPeelBonus(2, 8, 5, &kind) == 0 && kind == 0);
+        strcpy(want, "BOOKMARKS START A RUN");
+        CHECK("guide SHELVES: bookmarks, twists, Lockdown tiers, overtime from the rules",
+              strstr(all[5], "3 BOOKMARKS START A RUN") && strstr(all[5], "SHELF 4, 7, 10") && strstr(all[5], "INK SPILL: 3 HOLES") && strstr(all[5], "METER -2") && strstr(all[5], "PASS +1 LONGER") &&
+              strstr(all[5], "LOCKDOWN FROM SHELF 6") && strstr(all[5], "EVERY 6 TURNS") && strstr(all[5], "SHELF 9, 12, 15") && strstr(all[5], "FROM 12") &&
+              strstr(all[5], "AT TURN 25 (17 IN LOCKDOWN)") && boardTwistShelf(4) && boardTwistShelf(7) && !boardTwistShelf(5) && !boardTwistShelf(3));
+        CHECK("guide FIRE: the three fail screens are named by the game", strstr(all[4], boardFailName(FAIL_FIRE)) && strstr(all[4], boardFailName(FAIL_SCORCH)) && strstr(all[4], boardFailName(FAIL_WORDS)) &&
+              !strcmp(boardLockdownName(0), "LOCKDOWN") && !strcmp(boardLockdownName(3), "LOCKDOWN IV") && strstr(all[4], "SHELF 1-3") != NULL);
+        CHECK("guide MODES names the four Daily modifiers", strstr(all[6], "STANDARD, EMBER, DEEP, LONG") != NULL);
+
+        // the example words are worth what the game pays: I N K (+70) and Qu I Z (+210) on a real board
+        boardOf('e'); S.library = LIB_FULL; S.spelling = SPELL_BOTH;
+        set(0, 0, CELL_TILE, 'i'); set(0, 1, CELL_TILE, 'n'); set(0, 2, CELL_TILE, 'k');
+        bool oki = boardTryAddToChain(&g, 0, 0) && boardTryAddToChain(&g, 0, 1) && boardTryAddToChain(&g, 0, 2);
+        int ink = boardChainScore(&g);
+        sprintf(num, "+%d", ink);
+        CHECK("guide THE BOARD: INK is worth what boardChainScore says", oki && ink == 70 && strstr(all[0], "SPELL INK, CASH IN: +70") != NULL && strstr(all[0], num) != NULL);
+        boardOf('e');
+        set(0, 0, CELL_TILE, 'q'); set(0, 1, CELL_TILE, 'i'); set(0, 2, CELL_TILE, 'z');
+        bool okq = boardTryAddToChain(&g, 0, 0) && boardTryAddToChain(&g, 0, 1) && boardTryAddToChain(&g, 0, 2);
+        int quiz = boardChainScore(&g);
+        sprintf(num, "= +%d", quiz);
+        CHECK("guide SCORING: Qu+I+Z is worth what boardChainScore says", okq && quiz > 0 && strstr(all[1], num) != NULL && strstr(all[1], "10+1+10 = 21") != NULL);
+        CHECK("guide THE BOARD: chains go up to MAX_CHAIN", strstr(all[0], "UP TO 20") != NULL && MAX_CHAIN == 20);
+        // the guide's example and the game agree on every curve
+        CHECK("boardWordPoints: flame, diamonds, repeat and the long-word flat", boardWordPoints(10, 7, false, 0, false) == 10 * 3 * 10 + 200 &&
+              boardWordPoints(5, 4, true, 0, false) == 5 * 10 + 120 && boardWordPoints(5, 4, false, 2, false) == 100 && boardWordPoints(5, 4, false, 9, false) == 100 && boardWordPoints(5, 4, false, 0, true) == 25);
+    }
+
+    // ---- the rule accessors the guide prints are the ones boardNewShelf sets a shelf up with
+    {
+        bool rok = true;
+        S.fire = FIRE_NORMAL;
+        for (int shelf = 1; shelf <= 24; shelf++) {
+            ShelfRules r; boardShelfRules(shelf, &r);
+            bool plain = false;
+            for (int attempt = 0; attempt < 60 && !plain; attempt++) {      // a shelf with no twist, to see the bare rules (twist shelves have their own rule)
+                memset(&g, 0, sizeof(g)); g.mode = MODE_CLASSIC; g.shelf = shelf; boardSeed(0); srand(attempt + 1); boardNewShelf(&g);
+                if (g.twist == TWIST_NONE) plain = true;
+                else if (g.twist == TWIST_DAMP) {
+                    int thr = r.threshold - TWIST_DAMP_METER; if (thr < 3) thr = 3;
+                    if (g.heatThreshold != thr || g.burnEvery != r.burnEvery + TWIST_DAMP_SLOWER) { rok = false; printf("   DAMP on shelf %d: threshold %d every %d\n", shelf, g.heatThreshold, g.burnEvery); }
+                }
+            }
+            if (!boardTwistShelf(shelf) && !plain) rok = false;
+            if (plain && (g.heatThreshold != r.threshold || g.burnEvery != r.burnEvery || g.pulseEvery != r.pulseEvery || g.lockTier != r.tier || g.lockdown != r.lockdown)) { rok = false; printf("   shelf %d rules differ\n", shelf); }
+        }
+        CHECK("boardShelfRules matches boardNewShelf on shelves 1..24 (and DAMP is its documented offset)", rok);
+        bool dok = true;
+        for (int seed = 20260101; seed < 20260101 + 400; seed++) {
+            int mod = boardDailyMod(seed);
+            ShelfRules r; boardDailyRules(mod, &r);
+            memset(&g, 0, sizeof(g)); g.mode = MODE_DAILY; g.dailySeed = seed; g.shelf = 1; boardNewShelf(&g);
+            if (g.heatThreshold != r.threshold || g.burnEvery != r.burnEvery || g.pulseEvery != r.pulseEvery || g.lockdown) dok = false;
+            int top = ROWS;
+            for (int c = 0; c < COLS; c++) for (int rr = 0; rr < ROWS; rr++) if (g.back[c][rr] && rr < top) top = rr;
+            if (top < r.minRow) dok = false;
+            if (mod == DAILYMOD_LONG && g.passLen != DAILY_LONG_LEN) dok = false;
+        }
+        CHECK("boardDailyRules matches boardNewShelf for every Daily modifier (meter, fire, pulse, pass depth, LONG length)", dok);
+        S.fire = FIRE_NORMAL;
+        memset(&g, 0, sizeof(g)); g.mode = MODE_CLASSIC;
+        CHECK("heat for a peel and the overtime turns", boardPeelHeat(false) == 1 && boardPeelHeat(true) == 2 && boardOvertimeTurns(false) == 24 && boardOvertimeTurns(true) == 16);
+    }
+
+    // ---- the ghost drag of the guided shelf: a real, common word along touching, chainable cells
+    {
+        bool hok = true; int found = 0;
+        S.library = LIB_FULL; S.spelling = SPELL_BOTH;
+        for (int seed = 1; seed <= 30; seed++) {
+            memset(&g, 0, sizeof(g)); g.mode = MODE_CLASSIC; g.shelf = 1; srand(seed); boardNewShelf(&g);
+            for (int c = 0; c < COLS; c++) for (int r = 0; r < ROWS; r++) g.cell[c][r].yoff = 0;
+            u8 hc[8], hr[8];
+            int n = boardHintChain(&g, hc, hr, 5);
+            if (!n) continue;
+            found++;
+            char hw[16]; int wl = 0; bool used[COLS][ROWS] = {{false}};
+            if (n < 3 || n > 5) hok = false;
+            for (int i = 0; i < n; i++) {
+                if (used[hc[i]][hr[i]] || !boardIsChainable(&g, hc[i], hr[i])) hok = false;
+                used[hc[i]][hr[i]] = true;
+                if (i) { int nc[6], nr[6], k = boardNeighbors(hc[i - 1], hr[i - 1], nc, nr); bool adj = false; for (int j = 0; j < k; j++) if (nc[j] == hc[i] && nr[j] == hr[i]) adj = true; if (!adj) hok = false; }
+                int l = g.cell[hc[i]][hr[i]].letter;
+                hw[wl++] = 'a' + l; if (l == 'q' - 'a') hw[wl++] = 'u';
+            }
+            hw[wl] = 0;
+            if (dictLookup(hw, wl) != 1 || !boardWordOk(hw, wl)) { hok = false; printf("   hint %s is not a common word\n", hw); }
+        }
+        CHECK("boardHintChain: a common word on touching cells on 30 first shelves", hok && found >= 25);
+    }
+
     // ---- note table
     u16 hz[128];
     musicBuildNotes(hz);
