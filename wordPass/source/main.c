@@ -239,6 +239,7 @@ int main(void)
     settingsInit();
     gfxInit();
     dictInit();
+    poolsInit();
     musicInit();
     memset(&G, 0, sizeof(G));
     G.state = ST_TITLE;

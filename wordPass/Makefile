@@ -90,9 +90,9 @@ dict:
 pools:
 	python3 tools/gen_pools.py
 
-# Native rule tests: board.c, dict.c and music.c under gcc with the stubs in tools/check/stub.
+# Native rule tests: board.c, dict.c, pools.c and music.c under gcc with the stubs in tools/check/stub.
 #   make check
-CHECK_SRC := tools/check/board_test.c tools/check/stubs.c source/board.c source/dict.c source/music.c
+CHECK_SRC := tools/check/board_test.c tools/check/stubs.c source/board.c source/dict.c source/pools.c source/music.c
 check:
 	@mkdir -p $(BUILD)
 	gcc -std=gnu11 -Wall -Wextra -Wshadow -I tools/check/stub -I source $(CHECK_SRC) -o $(BUILD)/check

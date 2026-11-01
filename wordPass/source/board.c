@@ -3,26 +3,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Pass pools: one themed pool per shelf accent (theme = (shelf - 1) % 8). Every word is
-// in ENABLE and at most 9 letters; each pool spans lengths 4..7 at least so every shelf's
-// target length (4, 5, 6, 7, 8 as the shelves climb) has a candidate or a close neighbour.
-static const char *const POOL_BINDERY[] = { "book", "page", "leaf", "spine", "cover", "folio", "jacket", "binding" };
-static const char *const POOL_INK[]     = { "ink", "pen", "nib", "font", "blot", "etch", "rune", "quill", "scribe", "scroll", "vellum", "parchment" };
-static const char *const POOL_VERSE[]   = { "ode", "poem", "rhyme", "verse", "sonnet", "stanza", "ballad", "epigram" };
-static const char *const POOL_TALES[]   = { "myth", "saga", "fable", "story", "novel", "legend", "chapter", "epilogue" };
-static const char *const POOL_ATLAS[]   = { "map", "atlas", "globe", "chart", "compass", "meridian", "gazetteer" };
-static const char *const POOL_ARCHIVE[] = { "index", "codex", "ledger", "tome", "lexicon", "archive", "glossary", "almanac" };
-static const char *const POOL_LAMP[]    = { "lamp", "wick", "candle", "lantern", "sconce", "ember" };
-static const char *const POOL_STUDY[]   = { "desk", "shelf", "alcove", "lectern", "library", "footnote", "bookmark" };
-#define POOL(p) { p, (int)(sizeof(p) / sizeof(p[0])) }
-static const struct { const char *const *words; int n; } POOLS[NPASS_THEMES] = {
-    POOL(POOL_BINDERY), POOL(POOL_INK), POOL(POOL_VERSE), POOL(POOL_TALES),
-    POOL(POOL_ATLAS), POOL(POOL_ARCHIVE), POOL(POOL_LAMP), POOL(POOL_STUDY)
-};
-static const char *const POOL_NAMES[NPASS_THEMES] = { "BINDERY", "INK", "VERSE", "TALES", "ATLAS", "ARCHIVE", "LAMP", "STUDY" };
+// Pass pools live in data/pools.bin (pools.c): 40 themes and about 18,000 words. Shelf n draws from
+// theme (n - 1) % 40, the first eight being the original bookish shelves. Each pool runs from
+// familiar to obscure, and the window of it a shelf may draw from widens as the shelves climb.
 static const char *const TWIST_NAMES[4] = { "", "INK SPILL", "DAMP", "BURIED" };
 
-const char *boardPassTheme(const Game *g) { return POOL_NAMES[g->passTheme % NPASS_THEMES]; }
+const char *boardPassTheme(const Game *g) { return poolName(g->passTheme); }
 const char *boardTwistName(int twist) { return TWIST_NAMES[(twist >= 0 && twist < 4) ? twist : 0]; }
 
 // ---- board RNG: xorshift32, seeded per shelf (from the Daily date or libc rand()). Every
@@ -162,11 +148,14 @@ static int passTargetLen(int shelf)
     return shelf <= 2 ? 4 : shelf <= 5 ? 5 : shelf <= 8 ? 6 : shelf <= 12 ? 7 : 8;
 }
 
+// How many words from the front of a pool (the familiar end) a shelf may pick from.
+static int passWindow(int shelf) { return 48 + 24 * shelf; }
+
 static int nearestPoolLen(int theme, int want)
 {
     int best = -1;
-    for (int i = 0; i < POOLS[theme].n; i++) {
-        int len = strlen(POOLS[theme].words[i]);
+    for (int len = POOL_MIN_LEN; len <= POOL_MAX_LEN; len++) {
+        if (!poolCount(theme, len)) continue;
         if (len == want) return want;
         int d = len > want ? len - want : want - len, bd = best > want ? best - want : want - best;
         if (best < 0 || d < bd || (d == bd && len > best)) best = len;
@@ -174,37 +163,44 @@ static int nearestPoolLen(int theme, int want)
     return best;
 }
 
-static bool recentHas(const Game *g, int theme, int idx)
+static bool recentHas(const Game *g, int theme, int len, int idx)
 {
-    u8 key = (u8)(theme * 16 + idx + 1);
+    u32 key = PASS_KEY(theme, len, idx);
     for (int i = 0; i < 8; i++) if (g->recentPass[i] == key) return true;
     return false;
 }
 
 static void pickPass(Game *g, int extraLen)
 {
-    int theme, idx, len;
-    int cand[16], nc = 0;
+    const int themes = poolThemeCount();
+    int theme, idx, len, n;
     if (g->mode == MODE_DAILY) {
         u32 hash = (u32)((u32)g->dailySeed * 2654435761u) >> 8;
-        theme = hash % NPASS_THEMES;
+        theme = hash % themes;
         len = nearestPoolLen(theme, (hash & 8) ? 6 : 5);
-        for (int i = 0; i < POOLS[theme].n; i++) if ((int)strlen(POOLS[theme].words[i]) == len) cand[nc++] = i;
-        idx = cand[hash % nc];
+        n = poolCount(theme, len);
+        if (n > 200) n = 200;      // Daily stays on familiar words
+        idx = hash % n;
     } else {
-        theme = (g->shelf - 1) % NPASS_THEMES;
+        theme = (g->shelf - 1) % themes;
         len = nearestPoolLen(theme, passTargetLen(g->shelf) + extraLen);
-        for (int i = 0; i < POOLS[theme].n; i++)
-            if ((int)strlen(POOLS[theme].words[i]) == len && !recentHas(g, theme, i)) cand[nc++] = i;
-        if (!nc)   // every word of this length was used lately: length wins over variety
-            for (int i = 0; i < POOLS[theme].n; i++) if ((int)strlen(POOLS[theme].words[i]) == len) cand[nc++] = i;
-        idx = cand[boardRand() % nc];
-        g->recentPass[g->recentHead & 7] = (u8)(theme * 16 + idx + 1);
+        n = poolCount(theme, len);
+        if (n > passWindow(g->shelf)) n = passWindow(g->shelf);
+        int fresh = 0;
+        for (int i = 0; i < n; i++) if (!recentHas(g, theme, len, i)) fresh++;
+        bool any = fresh > 0;    // every word of this length was used lately: length wins over variety
+        int pick = boardRand() % (any ? fresh : n);
+        idx = 0;
+        for (int i = 0; i < n; i++) {
+            if (any && recentHas(g, theme, len, i)) continue;
+            if (pick-- == 0) { idx = i; break; }
+        }
+        g->recentPass[g->recentHead & 7] = PASS_KEY(theme, len, idx);
         g->recentHead = (g->recentHead + 1) & 7;
     }
     g->passTheme = theme;
-    strcpy(g->pass, POOLS[theme].words[idx]);
-    g->passLen = strlen(g->pass);
+    poolWord(theme, len, idx, g->pass);
+    g->passLen = len;
 }
 
 // INK SPILL: three holes in rows 2..6 over empty back cells, as if peeled before you came.

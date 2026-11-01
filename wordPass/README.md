@@ -88,17 +88,29 @@ screen says so.
 
 ### Shelves
 
-Every shelf draws its pass from a themed pool that matches the shelf's accent
-colour, and the plaque on the top screen names it (PASS - BINDERY). The eight
-pools cycle as you climb: **Bindery** (book, page, spine, jacket ...), **Ink**
-(nib, font, quill, scribe, parchment ...), **Verse** (poem, rhyme, sonnet,
-epigram ...), **Tales** (myth, fable, novel, chapter, epilogue ...), **Atlas**
-(map, globe, compass, gazetteer ...), **Archive** (codex, ledger, lexicon,
-glossary ...), **Lamp** (wick, candle, lantern, sconce ...) and **Study**
-(desk, shelf, lectern, footnote, bookmark ...). The pass gets longer with the
+Every shelf draws its pass from a themed pool, and the plaque on the top
+screen names it (PASS - BINDERY). The **word library** holds about 18,000
+pass words in 40 themes that cycle as you climb. The first eight shelves are
+the bookish ones: **Bindery** (book, page, spine, jacket ...), **Ink** (nib,
+font, quill, scribe ...), **Verse** (poem, rhyme, sonnet ...), **Tales**
+(myth, fable, novel, chapter ...), **Atlas** (globe, compass, gazetteer ...),
+**Archive** (codex, ledger, lexicon ...), **Lamp** (wick, candle, lantern
+...) and **Study** (desk, shelf, lectern, bookmark ...). Then the library
+opens out: **Beasts**, **Music**, **Herbal**, **Voyage**, **Cookery**,
+**Myth**, **Anatomy**, **Play**, **Alchemy**, **Weather**, **Guild**,
+**Smithy**, **Attire**, **House**, **Moods**, **Curses**, **Words**,
+**Deeds**, **Motion**, **Traits**, **Clans**, **Minds**, **Folk**, **Times**,
+**Making**, **Wares**, **Shapes**, **Change**, **Trade**, **States**,
+**Events** and **Lexicon**. Every pool runs from familiar words to obscure
+ones, and a shelf only draws from the first 48 + 24 x shelf words of it, so
+early shelves stay familiar and deep ones open the whole shelf. Daily Pass
+sticks to the familiar end. The pass gets longer with the
 shelf: four letters on shelves 1-2, five on 3-5, six on 6-8, seven on 9-12 and
 eight from shelf 13 (a pool without that length lends its nearest), and the
 last eight passes of the run are not repeated while the pool has a choice.
+The words are checked against the dictionary, and the library never goes
+rougher than a mild curse: the strongest words in it are *holy*, *damn*,
+*crappola* and *moobs*.
 The letters themselves come from a shuffled bag of 100 drawn without
 replacement, so a shelf never starves of vowels or drowns in them, J, Q, X and
 Z appear at most twice a bag, and a column that refills with nothing but
@@ -234,6 +246,17 @@ docker run --rm -v "$PWD":/work -w /work devkitpro/devkitarm:20240511 make
 The release ROM and CI use the `20240511` image (libnds 1.8). Current
 devkitPro (libnds 2 with calico) builds the same source without changes, but
 ROMs built with it do not boot in DeSmuME; use melonDS or real hardware.
+
+### Word library
+
+`data/pools.bin` (format `WPP1`, about 124 KB) holds the pass words: a theme count, then
+per theme a name and six counts for lengths 4..9, then the words of each
+length back to back. `tools/gen_pools.py` builds it from hand-written lists
+and WordNet-derived lists in `tools/words/pools`, filters every word against
+the dictionary and a blocklist, and orders each pool from familiar to
+obscure. `make pools` rebuilds it, and `tools/words/SOURCES.md` lists the
+sources and licences (WordNet, FrequencyWords, ENABLE and the profanity
+lists behind the blocklist).
 
 ### Dictionary
 

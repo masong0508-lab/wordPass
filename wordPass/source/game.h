@@ -115,15 +115,17 @@ typedef struct {
     int  newBest;             // recordScore changed a saved record (cleared by startShelf)
     // ---- progression (item 08)
     int  lives;               // bookmarks left in a Classic run (3 at the start; Daily ignores them)
-    int  passTheme;           // pool the current pass came from, 0..NPASS_THEMES-1
-    u8   recentPass[8];       // ring of the last passes as theme * 16 + index + 1 (0 = empty)
+    int  passTheme;           // pool the current pass came from, 0..poolThemeCount()-1
+    u32  recentPass[8];       // ring of the last passes as PASS_KEY(theme, len, index) (0 = empty)
     int  recentHead;
     int  twist;               // TWIST_* on this shelf (Classic, shelf >= 4 && shelf % 3 == 1)
     int  lastTwist;           // the previous twist, so two in a row are rerolled once
 } Game;
 
 enum { TWIST_NONE = 0, TWIST_INK, TWIST_DAMP, TWIST_BURIED };
-#define NPASS_THEMES 8        // pass pools, one per shelf accent
+#define POOL_MIN_LEN 4        // pass pools hold words of 4..9 letters
+#define POOL_MAX_LEN 9
+#define PASS_KEY(theme, len, idx) ((u32)(((((theme) * 6) + (len) - POOL_MIN_LEN) << 10) + (idx) + 1))   // idx < 1000
 
 enum { MODE_CLASSIC = 0, MODE_DAILY };
 
@@ -188,6 +190,13 @@ int  letterValue(int letter);
 
 // dict.c
 void dictInit(void);
+
+// pools.c: themed pass-word library (data/pools.bin)
+void poolsInit(void);
+int  poolThemeCount(void);
+const char *poolName(int theme);                              // "BINDERY"
+int  poolCount(int theme, int len);                           // words of that length in the theme
+void poolWord(int theme, int len, int idx, char *out);        // out holds len + 1 bytes
 int  dictLookup(const char *word, int len);   // 0 none, 1 common, 2 rare
 
 // gfx.c

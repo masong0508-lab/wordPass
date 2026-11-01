@@ -3,6 +3,7 @@
 // Each scenario prints PASS or FAIL; the exit status is the number of failures.
 #include "game.h"
 #include "dict_bin.h"
+#include "pools_bin.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,22 +37,29 @@ static int countState(int state)
     return n;
 }
 
-static bool loadDict(const char *path)
+static u8 *loadFile(const char *path)
 {
     FILE *f = fopen(path, "rb");
-    if (!f) { printf("cannot open %s (run from the repo root)\n", path); return false; }
+    if (!f) { printf("cannot open %s (run from the repo root)\n", path); return NULL; }
     fseek(f, 0, SEEK_END); long n = ftell(f); fseek(f, 0, SEEK_SET);
     u8 *buf = malloc(n);
-    if (fread(buf, 1, n, f) != (size_t)n) { fclose(f); return false; }
+    if (fread(buf, 1, n, f) != (size_t)n) { fclose(f); return NULL; }
     fclose(f);
-    dict_bin = buf;
-    dictInit();
+    return buf;
+}
+
+static bool loadDict(const char *path, const char *poolPath)
+{
+    u8 *d = loadFile(path), *p = loadFile(poolPath);
+    if (!d || !p) return false;
+    dict_bin = d; dictInit();
+    pools_bin = p; poolsInit();
     return true;
 }
 
 int main(int argc, char **argv)
 {
-    if (!loadDict(argc > 1 ? argv[1] : "data/dict.bin")) return 1;
+    if (!loadDict(argc > 1 ? argv[1] : "data/dict.bin", argc > 2 ? argv[2] : "data/pools.bin")) return 1;
     srand(1);
 
     // ---- dictionary tiers
@@ -354,17 +362,85 @@ int main(int argc, char **argv)
         CHECK("vowel floor swap preserves the bag's composition (42 vowels a cycle)", vowels == 42);
     }
 
+    // ---- the pass library: shape, validity, no repeats, content ceiling
+    {
+        int themes = poolThemeCount();
+        CHECK("pass library has 40 themes", themes == 40);
+        bool names = true, cover = true, valid = true, dups = true, clean = true, total3k = true, early = true;
+        int total = 0;
+        static const char *const NEVER[] = { "ass", "anal", "anus", "tits", "boob", "sex", "dyke", "fag", "nude", "naked",
+                                             "shit", "piss", "cunt", "cock", "dick", "bitch", "whore", "slut", "rape", "porn" };
+        for (int t = 0; t < themes; t++) {
+            int nl = strlen(poolName(t));
+            if (nl < 3 || nl > 7) names = false;
+            for (int len = POOL_MIN_LEN; len <= POOL_MAX_LEN; len++) {
+                int n = poolCount(t, len);
+                if (len <= 6 && n < 8 && strcmp(poolName(t), "LEXICON")) { cover = false; printf("   %s has %d words of length %d\n", poolName(t), n, len); }
+                total += n;
+                for (int i = 0; i < n; i++) {
+                    char pw[12], pv[12];
+                    poolWord(t, len, i, pw);
+                    if ((int)strlen(pw) != len || dictLookup(pw, len) == 0) { valid = false; printf("   %s: %s not a dictionary word\n", poolName(t), pw); }
+                    for (int j = i + 1; j < n; j++) { poolWord(t, len, j, pv); if (!strcmp(pw, pv)) dups = false; }
+                    for (unsigned k = 0; k < sizeof(NEVER) / sizeof(NEVER[0]); k++) if (!strcmp(pw, NEVER[k])) clean = false;
+                }
+            }
+        }
+        total3k = total >= 18000;
+        CHECK("theme names are 3 to 7 letters (they sit in a 32 character intro line)", names);
+        CHECK("every theme but LEXICON has at least 8 words at each length 4..6", cover);
+        CHECK("every pass word is a dictionary word of its stored length", valid);
+        CHECK("no theme repeats a word at one length", dups);
+        CHECK("the library holds at least 18000 pass words", total3k);
+        CHECK("no strong profanity is in the library (ceiling: holy damn crappola moobs)", clean);
+        bool mild = false;
+        for (int t = 0; t < themes; t++) if (!strcmp(poolName(t), "CURSES")) {
+            char pw[12]; int hit = 0;
+            static const char *const FOUR[] = { "holy", "damn", "crappola", "moobs" };
+            for (int f = 0; f < 4; f++) for (int i = 0; i < poolCount(t, (int)strlen(FOUR[f])); i++) { poolWord(t, (int)strlen(FOUR[f]), i, pw); if (!strcmp(pw, FOUR[f])) hit++; }
+            mild = hit == 4;
+        }
+        CHECK("the CURSES theme carries holy, damn, crappola and moobs", mild);
+        bool pickAll = true;
+        for (int sh = 1; sh <= 80; sh++) {
+            memset(&g, 0, sizeof(g)); g.mode = MODE_CLASSIC; g.shelf = sh; boardNewShelf(&g);
+            char pw[12];
+            bool inPool = false;
+            for (int i = 0; i < poolCount(g.passTheme, g.passLen); i++) { poolWord(g.passTheme, g.passLen, i, pw); if (!strcmp(pw, g.pass)) inPool = true; }
+            if (!inPool || (int)strlen(g.pass) != g.passLen || g.passTheme != (sh - 1) % themes) pickAll = false;
+        }
+        CHECK("shelves 1..80 cycle through all 40 themes and always pick a pool word", pickAll);
+        bool lately = true;   // twenty passes from one theme and length: the last eight are never repeated
+        {
+            memset(&g, 0, sizeof(g)); g.mode = MODE_CLASSIC; g.shelf = 1;
+            char hist[40][12];
+            for (int k = 0; k < 40; k++) {
+                boardNewShelf(&g); strcpy(hist[k], g.pass);
+                for (int b = k - 8 < 0 ? 0 : k - 8; b < k; b++) if (!strcmp(hist[b], g.pass)) lately = false;
+            }
+        }
+        CHECK("a pass is never one of the previous eight in the same theme", lately);
+        // familiarity window: shelf s only reaches the first 48 + 24 s words of a pool
+        for (int k = 0; k < 60 && early; k++) {
+            memset(&g, 0, sizeof(g)); g.mode = MODE_CLASSIC; g.shelf = 28 + 0 * k; boardNewShelf(&g);   // TRAITS, 6 letters
+            int idx = -1; char pw[12];
+            for (int i = 0; i < poolCount(g.passTheme, g.passLen); i++) { poolWord(g.passTheme, g.passLen, i, pw); if (!strcmp(pw, g.pass)) idx = i; }
+            if (idx < 0 || idx >= 48 + 24 * 28) early = false;
+        }
+        CHECK("a shelf-28 pass comes from the first 720 words of its pool", early);
+    }
+
     // ---- pass pools: shelf 2 draws a 4-letter INK word whatever the recent ring holds
     {
         bool ok4 = true, theme1 = true;
         for (int variant = 0; variant < 6; variant++) {
             memset(&g, 0, sizeof(g)); g.mode = MODE_CLASSIC; g.shelf = 2;
             for (int i = 0; i < 8; i++) {
-                if (variant == 1) g.recentPass[i] = 1 * 16 + i + 1;            // INK 0..7: font blot etch rune among them
-                if (variant == 2) g.recentPass[i] = 1 * 16 + 3 + (i & 3) + 1;  // exactly the four 4-letter INK words
-                if (variant == 3) g.recentPass[i] = 1 * 16 + 3 + 1;            // font eight times
-                if (variant == 4) g.recentPass[i] = (i & 7) * 16 + 1;          // one word of every pool
-                if (variant == 5) g.recentPass[i] = (u8)(i * 37 + 5);          // garbage
+                if (variant == 1) g.recentPass[i] = PASS_KEY(1, 4, i);            // the first eight 4-letter INK words
+                if (variant == 2) g.recentPass[i] = PASS_KEY(1, 4, i & 3);        // four of them, twice over
+                if (variant == 3) g.recentPass[i] = PASS_KEY(1, 4, 3);            // one word eight times
+                if (variant == 4) g.recentPass[i] = PASS_KEY(i & 7, 4, 0);        // one word of every early pool
+                if (variant == 5) g.recentPass[i] = (u32)(i * 7919 + 5);          // garbage
             }
             for (int k = 0; k < 20; k++) {
                 boardNewShelf(&g);
@@ -383,10 +459,10 @@ int main(int argc, char **argv)
         for (int sh = 1; sh <= 14; sh++) {
             memset(&g, 0, sizeof(g)); g.mode = MODE_CLASSIC; g.shelf = sh; boardNewShelf(&g);
             int extra = g.twist == TWIST_BURIED ? 1 : 0;
-            // the nearest length present in the pool stands in: ATLAS (shelf 5, 13) has no 6, LAMP (shelf 7) has 6/7, STUDY has 8
+            // the nearest length present in the pool stands in if a theme lacks the target
             int target = want[sh] + extra, got = g.passLen;
             bool near = got == target || (got == target - 1) || (got == target + 1) || (got == target + 2);
-            if (!near || g.passTheme != (sh - 1) % 8) { lens = false; printf("   shelf %d: %s (%d, want %d)\n", sh, g.pass, got, target); }
+            if (!near || g.passTheme != (sh - 1) % poolThemeCount()) { lens = false; printf("   shelf %d: %s (%d, want %d)\n", sh, g.pass, got, target); }
         }
         CHECK("pass length climbs with the shelf (4,4,5,5,5,6,6,6,7,7,7,7,8,8) within the pool's nearest length", lens);
     }

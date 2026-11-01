@@ -555,7 +555,7 @@ def _():
         else: assert g['shelf'] % 3 != 1, f'shelf {g["shelf"]} has no twist'
     assert g['shelf'] == 12 and g['lockdown'] == 1 and g['lockTier'] == 2 and g['twist'] == 0, f'shelf 12: lock {g["lockdown"]} tier {g["lockTier"]} twist {g["twist"]}'
     assert min(secret_rows(g)) >= 5, f'shelf 12 secret rows {secret_rows(g)}'
-    assert g['passTheme'] == 3 and g['passLen'] == 7, f'shelf 12 pass {g["pass"]!r}'
+    assert g['passTheme'] == 11 and g['passLen'] == 7, f'shelf 12 pass {g["pass"]!r} theme {g["passTheme"]}'
     assert g['lives'] == 3, f'lives {g["lives"]} after a clean climb'
     print('   twists on the way:', twists, 'shelf 12 pass', g['pass'])
     e.run(30); e.shot(f'{out}/rules_shelf12.png')
