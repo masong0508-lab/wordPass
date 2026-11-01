@@ -109,7 +109,9 @@ void boardNewShelf(Game *g)
         for (int r = 0; r < ROWS; r++) {
             g->cell[c][r].letter = randomLetter();
             g->cell[c][r].state = CELL_TILE;
-            g->cell[c][r].yoff = -(ROWS - r) * TILE_H - rand() % 40;
+            g->cell[c][r].yoff = (-(ROWS - r) * TILE_H - 20 - (rand() % 30) - c * 6) * 16;
+            g->cell[c][r].yv = 0;
+            g->cell[c][r].squash = 0;
             g->cell[c][r].flash = 0;
         }
     placeSecrets(g);
@@ -125,6 +127,9 @@ void boardNewShelf(Game *g)
     g->shelfStartScore = g->score;
     g->lastWord[0] = 0;
     g->msg[0] = 0;
+    g->bestWord[0] = 0;
+    g->bestWordScore = 0;
+    g->peels = 0;
 }
 
 bool boardTryAddToChain(Game *g, int c, int r)
@@ -185,7 +190,7 @@ static int applyGravity(Game *g)
             if (s == CELL_EMPTY) continue;
             if (w != r) {
                 Cell moved = g->cell[c][r];
-                moved.yoff -= (w - r) * TILE_H;
+                moved.yoff -= (w - r) * TILE_H * 16;
                 g->cell[c][w] = moved;
                 g->cell[c][r].state = CELL_EMPTY;
             }
@@ -203,7 +208,9 @@ static int applyGravity(Game *g)
             if (g->cell[c][r].state == CELL_EMPTY) {
                 g->cell[c][r].letter = randomLetter();
                 g->cell[c][r].state = CELL_TILE;
-                g->cell[c][r].yoff = -(k + 1) * TILE_H - 10;
+                g->cell[c][r].yoff = (-(k + 1) * TILE_H - 12 - (r == 0 ? 0 : 4)) * 16;
+                g->cell[c][r].yv = 0;
+                g->cell[c][r].squash = 0;
                 g->cell[c][r].flash = 0;
                 k++; spawned++;
             }
@@ -311,6 +318,7 @@ int boardSubmit(Game *g)
     strncpy(g->lastWord, w, 15); g->lastWord[15] = 0;
     g->lastWordLen = len;
     g->lastWordScore = gained;
+    if (gained > g->bestWordScore) { g->bestWordScore = gained; strcpy(g->bestWord, g->lastWord); }
     g->score += gained;
     g->wordsThisShelf++;
     g->chainLen = 0;
@@ -323,6 +331,7 @@ int boardPeel(Game *g, int c, int r)
     Cell *cl = &g->cell[c][r];
     if (cl->state != CELL_TILE && cl->state != CELL_BURN) return 0;
     bool scorch = (cl->state == CELL_BURN) || (r > 0 && g->cell[c][r - 1].state == CELL_BURN);
+    g->peels++;
     // drop a chained tile from the chain
     g->chainLen = 0;
     int secret = g->back[c][r];
@@ -349,12 +358,24 @@ int boardPeel(Game *g, int c, int r)
     return 1;
 }
 
+// Gravity-driven fall with a squash on landing. yoff and yv are in 1/16 px.
 void boardAnimate(Game *g)
 {
     for (int c = 0; c < COLS; c++)
         for (int r = 0; r < ROWS; r++) {
             Cell *cl = &g->cell[c][r];
-            if (cl->yoff < 0) { cl->yoff += 4; if (cl->yoff > 0) cl->yoff = 0; }
+            if (cl->yoff < 0) {
+                cl->yv += 10;                       // gravity
+                if (cl->yv > 160) cl->yv = 160;     // terminal velocity, 10 px/frame
+                cl->yoff += cl->yv;
+                if (cl->yoff >= 0) {
+                    cl->yoff = 0;
+                    cl->squash = (cl->yv > 60) ? SQUASH_MAX : (cl->yv > 30 ? 3 : 0);
+                    cl->yv = 0;
+                }
+            } else if (cl->squash) {
+                cl->squash--;
+            }
             if (cl->flash) cl->flash--;
         }
 }

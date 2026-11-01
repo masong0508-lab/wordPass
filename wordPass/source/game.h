@@ -30,9 +30,14 @@ enum {
 typedef struct {
     u8 letter;        // 0..25 ('q' - 'a' stands for Qu)
     u8 state;
-    s16 yoff;         // falling animation offset in pixels (negative = above)
+    s16 yoff;         // falling offset in 1/16 px (negative = above its slot)
+    s16 yv;           // fall velocity in 1/16 px per frame
+    u8 squash;        // frames of landing squash left
     u8 flash;         // frames of white flash left (word removal)
 } Cell;
+
+#define YOFF_PX(cell) ((cell)->yoff >> 4)
+#define SQUASH_MAX 6
 
 enum {
     ST_TITLE = 0,
@@ -77,6 +82,9 @@ typedef struct {
     char msg[32];
     int  msgTimer;
     bool lockdown;
+    char bestWord[16];        // per-shelf results card
+    int  bestWordScore;
+    int  peels;
 } Game;
 
 extern Game G;

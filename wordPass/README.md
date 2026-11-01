@@ -47,7 +47,7 @@ the pass buried low, and the music drops into a minor key.
 | Hold L or R | peek mode (tap a gem to peel it) |
 | START | pause |
 
-![wordPass](screenshot.png) ![fire](screenshot-fire.png)
+![wordPass](screenshot.png) ![fire](screenshot-fire.png) ![results](screenshot-results.png)
 
 ## Interface
 
@@ -64,6 +64,9 @@ stars and pops into the plaque on the top screen, burning gems pulse with
 flame tongues and shed sparks, callouts pop in at double size, shelves fade
 in, and a failed run flashes and shakes the screen. The gold frames carry a
 travelling shimmer and the submit gem breathes while a valid word is chained.
+Columns fall under gravity and squash when they land, each shelf has its own
+accent colour, and clearing a shelf slides up a results card with the pass,
+your best word, words spelled, peels used, turns and the shelf bonus.
 
 ## Music
 

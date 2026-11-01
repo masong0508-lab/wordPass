@@ -61,7 +61,9 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
                 gfxBurst(c, r, BURST_REVEAL);
                 gfxPopup(c, r, "FOUND", 1);
                 musicReveal(true);
-                setMsg(boardPassComplete(&G) ? "PASS COMPLETE!" : "PASS LETTER FOUND", 90);
+                if (boardPassComplete(&G)) {
+                    char s[32]; sprintf(s, "SHELF %d CLEARED", G.shelf); setMsg(s, 400);
+                } else setMsg("PASS LETTER FOUND", 90);
             } else if (res == 1) musicReveal(false);
             else if (res == 3) { setMsg("SCORCHED", 60); gfxBurst(c, r, BURST_SCORCH); gfxShake(6); }
             if (G.fail) { enterFail(); return; }
