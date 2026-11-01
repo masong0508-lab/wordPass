@@ -4,7 +4,7 @@
 .SUFFIXES:
 
 # `make check` (native rule tests) and `make dict` run without devkitARM
-NATIVE_GOALS := check dict
+NATIVE_GOALS := check dict pools
 ifneq ($(MAKECMDGOALS),)
 ifeq ($(filter-out $(NATIVE_GOALS),$(MAKECMDGOALS)),)
 NATIVE := 1
@@ -72,19 +72,23 @@ ifneq (,$(findstring icon.bmp,$(icons)))
   export GAME_ICON := $(CURDIR)/icon.bmp
 endif
 
-.PHONY: $(BUILD) clean dict check
+.PHONY: $(BUILD) clean dict pools check
 
 $(BUILD):
 	@mkdir -p $@
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
 # Regenerate the dictionary from a word list, marking COMMON words as the common tier:
-#   make dict WORDS=tools/enable1.txt COMMON=tools/common_words.txt
-WORDS  ?= tools/enable1.txt
+#   make dict WORDS=tools/enable1.txt,tools/words/extra.txt COMMON=tools/common_words.txt
+# WORDS takes several comma separated lists.  `make pools` rebuilds data/pools.bin (see tools/words/SOURCES.md).
+WORDS  ?= tools/enable1.txt,tools/words/extra.txt
 COMMON ?= tools/common_words.txt
 dict:
 	python3 tools/gen_dict.py $(WORDS) data/dict.bin $(COMMON)
 	python3 tools/gen_dict.py --verify data/dict.bin $(WORDS) $(COMMON)
+
+pools:
+	python3 tools/gen_pools.py
 
 # Native rule tests: board.c, dict.c and music.c under gcc with the stubs in tools/check/stub.
 #   make check

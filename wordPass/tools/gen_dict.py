@@ -33,13 +33,14 @@ def pack(word, tier=0):
 def read_words(src):
     """Valid game words from a list: ascii letters, 3..10 long, no lone q."""
     words = set()
-    for line in open(src, encoding="utf-8", errors="ignore"):
-        w = line.strip().lower()
-        if w.isalpha() and w.isascii() and MIN_LEN <= len(w) <= MAX_LEN:
-            # Qu tiles: a lone q followed by anything but u can never be spelled.
-            if "q" in w and "qu" not in w:
-                continue
-            words.add(w)
+    for path in src.split(","):       # several lists may be given, comma separated
+        for line in open(path, encoding="utf-8", errors="ignore"):
+            w = line.strip().lower()
+            if w.isalpha() and w.isascii() and MIN_LEN <= len(w) <= MAX_LEN:
+                # Qu tiles: a lone q followed by anything but u can never be spelled.
+                if "q" in w and "qu" not in w:
+                    continue
+                words.add(w)
     return words
 
 def build(src, dst, common_src=None):

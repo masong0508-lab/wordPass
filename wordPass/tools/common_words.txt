@@ -1853,6 +1853,8 @@ blocked
 blockhead
 blocking
 blocks
+blog
+blogs
 bloke
 blokes
 blond
@@ -2871,6 +2873,8 @@ cellar
 cellars
 cellmate
 cello
+cellphone
+cellphones
 cells
 cellular
 cement
@@ -5938,6 +5942,8 @@ elsewhere
 eluded
 elusive
 elves
+email
+emails
 embalming
 embargo
 embark
@@ -6674,6 +6680,8 @@ favorite
 favorites
 favors
 favour
+favourite
+favourites
 favours
 fawn
 fax
@@ -9515,6 +9523,7 @@ interior
 intern
 internal
 internally
+internet
 interns
 internship
 interpret
@@ -12369,6 +12378,7 @@ oneself
 ongoing
 onion
 onions
+online
 only
 ons
 onset
@@ -16762,6 +16772,8 @@ smart
 smartass
 smarter
 smartest
+smartphone
+smartphones
 smarts
 smarty
 smash
@@ -20162,6 +20174,8 @@ weaving
 web
 weber
 webs
+website
+websites
 webster
 wed
 wedded
