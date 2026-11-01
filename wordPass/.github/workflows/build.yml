@@ -30,3 +30,13 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: wordPass.nds
+
+  check:
+    # Native rule tests and the emulator tooling, no toolchain container needed.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rule tests (make check)
+        run: make check
+      - name: Python tools compile
+        run: python3 -m py_compile tools/emu/*.py

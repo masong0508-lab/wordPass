@@ -3,15 +3,27 @@
 #---------------------------------------------------------------------------------
 .SUFFIXES:
 
+# `make check` (native rule tests) and `make dict` run without devkitARM
+NATIVE_GOALS := check dict
+ifneq ($(MAKECMDGOALS),)
+ifeq ($(filter-out $(NATIVE_GOALS),$(MAKECMDGOALS)),)
+NATIVE := 1
+endif
+endif
+
+ifndef NATIVE
 ifeq ($(strip $(DEVKITARM)),)
 $(error "Please set DEVKITARM in your environment. export DEVKITARM=<path to>devkitARM")
+endif
 endif
 
 GAME_TITLE     := wordPass
 GAME_SUBTITLE1 := crack the pass, save the library
 GAME_SUBTITLE2 := homebrew
 
+ifndef NATIVE
 include $(DEVKITARM)/ds_rules
+endif
 
 TARGET   := wordPass
 BUILD    := build
@@ -60,7 +72,7 @@ ifneq (,$(findstring icon.bmp,$(icons)))
   export GAME_ICON := $(CURDIR)/icon.bmp
 endif
 
-.PHONY: $(BUILD) clean dict
+.PHONY: $(BUILD) clean dict check
 
 $(BUILD):
 	@mkdir -p $@
@@ -73,6 +85,14 @@ COMMON ?= tools/common_words.txt
 dict:
 	python3 tools/gen_dict.py $(WORDS) data/dict.bin $(COMMON)
 	python3 tools/gen_dict.py --verify data/dict.bin $(WORDS) $(COMMON)
+
+# Native rule tests: board.c, dict.c and music.c under gcc with the stubs in tools/check/stub.
+#   make check
+CHECK_SRC := tools/check/board_test.c tools/check/stubs.c source/board.c source/dict.c source/music.c
+check:
+	@mkdir -p $(BUILD)
+	gcc -std=gnu11 -Wall -Wextra -Wshadow -I tools/check/stub -I source $(CHECK_SRC) -o $(BUILD)/check
+	$(BUILD)/check
 
 clean:
 	@echo clean ...

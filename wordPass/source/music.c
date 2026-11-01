@@ -57,15 +57,21 @@ static void setVoice(int v, int note, int vol)
     x->target = vol;
 }
 
-void musicInit(void)
+// Equal-tempered table from one octave of integer frequencies: each lower octave is a
+// rounded halving, each higher one a doubling (no pow(), no libm): C4 = 262, A4 = 440.
+// Exported so tools/check can assert the table without the PSG.
+void musicBuildNotes(u16 *out)
 {
-    // equal-tempered table from one octave of integer frequencies: each lower octave is a
-    // rounded halving, each higher one a doubling (no pow(), no libm): C4 = 262, A4 = 440
     static const u16 OCT8[12] = { 4186, 4435, 4699, 4978, 5274, 5588, 5920, 6272, 6645, 7040, 7459, 7902 };
     for (int n = 0; n < 128; n++) {
         int s = 9 - n / 12;            // C8 (4186 Hz) is MIDI note 108
-        noteHz[n] = s > 0 ? (u16)((OCT8[n % 12] + (1 << (s - 1))) >> s) : (u16)(OCT8[n % 12] << -s);
+        out[n] = s > 0 ? (u16)((OCT8[n % 12] + (1 << (s - 1))) >> s) : (u16)(OCT8[n % 12] << -s);
     }
+}
+
+void musicInit(void)
+{
+    musicBuildNotes(noteHz);
     soundEnable();
     static const DutyCycle duty[NVOICE] = {
         DutyCycle_25, DutyCycle_12, DutyCycle_50, DutyCycle_37, DutyCycle_12, DutyCycle_50, DutyCycle_50
@@ -123,11 +129,6 @@ void musicReveal(bool secret)
 
 void musicPassComplete(void) { passFlourish = true; flourishSteps = PATTERN; drumLevel = 3; drumDecay = PATTERN; }
 void musicFail(void) { failing = true; failFrames = 90; }
-
-void musicStopAll(void)
-{
-    for (int v = 0; v < NVOICE; v++) { V[v].target = 0; V[v].vol = 0; soundSetVolume(V[v].id, 0); }
-}
 
 static void sequenceStep(const Game *g)
 {

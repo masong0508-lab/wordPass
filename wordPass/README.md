@@ -203,7 +203,10 @@ source/gfx.c     software renderer for both screens
 source/music.c   PSG sequencer and adaptive stems
 source/font.c    5x7 bitmap font
 source/settings.c options, records, FAT save
+source/debug.c   fixed-layout state mirror and poke channel for the test harness
 tools/gen_dict.py  WPD2 dictionary builder and --verify round trip
+tools/check/     native rule tests: make check (gcc, no toolchain)
+tools/emu/       headless DeSmuME harness, smoke.py and test_rules.py (see TESTING.md)
 tools/common_words.txt
 data/dict.bin
 ```

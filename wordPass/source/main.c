@@ -55,14 +55,12 @@ static void recordScore(void)
     if (changed) settingsSave();
 }
 
-static int optRow;
-
 static void cycleOption(int row, int dir)
 {
     switch (row) {
         case 0: S.theme = (S.theme + THEME_COUNT + dir) % THEME_COUNT; break;
         case 1: S.frame = (S.frame + FRAME_COUNT + dir) % FRAME_COUNT; break;
-        case 2: S.accent = (S.accent + 9 + dir) % 9; break;
+        case 2: S.accent = (S.accent + ACCENT_COUNT + dir) % ACCENT_COUNT; break;
         case 3: S.hand = !S.hand; break;
         case 4: S.fire = (S.fire + FIRE_COUNT + dir) % FIRE_COUNT; break;
         case 5: S.music = !S.music; break;
@@ -95,12 +93,40 @@ static void enterFail(void)
     musicFail();
 }
 
+// Submit the current chain: score it, shatter the gems (in the colours they had), callouts.
+static void submitChain(void)
+{
+    u8 cc[MAX_CHAIN], cr[MAX_CHAIN], cl[MAX_CHAIN];
+    int cn = G.chainLen;
+    for (int i = 0; i < cn; i++) {
+        cc[i] = G.chainC[i]; cr[i] = G.chainR[i];
+        cl[i] = G.cell[cc[i]][cr[i]].letter;     // snapshot: gravity moves the letters
+    }
+    int gained = boardSubmit(&G);
+    if (gained > 0) {
+        for (int i = 0; i < cn; i++) gfxBurst(cc[i], cr[i], BURST_SHATTER, cl[i]);
+        char ps[12]; siprintf(ps, "+%d", gained);
+        gfxPopup(cc[cn / 2], cr[cn / 2], ps, 1);
+        musicWord(G.lastWordLen, gained);
+        char s[32];
+        const char *tag = G.lastWordLen >= 8 ? "SPECTACULAR" : G.lastWordLen >= 7 ? "EXCELLENT" : G.lastWordLen >= 5 ? "GOOD" : "";
+        if (tag[0]) { siprintf(s, "%s!", tag); setMsg(s, 60); }
+        else if (G.lastWordTier == 2) setMsg("RARE WORD", 60);
+        if (G.fail) enterFail();
+    } else if (G.chainLen >= 3) {
+        char w[24]; boardChainWord(&G, w);
+        bool obscure = S.library == LIB_COMMON && boardWordTier(w, strlen(w)) == 2;
+        setMsg(obscure ? "TOO OBSCURE" : "NOT IN THE LIBRARY", 45);
+        gfxInvalidWord();
+    }
+}
+
 static void handlePlay(u32 down, u32 held, touchPosition *t)
 {
     bool peekNow = (held & (KEY_L | KEY_R)) != 0;
     if (peekNow != G.peekHeld) { G.peekHeld = peekNow; musicPeek(peekNow); }
 
-    if (down & KEY_START) { G.prevState = G.state; G.state = ST_PAUSE; return; }   // a held chain survives the pause
+    if (down & KEY_START) { G.state = ST_PAUSE; return; }   // a held chain survives the pause
     if (down & KEY_B) boardClearChain(&G);
 
     int c, r;
@@ -109,16 +135,17 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
 
     if (G.peekHeld) {
         if ((down & KEY_TOUCH) && gfxCellAt(t->px, t->py, &c, &r)) {
+            int letter = G.cell[c][r].letter;
             int res = boardPeel(&G, c, r);
             if (res == 2) {
-                gfxBurst(c, r, BURST_REVEAL);
+                gfxBurst(c, r, BURST_REVEAL, letter);
                 gfxPopup(c, r, "FOUND", 1);
                 musicReveal(true);
                 if (boardPassComplete(&G)) {
                     char s[32]; siprintf(s, "SHELF %d CLEARED", G.shelf); setMsg(s, 400);
                 } else setMsg("PASS LETTER FOUND", 90);
             } else if (res == 1) musicReveal(false);
-            else if (res == 3) { setMsg("SCORCHED", 60); gfxBurst(c, r, BURST_SCORCH); gfxShake(6); }
+            else if (res == 3 || res == -1) { setMsg("SCORCHED", 60); gfxBurst(c, r, BURST_SCORCH, letter); gfxShake(6); }
             if (G.fail) { enterFail(); return; }
             if (boardPassComplete(&G)) {
                 G.state = ST_PASSED; G.stateTimer = 0;
@@ -136,32 +163,11 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
         if (gfxCellAt(t->px, t->py, &c, &r)) {
             boardTryAddToChain(&G, c, r);
         } else if (down & KEY_TOUCH) {
-            if (gfxInSubmit(t->px, t->py)) goto submit;
-            if (gfxInClear(t->px, t->py)) boardClearChain(&G);
+            if (gfxInSubmit(t->px, t->py)) submitChain();
+            else if (gfxInClear(t->px, t->py)) boardClearChain(&G);
         }
     }
-    if (down & KEY_A) {
-submit:;
-        u8 cc[MAX_CHAIN], cr[MAX_CHAIN]; int cn = G.chainLen;
-        memcpy(cc, G.chainC, cn); memcpy(cr, G.chainR, cn);
-        int gained = boardSubmit(&G);
-        if (gained > 0) {
-            for (int i = 0; i < cn; i++) gfxBurst(cc[i], cr[i], BURST_SHATTER);
-            char ps[12]; siprintf(ps, "+%d", gained);
-            gfxPopup(cc[cn / 2], cr[cn / 2], ps, 1);
-            musicWord(G.lastWordLen, gained);
-            char s[32];
-            const char *tag = G.lastWordLen >= 8 ? "SPECTACULAR" : G.lastWordLen >= 7 ? "EXCELLENT" : G.lastWordLen >= 5 ? "GOOD" : "";
-            if (tag[0]) { siprintf(s, "%s!", tag); setMsg(s, 60); }
-            else if (G.lastWordTier == 2) setMsg("RARE WORD", 60);
-            if (G.fail) enterFail();
-        } else if (G.chainLen >= 3) {
-            char w[24]; boardChainWord(&G, w);
-            bool obscure = S.library == LIB_COMMON && boardWordTier(w, strlen(w)) == 2;
-            setMsg(obscure ? "TOO OBSCURE" : "NOT IN THE LIBRARY", 45);
-            gfxInvalidWord();
-        }
-    }
+    if (down & KEY_A) submitChain();
     // first-shelf nudge: three words in and no peek yet
     if (G.shelf == 1 && G.mode == MODE_CLASSIC && !G.hintShown && G.peels == 0 && G.wordsThisShelf >= 3) {
         G.hintShown = 1;
@@ -190,23 +196,23 @@ int main(void)
         switch (G.state) {
             case ST_TITLE:
                 if (down & KEY_TOUCH) {
+                    // only the drawn buttons do anything; a stray tap elsewhere is ignored
                     srand(seedCounter ^ (t.px << 8) ^ t.py);
-                    if (gfxInTitleOptions(t.px, t.py)) { G.state = ST_OPTIONS; optRow = 0; }
+                    if (gfxInTitleOptions(t.px, t.py)) { G.state = ST_OPTIONS; G.optRow = 0; }
                     else if (gfxInTitleDaily(t.px, t.py)) newGame(MODE_DAILY);
-                    else newGame(MODE_CLASSIC);
+                    else if (gfxInTitleClassic(t.px, t.py)) newGame(MODE_CLASSIC);
                 } else if (down & (KEY_START | KEY_A)) { srand(seedCounter); newGame(MODE_CLASSIC); }
                 else if (down & KEY_SELECT) newGame(MODE_DAILY);
-                else if (down & KEY_Y) { G.state = ST_OPTIONS; optRow = 0; }
+                else if (down & KEY_Y) { G.state = ST_OPTIONS; G.optRow = 0; }
                 break;
             case ST_OPTIONS: {
                 int row = (down & KEY_TOUCH) ? gfxOptionRowAt(t.px, t.py) : -1;
                 if (row == OPT_ROWS || (down & KEY_B)) { settingsSave(); G.state = ST_TITLE; break; }
-                if (row >= 0) { optRow = row; cycleOption(row, 1); }
-                if (down & KEY_UP)    optRow = (optRow + OPT_ROWS - 1) % OPT_ROWS;
-                if (down & KEY_DOWN)  optRow = (optRow + 1) % OPT_ROWS;
-                if (down & (KEY_RIGHT | KEY_A)) cycleOption(optRow, 1);
-                if (down & KEY_LEFT)  cycleOption(optRow, -1);
-                G.stateTimer = optRow;   // the renderer reads the highlighted row from here
+                if (row >= 0) { G.optRow = row; cycleOption(row, 1); }
+                if (down & KEY_UP)    G.optRow = (G.optRow + OPT_ROWS - 1) % OPT_ROWS;
+                if (down & KEY_DOWN)  G.optRow = (G.optRow + 1) % OPT_ROWS;
+                if (down & (KEY_RIGHT | KEY_A)) cycleOption(G.optRow, 1);
+                if (down & KEY_LEFT)  cycleOption(G.optRow, -1);
                 break;
             }
             case ST_PLAY:

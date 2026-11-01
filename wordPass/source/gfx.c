@@ -61,11 +61,10 @@ static u16 frameMid = C(28,22,6), frameDk = C(16,11,2), frameLt = C(31,29,18);
 #define GOLD       frameMid
 #define GOLD_DK    frameDk
 #define GOLD_LT    frameLt
-#define TRUE_GOLD  C(28,22,6)
 static u16 accent = C(6,28,24);
 #define ACCENT     accent
 // one accent per shelf so the library changes colour as you climb
-static const u16 SHELF_ACCENTS[8] = {
+static const u16 SHELF_ACCENTS[ACCENT_COUNT - 1] = {
     C(6,28,24), C(28,8,24), C(16,30,6), C(31,16,4), C(8,20,31), C(20,10,31), C(31,12,18), C(10,31,16)
 };
 #define WHITE      C(31,31,31)
@@ -96,7 +95,8 @@ static const GemPal THEMES[THEME_COUNT][5] = {
 };
 static const GemPal GEM_DIAMOND  = { C(16,18,21),C(27,28,30), C(31,31,31) };
 static const GemPal GEM_FIRE     = { C(12,0,0),  C(31,6,0),   C(31,22,4) };
-static const GemPal *GEM_RUBY, *GEM_SAPPHIRE, *GEM_AMBER, *GEM_AMETHYST, *GEM_EMERALD;
+// theme slots: 0 ruby (vowels), 1 sapphire, 2 amber, 3 amethyst, 4 emerald; index THEMES[S.theme][slot]
+enum { TH_RUBY = 0, TH_SAPPHIRE, TH_AMBER, TH_AMETHYST, TH_EMERALD };
 
 static int groupFor(int letter)
 {
@@ -362,7 +362,6 @@ static ALIGN(4) GemRow gemLetter[26][COMP_ROWS], diamondLetter[26][COMP_ROWS];
 static void setupTheme(void)
 {
     const GemPal *t = THEMES[S.theme];
-    GEM_RUBY = &t[0]; GEM_SAPPHIRE = &t[1]; GEM_AMBER = &t[2]; GEM_AMETHYST = &t[3]; GEM_EMERALD = &t[4];
     GEM_PALS[0] = &t[0]; GEM_PALS[1] = &t[1]; GEM_PALS[2] = &t[4]; GEM_PALS[3] = &t[2]; GEM_PALS[4] = &t[3];
     GEM_PALS[5] = &GEM_DIAMOND; GEM_PALS[6] = &GEM_FIRE;
     switch (S.frame) {
@@ -635,12 +634,12 @@ void gfxApplySettings(void)
 
 // ---------------------------------------------------------------- effects API
 
-void gfxBurst(int c, int r, int kind)
+void gfxBurst(int c, int r, int kind, int letter)
 {
     int x, y; cellOrigin(c, r, &x, &y);
     int cx = x + TILE_W / 2, cy = y + TILE_H / 2;
     if (kind == BURST_SHATTER) {
-        const GemPal *p = gemFor(G.cell[c][r].letter);
+        const GemPal *p = gemFor(letter);
         for (int i = 0; i < 10; i++)
             spawn(P_SHARD, cx + (rand() % 12) - 6, cy + (rand() % 10) - 5, (rand() % 25) - 12, -(rand() % 20) - 4, 18 + rand() % 10, (i & 1) ? p->light : p->mid);
     } else if (kind == BURST_REVEAL) {
@@ -981,6 +980,8 @@ static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
 }
 
 // ---------------------------------------------------------------- top screen
+// Everything below draws on the top screen, which is never mirrored for the left hand:
+// never use BX() here.
 
 static void drawTipCard(int which);
 
@@ -1116,7 +1117,8 @@ static void drawTitle(const Game *g)
     drawBoardFrame();
     // the logo as a row of gems
     static const char *letters = "wordPASS";
-    const GemPal *pals[8] = { GEM_RUBY, GEM_SAPPHIRE, GEM_EMERALD, GEM_AMBER, GEM_AMETHYST, GEM_RUBY, GEM_SAPPHIRE, GEM_EMERALD };
+    const GemPal *th = THEMES[S.theme];
+    const GemPal *pals[4] = { &th[TH_RUBY], &th[TH_SAPPHIRE], &th[TH_EMERALD], &th[TH_AMBER] };
     int gw = 20, gh = 22, lx = 86 - (8 * gw) / 2;
     for (int i = 0; i < 8; i++) {
         int bob = ((frame + i * 6) & 31) < 16 ? ((frame + i * 6) & 15) / 6 : (15 - ((frame + i * 6) & 15)) / 6;
@@ -1150,7 +1152,7 @@ static const char *const OPT_NAMES[OPT_ROWS] = { "THEME", "FRAME", "ACCENT", "HA
 static const char *const LIB_NAMES[LIB_COUNT] = { "FULL", "COMMON" };
 static const char *const THEME_NAMES[THEME_COUNT] = { "JEWEL", "INK", "CANDY", "EMBER" };
 static const char *const FRAME_NAMES[FRAME_COUNT] = { "GOLD", "SILVER", "ACCENT" };
-static const char *const ACCENT_NAMES[9] = { "AUTO", "TEAL", "MAGENTA", "LIME", "ORANGE", "SKY", "VIOLET", "PINK", "MINT" };
+static const char *const ACCENT_NAMES[ACCENT_COUNT] = { "AUTO", "TEAL", "MAGENTA", "LIME", "ORANGE", "SKY", "VIOLET", "PINK", "MINT" };
 static const char *const FIRE_NAMES[FIRE_COUNT] = { "RELAXED", "NORMAL", "FAST" };
 
 static void drawOptions(const Game *g)
@@ -1159,7 +1161,7 @@ static void drawOptions(const Game *g)
     drawBoardDots();
     drawBoardFrame();
     drawTextShadow(BX(86) - textWidth("OPTIONS", 2) / 2, 14, "OPTIONS", GOLD_LT, 2);
-    int sel = g->stateTimer;
+    int sel = g->optRow;
     for (int i = 0; i < OPT_ROWS; i++) {
         int y = OPT_Y0 + i * OPT_DY;
         const char *val = "";
@@ -1184,14 +1186,17 @@ static void drawOptions(const Game *g)
     drawTextCenter(BX(86), 182, settingsPersistent() ? "SAVED TO CARD" : "NOT SAVED: NO CARD", DIM, 1);
 }
 
-// Title top screen: three tip cards that cycle (the top screen has no hand offset)
+// Title top screen: three tip cards that cycle. This draws on the TOP screen, which has
+// no hand offset: never use BX() here (it would push the card off the right edge in the
+// left-hand layout).
 static void drawTipCard(int which)
 {
+    const GemPal *th = THEMES[S.theme];
     int cx = 128, y = 52;
     if (which == 0) {
         drawTextCenter(cx, y, "SPELL", GOLD_LT, 1);
         static const char L[3] = { 'I', 'N', 'K' };
-        const GemPal *P3[3] = { GEM_RUBY, GEM_SAPPHIRE, GEM_AMBER };
+        const GemPal *P3[3] = { &th[TH_RUBY], &th[TH_SAPPHIRE], &th[TH_AMBER] };
         int gx = cx - 40;
         for (int i = 0; i < 3; i++) {
             int x = gx + i * 28, gy = y + 14 + ((i & 1) ? 10 : 0);
@@ -1223,11 +1228,12 @@ static void drawTipCard(int which)
         drawTextCenter(cx, y, "FIRE", FIRE2, 1);
         int gx = cx - 40;
         GemPal firePal = GEM_FIRE; firePal.mid = (frame & 8) ? C(31,8,0) : C(31,14,0);
-        drawGemSized(gx, y + 14, TILE_W, TILE_H, &firePal, false); drawChar(gx + 7, y + 18, 'R', WHITE, 2);
-        rectOutline(gx + 1, y + 14 + TILE_H + 1, TILE_W - 2, TILE_H - 2, DIM);
-        for (int j = 0; j < 3; j++) px(gx + 6 + j * 6, y + 12 - ((frame >> 2) + j) % 3, FIRE2);
+        int fx = gx, fy = y + 14;   // the burning gem; the tongues above share its base
+        drawGemSized(fx, fy, TILE_W, TILE_H, &firePal, false); drawChar(fx + 7, fy + 4, 'R', WHITE, 2);
+        rectOutline(fx + 1, fy + TILE_H + 1, TILE_W - 2, TILE_H - 2, DIM);
+        for (int j = 0; j < 3; j++) px(fx + 6 + j * 6, fy - 2 - ((frame >> 2) + j) % 3, FIRE2);
         drawGemSized(gx + 28, y + 24, TILE_W, TILE_H, &GEM_DIAMOND, false); drawChar(gx + 35, y + 28, 'O', C(4,6,10), 2);
-        drawGemSized(gx + 56, y + 14, TILE_W, TILE_H, GEM_EMERALD, false); drawChar(gx + 63, y + 18, 'P', WHITE, 2);
+        drawGemSized(gx + 56, y + 14, TILE_W, TILE_H, &th[TH_EMERALD], false); drawChar(gx + 63, y + 18, 'P', WHITE, 2);
         drawTextCenter(cx, y + 62, "SHORT WORDS BUILD HEAT AND LIGHT A GEM", INK, 1);
         drawTextCenter(cx, y + 72, "FIRE DROPS A ROW EACH TURN. IT FALLS", INK, 1);
         drawTextCenter(cx, y + 82, "THROUGH HOLES. DIAMONDS BLOCK IT", INK, 1);
@@ -1326,7 +1332,7 @@ void gfxInit(void)
 void gfxFrame(const Game *g)
 {
     frame++;
-    accent = S.accent ? SHELF_ACCENTS[(S.accent - 1) % 8] : SHELF_ACCENTS[(g->shelf > 0 ? g->shelf - 1 : 0) % 8];
+    accent = S.accent ? SHELF_ACCENTS[(S.accent - 1) % (ACCENT_COUNT - 1)] : SHELF_ACCENTS[(g->shelf > 0 ? g->shelf - 1 : 0) % (ACCENT_COUNT - 1)];
     if (S.frame == FRAME_ACCENT && frameMid != accent) {   // the shelf accent changed
         frameMid = accent; frameDk = lerp15(accent, BLACK, 9); frameLt = lerp15(accent, WHITE, 8);
         buildHeatTables();

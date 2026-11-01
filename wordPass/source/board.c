@@ -244,6 +244,12 @@ static void spawnFire(Game *g)
 // Each burning tile destroys the tile beneath and takes its place.
 // Empty cells and holes are chimneys: fire drops straight through.
 // Secrets are firebreaks. A flame already on the bottom row ends the game.
+//
+// Invariant: HOLE and SECRET cells are immutable except via boardPeel. Fire never
+// assigns a whole Cell over one of them: a flame that is blocked (by a SECRET or another
+// flame) or that falls out the bottom settles on the lowest EMPTY row between its own
+// row and the blocker, and stays where it is when there is none. scorched[] therefore
+// stays tied to holes that boardPeel made.
 static void fireStep(Game *g)
 {
     for (int c = 0; c < COLS; c++)
@@ -256,34 +262,40 @@ static void fireStep(Game *g)
             if (g->cell[c][r].state != CELL_BURN || moved[c][r]) continue;
             int rr = r + 1;
             while (rr < ROWS && (g->cell[c][rr].state == CELL_EMPTY || g->cell[c][rr].state == CELL_HOLE)) rr++;
-            if (rr >= ROWS) {
-                // fell out the bottom: park on the lowest cell, burning
+            if (rr < ROWS && g->cell[c][rr].state == CELL_TILE) {
+                // TILE: burn it, move down onto it
                 Cell f = g->cell[c][r];
                 g->cell[c][r].state = CELL_EMPTY;
-                g->cell[c][ROWS - 1] = f;
-                g->cell[c][ROWS - 1].yoff = 0;
-                moved[c][ROWS - 1] = true;
+                f.letter = g->cell[c][rr].letter;
+                g->cell[c][rr] = f;
+                g->cell[c][rr].yoff = 0;
+                moved[c][rr] = true;
                 continue;
             }
-            int s = g->cell[c][rr].state;
-            if (s == CELL_SECRET || s == CELL_BURN) {
-                if (rr - 1 != r) {
-                    Cell f = g->cell[c][r];
-                    g->cell[c][r].state = CELL_EMPTY;
-                    g->cell[c][rr - 1] = f;
-                    moved[c][rr - 1] = true;
-                }
-                continue;
+            // blocked at rr (SECRET or BURN), or fell out the bottom (rr == ROWS): walk back up
+            // to the nearest EMPTY row below r and settle there; holes are skipped, never overwritten
+            int dest = -1;
+            for (int k = rr - 1; k > r; k--)
+                if (g->cell[c][k].state == CELL_EMPTY) { dest = k; break; }
+            if (dest < 0) {
+                if (rr >= ROWS) g->fail = FAIL_FIRE;   // nothing left to burn beneath it
+                continue;                              // flame stays put
             }
-            // TILE: burn it, move down onto it
             Cell f = g->cell[c][r];
             g->cell[c][r].state = CELL_EMPTY;
-            f.letter = g->cell[c][rr].letter;
-            g->cell[c][rr] = f;
-            g->cell[c][rr].yoff = 0;
-            moved[c][rr] = true;
+            g->cell[c][dest] = f;
+            g->cell[c][dest].yoff = 0;
+            moved[c][dest] = true;
         }
     }
+}
+
+// Test channel (debug.c poke 5): one fire advance and the gravity that follows it, with
+// no turn, heat or word check, so rule tests can step the fire deterministically.
+void boardDebugFireStep(Game *g)
+{
+    fireStep(g);
+    applyGravity(g);
 }
 
 static void endTurn(Game *g, int wordLen)

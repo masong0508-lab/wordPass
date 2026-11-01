@@ -47,7 +47,9 @@ enum {
     ST_PLAY,
     ST_PASSED,        // pass accepted, shelf cleared
     ST_FAIL,
-    ST_PAUSE
+    ST_PAUSE,
+    ST_OPTIONS,       // 5
+    ST_STATS          // 6 (reserved: lifetime stats screen)
 };
 
 enum {
@@ -76,7 +78,7 @@ typedef struct {
     int  burnEvery;           // fire advances every N turns
     int  burnTimer;
     int  fail;
-    int  state, prevState;
+    int  state;
     int  stateTimer;
     int  peekHeld;
     int  wordsThisShelf;
@@ -93,6 +95,7 @@ typedef struct {
     int  hintShown;
     int  lastWordTier;        // 0 none, 1 common, 2 rare (last accepted word)
     int  rareWords;           // rare words spelled this shelf
+    int  optRow;              // highlighted row on the options screen
 } Game;
 
 enum { MODE_CLASSIC = 0, MODE_DAILY };
@@ -103,6 +106,7 @@ enum { FRAME_GOLD = 0, FRAME_SILVER, FRAME_ACCENT, FRAME_COUNT };
 enum { HAND_RIGHT = 0, HAND_LEFT };
 enum { FIRE_RELAXED = 0, FIRE_NORMAL, FIRE_FAST, FIRE_COUNT };
 enum { LIB_FULL = 0, LIB_COMMON, LIB_COUNT };   // dictionary: every ENABLE word, or common words only
+#define ACCENT_COUNT 9                          // AUTO plus eight fixed colours
 
 typedef struct {
     u32 magic;
@@ -119,7 +123,6 @@ void settingsDefaults(void);
 bool settingsSave(void);
 bool settingsPersistent(void);
 
-#define ST_OPTIONS 5
 #define OPT_ROWS 7
 void gfxApplySettings(void);          // rebuild caches after a settings change
 int  gfxOptionRowAt(int px, int py);  // -1 none, 0..OPT_ROWS-1 rows, OPT_ROWS = back
@@ -129,6 +132,7 @@ extern Game G;
 
 // board.c
 void boardNewShelf(Game *g);
+void boardDebugFireStep(Game *g);    // test channel: one fire advance plus gravity, no turn
 bool boardTryAddToChain(Game *g, int c, int r);
 void boardClearChain(Game *g);
 int  boardSubmit(Game *g);           // returns score gained, 0 if invalid
@@ -157,7 +161,7 @@ int  gfxCellAt(int px, int py, int *c, int *r);
 bool gfxInSubmit(int px, int py);
 bool gfxInClear(int px, int py);
 enum { BURST_SHATTER = 0, BURST_REVEAL, BURST_SCORCH, BURST_FIRE };
-void gfxBurst(int c, int r, int kind);
+void gfxBurst(int c, int r, int kind, int letter);   // letter colours the shards; gfxBurst never reads G
 void gfxPopup(int c, int r, const char *txt, int gold);
 void gfxFadeIn(void);
 void gfxFlash(void);
@@ -176,10 +180,10 @@ void musicPeek(bool on);
 void musicReveal(bool secret);
 void musicPassComplete(void);
 void musicFail(void);
-void musicStopAll(void);
+void musicBuildNotes(u16 *out);     // 128-entry MIDI note -> Hz table (shared with tools/check)
 
 // debug.c
-void debugSync(const Game *g);
+void debugSync(Game *g);             // mirrors state for the emulator harness and applies pokes
 
 // font.c
 extern const u8 font5x7[][7];

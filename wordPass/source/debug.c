@@ -1,6 +1,14 @@
-// Fixed-layout mirror of game state for the emulator test harness.
-// Tests read DBG via its symbol address, so changes to Game never break them.
+// Fixed-layout mirror of game state for the emulator test harness, plus a poke channel.
+// Tests read DBG via its symbol address, so changes to Game never break them. Every
+// documented offset is pinned with _Static_assert so it cannot drift; tools/emu/wp.py
+// carries the same numbers in its OFF table.
+//
+// Poke channel: a test writes cmd/a0..a3, the next debugSync applies the command and
+// clears cmd. The writes land in main RAM that the ARM9 would normally cache: fine in
+// DeSmuME (no cache emulation) and the channel is test-only, so hardware builds may
+// keep it. DBG stays volatile so the reads are never hoisted.
 #include "game.h"
+#include <stddef.h>
 #include <string.h>
 
 typedef struct {
@@ -17,12 +25,69 @@ typedef struct {
     char lastWord[16];
     char bestWord[16];
     s32 lastWordTier, rareWords, library;   // offsets 324, 328, 332
-} DebugView;
+    // ---- poke channel (test -> game)
+    u32 cmd, a0, a1, a2, a3;                // 336..355
+    // ---- more mirrored state
+    s32 heatThreshold, burnEvery, burnTimer; // 356, 360, 364
+    u8  scorched[COLS * ROWS];              // 368..423
+    u8  theme, hand, fire, music;           // 424..427
+    s32 optRow;                             // 428
+    u8  chainC[MAX_CHAIN], chainR[MAX_CHAIN]; // 432.., 442..
+} DebugView;                                // total 452
+
+#define PIN(field, off) _Static_assert(offsetof(DebugView, field) == (off), "DebugView." #field " moved: update tools/emu/wp.py OFF")
+PIN(magic, 0); PIN(frame, 4); PIN(state, 8); PIN(mode, 12); PIN(shelf, 16); PIN(score, 20);
+PIN(fail, 24); PIN(turn, 28); PIN(heat, 32); PIN(chainLen, 36); PIN(peels, 40); PIN(lockdown, 44);
+PIN(bestWordScore, 48); PIN(dailySeed, 52); PIN(passLen, 56);
+PIN(pass, 60); PIN(found, 76); PIN(cellLetter, 92); PIN(cellState, 148); PIN(back, 204);
+PIN(msg, 260); PIN(lastWord, 292); PIN(bestWord, 308);
+PIN(lastWordTier, 324); PIN(rareWords, 328); PIN(library, 332);
+PIN(cmd, 336); PIN(a0, 340); PIN(a1, 344); PIN(a2, 348); PIN(a3, 352);
+PIN(heatThreshold, 356); PIN(burnEvery, 360); PIN(burnTimer, 364);
+PIN(scorched, 368); PIN(theme, 424); PIN(hand, 425); PIN(fire, 426); PIN(music, 427);
+PIN(optRow, 428); PIN(chainC, 432); PIN(chainR, 442);
+_Static_assert(sizeof(DebugView) == 452, "DebugView size changed: update tools/emu/wp.py");
 
 volatile DebugView DBG;
 
-void debugSync(const Game *g)
+enum {
+    POKE_NONE = 0,
+    POKE_CELL,      // a0=c a1=r a2=state a3=letter; motion and flash cleared
+    POKE_BACK,      // back[a0][a1] = a2
+    POKE_HEAT,      // heat = a0
+    POKE_BURN,      // burnTimer = a0, burnEvery = a1
+    POKE_FIRESTEP,  // one fire advance plus gravity
+    POKE_TURN,      // turn = a0
+    POKE_LIVES      // reserved: lives = a0 (item 08)
+};
+
+static void applyPoke(Game *g)
 {
+    u32 cmd = DBG.cmd;
+    if (!cmd) return;
+    int a0 = (int)DBG.a0, a1 = (int)DBG.a1, a2 = (int)DBG.a2, a3 = (int)DBG.a3;
+    bool inBoard = a0 >= 0 && a0 < COLS && a1 >= 0 && a1 < ROWS;
+    switch (cmd) {
+        case POKE_CELL:
+            if (inBoard) {
+                Cell *cl = &g->cell[a0][a1];
+                cl->state = (u8)a2; cl->letter = (u8)(a3 % 26);
+                cl->yoff = 0; cl->yv = 0; cl->squash = 0; cl->flash = 0;
+            }
+            break;
+        case POKE_BACK:     if (inBoard) g->back[a0][a1] = (u8)a2; break;
+        case POKE_HEAT:     g->heat = a0; break;
+        case POKE_BURN:     g->burnTimer = a0; g->burnEvery = a1 > 0 ? a1 : 1; break;
+        case POKE_FIRESTEP: boardDebugFireStep(g); break;
+        case POKE_TURN:     g->turn = a0; break;
+        case POKE_LIVES:    break;   // no lives field yet
+    }
+    DBG.cmd = 0;
+}
+
+void debugSync(Game *g)
+{
+    applyPoke(g);
     DBG.magic = 0x44424731;
     DBG.frame++;
     DBG.state = g->state; DBG.mode = g->mode; DBG.shelf = g->shelf; DBG.score = g->score;
@@ -36,9 +101,15 @@ void debugSync(const Game *g)
             DBG.cellLetter[c * ROWS + r] = g->cell[c][r].letter;
             DBG.cellState[c * ROWS + r] = g->cell[c][r].state;
             DBG.back[c * ROWS + r] = g->back[c][r];
+            DBG.scorched[c * ROWS + r] = g->scorched[c][r];
         }
     memcpy((void *)DBG.msg, g->msg, 32);
     memcpy((void *)DBG.lastWord, g->lastWord, 16);
     memcpy((void *)DBG.bestWord, g->bestWord, 16);
     DBG.lastWordTier = g->lastWordTier; DBG.rareWords = g->rareWords; DBG.library = S.library;
+    DBG.heatThreshold = g->heatThreshold; DBG.burnEvery = g->burnEvery; DBG.burnTimer = g->burnTimer;
+    DBG.theme = S.theme; DBG.hand = S.hand; DBG.fire = S.fire; DBG.music = S.music;
+    DBG.optRow = g->optRow;
+    memcpy((void *)DBG.chainC, g->chainC, MAX_CHAIN);
+    memcpy((void *)DBG.chainR, g->chainR, MAX_CHAIN);
 }
