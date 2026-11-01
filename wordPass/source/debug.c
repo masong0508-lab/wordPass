@@ -38,7 +38,10 @@ typedef struct {
     s32 speedBonus, peelBonus, passBonusKind, ledgerN, newBest;   // 468, 472, 476, 480, 484
     s32 lives, passTheme, twist;            // 488, 492, 496 (lockTier is at 456)
     s32 spelling;                           // 500: S.spelling (0 both, 1 American, 2 British)
-} DebugView;                                // total 504
+    s32 practice, dailyMod, clockOk;        // 504, 508, 512: Daily replay, DAILYMOD_*, the clock reads a real date
+    s32 statWords, statGames, streak;       // 516, 520, 524: S.wordsSpelled, S.gamesPlayed, S.dailyStreak
+    s32 dailyPlayed, dailyLast, dailyLastScore;   // 528, 532, 536: S.dailyPlayedDate, S.dailyLastDate, S.dailyLastScore
+} DebugView;                                // total 540
 
 #define PIN(field, off) _Static_assert(offsetof(DebugView, field) == (off), "DebugView." #field " moved: update tools/emu/wp.py OFF")
 PIN(magic, 0); PIN(frame, 4); PIN(state, 8); PIN(mode, 12); PIN(shelf, 16); PIN(score, 20);
@@ -54,7 +57,9 @@ PIN(optRow, 428); PIN(chainC, 432); PIN(chainR, 442);
 PIN(pulseEvery, 452); PIN(lockTier, 456); PIN(overtime, 460);
 PIN(chainScore, 464); PIN(speedBonus, 468); PIN(peelBonus, 472); PIN(passBonusKind, 476); PIN(ledgerN, 480); PIN(newBest, 484);
 PIN(lives, 488); PIN(passTheme, 492); PIN(twist, 496); PIN(spelling, 500);
-_Static_assert(sizeof(DebugView) == 504, "DebugView size changed: update tools/emu/wp.py");
+PIN(practice, 504); PIN(dailyMod, 508); PIN(clockOk, 512); PIN(statWords, 516); PIN(statGames, 520); PIN(streak, 524);
+PIN(dailyPlayed, 528); PIN(dailyLast, 532); PIN(dailyLastScore, 536);
+_Static_assert(sizeof(DebugView) == 540, "DebugView size changed: update tools/emu/wp.py");
 
 volatile DebugView DBG;
 
@@ -68,7 +73,9 @@ enum {
     POKE_TURN,      // turn = a0
     POKE_LIVES,     // lives = a0 (bookmarks)
     POKE_SCORE,     // score = a0 (panel layout checks)
-    POKE_SPELL      // S.spelling = a0 (0 both, 1 American, 2 British)
+    POKE_SPELL,     // S.spelling = a0 (0 both, 1 American, 2 British)
+    POKE_CLOCK,     // the DS clock reads YYYYMMDD a0 (0 = the real clock)
+    POKE_DAILY      // S.dailyPlayedDate = a0, S.dailyLastDate = a1, S.dailyStreak = a2 (records only; nothing is saved)
 };
 
 static void applyPoke(Game *g)
@@ -93,6 +100,8 @@ static void applyPoke(Game *g)
         case POKE_LIVES:    g->lives = a0; break;
         case POKE_SCORE:    g->score = a0; break;
         case POKE_SPELL:    if (a0 >= 0 && a0 < SPELL_COUNT) S.spelling = (u8)a0; break;
+        case POKE_CLOCK:    settingsDebugClock(a0); break;
+        case POKE_DAILY:    S.dailyPlayedDate = a0; S.dailyLastDate = a1; S.dailyStreak = a2; break;
     }
     DBG.cmd = 0;
 }
@@ -129,4 +138,7 @@ void debugSync(Game *g)
     DBG.speedBonus = g->speedBonus; DBG.peelBonus = g->peelBonus; DBG.passBonusKind = g->passBonusKind;
     DBG.ledgerN = g->ledgerN; DBG.newBest = g->newBest;
     DBG.lives = g->lives; DBG.passTheme = g->passTheme; DBG.twist = g->twist;
+    DBG.practice = g->practice; DBG.dailyMod = g->dailyMod; DBG.clockOk = g->clockOk;
+    DBG.statWords = S.wordsSpelled; DBG.statGames = S.gamesPlayed; DBG.streak = S.dailyStreak;
+    DBG.dailyPlayed = S.dailyPlayedDate; DBG.dailyLast = S.dailyLastDate; DBG.dailyLastScore = S.dailyLastScore;
 }

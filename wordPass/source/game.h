@@ -4,6 +4,7 @@
 
 #include <nds.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #define COLS 7
 #define ROWS 8
@@ -53,7 +54,7 @@ enum {
     ST_FAIL,
     ST_PAUSE,
     ST_OPTIONS,       // 5
-    ST_STATS          // 6 (reserved: lifetime stats screen)
+    ST_STATS          // 6: THE LEDGER, the lifetime stats screen (entered from the title)
 };
 
 enum {
@@ -122,7 +123,13 @@ typedef struct {
     int  recentHead;
     int  twist;               // TWIST_* on this shelf (Classic, shelf >= 4 && shelf % 3 == 1)
     int  lastTwist;           // the previous twist, so two in a row are rerolled once
+    // ---- Daily rules (item 09)
+    bool practice;            // a Daily replay: today's attempt is already used, nothing is recorded
+    bool clockOk;             // the DS clock reads a plausible date (settingsClockOk); Daily needs it
+    int  dailyMod;            // DAILYMOD_*: today's modifier (set from the clock on the title, by boardNewShelf in Daily)
 } Game;
+
+enum { DAILYMOD_STANDARD = 0, DAILYMOD_EMBER, DAILYMOD_DEEP, DAILYMOD_LONG, DAILYMOD_COUNT };
 
 enum { TWIST_NONE = 0, TWIST_INK, TWIST_DAMP, TWIST_BURIED };
 #define POOL_MIN_LEN 4        // pass pools hold words of 4..9 letters
@@ -140,25 +147,51 @@ enum { SPELL_BOTH = 0, SPELL_US, SPELL_UK, SPELL_COUNT };   // accepted spelling
 enum { LIB_FULL = 0, LIB_COMMON, LIB_COUNT };   // dictionary: every ENABLE word, or common words only
 #define ACCENT_COUNT 9                          // AUTO plus eight fixed colours
 
+// Saved file (wordPass.cfg): this struct byte for byte. The CRC covers every byte from `theme` on.
+#define SETTINGS_MAGIC    0x57505332u   // "WPS2"
+#define SETTINGS_V1_MAGIC 0x57505331u   // "WPS1": the old 28-byte file, migrated on load
+#define SETTINGS_VERSION  2
+#define SETTINGS_WORD_BUF (MAX_WORD + 4)   // a stored word, NUL-terminated, padded to a word multiple
+
 typedef struct {
     u32 magic;
-    u8  theme, frame, accent, hand, fire, music, library, spelling;
+    u16 version, crc;       // crc16 over bytes 8..end
+    u8  theme, frame, accent, hand, fire, music, library, spelling, tutorDone;
+    u8  reserved[3];
     int bestClassic;        // best Classic score
     int bestClassicShelf;   // highest shelf cleared
     int bestDaily;          // best Daily score
     int bestDailyDate;      // YYYYMMDD it was set on
+    int dailyPlayedDate;    // YYYYMMDD of the Daily attempt already used (replays are PRACTICE)
+    int dailyLastScore;     // score of the last scored Daily
+    int dailyStreak;        // consecutive days with a scored Daily
+    int dailyLastDate;      // YYYYMMDD of the last scored Daily
+    int gamesPlayed, shelvesCleared, wordsSpelled, longestLen, bestWordPts, perfectPasses, rareWords, peels, peelsHit;
+    char longestWord[SETTINGS_WORD_BUF], bestWordTxt[SETTINGS_WORD_BUF];   // lower case
 } Settings;
+_Static_assert(sizeof(Settings) % 4 == 0, "Settings must be a whole number of words");
+_Static_assert(offsetof(Settings, theme) == 8, "the CRC covers bytes 8..end");
 
 extern Settings S;
 void settingsInit(void);
 void settingsDefaults(void);
 bool settingsSave(void);
 bool settingsPersistent(void);
+bool settingsSaveFailed(void);                    // the last settingsSave could not write the card
+bool settingsDecode(const void *buf, size_t n);   // pure: a saved file (WPS2, or a WPS1 legacy file) into S; false = defaults
+size_t settingsEncode(void *buf);                 // pure: S into a WPS2 file image (sizeof(Settings) bytes, CRC filled)
+int  settingsToday(void);                         // YYYYMMDD from the DS clock (0 when it cannot be read)
+bool settingsClockOk(int ymd);                    // a plausible date: 2025-01-01 .. 2099-12-31
+int  settingsDayNumber(int ymd);                  // days since 1970-01-01 (civil calendar), for streaks
+int  settingsNextStreak(int lastDate, int streak, int today);   // the streak after a scored Daily on `today`
+int  settingsLiveStreak(int today);               // the streak still alive on `today` (0 once a day was missed)
+void settingsDebugClock(int ymd);                 // test channel: pretend the clock reads ymd (0 = the real clock)
 
 #define OPT_ROWS 8
 void gfxApplySettings(void);          // rebuild caches after a settings change
 int  gfxOptionRowAt(int px, int py);  // -1 none, 0..OPT_ROWS-1 rows, OPT_ROWS = back
 bool gfxInTitleOptions(int px, int py);
+bool gfxInTitleLedger(int px, int py);   // the BEST line under the title buttons: opens THE LEDGER
 
 extern Game G;
 
@@ -166,6 +199,8 @@ extern Game G;
 void boardNewShelf(Game *g);
 u32  boardRand(void);                // xorshift32 for every board decision (never for cosmetics)
 void boardSeed(u32 seed);
+int  boardDailyMod(int seed);                // DAILYMOD_* for a date
+const char *boardDailyModName(int mod);      // "STANDARD", "EMBER", "DEEP", "LONG"
 const char *boardPassTheme(const Game *g);   // "BINDERY", "INK" ... for the plaque label and the intro
 const char *boardTwistName(int twist);       // "INK SPILL", "DAMP", "BURIED" ("" for none)
 void boardBagReset(void);            // next randomLetter() refills the bag (tests; boardNewShelf does it)

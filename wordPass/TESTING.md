@@ -20,10 +20,11 @@ over holes and secrets, gravity with a hole, Qu+I+Z, chain backtracking, peeling
 reveal, OUT OF WORDS on an all-x board), dictionary tiers (`zax` rare, `book` common) and
 the note table (`musicBuildNotes`: C4 = 262, A4 = 440), the letter bag (100 a cycle, two
 of J/Q/X/Z, the vowel floor, seed determinism), the pass pools (shelf 2 is a 4-letter INK
-word for every `recentPass` state, lengths by shelf), Daily determinism and the twists. `tools/check/stub/nds.h` stands in
+word for every `recentPass` state, lengths by shelf), Daily determinism, the Daily modifiers, the lifetime stats and the twists. `tools/check/stub/nds.h` stands in
 for libnds (types, `ARGB16`, empty placement attributes, the PSG calls) and
 `tools/check/stubs.c` defines `S`, `dict_bin` and the sound stubs. When board.c or music.c
 starts calling a new gfx*/music*/sound* symbol, add it to stubs.c or the link will say so.
+`make check` first runs `tools/check/settings_test.c`, which compiles `source/settings.c` against a stub `fat.h` and tests the pure encode/decode (CRC, WPS1 migration, clamping), the streak arithmetic and the temp-file-and-rename save on a scratch file in `build/`.
 CI runs `make check` and `python3 -m py_compile tools/emu/*.py` in a second job.
 
 ## Emulator harness
@@ -59,6 +60,7 @@ would submit for; `passTheme` indexes `wp.PASS_THEMES`, `twist` is 0 none, 1 INK
 `DebugView` carries `cmd, a0..a3` (offsets 336..352). A test writes the arguments then the
 command; the ROM's next `debugSync()` applies it and clears `cmd`. `e.poke(cmd, a0, a1,
 a2, a3)` does the writes and runs two frames, and asserts the command was consumed.
+Daily and persistence: `set_clock(ymd)` makes the game's clock read a date (0 = real; call it on the title), `set_daily(played, last, streak)` sets the records, and `state()` also returns `practice, dailyMod, clockOk, statWords, statGames, streak, dailyPlayed, dailyLast, dailyLastScore`. DeSmuME has no FAT card, so saving is covered natively; the emulator keeps records in memory for the session.
 Helpers: `set_cell(c, r, state, letter)` (state EMPTY/TILE/BURN/HOLE/SECRET = 0..4,
 letter `'a'..'z'` or 0..25; motion and flash cleared), `set_back(c, r, v)` (0 or pass
 index + 1), `set_heat(h)`, `set_burn(timer, every)`, `fire_step()` (one fire advance plus

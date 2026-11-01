@@ -681,6 +681,7 @@ void gfxInvalidWord(void) { invalidTimer = 24; }
 bool gfxInTitleClassic(int x, int y) { return x >= BX(20) && x < BX(84) && y >= TB_Y && y < TB_Y + 22; }
 bool gfxInTitleDaily(int x, int y)   { return x >= BX(88) && x < BX(152) && y >= TB_Y && y < TB_Y + 22; }
 bool gfxInTitleOptions(int x, int y) { return x >= BX(54) && x < BX(118) && y >= TB_Y + 26 && y < TB_Y + 46; }
+bool gfxInTitleLedger(int x, int y)  { return x >= BX(12) && x < BX(160) && y >= TB_Y + 46 && y < SCREEN_H - 1; }   // the BEST line, just under OPTIONS
 
 // options list rows on the touch screen
 #define OPT_Y0 36
@@ -750,7 +751,11 @@ static void drawBoardFrame(void)
     rectOutline(BX(0), 0, BOARD_W, SCREEN_H, GOLD_DK);
     rectOutline(BX(1), 1, BOARD_W - 2, SCREEN_H - 2, GOLD);
     int sh = (frame * 2) % 240 - 20;
-    for (int i = 0; i < 14; i++) { px(BX(1 + sh + i), 1, GOLD_LT); px(BX(1 + sh + i), 0, GOLD); }
+    for (int i = 0; i < 14; i++) {
+        int x = 1 + sh + i;
+        if (x < 1 || x > BOARD_W - 2) continue;      // the shimmer runs along the frame only
+        px(BX(x), 1, GOLD_LT); px(BX(x), 0, GOLD);
+    }
 }
 
 // Clears the board area, except under gems that will be fully overdrawn.
@@ -996,6 +1001,9 @@ static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
     }
 }
 
+// the title, options and ledger screens: no board, no panel, the title layout on the top screen
+static inline bool menuState(int st) { return st == ST_TITLE || st == ST_OPTIONS || st == ST_STATS; }
+
 // ---------------------------------------------------------------- top screen
 // Everything below draws on the top screen, which is never mirrored for the left hand:
 // never use BX() here.
@@ -1007,8 +1015,6 @@ static void drawTopTitle(void)
     rectOutline(8, 8, 240, 176, GOLD_DK);
     rectOutline(9, 9, 238, 174, GOLD);
     drawLogo(16, 16, 2);
-    drawText(170, 18, "BOOKWORM", INK, 1);
-    drawText(170, 28, "X MINESWEEPER", INK, 1);
     if (G.state == ST_OPTIONS) {
         drawTextCenter(128, 60, "MAKE IT YOURS", GOLD_LT, 1);
         drawTextCenter(128, 78, "THEME CHANGES THE GEMS", INK, 1);
@@ -1023,7 +1029,14 @@ static void drawTopTitle(void)
         if (S.bestDaily)   { siprintf(s, "BEST DAILY %d ON %d", S.bestDaily, S.bestDailyDate); drawTextCenter(128, 166, s, DIM, 1); }
         return;
     }
+    if (G.state == ST_STATS) {
+        drawTextCenter(128, 84, "YOUR CAREER ON THIS CARD", GOLD_LT, 1);
+        drawTextCenter(128, 100, "WORDS PEEKS AND DAILY STREAKS", INK, 1);
+        drawTextCenter(128, 120, "B OR X OR A TAP CLOSES IT", DIM, 1);
+        return;
+    }
     drawTipCard((frame / 150) % 3);
+    if (G.msg[0]) drawTextCenter(128, 158, G.msg, GOLD_LT, 1);   // e.g. SET THE DS CLOCK FOR DAILY
 }
 
 // accent dot grid over the whole top screen, restricted to the slice being drawn
@@ -1040,7 +1053,7 @@ static void drawTopDots(void)
 static void drawTop(const Game *g)
 {
     fillRect(0, 0, SCREEN_W, SCREEN_H, BLACK);
-    if (g->state == ST_TITLE || g->state == ST_OPTIONS) {
+    if (menuState(g->state)) {
         drawTopDots();
         drawTopTitle();
         return;
@@ -1169,7 +1182,6 @@ static void drawTop(const Game *g)
 
 static void drawTitle(const Game *g)
 {
-    (void)g;
     fillRect(0, 0, SCREEN_W, SCREEN_H, BLACK);
     drawBoardDots();
     drawBoardFrame();
@@ -1195,15 +1207,34 @@ static void drawTitle(const Game *g)
     bool blink = frame & 32;
     roundRect(BX(20), TB_Y, 64, 22, blink ? GOLD : GOLD_DK);
     drawTextCenter(BX(52), TB_Y + 7, "CLASSIC", BLACK, 1);
-    roundRect(BX(88), TB_Y, 64, 22, DIM);
-    rectOutline(BX(88), TB_Y, 64, 22, GOLD_DK);
-    drawTextCenter(BX(120), TB_Y + 7, "DAILY", GOLD_LT, 1);
+    // DAILY: two 1x lines inside the 22 px button (nothing reaches y 157, where OPTIONS starts)
+    bool played = g->clockOk && S.dailyPlayedDate == g->dailySeed;
+    roundRect(BX(88), TB_Y, 64, 22, g->clockOk ? DIM : BLACK);
+    rectOutline(BX(88), TB_Y, 64, 22, g->clockOk ? GOLD_DK : DIM2);
+    char d1[16], d2[16];
+    if (!g->clockOk) {
+        drawTextCenter(BX(120), TB_Y + 3, "DAILY", DIM, 1);
+        drawTextCenter(BX(120), TB_Y + 12, "SET CLOCK", DIM, 1);
+    } else if (played) {
+        drawTextCenter(BX(120), TB_Y + 3, "PRACTICE", ACCENT, 1);
+        siprintf(d2, "DONE %d", S.dailyLastScore);
+        if (textWidth(d2, 1) > 58) siprintf(d2, "%d", S.dailyLastScore);
+        drawTextCenter(BX(120), TB_Y + 12, d2, INK, 1);
+    } else {
+        siprintf(d1, "DAILY %02d%02d", g->dailySeed / 100 % 100, g->dailySeed % 100);
+        drawTextCenter(BX(120), TB_Y + 3, d1, GOLD_LT, 1);
+        drawTextCenter(BX(120), TB_Y + 12, boardDailyModName(g->dailyMod), INK, 1);
+    }
     fillRect(BX(54), TB_Y + 26, 64, 20, BLACK);
     rectOutline(BX(54), TB_Y + 26, 64, 20, DIM);
     drawTextCenter(BX(86), TB_Y + 32, "OPTIONS", INK, 1);
+    // the BEST line is also the way into THE LEDGER (tap it, or press X)
     char s[32];
-    if (S.bestClassic) { siprintf(s, "BEST %d", S.bestClassic); drawText(BX(20), 180, s, DIM, 1); }
-    if (S.bestDaily)   { siprintf(s, "DAILY %d", S.bestDaily); drawText(BX(152) - textWidth(s, 1), 180, s, DIM, 1); }
+    int streak = g->clockOk ? settingsLiveStreak(g->dailySeed) : 0;
+    if (S.bestClassic) siprintf(s, "BEST %d", S.bestClassic); else strcpy(s, "LEDGER");
+    drawText(BX(20), 180, s, DIM, 1);
+    if (streak >= 2) { siprintf(s, "STREAK %d", streak); drawText(BX(152) - textWidth(s, 1), 180, s, GOLD_LT, 1); }
+    else if (S.bestDaily) { siprintf(s, "DAILY %d", S.bestDaily); drawText(BX(152) - textWidth(s, 1), 180, s, DIM, 1); }
 }
 
 static const char *const OPT_NAMES[OPT_ROWS] = { "THEME", "FRAME", "ACCENT", "HAND", "FIRE", "MUSIC", "LIBRARY", "SPELLING" };
@@ -1243,7 +1274,60 @@ static void drawOptions(const Game *g)
     for (int i = 0; i < 5; i++) { blitGem(BX(16) + i * 28, 136, i); drawLetter(BX(16) + i * 28, 136, "AIRTS"[i] - 'A', WHITE, GEM_PALS[i]->dark); }
     rectOutline(BX(54), 160, 64, 20, DIM);
     drawTextCenter(BX(86), 166, "BACK", INK, 1);
-    drawTextCenter(BX(86), 182, settingsPersistent() ? "SAVED TO CARD" : "NOT SAVED: NO CARD", DIM, 1);
+    if (!settingsPersistent()) drawTextCenter(BX(86), 182, "NOT SAVED: NO CARD", DIM, 1);
+    else if (settingsSaveFailed()) drawTextCenter(BX(86), 182, "SAVE FAILED", FIRE2, 1);
+    else drawTextCenter(BX(86), 182, "SAVED TO CARD", DIM, 1);
+}
+
+// THE LEDGER: lifetime stats from the saved records, on the touch screen like the options
+#define STAT_LABEL C(15,15,18)       // brighter than DIM: twelve labels on one screen have to be readable
+static void statRow(int y, const char *label, const char *val, u16 col)
+{
+    drawText(BX(14), y, label, STAT_LABEL, 1);
+    drawText(BX(158) - textWidth(val, 1), y, val, col, 1);
+}
+
+static void upperCopy(char *dst, const char *src)
+{
+    for (; *src; src++, dst++) *dst = (*src >= 'a' && *src <= 'z') ? (char)(*src - 32) : *src;
+    *dst = 0;
+}
+
+static void drawStats(const Game *g)
+{
+    fillRect(0, 0, SCREEN_W, SCREEN_H, BLACK);
+    drawBoardDots();
+    drawBoardFrame();
+    drawTextShadow(BX(86) - textWidth("THE LEDGER", 2) / 2, 12, "THE LEDGER", GOLD_LT, 2);
+    char s[32], w[SETTINGS_WORD_BUF];
+    int y = 32;
+    siprintf(s, "%d", S.gamesPlayed);     statRow(y, "GAMES", s, WHITE);          y += 10;
+    siprintf(s, "%d", S.shelvesCleared);  statRow(y, "SHELVES", s, WHITE);        y += 10;
+    siprintf(s, "%d", S.wordsSpelled);    statRow(y, "WORDS", s, WHITE);          y += 10;
+    siprintf(s, "%d", S.perfectPasses);   statRow(y, "PERFECT", s, GOLD_LT);      y += 10;
+    siprintf(s, "%d", S.rareWords);       statRow(y, "RARE WORDS", s, ACCENT);    y += 10;
+    siprintf(s, "%d%%", S.peelsHit * 100 / (S.peels > 0 ? S.peels : 1)); statRow(y, "PEEK ACCURACY", s, WHITE);   y += 10;
+    int streak = g->clockOk ? settingsLiveStreak(g->dailySeed) : 0;
+    siprintf(s, "%d", streak);            statRow(y, "DAILY STREAK", s, streak >= 2 ? GOLD_LT : WHITE);   y += 10;
+    if (S.bestDaily) {
+        siprintf(s, "%d  %02d-%02d", S.bestDaily, S.bestDailyDate / 100 % 100, S.bestDailyDate % 100);
+        if (textWidth(s, 1) > 80) siprintf(s, "%d", S.bestDaily);
+    } else strcpy(s, "-");
+    statRow(y, "DAILY BEST", s, WHITE);   y += 10;
+    // the two word records are a label line and the word on its own line: a 20-letter word fits
+    hline(BX(14), y + 1, 144, DIM);
+    y += 6;
+    if (S.longestLen) siprintf(s, "%d LETTERS", S.longestLen); else strcpy(s, "-");
+    statRow(y, "LONGEST", s, WHITE);
+    upperCopy(w, S.longestLen ? S.longestWord : "-");
+    drawTextCenter(BX(86), y + 9, w, S.longestLen ? GOLD_LT : DIM, 1);
+    y += 21;
+    if (S.bestWordPts) siprintf(s, "+%d", S.bestWordPts); else strcpy(s, "-");
+    statRow(y, "BEST WORD", s, GOLD);
+    upperCopy(w, S.bestWordPts ? S.bestWordTxt : "-");
+    drawTextCenter(BX(86), y + 9, w, S.bestWordPts ? GOLD_LT : DIM, 1);
+    rectOutline(BX(54), 162, 64, 20, DIM);
+    drawTextCenter(BX(86), 168, "BACK", INK, 1);
 }
 
 // Title top screen: three tip cards that cycle. This draws on the TOP screen, which has
@@ -1316,6 +1400,7 @@ static void drawOverlay(const Game *g)
     if (g->state == ST_PLAY) return;
     if (g->state == ST_TITLE) { drawTitle(g); return; }
     if (g->state == ST_OPTIONS) { drawOptions(g); return; }
+    if (g->state == ST_STATS) { drawStats(g); return; }
     if (g->state == ST_PASSED) {
         // results card slides up from the bottom and settles
         int t = g->stateTimer;
@@ -1325,7 +1410,7 @@ static void drawOverlay(const Game *g)
         rectOutline(BX(cx - cw / 2), cy, cw, ch, GOLD_LT);
         rectOutline(BX(cx - cw / 2 + 2), cy + 2, cw - 4, ch - 4, GOLD_DK);
         char title[32];
-        if (g->mode == MODE_DAILY) strcpy(title, "DAILY PASS DONE");
+        if (g->mode == MODE_DAILY) strcpy(title, g->practice ? "PRACTICE DONE" : "DAILY PASS DONE");
         else if (g->twist) siprintf(title, "PASS ACCEPTED: %s", boardTwistName(g->twist));   // 24 chars at most: 143 px
         else strcpy(title, "PASS ACCEPTED");
         drawTextShadow(BX(cx - textWidth(title, 1) / 2), cy + 8, title, GOLD_LT, 1);
@@ -1372,7 +1457,12 @@ static void drawOverlay(const Game *g)
             drawText(BX(lx), cy + 110, "PEELS", DIM, 1);
             drawText(BX(rx - textWidth("-", 1)), cy + 110, "-", DIM, 1);
         }
-        if (g->mode == MODE_DAILY) { siprintf(s, "FINAL %d", g->score); drawTextCenter(BX(cx), cy + 120, s, GOLD_LT, 1); }
+        if (g->mode == MODE_DAILY) {
+            if (g->practice) siprintf(s, "FINAL %d  NOT SCORED", g->score);
+            else if (S.dailyStreak >= 2) siprintf(s, "FINAL %d  STREAK %d", g->score, S.dailyStreak);   // 130 px at most: the card is 150 wide
+            else siprintf(s, "FINAL %d", g->score);
+            drawTextCenter(BX(cx), cy + 120, s, GOLD_LT, 1);
+        }
         else { siprintf(s, "SHELF %d OPEN", g->shelf + 1); drawTextCenter(BX(cx), cy + 120, s, ACCENT, 1); }
         if (t > 30 && (frame & 32)) drawTextCenter(BX(cx), cy + 130, "TAP TO CONTINUE", INK, 1);
     } else if (g->state == ST_FAIL) {
@@ -1394,7 +1484,7 @@ static void drawOverlay(const Game *g)
         rectOutline(BX(26), 66, 120, 64, ACCENT);
         drawTextCenter(BX(86), 74, "PAUSED", ACCENT, 1);
         drawText(BX(36), 90, "START", GOLD_LT, 1);  drawText(BX(80), 90, "RESUME", INK, 1);
-        drawText(BX(36), 102, "SELECT", GOLD_LT, 1); drawText(BX(80), 102, "RESTART", INK, 1);
+        drawText(BX(36), 102, "SELECT", g->mode == MODE_DAILY ? DIM : GOLD_LT, 1); drawText(BX(80), 102, "RESTART", g->mode == MODE_DAILY ? DIM : INK, 1);
         drawText(BX(36), 114, "B", GOLD_LT, 1);      drawText(BX(80), 114, "TITLE", INK, 1);
     }
 }
@@ -1456,7 +1546,7 @@ void gfxFrame(const Game *g)
     // The hardware dim is re-requested by overlayCard every frame it is wanted; a state
     // that draws no card (play) must not inherit it from the previous frame's card.
     dimOn = false;
-    if (g->state == ST_TITLE || g->state == ST_OPTIONS) {
+    if (menuState(g->state)) {
         // menus paint their own black strip and frame: no board, no panel. Particles and
         // popups that outlive the game go on top of the menu, not under it.
         PROF(0); PROF(1); PROF(2); PROF(3);
@@ -1532,7 +1622,7 @@ void gfxFrame(const Game *g)
     // layout changes (title/options <-> in-game) all four slices are redrawn, two per
     // frame, so the screen updates at once while each vblank stays well under budget.
     cur = vramSub;
-    int kind = (g->state == ST_TITLE || g->state == ST_OPTIONS);
+    int kind = menuState(g->state);
     if (kind != lastTopKind) { lastTopKind = kind; topBurst = 2; }
     int s0 = frame & 3, s1 = s0;
     if (topBurst) { topBurst--; s0 = topBurst ? 0 : 2; s1 = s0 + 1; }

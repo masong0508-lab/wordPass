@@ -6,7 +6,7 @@ exit status is the number of failures. Screenshots land in outdir (default /tmp)
 import sys, os, traceback
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from wp import Emu, COLS, ROWS, EMPTY, TILE, BURN, HOLE, SECRET, ST_TITLE, ST_PLAY, ST_PASSED, ST_FAIL, ST_PAUSE, ST_OPTIONS, \
-    FAIL_FIRE, FAIL_SCORCH, FAIL_WORDS, Keys, keymask, load_words, POKE_SPELL
+    FAIL_FIRE, FAIL_SCORCH, FAIL_WORDS, Keys, keymask, load_words, POKE_SPELL, ST_STATS
 
 rom = sys.argv[1]; out = sys.argv[2] if len(sys.argv) > 2 else '/tmp'
 e = Emu(rom)
@@ -573,6 +573,7 @@ def _():
     e.shot(f'{out}/rules_last_bookmark.png')
     e.press('START', settle=30); assert e.state()['state'] == ST_PLAY
     to_title(); e.start_classic()
+    games0 = e.state()['statGames']
     for want in (2, 1, 0):
         g = e.state(); assert g['state'] == ST_PLAY and g['shelf'] == 1 and g['lives'] == want + 1
         for c in range(COLS):
@@ -581,12 +582,191 @@ def _():
         plain = [(c, r) for c in range(COLS) for r in range(ROWS) if not g['back'][c][r]]
         e.peel(*plain[len(plain) // 2]); g = e.state()
         assert g['state'] == ST_FAIL and g['fail'] == FAIL_WORDS and g['lives'] == want, f'fail: state {g["state"]} lives {g["lives"]}'
+        assert g['statGames'] == games0 + (1 if want == 0 else 0), f'games played {g["statGames"]} (was {games0}) after fail with {want} left'
         e.run(60)
         if want == 1: e.shot(f'{out}/rules_fail_bookmarks.png')
         e.tap(e.bx + 100, 100); e.run(150)
         g = e.state()
         if want: assert g['state'] == ST_PLAY and g['lives'] == want, f'retry {want}: state {g["state"]} lives {g["lives"]}'
         else: assert g['state'] == ST_TITLE, f'third fail tap: state {g["state"]}'
+
+# ---- persistence, Daily rules and the ledger (item 09) -------------------------------------
+MODS = ['STANDARD', 'EMBER', 'DEEP', 'LONG']
+def daily_mod(d): return (((d * 2654435761) & 0xFFFFFFFF) >> 28) & 3
+def date_with_mod(mod, start=20270401):
+    d = start
+    while daily_mod(d) != mod: d += 1
+    return d
+
+def force_fail():
+    """Every gem an x and one plain peel: OUT OF WORDS, deterministically."""
+    for c in range(COLS):
+        for r in range(ROWS): e.set_cell(c, r, TILE, 'x')
+    g = e.state()
+    plain = [(c, r) for c in range(COLS) for r in range(ROWS) if not g['back'][c][r]]
+    e.peel(*plain[len(plain) // 2])
+    g = e.state(); assert g['state'] == ST_FAIL and g['fail'] == FAIL_WORDS, f'force_fail: state {g["state"]} fail {g["fail"]}'
+    e.run(60)
+    return g
+
+def force_pass():
+    """Peel the pass in order with the fire held off: a perfect pass, stopping at the results card."""
+    g = e.state(); n = g['passLen']
+    for i in range(1, n + 1):
+        e.set_heat(0); e.set_turn(0); e.set_burn(0, 99)
+        g = e.state()
+        for c, r in e.burn_cells(g): e.set_cell(c, r, TILE, 'e')
+        c, r = e.secret_cells(g)[i]
+        e.peel(c, r)
+    g = e.state(); assert g['state'] == ST_PASSED, f'force_pass: state {g["state"]} fail {g["fail"]}'
+    e.run(40)
+    return g
+
+def leave_result():
+    e.tap(e.bx + 100, 100); e.run(30)
+    g = e.state(); assert g['state'] == ST_TITLE, f'tap on a Daily result card: state {g["state"]}'
+    return g
+
+def daily_title(day, played=0, last=0, streak=0):
+    """Title screen with the DS clock at `day` and the Daily records set; returns the state."""
+    e.set_clock(day); e.set_daily(played, last, streak); e.run(70)
+    g = e.state(); assert g['state'] == ST_TITLE and g['clockOk'] == 1 and g['dailySeed'] == day, f'daily_title: {g["state"]} {g["dailySeed"]}'
+    return g
+
+def tap_daily(wait=150):
+    e.tap(e.bx + 120, 147); e.run(wait)
+
+@scenario('Daily: one scored attempt (words counted, fail recorded), then PRACTICE records nothing')
+def _():
+    to_title()
+    day = 20270310
+    daily_title(day)
+    e.shot(f'{out}/rules_daily_fresh_title.png')
+    g0 = e.state(); words0, games0 = g0['statWords'], g0['statGames']
+    tap_daily(30)
+    g = e.state()
+    assert g['state'] == ST_PLAY and g['mode'] == 1 and g['practice'] == 0 and g['dailySeed'] == day, f'daily start: {g["state"]} practice {g["practice"]}'
+    assert g['dailyPlayed'] == day, f'the attempt is spent at once: dailyPlayed {g["dailyPlayed"]}'
+    assert g['dailyMod'] == daily_mod(day), f'modifier {g["dailyMod"]} want {daily_mod(day)}'
+    assert g['msg'] == f'DAILY: {MODS[daily_mod(day)]}', f'start msg {g["msg"]!r}'
+    e.run(120)
+    r = play_turn(shortest); assert r, 'no word to spell'
+    g = e.state(); assert g['statWords'] == words0 + 1, f'scored Daily word counted: {g["statWords"]} (was {words0})'
+    e.press('START', settle=10); e.press('SELECT', settle=20)
+    g = e.state(); assert g['state'] == ST_PAUSE and g['msg'] == 'NO RESTART IN DAILY', f'Daily restart: state {g["state"]} msg {g["msg"]!r}'
+    e.shot(f'{out}/rules_daily_pause.png')
+    e.press('START', settle=30); assert e.state()['state'] == ST_PLAY
+    score = e.state()['score']
+    g = force_fail()
+    assert g['statGames'] == games0 + 1 and g['streak'] == 1 and g['dailyLast'] == day, f'record: games {g["statGames"]} streak {g["streak"]} last {g["dailyLast"]}'
+    assert g['dailyLastScore'] == score, f'last score {g["dailyLastScore"]} want {score}'
+    leave_result()
+    g = daily_title(day, played=day, last=day, streak=1)
+    e.shot(f'{out}/rules_daily_practice_title.png')
+    # the second run today is practice: same board, announced, never recorded
+    words1, games1, last1 = g['statWords'], g['statGames'], g['dailyLastScore']
+    tap_daily(30)
+    g = e.state()
+    assert g['state'] == ST_PLAY and g['practice'] == 1 and g['msg'] == 'PRACTICE RUN: NOT SCORED', f'practice: {g["state"]} {g["practice"]} {g["msg"]!r}'
+    e.run(120)
+    r = play_turn(shortest); assert r, 'no word to spell'
+    g = e.state(); assert g['statWords'] == words1, f'a practice word was counted: {g["statWords"]} (was {words1})'
+    e.shot(f'{out}/rules_daily_practice_play.png')
+    force_fail(); leave_result()
+    g = e.state()
+    assert g['statGames'] == games1 and g['streak'] == 1 and g['dailyLastScore'] == last1 and g['dailyLast'] == day, \
+        f'practice recorded: games {g["statGames"]} streak {g["streak"]} last score {g["dailyLastScore"]}'
+
+@scenario('Daily streak: next day +1 (results card shows it), a skipped day or a date in the past resets to 1')
+def _():
+    to_title()
+    d1, d2, d4 = 20270310, 20270311, 20270314
+    daily_title(d2, played=d1, last=d1, streak=1)
+    tap_daily()
+    g = e.state(); assert g['practice'] == 0 and g['dailyPlayed'] == d2, f'next day starts scored: practice {g["practice"]}'
+    games0 = g['statGames']
+    g = force_pass()
+    assert g['streak'] == 2 and g['dailyLast'] == d2 and g['statGames'] == games0 + 1, f'next day: streak {g["streak"]} games {g["statGames"]}'
+    e.shot(f'{out}/rules_daily_result_streak.png')
+    leave_result()
+    daily_title(d2, played=d2, last=d2, streak=2); e.shot(f'{out}/rules_daily_title_streak.png')
+    # a practice pass the same day: the card says so and nothing changes
+    tap_daily()
+    g = force_pass(); assert g['practice'] == 1
+    e.shot(f'{out}/rules_daily_result_practice.png')
+    leave_result()
+    g = e.state(); assert g['streak'] == 2 and g['statGames'] == games0 + 1, f'practice pass recorded: streak {g["streak"]}'
+    # two days missed
+    daily_title(d4, played=d2, last=d2, streak=2); tap_daily(); force_fail(); leave_result()
+    g = e.state(); assert g['streak'] == 1 and g['dailyLast'] == d4, f'missed days: streak {g["streak"]} last {g["dailyLast"]}'
+    # the clock moves back before the last scored date: the streak counts as broken
+    daily_title(d1, played=d2, last=d4, streak=5); tap_daily(); force_fail(); leave_result()
+    g = e.state(); assert g['streak'] == 1 and g['dailyLast'] == d1, f'date in the past: streak {g["streak"]} last {g["dailyLast"]}'
+    # walking away from a scored Daily forfeits it: the score so far stands and the attempt stays spent
+    daily_title(d2, played=d1, last=d1, streak=1); tap_daily()
+    assert e.state()['practice'] == 0
+    e.press('START', settle=10); e.press('B', settle=30)
+    g = e.state(); assert g['state'] == ST_TITLE and g['dailyPlayed'] == d2 and g['dailyLast'] == d2 and g['streak'] == 2, \
+        f'quit Daily: {g["state"]} played {g["dailyPlayed"]} last {g["dailyLast"]} streak {g["streak"]}'
+
+@scenario('Daily needs a real clock: tap and SELECT are ignored with SET THE DS CLOCK FOR DAILY')
+def _():
+    to_title()
+    e.set_clock(19990101); e.run(70)
+    g = e.state(); assert g['state'] == ST_TITLE and g['clockOk'] == 0, f'clock: {g["state"]} ok {g["clockOk"]}'
+    e.shot(f'{out}/rules_daily_noclock_title.png')
+    e.tap(e.bx + 120, 147, settle=10)
+    g = e.state(); assert g['state'] == ST_TITLE and g['msg'] == 'SET THE DS CLOCK FOR DAILY', f'tap: {g["state"]} {g["msg"]!r}'
+    e.run(6); e.shot(f'{out}/rules_daily_noclock_msg.png')
+    e.run(150); assert e.state()['msg'] == '', 'the clock message should fade'
+    e.press('SELECT', settle=10)
+    g = e.state(); assert g['state'] == ST_TITLE and g['msg'] == 'SET THE DS CLOCK FOR DAILY', f'SELECT: {g["state"]} {g["msg"]!r}'
+    g0 = e.state()
+    e.run(200)
+    e.tap(e.bx + 52, 147); e.run(150)
+    assert e.state()['state'] == ST_PLAY and e.state()['mode'] == 0, 'Classic must not depend on the clock'
+    to_title()
+    e.set_clock(0); e.run(70)
+    assert e.state()['clockOk'] == 1, 'the real clock should be accepted again'
+
+@scenario('Daily modifiers: STANDARD, EMBER (meter 8, fire every turn), DEEP (pass in rows 5..7), LONG (7-letter pass)')
+def _():
+    to_title()
+    for mod in range(4):
+        day = date_with_mod(mod)
+        daily_title(day)
+        e.shot(f'{out}/rules_daily_mod_{MODS[mod].lower()}_title.png')
+        e.set_daily(day, 0, 0)
+        tap_daily()
+        g = e.state()
+        assert g['state'] == ST_PLAY and g['practice'] == 1 and g['dailyMod'] == mod, f'{MODS[mod]}: state {g["state"]} mod {g["dailyMod"]}'
+        if mod == 0: assert g['heatThreshold'] == 7 and g['burnEvery'] == 2, f'STANDARD: {g["heatThreshold"]}/{g["burnEvery"]}'
+        if mod == 1: assert g['heatThreshold'] == 8 and g['burnEvery'] == 1, f'EMBER: {g["heatThreshold"]}/{g["burnEvery"]}'
+        if mod == 2: assert min(secret_rows(g)) >= 5 and g['heatThreshold'] == 7, f'DEEP rows {secret_rows(g)}'
+        if mod == 3: assert 6 <= g['passLen'] <= 8, f'LONG pass {g["pass"]!r}'
+        print(f'   {day} {MODS[mod]}: {g["pass"]} theme {g["passTheme"]} len {g["passLen"]}')
+        e.run(40); e.shot(f'{out}/rules_daily_mod_{MODS[mod].lower()}_play.png')
+        to_title()
+    e.set_clock(0); e.set_daily(0, 0, 0)
+
+@scenario('THE LEDGER: X and a tap on the BEST line open it, B / X / any tap close it; OPTIONS and CLASSIC unaffected')
+def _():
+    to_title()
+    g = e.state(); assert g['statWords'] > 0 and g['statGames'] > 0, 'earlier scenarios should have left some stats'
+    e.press('X', settle=20)
+    g = e.state(); assert g['state'] == ST_STATS, f'X: state {g["state"]}'
+    e.shot(f'{out}/rules_ledger.png')
+    fps = e.fps(); assert fps == 120, f'ledger fps {fps}/120'
+    e.press('B', settle=20); assert e.state()['state'] == ST_TITLE, 'B did not leave the ledger'
+    e.press('X', settle=20); e.press('X', settle=20); assert e.state()['state'] == ST_TITLE, 'X did not leave the ledger'
+    e.tap(e.bx + 86, 185); assert e.state()['state'] == ST_STATS, 'tap on the BEST line did not open the ledger'
+    e.tap(e.bx + 20, 20); assert e.state()['state'] == ST_TITLE, 'a tap did not leave the ledger'
+    e.tap(e.bx + 86, 150, settle=10); assert e.state()['state'] == ST_TITLE, 'a tap between the buttons opened something'
+    e.tap(e.bx + 86, 178); g = e.state(); assert g['state'] == ST_OPTIONS, f'OPTIONS (to y 179) lost to the ledger: {g["state"]}'
+    e.press('B', settle=30); assert e.state()['state'] == ST_TITLE
+    e.tap(e.bx + 86, 181); assert e.state()['state'] == ST_STATS, 'y 181 should be the ledger'
+    e.press('B', settle=20)
+    e.tap(e.bx + 52, 147); e.run(150); assert e.state()['state'] == ST_PLAY, 'CLASSIC no longer starts'
 
 # ---- options and the left-hand title --------------------------------------------------
 @scenario('options HAND row: optRow 3, hand flips; left-hand title keeps the top screen inside its frame')
@@ -634,6 +814,24 @@ def _():
     assert e.state()['spelling'] == 1, 'POKE_SPELL did not set AMERICAN'
     e.poke(POKE_SPELL, 0); e.run(4)
     assert e.state()['spelling'] == 0
+
+
+@scenario('left-hand layout: title with a Daily streak and THE LEDGER stay inside the board strip')
+def _():
+    assert e.bx == 82, 'the HAND scenario above leaves the game left-handed'
+    to_title()
+    daily_title(20270320, played=0, last=20270319, streak=3)
+    e.shot(f'{out}/rules_left_title_streak.png')
+    e.press('X', settle=20)
+    assert e.state()['state'] == ST_STATS, 'X in the left-hand layout'
+    e.run(20); e.shot(f'{out}/rules_left_ledger.png')
+    px = e.pixels()
+    lit = [(x, y) for y in range(192, 384) for x in range(0, 82) if sum(px[x, y]) > 120]
+    assert not lit, f'ledger drew {len(lit)} lit pixels left of the mirrored strip, first {lit[0]}'
+    e.tap(e.bx + 20, 20); assert e.state()['state'] == ST_TITLE
+    daily_title(20270320, played=20270320, last=20270320, streak=3)
+    e.shot(f'{out}/rules_left_title_practice.png')
+    e.set_clock(0); e.set_daily(0, 0, 0)
 
 print('RULES OK' if not fails else f'RULES FAILED: {fails}')
 sys.exit(fails)

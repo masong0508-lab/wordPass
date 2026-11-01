@@ -359,7 +359,9 @@ int main(int argc, char **argv)
     g.shelf = 20; boardNewShelf(&g);
     bool s20 = g.heatThreshold == 4 && g.lockTier == 3 && g.pulseEvery == 3;
     CHECK("shelf thresholds 1/4/6/12/20", s1 && s4 && s6 && s12 && s20);
-    g.mode = MODE_DAILY; g.dailySeed = 20260101; g.shelf = 1; boardNewShelf(&g);
+    int stdDay = 20260101;
+    while (boardDailyMod(stdDay) != DAILYMOD_STANDARD) stdDay++;       // a STANDARD date: the base Daily rules
+    g.mode = MODE_DAILY; g.dailySeed = stdDay; g.shelf = 1; boardNewShelf(&g);
     CHECK("Daily: threshold 7, fire every other turn, not Lockdown", g.heatThreshold == 7 && g.burnEvery == 2 && !g.lockdown);
     g.mode = MODE_CLASSIC; S.fire = FIRE_FAST; g.shelf = 1; boardNewShelf(&g);
     bool fast = g.heatThreshold == 8 && g.burnEvery == 1;
@@ -590,6 +592,77 @@ int main(int argc, char **argv)
             for (int c = 0; c < COLS; c++) for (int r = 0; r < 5; r++) if (g.back[c][r]) deep = false;
         }
         CHECK("shelf 12: every pass letter in rows 5..7", deep);
+    }
+
+    // ---- Daily modifiers: a hash of the date, applied before any random draw
+    {
+        int seen[DAILYMOD_COUNT] = {0}, bad = 0, stdBad = 0, emberBad = 0, deepBad = 0, longBad = 0, seedBad = 0, sameBad = 0, nameBad = 0;
+        for (int d = 0; d < 400; d++) {
+            int day = 20260101 + d / 28 * 100 + d % 28;       // 28 days a month: always a real date
+            if (day % 10000 / 100 > 12) continue;
+            Game a, b;
+            memset(&a, 0, sizeof(a)); a.mode = MODE_DAILY; a.dailySeed = day; a.shelf = 1; boardNewShelf(&a);
+            memset(&b, 0, sizeof(b)); b.mode = MODE_DAILY; b.dailySeed = day; b.shelf = 1; boardNewShelf(&b);
+            int m = boardDailyMod(day);
+            if (m != (int)(((u32)((u32)day * 2654435761u) >> 28) & 3)) seedBad++;
+            if (a.dailyMod != m) bad++;
+            seen[m]++;
+            bool same = strcmp(a.pass, b.pass) == 0 && memcmp(a.back, b.back, sizeof(a.back)) == 0 && a.dailyMod == b.dailyMod;
+            for (int c = 0; c < COLS; c++) for (int r = 0; r < ROWS; r++) if (a.cell[c][r].letter != b.cell[c][r].letter) same = false;
+            if (!same) sameBad++;
+            if (a.twist != TWIST_NONE || a.lockdown) bad++;
+            int minRow = ROWS;
+            for (int c = 0; c < COLS; c++) for (int r = 0; r < ROWS; r++) if (a.back[c][r] && r < minRow) minRow = r;
+            if (m == DAILYMOD_STANDARD && (a.heatThreshold != 7 || a.burnEvery != 2 || minRow < 3)) stdBad++;
+            if (m == DAILYMOD_EMBER && (a.heatThreshold != 8 || a.burnEvery != 1)) emberBad++;
+            if (m == DAILYMOD_DEEP && (minRow < 5 || a.heatThreshold != 7 || a.burnEvery != 2)) deepBad++;
+            if (m == DAILYMOD_LONG && (poolCount(a.passTheme, 7) ? a.passLen != 7 : (a.passLen < 6 || a.passLen > 8))) longBad++;
+            if (m != DAILYMOD_LONG && a.passLen == 7 && poolCount(a.passTheme, 5) && poolCount(a.passTheme, 6)) longBad++;   // 5 or 6 unless the pool lacks both
+            if (!boardDailyModName(m)[0]) nameBad++;
+        }
+        CHECK("Daily modifier: every date has one, all four occur, the board stores it", bad == 0 && seedBad == 0 && seen[0] && seen[1] && seen[2] && seen[3]);
+        CHECK("Daily modifier names", !strcmp(boardDailyModName(0), "STANDARD") && !strcmp(boardDailyModName(1), "EMBER") &&
+              !strcmp(boardDailyModName(2), "DEEP") && !strcmp(boardDailyModName(3), "LONG") && nameBad == 0);
+        CHECK("Daily STANDARD: meter 7, fire every other turn, pass from row 3", stdBad == 0);
+        CHECK("Daily EMBER: meter 8 and the fire moves every turn", emberBad == 0);
+        CHECK("Daily DEEP: every pass letter in rows 5..7", deepBad == 0);
+        CHECK("Daily LONG: a seven-letter pass (the nearest length when the pool lacks one)", longBad == 0);
+        CHECK("Daily with a modifier is still one board for everyone (same date, same board)", sameBad == 0);
+    }
+
+    // ---- lifetime stats: words, longest, best word, rare words, peels; a Daily replay leaves no trace
+    {
+        memset(&S, 0, sizeof(S)); S.music = 1;
+        boardOf('e'); g.shelf = 1;
+        set(0, 0, CELL_TILE, 'z'); set(0, 1, CELL_TILE, 'a'); set(0, 2, CELL_TILE, 'x');      // "zax": rare
+        boardTryAddToChain(&g, 0, 0); boardTryAddToChain(&g, 0, 1); boardTryAddToChain(&g, 0, 2);
+        int zaxPts = boardSubmit(&g);
+        CHECK("stats: a word counts, a rare word counts as rare, longest and best word are kept",
+              zaxPts > 0 && S.wordsSpelled == 1 && S.rareWords == 1 && S.longestLen == 3 && !strcmp(S.longestWord, "zax") &&
+              S.bestWordPts == zaxPts && !strcmp(S.bestWordTxt, "zax"));
+        boardOf('e'); g.shelf = 1;
+        static const char *const W = "book";
+        for (int i = 0; i < 4; i++) set(1, i, CELL_TILE, W[i]);
+        for (int i = 0; i < 4; i++) boardTryAddToChain(&g, 1, i);
+        int bookPts = boardSubmit(&g);
+        CHECK("stats: a longer word takes LONGEST, a cheaper one leaves BEST WORD",
+              bookPts > 0 && S.wordsSpelled == 2 && S.longestLen == 4 && !strcmp(S.longestWord, "book") &&
+              (bookPts > zaxPts ? !strcmp(S.bestWordTxt, "book") : !strcmp(S.bestWordTxt, "zax")));
+        boardOf('e'); g.shelf = 1; g.practice = true;
+        for (int i = 0; i < 4; i++) set(1, i, CELL_TILE, "dogs"[i]);
+        for (int i = 0; i < 4; i++) boardTryAddToChain(&g, 1, i);
+        int before = S.wordsSpelled;
+        CHECK("stats: a practice word scores but is not counted", boardSubmit(&g) > 0 && S.wordsSpelled == before && !strcmp(S.longestWord, "book"));
+        boardOf('e'); g.shelf = 1; g.passLen = 4; strcpy(g.pass, "book");
+        memset(g.back, 0, sizeof(g.back)); g.back[2][2] = 1;
+        set(2, 2, CELL_TILE, 'q'); set(4, 4, CELL_TILE, 'q');
+        int p0 = S.peels, h0 = S.peelsHit;
+        int r1 = boardPeel(&g, 4, 4), r2 = boardPeel(&g, 2, 2);
+        CHECK("stats: a peel counts, a hit counts as a hit", r1 == 1 && r2 == 2 && S.peels == p0 + 2 && S.peelsHit == h0 + 1);
+        g.practice = true;
+        set(5, 5, CELL_TILE, 'q'); boardPeel(&g, 5, 5);
+        CHECK("stats: a practice peel is not counted", S.peels == p0 + 2 && S.peelsHit == h0 + 1);
+        memset(&S, 0, sizeof(S)); S.music = 1;
     }
 
     // ---- note table

@@ -139,6 +139,20 @@ static void placeSecrets(Game *g, int minRow)
     }
 }
 
+// The Daily modifier: a hash of the date, so every player gets the same one. STANDARD changes
+// nothing; EMBER lights the fire sooner and keeps it moving every turn, DEEP buries the pass
+// in the bottom rows, LONG asks for a seven-letter pass.
+int boardDailyMod(int seed)
+{
+    return (int)(((u32)((u32)seed * 2654435761u) >> 28) & 3);
+}
+
+const char *boardDailyModName(int mod)
+{
+    static const char *const names[DAILYMOD_COUNT] = { "STANDARD", "EMBER", "DEEP", "LONG" };
+    return (mod >= 0 && mod < DAILYMOD_COUNT) ? names[mod] : "";
+}
+
 // Pick the shelf's pass from its theme pool. Classic: the target length climbs with the
 // shelf (4, 5, 6, 7, 8), the pool's nearest length stands in when a pool lacks it (the
 // longer neighbour on ties), and the last eight passes are avoided while that leaves a
@@ -177,7 +191,7 @@ static void pickPass(Game *g, int extraLen)
     if (g->mode == MODE_DAILY) {
         u32 hash = (u32)((u32)g->dailySeed * 2654435761u) >> 8;
         theme = hash % themes;
-        len = nearestPoolLen(theme, (hash & 8) ? 6 : 5);
+        len = nearestPoolLen(theme, g->dailyMod == DAILYMOD_LONG ? 7 : (hash & 8) ? 6 : 5);
         n = poolCount(theme, len);
         if (n > 200) n = 200;      // Daily stays on familiar words
         idx = hash % n;
@@ -218,6 +232,7 @@ static void spillInk(Game *g)
 void boardNewShelf(Game *g)
 {
     boardSeed(g->mode == MODE_DAILY ? (u32)g->dailySeed : (u32)rand());
+    if (g->mode == MODE_DAILY) g->dailyMod = boardDailyMod(g->dailySeed);   // before any boardRand() draw
     // twists: Classic shelves 4, 7, 10 ... get one of three, never the same one twice running
     g->twist = TWIST_NONE;
     if (g->mode == MODE_CLASSIC && g->shelf >= 4 && g->shelf % 3 == 1) {
@@ -230,7 +245,7 @@ void boardNewShelf(Game *g)
     memset(g->scorched, 0, sizeof(g->scorched));
     // deeper shelves bury the pass lower in the board
     int minRow = (g->shelf <= 2) ? 1 : (g->shelf <= 5) ? 3 : (g->shelf <= 11) ? 4 : 5;
-    if (g->mode == MODE_DAILY) minRow = 3;
+    if (g->mode == MODE_DAILY) minRow = g->dailyMod == DAILYMOD_DEEP ? 5 : 3;
     if (g->twist == TWIST_BURIED) minRow = 5;
     rareRot = boardRand() & 3;
     for (int attempt = 0; attempt < 10; attempt++) {
@@ -284,6 +299,7 @@ void boardNewShelf(Game *g)
         g->pulseEvery = 6;
         g->heatThreshold = 7;
         g->burnEvery = 2;
+        if (g->dailyMod == DAILYMOD_EMBER) { g->burnEvery = 1; g->heatThreshold = 8; }
     } else if (S.fire == FIRE_RELAXED) {
         g->burnEvery += 1;
         g->heatThreshold += 3;
@@ -639,6 +655,12 @@ int boardSubmit(Game *g)
     if (!repeat) g->uniqueWords++;
     g->score += gained;
     g->wordsThisShelf++;
+    if (!g->practice) {            // lifetime stats: a Daily replay leaves no trace
+        S.wordsSpelled++;
+        if (tier == 2) S.rareWords++;
+        if (len > S.longestLen) { S.longestLen = len; strcpy(S.longestWord, w); }
+        if (gained > S.bestWordPts) { S.bestWordPts = gained; strcpy(S.bestWordTxt, w); }
+    }
     g->chainLen = 0;
     endTurn(g, boardHeatFor(len));
     return gained;
@@ -650,6 +672,7 @@ int boardPeel(Game *g, int c, int r)
     if (cl->state != CELL_TILE && cl->state != CELL_BURN) return 0;
     bool scorch = (cl->state == CELL_BURN) || (r > 0 && g->cell[c][r - 1].state == CELL_BURN);
     g->peels++;
+    if (!g->practice) S.peels++;
     // drop a chained tile from the chain
     g->chainLen = 0;
     int secret = g->back[c][r];
@@ -667,6 +690,7 @@ int boardPeel(Game *g, int c, int r)
         cl->letter = g->pass[secret - 1] - 'a';
         cl->flash = 14;
         g->found[secret - 1] = 1;
+        if (!g->practice) S.peelsHit++;
         endTurn(g, peelHeat);
         return 2;
     }

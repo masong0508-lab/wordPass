@@ -63,8 +63,36 @@ numbers.
 - **Classic**: climb the shelves. Fire pressure and pass depth rise as you go,
   with a twist every third shelf from shelf 4 and three bookmarks per run.
 - **Daily Pass**: one fixed shelf for everyone, seeded from the DS clock date.
-  Same board, same pass, one attempt per run. Pick it from the title screen or
-  press SELECT there.
+  Same board, same pass. Pick it from the title screen or press SELECT there.
+  See *Daily Pass* below.
+
+### Daily Pass
+
+- **One scored attempt a day.** The first Daily you start on a date is the
+  scored one: starting it spends the attempt, even if you quit from the pause
+  menu (the score so far stands). Every later start that day is **PRACTICE**:
+  the same board, announced as PRACTICE RUN, and nothing from it is recorded
+  (not the score, the streak, or the lifetime stats). The title button reads
+  PRACTICE with your score. The pause menu's restart is off in Daily.
+- **Modifier of the day.** The date picks one, and the title button names it:
+  STANDARD (as before), EMBER (the meter holds 8 and the fire moves every
+  turn), DEEP (the pass is buried in the bottom three rows) or LONG (a
+  seven-letter pass, or the nearest length the theme has). Everyone still gets
+  the same board.
+- **Streak.** A scored Daily on the day after your last one adds to your
+  streak; a missed day starts it over. The title shows STREAK n from 2 days.
+- **The DS clock.** Daily needs a clock that reads 2025 or later. If it does
+  not (a DS whose clock was never set), the button reads SET CLOCK and Daily
+  will not start.
+
+### The Ledger
+
+Press **X** on the title, or tap the BEST line under OPTIONS, for **THE
+LEDGER**: games played, shelves cleared, words spelled, perfect passes, rare
+words, peek accuracy (peels that found a pass letter), the daily streak, the
+Daily best of its day, and your longest word and best-scoring word. A Classic
+run counts as a game when it ends on its last bookmark, a Daily when its
+scored attempt ends. B, X or any tap closes it.
 
 ### Options
 
@@ -82,10 +110,12 @@ d-pad.
 | Library | Full (every dictionary word) or Common (rejects obscure words with TOO OBSCURE) |
 | Spelling | Both (default), American only or British only. A word spelled one way only (color / colour, center / centre, traveled / travelled) is refused in the other setting with AMERICAN SPELLING or BRITISH SPELLING. Words spelled the same everywhere, and the -ize / -ise forms, always pass. |
 
-Settings, best Classic score and shelf, and best Daily result are saved to
-`wordPass.cfg` on the card when a FAT filesystem is available (flashcarts
-with DLDI, DSi SD). Without one they last for the session and the options
-screen says so.
+Settings, records, the Daily state and the ledger are saved to `wordPass.cfg`
+on the card when a FAT filesystem is available (flashcarts with DLDI, DSi SD).
+The file is written to a temporary name and renamed over the old one, carries a
+checksum (a damaged file falls back to the defaults) and still reads the older
+28-byte format. Without a card they last for the session and the options screen
+says so; if a write fails it says SAVE FAILED.
 
 ### Shelves
 
@@ -152,6 +182,8 @@ three. Daily Pass has no bookmarks: one attempt.
 | Hold L or R | peek mode (tap a gem to peel it) |
 | START | pause (then START resume, SELECT restart shelf for one bookmark, B quit to title) |
 | Y (title) | options |
+| X (title) | THE LEDGER |
+| SELECT (title) | Daily Pass |
 
 ![wordPass](screenshot.png) ![fire](screenshot-fire.png) ![results](screenshot-results.png)
 
@@ -304,7 +336,7 @@ source/dict.c    packed dictionary lookup
 source/gfx.c     software renderer for both screens
 source/music.c   PSG sequencer and adaptive stems
 source/font.c    5x7 bitmap font
-source/settings.c options, records, FAT save
+source/settings.c options, records, stats, checksummed FAT save, Daily clock and streak
 source/debug.c   fixed-layout state mirror and poke channel for the test harness
 tools/gen_dict.py  WPD2 dictionary builder and --verify round trip
 tools/check/     native rule tests: make check (gcc, no toolchain)

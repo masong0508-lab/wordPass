@@ -41,16 +41,30 @@ static void startShelf(void)
     } else setMsg(s, 180);
 }
 
-static int todaySeed(void)
+// Today's date from the DS clock. The title refreshes it once a second, and starting a Daily
+// reads it again, so a shelf is always seeded from the date it was started on.
+static void refreshClock(void)
 {
-    time_t t = time(NULL);
-    struct tm *tm = gmtime(&t);
-    if (!tm) return 20260101;
-    return (tm->tm_year + 1900) * 10000 + (tm->tm_mon + 1) * 100 + tm->tm_mday;
+    int today = settingsToday();
+    G.clockOk = settingsClockOk(today);
+    G.dailySeed = G.clockOk ? today : 0;
+    G.dailyMod = G.clockOk ? boardDailyMod(today) : 0;
 }
 
-static void newGame(int mode)
+static bool dailyRecorded;      // this Daily attempt's result is already in the records
+
+static bool newGame(int mode)
 {
+    G.practice = false;
+    if (mode == MODE_DAILY) {
+        refreshClock();
+        if (!G.clockOk) { setMsg("SET THE DS CLOCK FOR DAILY", 120); return false; }
+        // one scored attempt a day: the second and later runs are practice (nothing recorded)
+        G.practice = (S.dailyPlayedDate == G.dailySeed);
+        if (!G.practice) { S.dailyPlayedDate = G.dailySeed; settingsSave(); }
+        dailyRecorded = false;
+        srand(G.dailySeed);
+    }
     G.mode = mode;
     G.shelf = 1;
     G.score = 0;
@@ -58,21 +72,45 @@ static void newGame(int mode)
     G.lives = 3;
     G.twist = 0; G.lastTwist = 0;
     memset(G.recentPass, 0, sizeof(G.recentPass)); G.recentHead = 0;
-    if (mode == MODE_DAILY) { G.dailySeed = todaySeed(); srand(G.dailySeed); }
     startShelf();
+    if (mode == MODE_DAILY) {
+        char t[32];
+        if (G.practice) strcpy(t, "PRACTICE RUN: NOT SCORED");
+        else siprintf(t, "DAILY: %s", boardDailyModName(G.dailyMod));
+        queueMsg(G.msg, G.msgTimer);       // the shelf intro follows
+        setMsg(t, 150);
+    }
     G.state = ST_PLAY;
+    return true;
 }
 
+// Fold a finished run into the saved records. A Daily replay (practice) or a Daily without a
+// readable clock records nothing; a scored Daily updates the last score, the best, the
+// streak and the games played exactly once.
 static void recordScore(void)
 {
-    bool changed = false;
+    bool best = false;
     if (G.mode == MODE_DAILY) {
-        if (G.dailySeed != S.bestDailyDate || G.score > S.bestDaily) { S.bestDaily = G.score; S.bestDailyDate = G.dailySeed; changed = true; }
-    } else {
-        if (G.score > S.bestClassic) { S.bestClassic = G.score; changed = true; }
-        if (G.state == ST_PASSED && G.shelf > S.bestClassicShelf) { S.bestClassicShelf = G.shelf; changed = true; }
+        if (G.practice || !G.clockOk || dailyRecorded) return;
+        dailyRecorded = true;
+        S.dailyLastScore = G.score;
+        if (G.dailySeed != S.bestDailyDate || G.score > S.bestDaily) { S.bestDaily = G.score; S.bestDailyDate = G.dailySeed; best = true; }
+        S.dailyStreak = settingsNextStreak(S.dailyLastDate, S.dailyStreak, G.dailySeed);
+        S.dailyLastDate = G.dailySeed;
+        S.gamesPlayed++;
+        if (G.state == ST_PASSED) S.shelvesCleared++;
+        if (G.state == ST_PASSED && G.passBonusKind == 2) S.perfectPasses++;
+        if (best) G.newBest = 1;
+        settingsSave();
+        return;
     }
-    if (changed) { G.newBest = 1; settingsSave(); }
+    if (G.score > S.bestClassic) { S.bestClassic = G.score; best = true; }
+    if (G.state == ST_PASSED) {
+        S.shelvesCleared++;
+        if (G.passBonusKind == 2) S.perfectPasses++;
+        if (G.shelf > S.bestClassicShelf) { S.bestClassicShelf = G.shelf; best = true; }
+    }
+    if (best) { G.newBest = 1; settingsSave(); }
 }
 
 static void cycleOption(int row, int dir)
@@ -92,6 +130,9 @@ static void cycleOption(int row, int dir)
 
 static void quitToTitle(void)
 {
+    // walking away from a scored Daily forfeits it: the attempt is spent, so the score so far stands
+    if (G.mode == MODE_DAILY && G.state == ST_PAUSE) recordScore();
+    G.practice = false;
     G.mode = MODE_CLASSIC;
     G.shelf = 1;
     G.score = 0;
@@ -99,15 +140,20 @@ static void quitToTitle(void)
     boardNewShelf(&G);
     G.state = ST_TITLE;
     G.msg[0] = 0; G.msgTimer = 0; pendingMsg[0] = 0;
+    refreshClock();
     gfxFadeIn();
     musicNewShelf(1, false);
+    settingsSave();
 }
 
 static void enterFail(void)
 {
     G.state = ST_FAIL;
     boardClearChain(&G);
-    if (G.mode == MODE_CLASSIC && G.lives > 0) G.lives--;   // a failed shelf costs a bookmark
+    if (G.mode == MODE_CLASSIC) {
+        if (G.lives > 0) G.lives--;   // a failed shelf costs a bookmark
+        if (G.lives == 0) S.gamesPlayed++;   // the last bookmark: the run is over
+    }
     recordScore();
     gfxShake(14);
     gfxFlash();
@@ -247,6 +293,7 @@ int main(void)
     G.state = ST_TITLE;
     G.shelf = 1;
     boardNewShelf(&G);
+    refreshClock();
     unsigned seedCounter = 0;
 
     while (1) {
@@ -257,15 +304,21 @@ int main(void)
 
         switch (G.state) {
             case ST_TITLE:
+                if (seedCounter % 60 == 0) refreshClock();   // midnight passes under an idle title
                 if (down & KEY_TOUCH) {
                     // only the drawn buttons do anything; a stray tap elsewhere is ignored
                     srand(seedCounter ^ (t.px << 8) ^ t.py);
                     if (gfxInTitleOptions(t.px, t.py)) { G.state = ST_OPTIONS; G.optRow = 0; }
                     else if (gfxInTitleDaily(t.px, t.py)) newGame(MODE_DAILY);
                     else if (gfxInTitleClassic(t.px, t.py)) newGame(MODE_CLASSIC);
+                    else if (gfxInTitleLedger(t.px, t.py)) G.state = ST_STATS;
                 } else if (down & (KEY_START | KEY_A)) { srand(seedCounter); newGame(MODE_CLASSIC); }
                 else if (down & KEY_SELECT) newGame(MODE_DAILY);
                 else if (down & KEY_Y) { G.state = ST_OPTIONS; G.optRow = 0; }
+                else if (down & KEY_X) G.state = ST_STATS;
+                break;
+            case ST_STATS:       // THE LEDGER: B, X, A, START or any tap leaves
+                if (down & (KEY_B | KEY_X | KEY_A | KEY_START | KEY_TOUCH)) G.state = ST_TITLE;
                 break;
             case ST_OPTIONS: {
                 int row = (down & KEY_TOUCH) ? gfxOptionRowAt(t.px, t.py) : -1;
@@ -283,6 +336,7 @@ int main(void)
             case ST_PASSED:
                 G.stateTimer++;
                 if (G.stateTimer > 30 && (down & (KEY_TOUCH | KEY_START | KEY_A))) {
+                    settingsSave();
                     if (G.mode == MODE_DAILY) { quitToTitle(); break; }
                     G.shelf++;
                     startShelf();
@@ -292,6 +346,7 @@ int main(void)
             case ST_FAIL:
                 G.stateTimer++;
                 if (G.stateTimer > 45 && (down & (KEY_TOUCH | KEY_START | KEY_A))) {
+                    settingsSave();
                     if (G.mode == MODE_DAILY || G.lives <= 0) { quitToTitle(); break; }   // no bookmark left: the run is over
                     G.score = G.shelfStartScore;
                     startShelf();
@@ -301,6 +356,7 @@ int main(void)
             case ST_PAUSE:
                 if (down & KEY_START) G.state = ST_PLAY;
                 else if (down & KEY_SELECT) {
+                    if (G.mode == MODE_DAILY) { setMsg("NO RESTART IN DAILY", 60); break; }   // the one attempt cannot be retried
                     // a restart costs a bookmark in Classic and is refused on the last one
                     if (G.mode == MODE_CLASSIC && G.lives <= 1) { setMsg("LAST BOOKMARK", 60); break; }
                     if (G.mode == MODE_CLASSIC) G.lives--;
