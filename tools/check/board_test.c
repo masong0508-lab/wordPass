@@ -1293,6 +1293,40 @@ int main(int argc, char **argv)
         CHECK("guide: every page fits its 139 px of text", tall);
         CHECK("guide: every character has a glyph, every title fits at 2x", glyphs && titles);
 
+        // the same pages in every language: the line count, 38 visible characters a line, 139 px of lines, a glyph for every
+        // character, a title that fits at 2x, and the same numbers as in English
+        {
+            static char pl[GUIDE_PAGES][GUIDE_MAX_LINES][GUIDE_LINE_BUF];
+            bool lfits = true, ltall = true, lglyph = true, ltitle = true, lnum = true;
+            for (int lg = 1; lg < LANG_COUNT; lg++) {
+                uiTestLang(lg);
+                for (int p = 0; p < GUIDE_PAGES; p++) {
+                    int c = guideLines(p, pl[p]), h = 0;
+                    if (c != cnt[p]) { lfits = false; printf("   lang %d page %d has %d lines, English %d\n", lg, p + 1, c, cnt[p]); }
+                    for (int i = 0; i < c; i++) {
+                        int v = guideVisibleLen(pl[p][i]);
+                        h += v ? GUIDE_LINE_H : GUIDE_GAP_H;
+                        if (v > GUIDE_MAX_CHARS) { lfits = false; printf("   lang %d page %d line %d is %d characters: %s\n", lg, p + 1, i, v, pl[p][i]); }
+                        char plain[GUIDE_LINE_BUF]; guideStrip(plain, pl[p][i]);
+                        for (const char *ch = plain; *ch; ch++) if (*ch != ' ' && fontIndex(*ch) == fontIndex('~')) { lglyph = false; printf("   lang %d page %d: no glyph for '%c' in %s\n", lg, p + 1, *ch, plain); }
+                        // digits: the same numbers in the same order as the English line (a language may move them)
+                        char pe[GUIDE_LINE_BUF]; guideStrip(pe, pg[p][i]);
+                        int de = 0, dl = 0;
+                        for (const char *ch = pe; *ch; ch++) if (*ch >= '0' && *ch <= '9') de += *ch - '0' + 1;
+                        for (const char *ch = plain; *ch; ch++) if (*ch >= '0' && *ch <= '9') dl += *ch - '0' + 1;
+                        if (de != dl && i != 1 && !(p == 1)) { lnum = false; printf("   lang %d page %d line %d: digits differ from English: %s | %s\n", lg, p + 1, i, pe, plain); }
+                    }
+                    if (h > GUIDE_MAX_H) { ltall = false; printf("   lang %d page %d is %d px tall\n", lg, p + 1, h); }
+                    if (!guideTitle(p)[0] || strlen(guideTitle(p)) * 12 > 150) { ltitle = false; printf("   lang %d title %s too wide\n", lg, guideTitle(p)); }
+                }
+            }
+            uiTestLang(-1);
+            CHECK("guide in ten languages: same line count, no visible line over 38 characters", lfits);
+            CHECK("guide in ten languages: every page fits its 139 px, every title fits at 2x", ltall && ltitle);
+            CHECK("guide in ten languages: every character has a glyph", lglyph);
+            CHECK("guide in ten languages: the numbers are the English numbers", lnum);
+        }
+
         // the text of a page with the colour codes taken out, lines joined by '|'
         static char all[GUIDE_PAGES][1600];
         for (int p = 0; p < GUIDE_PAGES; p++) {

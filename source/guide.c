@@ -10,11 +10,7 @@
 
 typedef char Page[GUIDE_MAX_LINES][GUIDE_LINE_BUF];
 
-static const char *const TITLES[GUIDE_PAGES] = {
-    "THE BOARD", "SCORING", "PEEKING", "THE PASS", "FIRE", "SHELVES", "MODES", "CONTROLS"
-};
-
-const char *guideTitle(int page) { return TITLES[(page >= 0 && page < GUIDE_PAGES) ? page : 0]; }
+const char *guideTitle(int page) { return ui(UI_GT_BOARD + ((page >= 0 && page < GUIDE_PAGES) ? page : 0)); }
 
 int guideVisibleLen(const char *line)
 {
@@ -120,28 +116,31 @@ static int valueLines(char lines[][GUIDE_LINE_BUF], int max)
     return last + 1;
 }
 
-// ---- the pages. Each one fills `p` and returns its line count. Fit: GUIDE_MAX_CHARS visible characters a line and
-// at most GUIDE_MAX_H pixels of lines (10 a line, 4 a gap), which tools/check asserts for every page.
-#define L(...) do { if (n < GUIDE_MAX_LINES) { bld(p[n], __VA_ARGS__); n++; } } while (0)
+// ---- the pages. Each one fills `p` and returns its line count. Every line is a UI_G* id of the string layer (colour codes
+// and %d / %s slots inside, see tools/lang/ui_strings.tsv); the numbers come from the rules. Fit: GUIDE_MAX_CHARS visible
+// characters a line and at most GUIDE_MAX_H pixels of lines (10 a line, 4 a gap), which tools/check asserts for every
+// page in every language.
+#define L(id, ...) do { if (n < GUIDE_MAX_LINES) { uiFmt(p[n], GUIDE_LINE_BUF, id, ##__VA_ARGS__); n++; } } while (0)
+#define LS(s)  do { if (n < GUIDE_MAX_LINES) { bld(p[n], "%s", s); n++; } } while (0)
 #define GAP()  do { if (n < GUIDE_MAX_LINES) { p[n][0] = 0; n++; } } while (0)
 
 static int pageBoard(Page p)
 {
     int n = 0;
     int ink = letterValueEn('i' - 'a') + letterValueEn('n' - 'a') + letterValueEn('k' - 'a');   // the example word: I, N, K
-    L(GM_ACCENT "DRAG" GM_BASE " THE STYLUS ACROSS TOUCHING GEMS.");
-    L("EACH ONE JOINS THE CHAIN, UP TO " GM_GOLD "%d" GM_BASE ".", MAX_CHAIN);
-    L(GM_ACCENT "THREE" GM_BASE " OR MORE LETTERS SPELL A WORD.");
+    L(UI_GB_1);
+    L(UI_GB_2, MAX_CHAIN);
+    L(UI_GB_3);
     GAP();
-    L("A GOOD WORD PUTS A " GM_GOLD "GOLD RING" GM_BASE " ON ITS");
-    L("LAST GEM: " GM_ACCENT "TAP IT" GM_BASE " TO CASH IN, OR PRESS");
-    L(GM_ACCENT "SUBMIT" GM_BASE " OR " GM_ACCENT "A" GM_BASE ".");
+    L(UI_GB_4);
+    L(UI_GB_5);
+    L(UI_GB_6);
     GAP();
-    L("DRAG BACK TO THE PREVIOUS GEM TO UNDO.");
-    L("TAP AN EARLIER GEM TO CUT BACK TO IT.");
+    L(UI_GB_7);
+    L(UI_GB_8);
     GAP();
-    L("SPELL " GM_GOLD "INK" GM_BASE ", CASH IN: " GM_GOLD "+%d" GM_BASE, boardWordPoints(ink, 3, false, 0, false));
-    L(GM_ACCENT "TRY IT:" GM_BASE " CHAIN A WORD ON SHELF 1.");
+    L(UI_GB_9, boardWordPoints(ink, 3, false, 0, false));
+    L(UI_GB_10);
     return n;
 }
 
@@ -150,42 +149,41 @@ static int pageScoring(Page p)
     int n = 0;
     char vl[3][GUIDE_LINE_BUF], runs[GUIDE_LINE_BUF];
     int nv = valueLines(vl, 3);
-    L(GM_ACCENT "GEM VALUES" GM_BASE " ADD UP:");
-    for (int i = 0; i < nv; i++) L("%s", vl[i]);
+    L(UI_GS_1);
+    for (int i = 0; i < nv; i++) LS(vl[i]);
     GAP();
     runList(runs, 3, MAX_CHAIN, boardLenMult, "X", NULL, "  ", NULL, " ");
-    L("THE SUM X " GM_ACCENT "LENGTH" GM_BASE " X " GM_GOLD "%d" GM_BASE ", BY LETTERS:", SCORE_UNIT);
-    L("%s", runs);
-    L(GM_GOLD "%d+" GM_BASE " LETTERS ADD A FLAT " GM_GOLD "+%d" GM_BASE ".", LONG_WORD_LEN, LONG_WORD_BONUS);
-    L("A " GM_FIRE "FLAME" GM_BASE " IN THE WORD: " GM_GOLD "+%d" GM_BASE " PER LETTER.", BURN_BONUS_PER_LETTER);
-    L("EACH " GM_ACCENT "DIAMOND" GM_BASE " ADDS HALF AGAIN (" GM_GOLD "%d" GM_BASE " MAX).", DIAMOND_CAP);
-    L("THE SAME WORD TWICE A SHELF: " GM_FIRE "HALF" GM_BASE ".");
+    L(UI_GS_3, SCORE_UNIT);
+    LS(runs);
+    L(UI_GS_4, LONG_WORD_LEN, LONG_WORD_BONUS);
+    L(UI_GS_5, BURN_BONUS_PER_LETTER);
+    L(UI_GS_6, DIAMOND_CAP);
+    L(UI_GS_7);
     GAP();
     int qu = letterValueEn('q' - 'a'), iv = letterValueEn('i' - 'a'), zv = letterValueEn('z' - 'a');
-    L(GM_ACCENT "QU" GM_BASE " IS ONE GEM BUT TWO LETTERS LONG.");
-    L("QU+I+Z: " GM_GOLD "%d+%d+%d" GM_BASE " = " GM_GOLD "%d" GM_BASE ", X" GM_GOLD "%d" GM_BASE " X" GM_GOLD "%d" GM_BASE " = " GM_GOLD "+%d" GM_BASE,
-      qu, iv, zv, qu + iv + zv, boardLenMult(4), SCORE_UNIT, boardWordPoints(qu + iv + zv, 4, false, 0, false));
+    L(UI_GS_8);
+    L(UI_GS_9, qu, iv, zv, qu + iv + zv, boardLenMult(4), SCORE_UNIT, boardWordPoints(qu + iv + zv, 4, false, 0, false));
     return n;
 }
 
 static int pagePeek(Page p)
 {
     int n = 0;
-    L(GM_ACCENT "HOLD L OR R" GM_BASE " TO PEEK, OR X, OR TAP " GM_ACCENT "PEEK" GM_BASE);
-    L("TOUCH A GEM TO ARM IT, LIFT TO " GM_ACCENT "PEEL" GM_BASE ".");
-    L("SLIDE OFF THE GEM FIRST TO CANCEL.");
+    L(UI_GE_1);
+    L(UI_GE_2);
+    L(UI_GE_3);
     GAP();
-    L("A PEELED CELL IS A HOLE WITH A NUMBER:");
-    L("HOW MANY OF THE " GM_GOLD "6" GM_BASE " CELLS AROUND IT HIDE");
-    L("A PASS LETTER:  " GM_DIM "0  " GM_ACCENT "1  " GM_GOLD "2  " GM_FIRE "3  " GM_WHITE "4+" GM_BASE);
-    L("A " GM_ACCENT "DIAMOND" GM_BASE " IS A PASS LETTER YOU FOUND.");
+    L(UI_GE_4);
+    L(UI_GE_5);
+    L(UI_GE_6);
+    L(UI_GE_7);
     GAP();
-    L(GM_FIRE "RED GEM" GM_BASE ": UNDER A FLAME. PEELING IT");
-    L(GM_FIRE "SCORCHES" GM_BASE " THE CELL, AND A PASS LETTER");
-    L("THERE IS BURNT FOR GOOD.");
-    L("EVERY PEEL IS A TURN: " GM_GOLD "+%d" GM_BASE " HEAT.", boardPeelHeat(false));
+    L(UI_GE_8);
+    L(UI_GE_9);
+    L(UI_GE_10);
+    L(UI_GE_11, boardPeelHeat(false));
     GAP();
-    L(GM_ACCENT "TRY IT:" GM_BASE " PEEK ONE GEM ON SHELF 1.");
+    L(UI_GE_12);
     return n;
 }
 
@@ -193,21 +191,21 @@ static int pagePass(Page p)
 {
     int n = 0;
     char runs[GUIDE_LINE_BUF];
-    L("EVERY SHELF HIDES A " GM_ACCENT "PASSWORD" GM_BASE " BEHIND");
-    L("THE GEMS: ITS LETTERS LIE IN A TRAIL.");
-    L("THE TOP SCREEN SHOWS SLOTS AND THEME:");
-    L(GM_GOLD "%s" GM_BASE ", " GM_GOLD "%s" GM_BASE ", " GM_GOLD "%s" GM_BASE "... " GM_GOLD "%d" GM_BASE " IN ALL.", poolNameEn(0), poolNameEn(8), poolNameEn(17), poolThemeCount());
+    L(UI_GA_1);
+    L(UI_GA_2);
+    L(UI_GA_3);
+    L(UI_GA_4, poolNameEn(0), poolNameEn(8), poolNameEn(17), poolThemeCount());
     GAP();
     runList(runs, 1, 20, boardPassLenFor, "", NULL, "  ", NULL, ":");
-    L(GM_ACCENT "LETTERS" GM_BASE " IN THE PASS, BY SHELF:");
-    L("%s", runs);
+    L(UI_GA_5);
+    LS(runs);
     GAP();
-    L("EACH LETTER FOUND PAYS " GM_GOLD "%d" GM_BASE " X SHELF.", PASS_LETTER_PER_SHELF);
-    L("FIND THEM ALL TO " GM_ACCENT "CLEAR THE SHELF" GM_BASE ":");
-    L(GM_GOLD "+%d" GM_BASE " X SHELF, AND " GM_GOLD "+%d" GM_BASE " X SHELF FOR", SHELF_BONUS_PER_SHELF, SPEED_PER_SHELF_TURN);
-    L("EACH TURN UNDER " GM_GOLD "%d" GM_BASE ".", SPEED_TURNS);
-    L(GM_ACCENT "PERFECT" GM_BASE ", NO WASTED PEEK: " GM_GOLD "+%d" GM_BASE " X SHELF", PERFECT_PER_SHELF);
-    L(GM_ACCENT "CLEAN" GM_BASE ", " GM_GOLD "%d" GM_BASE " SPARE PEEKS: " GM_GOLD "+%d" GM_BASE " X SHELF", CLEAN_EXTRA_PEELS, CLEAN_PER_SHELF);
+    L(UI_GA_6, PASS_LETTER_PER_SHELF);
+    L(UI_GA_7);
+    L(UI_GA_8, SHELF_BONUS_PER_SHELF, SPEED_PER_SHELF_TURN);
+    L(UI_GA_9, SPEED_TURNS);
+    L(UI_GA_10, PERFECT_PER_SHELF);
+    L(UI_GA_11, CLEAN_EXTRA_PEELS, CLEAN_PER_SHELF);
     return n;
 }
 
@@ -216,22 +214,23 @@ static bool burnsEveryTurn(int s) { return burnEveryOf(s) == 1; }
 static int pageFire(Page p)
 {
     int n = 0;
-    char heat[GUIDE_LINE_BUF];
-    runList(heat, 3, MAX_CHAIN, heatOf, "+", "FREE", ", ", " LETTERS", " ");
-    L("SHORT WORDS BUILD " GM_FIRE "HEAT" GM_BASE ", PER WORD:");
-    L("%s", heat);
-    L("A PEEL ADDS " GM_GOLD "+%d" GM_BASE " (" GM_GOLD "+%d" GM_BASE " IN LOCKDOWN).", boardPeelHeat(false), boardPeelHeat(true));
-    L("A FULL METER SETS A TOP GEM " GM_FIRE "ALIGHT" GM_BASE ".");
-    L("A FLAME FALLS A ROW EVERY TURN, BUT");
-    L("EVERY " GM_GOLD "%d" GM_BASE " TURNS ON SHELF 1-" GM_GOLD "%d" GM_BASE ".", burnEveryOf(1), firstShelf(burnsEveryTurn) - 1);
-    L("SPELL THROUGH A FLAME TO " GM_ACCENT "PUT IT OUT" GM_BASE ".");
-    L("HOLES: CHIMNEYS. " GM_ACCENT "DIAMONDS" GM_BASE " NEVER BURN.");
-    L(GM_FIRE "SCORCH" GM_BASE ": PEELING A FLAME OR UNDER ONE.");
+    char heat[GUIDE_LINE_BUF], unit[16];
+    strcpy(unit, " "); strcat(unit, ui(UI_GP_UNIT));
+    runList(heat, 3, MAX_CHAIN, heatOf, "+", ui(UI_GP_FREE), ", ", unit, " ");
+    L(UI_GF_1);
+    LS(heat);
+    L(UI_GF_2, boardPeelHeat(false), boardPeelHeat(true));
+    L(UI_GF_3);
+    L(UI_GF_4);
+    L(UI_GF_5, burnEveryOf(1), firstShelf(burnsEveryTurn) - 1);
+    L(UI_GF_6);
+    L(UI_GF_7);
+    L(UI_GF_8);
     GAP();
-    L("THE SHELF IS LOST WHEN:");
-    L(GM_FIRE "%s" GM_BASE ": %s", boardFailName(FAIL_FIRE), "FLAME ON THE FLOOR");
-    L(GM_FIRE "%s" GM_BASE ": %s", boardFailName(FAIL_SCORCH), "A PASS LETTER BURNED");
-    L(GM_FIRE "%s" GM_BASE ": %s", boardFailName(FAIL_WORDS), "NO WORD LEFT");
+    L(UI_GF_9);
+    L(UI_GF_10);
+    L(UI_GF_11);
+    L(UI_GF_12);
     return n;
 }
 
@@ -242,58 +241,58 @@ static int pageShelves(Page p)
     for (int s = lock; s <= 40; s++) { ShelfRules r; boardShelfRules(s, &r); if (!tier2 && r.tier >= 2) tier2 = s; if (!tier3 && r.tier >= 3) tier3 = s; }
     int t[3] = { 0, 0, 0 }, found = 0;
     for (int s = 1; s <= 40 && found < 3; s++) if (boardTwistShelf(s)) t[found++] = s;
-    L(GM_GOLD "%d" GM_BASE " " GM_ACCENT "BOOKMARKS" GM_BASE " START A RUN. A LOST SHELF", BOOKMARKS_MAX);
-    L("COSTS ONE, NONE LEFT ENDS THE RUN.");
-    L("CLEAR A LOCKDOWN SHELF: WIN ONE BACK.");
+    L(UI_GH_1, BOOKMARKS_MAX);
+    L(UI_GH_2);
+    L(UI_GH_3);
     GAP();
-    L(GM_ACCENT "TWISTS" GM_BASE ", SHELF " GM_GOLD "%d" GM_BASE ", " GM_GOLD "%d" GM_BASE ", " GM_GOLD "%d" GM_BASE " AND SO ON:", t[0], t[1], t[2]);
-    L(GM_ACCENT "%s" GM_BASE ": %d HOLES ARE ALREADY OPEN", boardTwistName(TWIST_INK), INK_SPILL_HOLES);
-    L(GM_ACCENT "%s" GM_BASE ": SLOWER FIRE, METER -%d", boardTwistName(TWIST_DAMP), TWIST_DAMP_METER);
-    L(GM_ACCENT "%s" GM_BASE ": PASS +%d LONGER, LOW DOWN", boardTwistName(TWIST_BURIED), TWIST_BURIED_EXTRA);
+    L(UI_GH_4, t[0], t[1], t[2]);
+    L(UI_GH_5, boardTwistName(TWIST_INK), INK_SPILL_HOLES);
+    L(UI_GH_6, boardTwistName(TWIST_DAMP), TWIST_DAMP_METER);
+    L(UI_GH_7, boardTwistName(TWIST_BURIED), TWIST_BURIED_EXTRA);
     GAP();
-    L(GM_FIRE "LOCKDOWN" GM_BASE " FROM SHELF " GM_GOLD "%d" GM_BASE ": FIRE EVERY TURN", lock);
-    L("AND A HEAT PULSE EVERY " GM_GOLD "%d" GM_BASE " TURNS. IT", pulseOf(lock));
-    L("TIGHTENS AT SHELF " GM_GOLD "%d" GM_BASE ", " GM_GOLD "%d" GM_BASE ", " GM_GOLD "%d" GM_BASE ". FROM " GM_GOLD "%d" GM_BASE, tier1, tier2, tier3, twin);
-    L("TWO COLUMNS CATCH FIRE AT ONCE.");
-    L(GM_FIRE "OVERTIME" GM_BASE ": AT TURN " GM_GOLD "%d" GM_BASE " (" GM_GOLD "%d" GM_BASE " IN LOCKDOWN)", OVERTIME_TURNS + 1, OVERTIME_TURNS_LOCKDOWN + 1);
-    L("EVERY TURN ADDS HEAT OF ITS OWN.");
+    L(UI_GH_8, lock);
+    L(UI_GH_9, pulseOf(lock));
+    L(UI_GH_10, tier1, tier2, tier3, twin);
+    L(UI_GH_11);
+    L(UI_GH_12, OVERTIME_TURNS + 1, OVERTIME_TURNS_LOCKDOWN + 1);
+    L(UI_GH_13);
     return n;
 }
 
 static int pageModes(Page p)
 {
     int n = 0;
-    L(GM_ACCENT "CLASSIC" GM_BASE ": CLIMB THE SHELVES, FIRE AND");
-    L("PASS DEPTH RISING AS YOU GO.");
+    L(UI_GM_1);
+    L(UI_GM_2);
     GAP();
-    L(GM_ACCENT "DAILY PASS" GM_BASE ": ONE SHELF FOR EVERYONE,");
-    L("FROM THE DS CLOCK DATE. THE FIRST RUN");
-    L("OF A DAY IS " GM_GOLD "SCORED" GM_BASE ", EVEN IF YOU QUIT.");
-    L("AFTER THAT IT IS " GM_ACCENT "PRACTICE" GM_BASE ": NOTHING IS");
-    L("RECORDED.");
-    L("MODIFIERS: %s, %s, %s, %s", boardDailyModName(DAILYMOD_STANDARD), boardDailyModName(DAILYMOD_EMBER),
+    L(UI_GM_3);
+    L(UI_GM_4);
+    L(UI_GM_5);
+    L(UI_GM_6);
+    L(UI_GM_7);
+    L(UI_GM_8, boardDailyModName(DAILYMOD_STANDARD), boardDailyModName(DAILYMOD_EMBER),
       boardDailyModName(DAILYMOD_DEEP), boardDailyModName(DAILYMOD_LONG));
-    L("SCORED DAYS IN A ROW BUILD A " GM_ACCENT "STREAK" GM_BASE ".");
+    L(UI_GM_9);
     GAP();
-    L("THE " GM_ACCENT "LEDGER" GM_BASE " (X ON THE TITLE) KEEPS YOUR");
-    L("CAREER: WORDS, PEEKS, BEST WORD.");
+    L(UI_GM_10);
+    L(UI_GM_11);
     return n;
 }
 
 static int pageControls(Page p)
 {
     int n = 0;
-    L(GM_ACCENT "TOUCH" GM_BASE ": DRAG TO CHAIN, TAP THE LAST GEM");
-    L("TO SUBMIT. " GM_ACCENT "HOLD L OR R" GM_BASE " TO PEEK.");
-    L(GM_ACCENT "D-PAD" GM_BASE ": MOVE THE CURSOR, A CHAINS AND");
-    L("SUBMITS, B BACKS UP, Y CLEARS.");
-    L("X LATCHES PEEK, THEN A PEELS THE GEM.");
-    L(GM_ACCENT "START" GM_BASE " OR THE II BUTTON PAUSES.");
+    L(UI_GC_1);
+    L(UI_GC_2);
+    L(UI_GC_3);
+    L(UI_GC_4);
+    L(UI_GC_5);
+    L(UI_GC_6);
     GAP();
-    L(GM_ACCENT "OPTIONS" GM_BASE " HAS " GM_ACCENT "HAND" GM_BASE " (MIRRORS THE BOARD),");
-    L(GM_ACCENT "LIBRARY" GM_BASE " (COMMON SKIPS ODD WORDS) AND");
-    L(GM_ACCENT "SPELLING" GM_BASE " (AMERICAN, BRITISH OR BOTH).");
-    L(GM_ACCENT "CLEAR" GM_BASE " THEME: COLOUR-BLIND SAFE GEMS.");
+    L(UI_GC_7);
+    L(UI_GC_8);
+    L(UI_GC_9);
+    L(UI_GC_10);
     return n;
 }
 
