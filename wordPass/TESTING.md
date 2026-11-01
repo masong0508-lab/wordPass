@@ -45,7 +45,7 @@ via `e.center(c, r)`, cell rectangles on the screenshot via `e.cell_rect(c, r)`.
 `_Static_assert`; `wp.py` has the same numbers in `OFF = {'state': 8, ..., 'chainR': 442}`
 and `state()` reads through it (no hand-walked slices). Adding a field means: append it
 to `DebugView`, add its `PIN(...)`, bump the size assert, add it to `OFF`, and read it in
-`state()`. `state()` returns the scalars (`state, mode, shelf, score, fail, turn, heat,
+`state()`. `state()` returns the scalars (`peek` (peekHeld or the latch), `armed`, `armC`, `armR` (the armed peel), `state, mode, shelf, score, fail, turn, heat,
 chainLen, peels, lockdown, bestWordScore, dailySeed, passLen, lastWordTier, rareWords,
 library, heatThreshold, burnEvery, burnTimer, optRow, pulseEvery, lockTier, overtime,
 chainScore, speedBonus, peelBonus, passBonusKind, ledgerN, newBest, lives, passTheme,
@@ -103,3 +103,7 @@ completion) for exact score assertions.
 ## Chain input
 
 `boardChainTouch(g, c, r, fresh)` is the one entry point for a touch sample (`fresh` = a new stylus-down, false while dragging); `make check` covers cut-back, bridge, restart-on-tap, the tail-tap submit and the 20-gem cap. `boardTryAddToChain` is a thin drag wrapper. `gfxCellAt` is a 12 px circle hit test over the hex centres. In `test_rules.py` the `chain input` scenarios (both hands) drive real stylus strokes: `touch(x, y)` holds a point, `untouch()` lifts, `e.tap` is a fresh tap. Set `WP_ONLY="chain input|other name"` to run just the scenarios whose name contains one of those words (a development filter; the full suite must still pass).
+
+## Peek input
+
+A peek touch only arms a gem; the peel happens when the stylus lifts (`keysUp() & KEY_TOUCH`). `Emu.peel(c, r)` holds L, touches for 5 frames and lifts, so it keeps working. A test that wants the peel on a frame must lift the stylus first. Avoid pokes that make an all-one-letter board in a scenario that peels: the OUT OF WORDS search over such a board takes many frames. The `peek input` scenarios (both hands) cover arm, slide-off, shoulder release, the X latch, the PEEK button and take the readability screenshots.

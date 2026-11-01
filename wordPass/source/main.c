@@ -26,6 +26,7 @@ static void queueMsg(const char *m, int frames)
 
 static void startShelf(void)
 {
+    G.armed = 0; G.peekLatch = 0;
     boardNewShelf(&G);
     G.newBest = 0;
     gfxFadeIn();
@@ -137,6 +138,7 @@ static void quitToTitle(void)
     G.shelf = 1;
     G.score = 0;
     G.twist = 0;
+    G.armed = 0; G.peekLatch = 0;
     boardNewShelf(&G);
     G.state = ST_TITLE;
     G.msg[0] = 0; G.msgTimer = 0; pendingMsg[0] = 0;
@@ -157,7 +159,7 @@ static void enterFail(void)
     recordScore();
     gfxShake(14);
     gfxFlash();
-    G.peekHeld = 0;
+    G.peekHeld = 0; G.armed = 0; G.peekLatch = 0;
     musicPeek(false);
     G.stateTimer = 0;
     musicFail();
@@ -213,10 +215,13 @@ static void submitChain(void)
 
 static void handlePlay(u32 down, u32 held, touchPosition *t)
 {
-    bool peekNow = (held & (KEY_L | KEY_R)) != 0;
+    if (down & KEY_X) G.peekLatch = !G.peekLatch;
+    if ((down & KEY_TOUCH) && gfxInPeekButton(t->px, t->py)) G.peekLatch = !G.peekLatch;
+    bool peekNow = (held & (KEY_L | KEY_R)) != 0 || G.peekLatch;
     if (peekNow != G.peekHeld) { G.peekHeld = peekNow; musicPeek(peekNow); }
+    if (!peekNow) G.armed = 0;
 
-    if (down & KEY_START) { G.state = ST_PAUSE; return; }   // a held chain survives the pause
+    if (down & KEY_START) { G.armed = 0; G.state = ST_PAUSE; return; }   // a held chain survives the pause
     if (down & KEY_B) boardClearChain(&G);
 
     int c, r;
@@ -224,7 +229,15 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
     if (touching && t->px == 0 && t->py == 0) touching = false;
 
     if (G.peekHeld) {
-        if ((down & KEY_TOUCH) && gfxCellAt(t->px, t->py, &c, &r)) {
+        // peel on release: a touch arms the gem under it, sliding off (or onto another gem) disarms,
+        // lifting the stylus on the armed gem peels it. A latched peek is one-shot.
+        bool peel = false;
+        if ((down & KEY_TOUCH) && gfxCellAt(t->px, t->py, &c, &r)) { G.armed = 1; G.armC = c; G.armR = r; }
+        else if (G.armed && touching && !(down & KEY_TOUCH)) {
+            if (!gfxCellAt(t->px, t->py, &c, &r) || c != G.armC || r != G.armR) G.armed = 0;
+        }
+        if ((keysUp() & KEY_TOUCH) && G.armed) { peel = true; c = G.armC; r = G.armR; G.armed = 0; G.peekLatch = 0; }
+        if (peel) {
             int letter = G.cell[c][r].letter;
             int res = boardPeel(&G, c, r);
             if (res == 2) {
@@ -245,7 +258,7 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
             if (boardPassComplete(&G)) {
                 G.state = ST_PASSED; G.stateTimer = 0; G.fail = FAIL_NONE;
                 boardClearChain(&G);
-                G.peekHeld = 0; musicPeek(false);
+                G.peekHeld = 0; G.armed = 0; G.peekLatch = 0; musicPeek(false);
                 // shelf bonus, a speed bonus for a quick pass, and a bonus for a tidy peel count
                 int shelfBonus = 1000 * G.shelf;
                 int left = 40 - G.turn;
@@ -306,7 +319,7 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
     // first-shelf nudge: three words in and no peek yet
     if (G.shelf == 1 && G.mode == MODE_CLASSIC && !G.hintShown && G.peels == 0 && G.wordsThisShelf >= 3) {
         G.hintShown = 1;
-        setMsg("HOLD L + TAP A GEM TO PEEK", 300);
+        setMsg("HOLD L OR X, TAP A GEM TO PEEL", 300);
     }
 }
 

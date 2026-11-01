@@ -16,7 +16,9 @@ and uncover the pass. Spell weak words and the shelf catches fire.
   gem still picks it up when there is only one way through, and a drag never
   restarts the chain by accident (a gem it cannot reach flashes red instead).
   Tap an earlier gem to cut the chain back to it.
-- **Peek.** Hold **L** or **R** and tap a gem to peel it off the board.
+- **Peek.** Hold **L** or **R** (or press **X**, or tap the **PEEK** button, to
+  latch it for one peel), then touch a gem to arm it and lift the stylus to
+  peel it off the board. Slide off the gem before lifting to change your mind.
   Behind it is either a **pass letter** (a diamond you can still chain through)
   or a **number**: how many of the six neighbouring cells hide a pass letter.
   A peeled cell is a hole for the rest of the shelf; the gems below it still
@@ -186,7 +188,8 @@ three. Daily Pass has no bookmarks: one attempt.
 | Tap a gem away from the chain | start a new chain there |
 | A / SUBMIT button | submit word |
 | B / CLEAR button | clear chain |
-| Hold L or R | peek mode (tap a gem to peel it) |
+| Hold L or R | peek mode (touch a gem to arm it, lift to peel it; slide away to cancel) |
+| X / PEEK button | latch peek on for one peel (press again to cancel) |
 | START | pause (then START resume, SELECT restart shelf for one bookmark, B quit to title) |
 | Y (title) | options |
 | X (title) | THE LEDGER |
@@ -200,8 +203,12 @@ Bejeweled on the front, N+ behind. Letter gems are faceted and glossy, colour
 coded by letter group (vowels ruby, common consonants sapphire, rare letters
 amber). The frame and pass plaque are gold. Everything else, including the
 whole back layer you see in peek mode, is flat black with thin lines and a
-single accent colour. Holding peek dims the gems to outlines so the layer
-you are reading is always the one in colour.
+single accent colour. Holding peek dims the gems to outlines with their letters
+still readable, so the layer you are reading is always the one in colour. Hole
+numbers are drawn large and colour coded (0 grey, 1 accent, 2 gold, 3 amber,
+4 and up white). Gems directly under a flame pulse red with a blinking `!`:
+peeling one scorches the back layer (the panel says RED: SCORCH). The armed
+gem gets a pulsing double rim and a PEEL label.
 
 Everything that happens gets juice: scored gems shatter into shards and the
 score floats up from the chain, a found pass letter cracks open in a ring of

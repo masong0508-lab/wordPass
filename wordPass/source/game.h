@@ -90,7 +90,9 @@ typedef struct {
     int  fail;
     int  state;
     int  stateTimer;
-    int  peekHeld;
+    int  peekHeld;            // peeking this frame: a shoulder held or the latch on
+    int  peekLatch;           // X or the PEEK button latched peek on (one peel, then off)
+    int  armed, armC, armR;   // a peek touch is down on this gem; the peel happens on release
     int  wordsThisShelf;
     int  lastWordLen, lastWordScore;
     char lastWord[MAX_WORD + 1];
@@ -247,6 +249,7 @@ void gfxFrame(const Game *g);        // draws both screens and flips
 int  gfxCellAt(int px, int py, int *c, int *r);
 bool gfxInSubmit(int px, int py);
 bool gfxInClear(int px, int py);
+bool gfxInPeekButton(int px, int py);
 void gfxNope(int c, int r);          // red flash on a gem the drag could not reach
 enum { BURST_SHATTER = 0, BURST_REVEAL, BURST_SCORCH, BURST_FIRE };
 void gfxBurst(int c, int r, int kind, int letter);   // letter colours the shards; gfxBurst never reads G

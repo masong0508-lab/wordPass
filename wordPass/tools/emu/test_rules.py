@@ -162,12 +162,13 @@ def _():
     ensure_play()
     e.set_cell(C, 0, BURN, 'a'); e.set_cell(C, 1, TILE, 'b'); e.set_back(C, 1, 1)
     # frame-exact peel: L held, stylus down on the gem, step until the state flips
-    e.hold('L', True); e.emu.input.touch_set_pos(*e.center(C, 1))
+    e.hold('L', True); e.emu.input.touch_set_pos(*e.center(C, 1)); e.run(3)
+    e.emu.input.touch_release()          # peel on release
     seen = None
     for i in range(10):
         e.run(1); g = e.state()
         if g['state'] == ST_FAIL: seen = g; break
-    e.emu.input.touch_release(); e.hold('L', False)
+    e.hold('L', False)
     assert seen, 'peel did not end the run'
     assert seen['fail'] == FAIL_SCORCH, f'fail {seen["fail"]}'
     assert seen['msg'] == 'SCORCHED', f'msg {seen["msg"]!r} on the fail frame'
@@ -919,6 +920,62 @@ def _():
     set_hand(False)
     e.start_classic()
     check_chain_input('right')
+
+# ---- peek input and readability (item 11) -----------------------------------------------
+def check_peek(tag):
+    px0 = 42 if e.bx else 214                              # the PEEK button's centre x in this layout
+    fresh_shelf(); e.set_heat(0); e.set_burn(0, 99); e.set_turn(0)
+    g = e.state()
+    for c, r in e.burn_cells(g): e.set_cell(c, r, TILE, 'e')
+    # plain gems (nothing hidden behind them) in rows 1..6 of column C and its neighbour: peeling them cannot finish or fail the shelf
+    plain = [r for r in range(1, 7) if not g['back'][C][r]]
+    assert len(plain) >= 3, f'{tag}: column {C} hides too much'
+    ra, rb, rc = plain[0], plain[-1], plain[len(plain) // 2]
+    x, y = e.center(C, ra)
+    # arm, slide off, release: nothing peels
+    e.hold('L', True); e.emu.input.touch_set_pos(x, y); e.run(4)
+    g = e.state(); assert g['armed'] == 1 and (g['armC'], g['armR']) == (C, ra) and g['peek'] == 1, f'{tag}: arm {g["armed"]} {(g["armC"], g["armR"])}'
+    e.shot(f'{out}/rules_armed_{tag}.png')
+    e.emu.input.touch_set_pos(*e.center(C, rb)); e.run(3)
+    assert e.state()['armed'] == 0, f'{tag}: sliding to another gem must disarm'
+    e.emu.input.touch_release(); e.run(5)
+    g = e.state(); assert g['peels'] == 0 and g['cell'][C][ra][1] == TILE, f'{tag}: a disarmed release peeled'
+    # arm and let go of the shoulder: disarmed, nothing peels
+    e.emu.input.touch_set_pos(x, y); e.run(4); e.hold('L', False)
+    assert e.state()['armed'] == 0, f'{tag}: releasing the shoulder must disarm'
+    e.emu.input.touch_release(); e.run(5)
+    assert e.state()['peels'] == 0, f'{tag}: shoulder release peeled'
+    # arm and release on the gem: it peels
+    e.hold('L', True); e.emu.input.touch_set_pos(x, y); e.run(4); e.emu.input.touch_release(); e.run(6)
+    g = e.state(); assert g['peels'] == 1 and g['cell'][C][ra][1] == HOLE and g['armed'] == 0, f'{tag}: release did not peel: peels {g["peels"]} armed {g["armed"]}'
+    e.hold('L', False); e.run(20)
+    # X latches peek for exactly one peel
+    e.press('X', settle=5); assert e.state()['peek'] == 1, f'{tag}: X did not latch peek'
+    e.press('X', settle=5); assert e.state()['peek'] == 0, f'{tag}: X did not unlatch'
+    e.press('X', settle=5)
+    x2, y2 = e.center(C, rc); e.tap(x2, y2, hold=5, settle=8)
+    g = e.state(); assert g['peels'] == 2 and g['peek'] == 0, f'{tag}: latched peel should be one-shot: peels {g["peels"]} peek {g["peek"]}'
+    # the panel button toggles it too
+    e.tap(px0, 182); assert e.state()['peek'] == 1, f'{tag}: PEEK button did not latch'
+    e.run(10); e.shot(f'{out}/rules_peekon_{tag}.png')
+    e.tap(px0, 182); assert e.state()['peek'] == 0, f'{tag}: PEEK button did not unlatch'
+    # readability: numbered holes and scorch-risk marks under a flame
+    g = e.state()
+    e.set_cell(0, 0, BURN, 'a'); e.set_cell(5, 2, BURN, 'a'); e.set_burn(0, 99); e.set_heat(0)
+    e.hold('L', True); e.run(20)
+    e.shot(f'{out}/rules_peek_read_{tag}.png')
+    assert e.fps() == 120, f'{tag}: peek fps'
+    e.hold('L', False); e.run(10)
+
+@scenario('peek input (left hand): arm on touch, peel on release, latch by X and the button, readable layer')
+def _():
+    set_hand(True); e.start_classic()
+    check_peek('left')
+
+@scenario('peek input (right hand): arm on touch, peel on release, latch by X and the button, readable layer')
+def _():
+    set_hand(False); e.start_classic()
+    check_peek('right')
 
 print('RULES OK' if not fails else f'RULES FAILED: {fails}')
 sys.exit(fails)

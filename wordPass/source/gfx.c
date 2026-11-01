@@ -69,6 +69,7 @@ static const u16 SHELF_ACCENTS[ACCENT_COUNT - 1] = {
 };
 #define WHITE      C(31,31,31)
 #define DIM        C(6,6,8)
+#define DIM_TEXT   C(13,13,16)     // dim text that must still be read; DIM stays for decorative outlines
 #define DIM2       C(3,3,5)
 #define FIRE1      C(31,12,2)
 #define FIRE2      C(31,24,4)
@@ -632,7 +633,8 @@ int gfxCellAt(int pxl, int pyl, int *c, int *r)
 #define SUBMIT_Y 120
 #define CLEAR_Y 150
 bool gfxInSubmit(int x, int y) { return x >= PANEL_X && x < PANEL_X + 76 && y >= SUBMIT_Y && y < SUBMIT_Y + 24; }
-bool gfxInClear(int x, int y)  { return x >= PANEL_X && x < PANEL_X + 76 && y >= CLEAR_Y && y < CLEAR_Y + 20; }
+bool gfxInClear(int x, int y)  { return x >= PANEL_X && x < PANEL_X + 76 && y >= CLEAR_Y && y < CLEAR_Y + 16; }
+bool gfxInPeekButton(int x, int y) { return x >= PANEL_X && x < PANEL_X + 76 && y >= 174 && y < 190; }
 
 void gfxApplySettings(void)
 {
@@ -834,9 +836,9 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
                     rectOutline(x + 1, y + 1, TILE_W - 2, TILE_H - 2, sc ? C(12,4,0) : ACCENT);
                     rectOutline(x + 3, y + 3, TILE_W - 6, TILE_H - 6, DIM2);
                     int n = boardBackNumber(g, c, r);
-                    char s[2] = { '0' + n, 0 };
-                    drawChar(x + 10, y + 8, s[0], n ? ACCENT : DIM, 1);
-                    if (n) drawChar(x + 10, y + 8, s[0], (frame & 16) ? ACCENT : lerp15(ACCENT, WHITE, 8), 1);
+                    u16 dcol = n == 0 ? C(10,10,12) : n == 1 ? ACCENT : n == 2 ? GOLD_LT : n == 3 ? FIRE2 : WHITE;
+                    if (n && !(frame & 16)) dcol = lerp15(dcol, WHITE, 8);
+                    drawChar2Shadow(x + 7, y + 4, '0' + n, dcol, BLACK);
                     if (chimney) rectOutline(x, y, TILE_W, TILE_H, FIRE1);
                     break;
                 }
@@ -867,6 +869,7 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
                         for (int j = 0; j < fh; j++) px(fx, yd - j, j == fh - 1 ? FIRE2 : lerp15(FIRE1, FIRE2, j * 4));
                         px(fx + 1, yd - 1, FIRE1);
                     }
+                    if (peek && (frame & 16)) drawChar(x + 17, yd + 3, '!', FIRE2, 1);
                     // glow bleeding below
                     if (r < ROWS - 1) {
                         int gy = yd + TILE_H;
@@ -877,9 +880,15 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
                 }
                 default:
                     if (peek) {
-                        drawGemOutline(x, yd);
-                        drawChar(x + 10, yd + 8, 'A' + cl->letter, DIM, 1);
-                        if (cl->letter == 'q' - 'a') drawChar(x + 15, yd + 8, 'U', DIM, 1);
+                        const GemPal *pp = GEM_PALS[palOf[cl->letter]];
+                        bool risk = r > 0 && g->cell[c][r - 1].state == CELL_BURN;   // a peel here scorches
+                        if (risk) {
+                            int ph = frame & 15, pu = ph < 8 ? ph : 15 - ph;
+                            rectOutline(x + 1, yd + 1, TILE_W - 2, TILE_H - 2, lerp15(C(12,3,0), FIRE1, pu * 2));
+                            rectOutline(x + 2, yd + 2, TILE_W - 4, TILE_H - 4, C(12,3,0));
+                            if (frame & 16) drawChar(x + 17, yd + 3, '!', FIRE2, 1);
+                        } else rectOutline(x + 1, yd + 1, TILE_W - 2, TILE_H - 2, lerp15(pp->mid, BLACK, 8));
+                        drawLetter(x, yd, cl->letter, lerp15(pp->light, BLACK, 6), BLACK);
                     } else if (!sq && !lit && !cl->flash && yd + 1 >= clipY0 && yd + 1 + COMP_ROWS <= clipY1) {
                         blitComposite(gemLetter[cl->letter], x, yd + 1);   // the common case: one 48-byte move per row
                     } else {
@@ -902,6 +911,18 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
             }
         }
         clipY0 = outerClip;
+    }
+    // the armed peel: a pulsing double rim and a PEEL label that the release will act on
+    if (g->armed) {
+        int x, y; cellOrigin(g->armC, g->armR, &x, &y);
+        u16 ac = lerp15(ACCENT, WHITE, (frame & 7) * 2);
+        rectOutline(x, y, TILE_W, TILE_H, ac);
+        rectOutline(x + 2, y + 2, TILE_W - 4, TILE_H - 4, ac);
+        int tw = textWidth("PEEL", 1), ly = y - 9;
+        if (ly < 3) ly = 3;
+        int lx = x + TILE_W / 2 - tw / 2;
+        fillRect(lx - 1, ly - 1, tw + 2, 9, BLACK);
+        drawText(lx, ly, "PEEL", WHITE, 1);
     }
     // chain links: gold rope that turns to the shelf accent once the word is valid
     bool chainValid = chainValidNow;
@@ -994,10 +1015,10 @@ static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
     bool valid = chainValidNow;
     if (strlen(w) > 12) { memmove(w + 1, w + strlen(w) - 11, 12); w[0] = '.'; }   // the last 11 letters fit the panel
     drawText(PANEL_X, 70, w, valid ? GOLD_LT : WHITE, 1);
-    if (g->chainLen >= 3 && !g->peekHeld) drawText(PANEL_X, 82, valid ? "VALID" : "...", valid ? ACCENT : DIM, 1);
+    if (g->chainLen >= 3 && !g->peekHeld) drawText(PANEL_X, 82, valid ? "VALID" : "...", valid ? ACCENT : DIM_TEXT, 1);
 
     // heat: small flame glyph grows with the bar
-    drawText(PANEL_X, 98, "HEAT", DIM, 1);
+    drawText(PANEL_X, 98, "HEAT", DIM_TEXT, 1);
     int hw = HEAT_W * g->heat / (g->heatThreshold ? g->heatThreshold : 1);
     if (hw > HEAT_W) hw = HEAT_W;
     rectOutline(PANEL_X, 108, 72, 6, DIM);
@@ -1012,14 +1033,16 @@ static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
     roundRect(PANEL_X, SUBMIT_Y, 76, 24, bc);
     if (valid) { hline(PANEL_X + 3, SUBMIT_Y + 2, 70, GOLD_LT); hline(PANEL_X + 2, SUBMIT_Y + 21, 72, GOLD_DK); }
     drawTextCenter(PANEL_X + 38, SUBMIT_Y + 8, "SUBMIT", valid ? BLACK : INK, 1);
-    rectOutline(PANEL_X, CLEAR_Y, 76, 20, DIM);
-    drawTextCenter(PANEL_X + 38, CLEAR_Y + 6, "CLEAR", INK, 1);
+    rectOutline(PANEL_X, CLEAR_Y, 76, 16, DIM);
+    drawTextCenter(PANEL_X + 38, CLEAR_Y + 4, "CLEAR", INK, 1);
 
-    if (g->peekHeld) {
-        fillRect(PANEL_X, 176, 76, 12, ACCENT);
-        drawTextCenter(PANEL_X + 38, 178, "PEEK", BLACK, 1);
+    if (g->peekHeld && boardLowestFireRow(g) >= 0) drawTextCenter(PANEL_X + 38, 166, "RED: SCORCH", FIRE1, 1);
+    if (g->peekHeld) {      // PEEK button: filled while a shoulder is held or the latch is on
+        fillRect(PANEL_X, 174, 76, 16, ACCENT);
+        drawTextCenter(PANEL_X + 38, 178, g->peekLatch ? "PEEK ON" : "PEEK", BLACK, 1);
     } else {
-        drawTextCenter(PANEL_X + 38, 178, "HOLD L:PEEK", DIM, 1);
+        rectOutline(PANEL_X, 174, 76, 16, ACCENT);
+        drawTextCenter(PANEL_X + 38, 178, "PEEK", INK, 1);
     }
 }
 
@@ -1045,16 +1068,16 @@ static void drawTopTitle(void)
         drawTextCenter(128, 108, "FIRE SETS HOW FAST THE SHELF BURNS", INK, 1);
         drawTextCenter(128, 118, "LIBRARY: COMMON REJECTS OBSCURE WORDS", INK, 1);
         drawTextCenter(128, 128, "SPELLING: COLOR OR COLOUR, OR BOTH", INK, 1);
-        drawTextCenter(128, 140, "TAP A ROW OR USE THE D-PAD", DIM, 1);
+        drawTextCenter(128, 140, "TAP A ROW OR USE THE D-PAD", DIM_TEXT, 1);
         char s[40];
-        if (S.bestClassic) { siprintf(s, "BEST CLASSIC %d  SHELF %d", S.bestClassic, S.bestClassicShelf); drawTextCenter(128, 156, s, DIM, 1); }
-        if (S.bestDaily)   { siprintf(s, "BEST DAILY %d ON %d", S.bestDaily, S.bestDailyDate); drawTextCenter(128, 166, s, DIM, 1); }
+        if (S.bestClassic) { siprintf(s, "BEST CLASSIC %d  SHELF %d", S.bestClassic, S.bestClassicShelf); drawTextCenter(128, 156, s, DIM_TEXT, 1); }
+        if (S.bestDaily)   { siprintf(s, "BEST DAILY %d ON %d", S.bestDaily, S.bestDailyDate); drawTextCenter(128, 166, s, DIM_TEXT, 1); }
         return;
     }
     if (G.state == ST_STATS) {
         drawTextCenter(128, 84, "YOUR CAREER ON THIS CARD", GOLD_LT, 1);
         drawTextCenter(128, 100, "WORDS PEEKS AND DAILY STREAKS", INK, 1);
-        drawTextCenter(128, 120, "B OR X OR A TAP CLOSES IT", DIM, 1);
+        drawTextCenter(128, 120, "B OR X OR A TAP CLOSES IT", DIM_TEXT, 1);
         return;
     }
     drawTipCard((frame / 150) % 3);
@@ -1106,7 +1129,7 @@ static void drawTop(const Game *g)
     int n = g->passLen, bw = PLAQUE_W, gap = 4;
     int x0 = ((SCREEN_W - (n * bw + (n - 1) * gap)) / 2) & ~1, y0 = 60;   // x even: word-aligned blits; the popped gem spans y 50..95, inside HUD slice 1
     strcpy(s, "PASS - "); strcpy(s + 7, boardPassTheme(g));
-    drawTextCenter(SCREEN_W / 2, 50, s, DIM, 1);
+    drawTextCenter(SCREEN_W / 2, 50, s, DIM_TEXT, 1);
     for (int i = 0; i < n; i++) {
         int x = x0 + i * (bw + gap);
         if (g->found[i]) {
@@ -1157,7 +1180,7 @@ static void drawTop(const Game *g)
         }
 
     // fire meter with a flame cap
-    drawText(222, 46, "FIRE", DIM, 1);
+    drawText(222, 46, "FIRE", DIM_TEXT, 1);
     rectOutline(226, 54, 8, ROWS * 10 + 2, DIM);   // rows 54..135: clear of the ledger line below
     int low = boardLowestFireRow(g);
     for (int r = 0; r <= low; r++) fillRect(227, 55 + r * 10, 6, 9, lerp15(FIRE2, FIRE1, r * 2));
@@ -1179,7 +1202,7 @@ static void drawTop(const Game *g)
             int tw = textWidth(lw, 1);
             if (x - tw < 8) break;
             x -= tw;
-            drawText(x, 137, lw, age == 0 ? WHITE : lerp15(INK, DIM, age * 4), 1);
+            drawText(x, 137, lw, age == 0 ? WHITE : lerp15(INK, DIM_TEXT, age * 4), 1);
             x -= 8;
         }
     }
@@ -1224,7 +1247,7 @@ static void drawTitle(const Game *g)
     rectOutline(BX(16), 72, 140, 56, GOLD);
     drawTextCenter(BX(86), 80, "CRACK THE PASS", ACCENT, 1);
     drawTextCenter(BX(86), 92, "DON'T BURN THE LIBRARY", INK, 1);
-    drawTextCenter(BX(86), 108, "DRAG SPELLS. L PEEKS", DIM, 1);
+    drawTextCenter(BX(86), 108, "DRAG SPELLS. L PEEKS", DIM_TEXT, 1);
     // mode buttons
     bool blink = frame & 32;
     roundRect(BX(20), TB_Y, 64, 22, blink ? GOLD : GOLD_DK);
@@ -1235,8 +1258,8 @@ static void drawTitle(const Game *g)
     rectOutline(BX(88), TB_Y, 64, 22, g->clockOk ? GOLD_DK : DIM2);
     char d1[16], d2[16];
     if (!g->clockOk) {
-        drawTextCenter(BX(120), TB_Y + 3, "DAILY", DIM, 1);
-        drawTextCenter(BX(120), TB_Y + 12, "SET CLOCK", DIM, 1);
+        drawTextCenter(BX(120), TB_Y + 3, "DAILY", DIM_TEXT, 1);
+        drawTextCenter(BX(120), TB_Y + 12, "SET CLOCK", DIM_TEXT, 1);
     } else if (played) {
         drawTextCenter(BX(120), TB_Y + 3, "PRACTICE", ACCENT, 1);
         siprintf(d2, "DONE %d", S.dailyLastScore);
@@ -1254,9 +1277,9 @@ static void drawTitle(const Game *g)
     char s[32];
     int streak = g->clockOk ? settingsLiveStreak(g->dailySeed) : 0;
     if (S.bestClassic) siprintf(s, "BEST %d", S.bestClassic); else strcpy(s, "LEDGER");
-    drawText(BX(20), 180, s, DIM, 1);
+    drawText(BX(20), 180, s, DIM_TEXT, 1);
     if (streak >= 2) { siprintf(s, "STREAK %d", streak); drawText(BX(152) - textWidth(s, 1), 180, s, GOLD_LT, 1); }
-    else if (S.bestDaily) { siprintf(s, "DAILY %d", S.bestDaily); drawText(BX(152) - textWidth(s, 1), 180, s, DIM, 1); }
+    else if (S.bestDaily) { siprintf(s, "DAILY %d", S.bestDaily); drawText(BX(152) - textWidth(s, 1), 180, s, DIM_TEXT, 1); }
 }
 
 static const char *const OPT_NAMES[OPT_ROWS] = { "THEME", "FRAME", "ACCENT", "HAND", "FIRE", "MUSIC", "LIBRARY", "SPELLING" };
@@ -1296,9 +1319,9 @@ static void drawOptions(const Game *g)
     for (int i = 0; i < 5; i++) { blitGem(BX(16) + i * 28, 136, i); drawLetter(BX(16) + i * 28, 136, "AIRTS"[i] - 'A', WHITE, GEM_PALS[i]->dark); }
     rectOutline(BX(54), 160, 64, 20, DIM);
     drawTextCenter(BX(86), 166, "BACK", INK, 1);
-    if (!settingsPersistent()) drawTextCenter(BX(86), 182, "NOT SAVED: NO CARD", DIM, 1);
+    if (!settingsPersistent()) drawTextCenter(BX(86), 182, "NOT SAVED: NO CARD", DIM_TEXT, 1);
     else if (settingsSaveFailed()) drawTextCenter(BX(86), 182, "SAVE FAILED", FIRE2, 1);
-    else drawTextCenter(BX(86), 182, "SAVED TO CARD", DIM, 1);
+    else drawTextCenter(BX(86), 182, "SAVED TO CARD", DIM_TEXT, 1);
 }
 
 // THE LEDGER: lifetime stats from the saved records, on the touch screen like the options
@@ -1342,12 +1365,12 @@ static void drawStats(const Game *g)
     if (S.longestLen) siprintf(s, "%d LETTERS", S.longestLen); else strcpy(s, "-");
     statRow(y, "LONGEST", s, WHITE);
     upperCopy(w, S.longestLen ? S.longestWord : "-");
-    drawTextCenter(BX(86), y + 9, w, S.longestLen ? GOLD_LT : DIM, 1);
+    drawTextCenter(BX(86), y + 9, w, S.longestLen ? GOLD_LT : DIM_TEXT, 1);
     y += 21;
     if (S.bestWordPts) siprintf(s, "+%d", S.bestWordPts); else strcpy(s, "-");
     statRow(y, "BEST WORD", s, GOLD);
     upperCopy(w, S.bestWordPts ? S.bestWordTxt : "-");
-    drawTextCenter(BX(86), y + 9, w, S.bestWordPts ? GOLD_LT : DIM, 1);
+    drawTextCenter(BX(86), y + 9, w, S.bestWordPts ? GOLD_LT : DIM_TEXT, 1);
     rectOutline(BX(54), 162, 64, 20, DIM);
     drawTextCenter(BX(86), 168, "BACK", INK, 1);
 }
@@ -1376,20 +1399,20 @@ static void drawTipCard(int which)
         }
         drawTextCenter(cx, y + 56, "DRAG ACROSS TOUCHING GEMS", INK, 1);
         drawTextCenter(cx, y + 66, "THREE LETTERS OR MORE, THEN SUBMIT", INK, 1);
-        drawTextCenter(cx, y + 80, "LONG WORDS SCORE BIG AND KEEP HEAT DOWN", DIM, 1);
+        drawTextCenter(cx, y + 80, "LONG WORDS SCORE BIG AND KEEP HEAT DOWN", DIM_TEXT, 1);
     } else if (which == 1) {
         drawTextCenter(cx, y, "PEEK", ACCENT, 1);
         int gx = cx - 40;
         for (int i = 0; i < 3; i++) {
             int x = gx + i * 28, gy = y + 14 + ((i & 1) ? 10 : 0);
-            if (i == 0) { rectOutline(x + 1, gy + 1, TILE_W - 2, TILE_H - 2, ACCENT); drawChar(x + 10, gy + 8, '2', ACCENT, 1); }
+            if (i == 0) { rectOutline(x + 1, gy + 1, TILE_W - 2, TILE_H - 2, ACCENT); drawChar2Shadow(x + 7, gy + 4, '2', ACCENT, BLACK); }
             else if (i == 1) { drawGemSized(x, gy, TILE_W, TILE_H, &GEM_DIAMOND, false); drawChar(x + 7, gy + 4, 'B', C(4,6,10), 2); }
-            else { rectOutline(x + 1, gy + 1, TILE_W - 2, TILE_H - 2, DIM); drawChar(x + 10, gy + 8, 'X', DIM, 1); }
+            else { rectOutline(x + 1, gy + 1, TILE_W - 2, TILE_H - 2, DIM); drawChar(x + 10, gy + 8, 'X', DIM_TEXT, 1); }
         }
-        drawTextCenter(cx, y + 56, "HOLD L AND TAP A GEM YOU CAN SPARE", INK, 1);
+        drawTextCenter(cx, y + 56, "HOLD L OR X, TAP A GEM, LET GO TO PEEL", INK, 1);
         drawTextCenter(cx, y + 66, "A NUMBER COUNTS HIDDEN PASS LETTERS", INK, 1);
         drawTextCenter(cx, y + 76, "IN THE SIX CELLS AROUND IT", INK, 1);
-        drawTextCenter(cx, y + 94, "EVERY PEEL IS A TURN", DIM, 1);
+        drawTextCenter(cx, y + 94, "EVERY PEEL IS A TURN", DIM_TEXT, 1);
     } else {
         drawTextCenter(cx, y, "FIRE", FIRE2, 1);
         int gx = cx - 40;
@@ -1403,7 +1426,7 @@ static void drawTipCard(int which)
         drawTextCenter(cx, y + 62, "SHORT WORDS BUILD HEAT AND LIGHT A GEM", INK, 1);
         drawTextCenter(cx, y + 72, "FIRE WAITS A TURN, THEN CREEPS DOWN.", INK, 1);
         drawTextCenter(cx, y + 82, "HOLES ARE CHIMNEYS. DIAMONDS BLOCK IT", INK, 1);
-        drawTextCenter(cx, y + 96, "SPELL THROUGH A FLAME TO PUT IT OUT", DIM, 1);
+        drawTextCenter(cx, y + 96, "SPELL THROUGH A FLAME TO PUT IT OUT", DIM_TEXT, 1);
     }
     for (int i = 0; i < 3; i++) {
         if (i == which) fillRect(118 + i * 8, 170, 4, 4, GOLD_LT); else rectOutline(118 + i * 8, 170, 4, 4, DIM);
@@ -1449,26 +1472,26 @@ static void drawOverlay(const Game *g)
         hline(BX(lx), cy + 41, cw - 20, DIM);
         strcpy(lw, g->bestWord[0] ? g->bestWord : "-");
         for (char *p = lw; *p; p++) if (*p >= 'a') *p -= 32;
-        drawText(BX(lx), cy + 46, "BEST WORD", DIM, 1);
+        drawText(BX(lx), cy + 46, "BEST WORD", DIM_TEXT, 1);
         if (strlen(lw) > 14) { lw[13] = '.'; lw[14] = 0; }    // a long best word keeps the label readable
         drawText(BX(rx - textWidth(lw, 1)), cy + 46, lw, WHITE, 1);
         if (g->bestWordScore) { siprintf(s, "+%d", g->bestWordScore); drawText(BX(rx - textWidth(s, 1)), cy + 55, s, GOLD, 1); }
-        else drawText(BX(rx - textWidth("-", 1)), cy + 55, "-", DIM, 1);
-        drawText(BX(lx), cy + 64, "WORDS", DIM, 1);
+        else drawText(BX(rx - textWidth("-", 1)), cy + 55, "-", DIM_TEXT, 1);
+        drawText(BX(lx), cy + 64, "WORDS", DIM_TEXT, 1);
         if (g->uniqueWords < g->wordsThisShelf) siprintf(s, "%d (%d UNIQUE)", g->wordsThisShelf, g->uniqueWords);
         else siprintf(s, "%d", g->wordsThisShelf);
         drawText(BX(rx - textWidth(s, 1)), cy + 64, s, WHITE, 1);
-        drawText(BX(lx), cy + 73, "PEELS", DIM, 1); siprintf(s, "%d", g->peels);
+        drawText(BX(lx), cy + 73, "PEELS", DIM_TEXT, 1); siprintf(s, "%d", g->peels);
         u16 pc = g->peels == g->passLen ? GOLD_LT : g->peels <= g->passLen + 2 ? ACCENT : WHITE;
         drawText(BX(rx - textWidth(s, 1)), cy + 73, s, pc, 1);
-        drawText(BX(lx), cy + 82, "TURNS", DIM, 1); siprintf(s, "%d", g->turn);
+        drawText(BX(lx), cy + 82, "TURNS", DIM_TEXT, 1); siprintf(s, "%d", g->turn);
         drawText(BX(rx - textWidth(s, 1)), cy + 82, s, WHITE, 1);
         hline(BX(lx), cy + 90, cw - 20, DIM);
-        drawText(BX(lx), cy + 92, "SHELF BONUS", DIM, 1); siprintf(s, "+%d", 1000 * g->shelf);
+        drawText(BX(lx), cy + 92, "SHELF BONUS", DIM_TEXT, 1); siprintf(s, "+%d", 1000 * g->shelf);
         drawText(BX(rx - textWidth(s, 1)), cy + 92, s, GOLD_LT, 1);
-        drawText(BX(lx), cy + 101, "SPEED", DIM, 1);
+        drawText(BX(lx), cy + 101, "SPEED", DIM_TEXT, 1);
         if (g->speedBonus) { siprintf(s, "+%d", g->speedBonus); drawText(BX(rx - textWidth(s, 1)), cy + 101, s, GOLD_LT, 1); }
-        else drawText(BX(rx - textWidth("-", 1)), cy + 101, "-", DIM, 1);
+        else drawText(BX(rx - textWidth("-", 1)), cy + 101, "-", DIM_TEXT, 1);
         if (g->passBonusKind == 2) {
             drawText(BX(lx), cy + 110, "PERFECT PASS", GOLD_LT, 1); siprintf(s, "+%d", g->peelBonus);
             drawText(BX(rx - textWidth(s, 1)), cy + 110, s, GOLD_LT, 1);
@@ -1476,8 +1499,8 @@ static void drawOverlay(const Game *g)
             drawText(BX(lx), cy + 110, "CLEAN PASS", ACCENT, 1); siprintf(s, "+%d", g->peelBonus);
             drawText(BX(rx - textWidth(s, 1)), cy + 110, s, ACCENT, 1);
         } else {
-            drawText(BX(lx), cy + 110, "PEELS", DIM, 1);
-            drawText(BX(rx - textWidth("-", 1)), cy + 110, "-", DIM, 1);
+            drawText(BX(lx), cy + 110, "PEELS", DIM_TEXT, 1);
+            drawText(BX(rx - textWidth("-", 1)), cy + 110, "-", DIM_TEXT, 1);
         }
         if (g->mode == MODE_DAILY) {
             if (g->practice) siprintf(s, "FINAL %d  NOT SCORED", g->score);
@@ -1506,7 +1529,7 @@ static void drawOverlay(const Game *g)
         rectOutline(BX(26), 66, 120, 64, ACCENT);
         drawTextCenter(BX(86), 74, "PAUSED", ACCENT, 1);
         drawText(BX(36), 90, "START", GOLD_LT, 1);  drawText(BX(80), 90, "RESUME", INK, 1);
-        drawText(BX(36), 102, "SELECT", g->mode == MODE_DAILY ? DIM : GOLD_LT, 1); drawText(BX(80), 102, "RESTART", g->mode == MODE_DAILY ? DIM : INK, 1);
+        drawText(BX(36), 102, "SELECT", g->mode == MODE_DAILY ? DIM_TEXT : GOLD_LT, 1); drawText(BX(80), 102, "RESTART", g->mode == MODE_DAILY ? DIM_TEXT : INK, 1);
         drawText(BX(36), 114, "B", GOLD_LT, 1);      drawText(BX(80), 114, "TITLE", INK, 1);
     }
 }
