@@ -117,17 +117,22 @@ can be mixed by game state.
 
 ## Performance
 
-Both screens are software rendered. The touch screen is drawn straight into
-VRAM: banks A and B each hold a full 16-bit bitmap and the main background
-flips between them at vblank, so there is no per-frame copy of the board at
-all. The top screen HUD still renders to RAM and is DMA'd across, spread over
-four frames (drawn on one, copied on another). The board stays at 60 fps in
-both hand layouts by keeping the hot blitters (fills, gem blits, glyphs,
-particles, backdrop, board, panel) in ITCM and the gem sprite cache, particles
-and popups in DTCM, skipping the backdrop under gems that are fully redrawn,
-clipping-free 2x glyph blits, and word-aligned 32-bit fills (the left-hand
-layout starts the grid on an even x for the same reason). Build with
-`-DWP_PROFILE` to expose per-stage timings in `dbgT[]`.
+Both screens are software rendered straight into VRAM, with no RAM back
+buffer and no per-frame copy. The touch screen uses banks A and B as a full
+16-bit bitmap pair and the main background flips between them at vblank. The
+top screen HUD has no back buffer, so it is drawn into bank C inside vblank,
+one 48-row slice per frame: every primitive honours a vertical clip band, so
+each region refreshes at 15 Hz without ever tearing or flickering, and a
+state change draws all four slices at once. Every state runs at 60 fps: the
+title and options screens skip the board entirely, and pause, results and
+fail screens render the dimmed board once it is at rest into a snapshot that
+is restored by DMA each frame. The hot blitters (fills, gem blits, glyphs,
+outlines, particles, backdrop, board, panel) live in ITCM and the gem sprite
+cache, particles and popups in DTCM; the backdrop is skipped under gems that
+are fully redrawn, glyphs and gems are written directly after a single
+bounds test, and fills, dims and blits use word-aligned 32-bit stores (the
+left-hand layout starts the grid on an even x for the same reason). Build
+with `-DWP_PROFILE` to expose per-stage timings in `dbgT[]`.
 
 ## Building
 

@@ -84,6 +84,7 @@ static void quitToTitle(void)
 static void enterFail(void)
 {
     G.state = ST_FAIL;
+    boardClearChain(&G);
     recordScore();
     gfxShake(14);
     gfxFlash();
@@ -98,7 +99,7 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
     bool peekNow = (held & (KEY_L | KEY_R)) != 0;
     if (peekNow != G.peekHeld) { G.peekHeld = peekNow; musicPeek(peekNow); }
 
-    if (down & KEY_START) { G.prevState = G.state; G.state = ST_PAUSE; return; }
+    if (down & KEY_START) { G.prevState = G.state; G.state = ST_PAUSE; boardClearChain(&G); return; }   // the renderer snapshots the board at rest
     if (down & KEY_B) boardClearChain(&G);
 
     int c, r;
@@ -120,6 +121,7 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
             if (G.fail) { enterFail(); return; }
             if (boardPassComplete(&G)) {
                 G.state = ST_PASSED; G.stateTimer = 0;
+                boardClearChain(&G);
                 G.peekHeld = 0; musicPeek(false);
                 G.score += 500 * G.shelf;
                 musicPassComplete();
