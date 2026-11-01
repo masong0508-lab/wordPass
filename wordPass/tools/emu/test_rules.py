@@ -2102,7 +2102,9 @@ def _():
 def _():
     set_hand(False); to_title(); e.set_language(0)
     e.tap(40, 15, settle=10); assert e.state()['state'] == ST_LANGPICK, 'tapping the tag opens the language chooser'
-    e.shot(f'{out}/rules_lang_picker.png')
+    e.shot(f'{out}/rules_lang_picker.png'); px = e.pixels()
+    edge = [(x, y) for y in range(192 + 20, 192 + 168) for x in list(range(5, 11)) + list(range(161, 169)) if sum(px[x, y]) > 250 and sum(px[x, y]) < 700 and False] or [(x, y) for y in range(192 + 24, 192 + 165) for x in list(range(5, 11)) + list(range(161, 169)) if sum(px[x, y]) > 250]
+    assert not edge, f'the chooser reaches the frame: {edge[:3]}'
     e.tap(60, 22 + 13 * 1 + 6, settle=10); n = 0     # the second row: Espanol
     while e.state()['language'] != 1 and n < 400: e.run(5); n += 5
     assert e.state()['language'] == 1 and e.state()['state'] == ST_TITLE, 'tapping a row of the chooser should load it'
@@ -2125,10 +2127,15 @@ def _():
 def _():
     for left in (False, True):
         set_hand(left)
-        for i in (2, 7, 8, 1):                         # RELIURE, BOKBAND, KSIAZKI: seven-letter theme names; ESPANOL
+        for i in range(1, 11):                         # every language (RELIURE, BOKBAND, KSIAZKI are seven-letter theme names)
             lang_shelf(i); e.set_heat(0); e.set_burn(0, 99)
+            g = e.state(); tag = 'left' if left else 'right'
+            assert g['msg'].endswith('LETTER PASS') and len(g['msg']) <= 31, f'{LANG_CODES[i]}: shelf intro {g["msg"]!r}'
+            px = e.pixels()          # the shelf intro line on the top screen: nothing lit in the frame columns or past the plaque
+            edge = [(x, y) for y in range(0, 192) for x in list(range(0, 8)) + list(range(249, 256)) if sum(px[x, y]) > 250]
+            assert not edge, f'{LANG_CODES[i]} {tag}: intro line reaches the top frame: {edge[:3]}'
+            e.shot(f'{out}/rules_lang_intro_{LANG_CODES[i]}_{tag}.png')
             e.set_pass(9, 0b101010101); e.set_score(999999); e.set_turn(150); e.run(20)
-            tag = 'left' if left else 'right'
             e.shot(f'{out}/rules_lang_worst_{LANG_CODES[i]}_{tag}.png'); px = e.pixels()
             bad = lit_outside_panel(px); assert not bad, f'{LANG_CODES[i]} {tag}: panel text reaches the margin: {bad[:3]}'
             top = [(x, y) for y in range(0, 192) for x in list(range(0, 8)) + list(range(249, 256)) if sum(px[x, y]) > 250]
