@@ -415,6 +415,16 @@ obscure. `make pools` rebuilds it, and `tools/words/SOURCES.md` lists the
 sources and licences (WordNet, FrequencyWords, ENABLE and the profanity
 lists behind the blocklist).
 
+### Languages (data)
+
+`data/lang/<code>/` holds a dictionary (`dict.bin`, 147k to 220k words), a themed pass-word library
+(`pools.bin`, the same 40 themes translated) and a tile table (`letters.bin`, weights, values, the Qu flag)
+for Spanish, French, German, Italian, Portuguese, Dutch, Swedish, Polish, Danish and Finnish, 15 MB in
+all, built from open Hunspell dictionaries, wordnets and subtitle frequencies by `tools/lang`. Words are
+normalised to A-Z (diacritics stripped, sharp s to ss). The game does not load them yet: they are meant for
+the ROM filesystem. `docs/LANGUAGES-DATA.md` has the pipeline, the limits (Finnish has the weakest list,
+Swedish and Danish the thinnest pools) and the exact file formats; `make check` verifies them.
+
 ### Dictionary
 
 `data/dict.bin` holds 183,000 words of 3 to 20 letters: the public-domain ENABLE
@@ -464,6 +474,7 @@ source/guide.c   the eight HOW TO PLAY pages, built from the rules' own tables
 source/settings.c options, records, stats, checksummed FAT save, Daily clock and streak
 source/debug.c   fixed-layout state mirror and poke channel for the test harness
 tools/gen_dict.py  WPD2 dictionary builder and --verify round trip
+tools/lang/      ten-language data pipeline (Hunspell expander, word, letter and pool builders, fetch.sh)
 tools/check/     native rule tests: make check (gcc, no toolchain)
 tools/emu/       headless DeSmuME harness, smoke.py and test_rules.py (see TESTING.md)
 tools/common_words.txt
@@ -474,3 +485,10 @@ data/dict.bin
 
 MIT. Word list: ENABLE, public domain. Common-word tier derived from
 hermitdave/FrequencyWords (CC-BY-SA 4.0) and first20hours/google-10000-english.
+
+Language data credits (details and licences in `tools/words/SOURCES.md`): Hunspell dictionaries from
+wooorm/dictionaries (Spanish, French, German, Italian, Portuguese, Dutch, Swedish, Polish, Danish);
+OpenSubtitles frequencies by hermitdave/FrequencyWords (CC BY-SA 4.0); the Open Multilingual Wordnet
+(MCR, WOLF, MultiWordNet, OpenWN-PT, Open Dutch WordNet, SALDO, plWordNet, DanNet, the Norwegian
+wordnet, FinnWordNet) and Princeton WordNet 3.0; Open German WordNet (OdeNet, CC BY-SA 4.0) with the
+Collaborative Interlingual Index; LDNOOBW bad-word lists (CC BY 4.0).
