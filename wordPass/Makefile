@@ -4,7 +4,7 @@
 .SUFFIXES:
 
 # `make check` (native rule tests) and `make dict` run without devkitARM
-NATIVE_GOALS := check dict pools variants
+NATIVE_GOALS := check dict pools variants guide guide-check
 ifneq ($(MAKECMDGOALS),)
 ifeq ($(filter-out $(NATIVE_GOALS),$(MAKECMDGOALS)),)
 NATIVE := 1
@@ -72,7 +72,7 @@ ifneq (,$(findstring icon.bmp,$(icons)))
   export GAME_ICON := $(CURDIR)/icon.bmp
 endif
 
-.PHONY: $(BUILD) clean dict pools variants check
+.PHONY: $(BUILD) clean dict pools variants check guide guide-check
 
 $(BUILD):
 	@mkdir -p $@
@@ -105,6 +105,18 @@ check:
 	$(BUILD)/settings_check
 	gcc -std=gnu11 -Wall -Wextra -Wshadow -I tools/check/stub -I source $(CHECK_SRC) -o $(BUILD)/check
 	$(BUILD)/check
+
+# The written guide (docs/GUIDE.md). `make guide` retakes every picture in docs/img by driving the ROM in the headless
+# emulator (tools/emu/screens.py: needs py-desmume, Pillow and the toolchain image for the symbol lookup, not devkitARM
+# itself), then checks the guide against the source and the data files. `make guide-check` runs only the check (gcc only).
+#   make guide [ROM=wordPass.nds]
+ROM ?= wordPass.nds
+guide:
+	python3 tools/emu/screens.py $(ROM)
+	python3 tools/check_guide.py
+
+guide-check:
+	python3 tools/check_guide.py
 
 clean:
 	@echo clean ...

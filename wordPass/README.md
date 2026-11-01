@@ -7,6 +7,19 @@ and uncover the pass. Spell weak words and the shelf catches fire.
 
 ![build](https://github.com/masong0508-lab/wordPass/actions/workflows/build.yml/badge.svg)
 
+## The guide
+
+**[docs/GUIDE.md](docs/GUIDE.md) is the complete manual**: a five-minute quick start, every control, the hex board,
+exact scoring with worked examples, how to read the peek numbers (with puzzles), the fire rules, all 40 pass themes,
+Lockdown and the twists, the Daily Pass and the Ledger, strategy, and the file formats. Every number in it is checked
+against the source and the data files by `tools/check_guide.py`, and every picture is taken from the running game by
+`tools/emu/screens.py` (`make guide` redoes both).
+
+<p>
+<a href="docs/GUIDE.md"><img src="docs/img/chain_valid.png" alt="A valid chain on the play screen: STONE, with its value and heat on the panel" width="360"></a>
+<a href="docs/GUIDE.md#6-peeking-the-heart-of-the-game"><img src="docs/img/peek_puzzles.png" alt="Three peek puzzles, as you see them and solved" width="360"></a>
+</p>
+
 ## How it plays
 
 - **Spell.** Drag the stylus across touching gems to chain a word (3+ letters),
@@ -160,12 +173,14 @@ consonants gets a vowel at the bottom. Daily boards use a separate random
 stream from the sparks and shakes, so two players on the same date see the
 same board, the same refills and the same fire.
 
-Shelves 1-3 are **Classic**: fire moves every other turn, the pass sits high
-and the heat meter holds 10. Shelves 3-5 tighten it to 7. From shelf 6 on it
+Shelves 1-2 are the gentlest **Classic** ones: the heat meter holds 10, fire
+moves every other turn and the pass can sit anywhere but the top row. Shelf 3
+keeps the slow fire but cuts the meter to 7 (it stays 7 through shelf 5, where
+the fire moves every turn). From shelf 6 on it
 is **Lockdown**: fire every turn, a heat pulse every six turns, the pass
 buried low, and the music drops into a minor key. Lockdown climbs in tiers
 every three shelves (the panel reads LOCKDOWN, LOCKDOWN II, III, IV): the
-pulse comes faster, the meter shrinks, and from tier two (shelf 12) every
+pulse comes faster, the meter shrinks, and from LOCKDOWN III (shelf 12) every
 ignition lights two columns at once.
 
 From shelf 4, every third shelf (4, 7, 10 ...) has a **twist**, announced as
@@ -351,7 +366,7 @@ can be mixed by game state.
 - **Alarm**: a clashing tone that climbs as the fire descends.
 - **Peek** ducks everything but the pulse; each reveal plays the next note of
   the hook, so peeling a path plays the tune.
-- Word chimes are quantized to the beat. Finishing a pass hands the hook to a
+- Word chimes climb in pitch with the score. Finishing a pass hands the hook to a
   bright octave-up voice for one loop. Failing cuts to the alarm sliding down.
 
 ## Performance
@@ -463,9 +478,12 @@ source/font.c    5x7 bitmap font
 source/guide.c   the eight HOW TO PLAY pages, built from the rules' own tables
 source/settings.c options, records, stats, checksummed FAT save, Daily clock and streak
 source/debug.c   fixed-layout state mirror and poke channel for the test harness
-tools/gen_dict.py  WPD2 dictionary builder and --verify round trip
+tools/gen_dict.py  WPD3 dictionary builder and --verify round trip
 tools/check/     native rule tests: make check (gcc, no toolchain)
 tools/emu/       headless DeSmuME harness, smoke.py and test_rules.py (see TESTING.md)
+tools/emu/screens.py   regenerates every picture of the written guide (make guide)
+tools/check_guide.py   checks docs/GUIDE.md against the source and the data files
+docs/GUIDE.md    the complete written guide; docs/img/ its pictures
 tools/common_words.txt
 data/dict.bin
 ```
