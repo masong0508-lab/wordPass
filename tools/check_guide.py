@@ -177,7 +177,7 @@ def build_facts(queries=()):
     with open(cfile, 'w') as f: f.write(FACTS_C)
     cmd = ['gcc', '-std=gnu11', '-w', '-I', os.path.join(REPO, 'tools/check/stub'), '-I', SRC, cfile,
            os.path.join(REPO, 'tools/check/stubs.c'), os.path.join(SRC, 'board.c'), os.path.join(SRC, 'dict.c'),
-           os.path.join(SRC, 'pools.c'), os.path.join(SRC, 'music.c'), '-o', exe]
+           os.path.join(SRC, 'pools.c'), os.path.join(SRC, 'lang.c'), os.path.join(SRC, 'langload.c'), os.path.join(SRC, 'music.c'), '-o', exe]
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode: raise SystemExit('cannot build the facts program:\n' + r.stderr)
     qfile = os.path.join(out, 'queries.txt')

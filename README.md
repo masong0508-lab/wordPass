@@ -7,6 +7,13 @@ and uncover the pass. Spell weak words and the shelf catches fire.
 
 ![build](https://github.com/masong0508-lab/wordPass/actions/workflows/build.yml/badge.svg)
 
+
+## Get the ROM
+
+- **From GitHub (no tools needed):** open the repository's **Actions** tab, pick the latest **build** run (or press **Run workflow** to make a fresh one) and download the `wordPass.nds` artifact. Tagged versions (`v*`) also attach the ROM to a release.
+- **On your own machine:** install Docker and run `./build.sh`. The ROM appears as `wordPass.nds`. The Docker image is pinned so the ROM boots in DeSmuME, melonDS and on hardware.
+- Play it in melonDS or DeSmuME, or copy it to a flashcart. The ten extra languages live in the ROM's own filesystem, so use a flashcart that runs the ROM normally.
+
 ## The guide
 
 **[docs/GUIDE.md](docs/GUIDE.md) is the complete manual**: a five-minute quick start, every control, the hex board,

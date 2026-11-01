@@ -5,7 +5,7 @@ on:
     branches: [ main ]
     tags: [ 'v*' ]
   pull_request:
-  workflow_dispatch:
+  workflow_dispatch:      # Actions tab > build > Run workflow, then download the wordPass.nds artifact
 
 permissions:
   contents: write
@@ -20,6 +20,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build ROM
         run: make
+      - name: Check the ROM exists
+        run: ls -l wordPass.nds
       - name: Upload ROM
         uses: actions/upload-artifact@v4
         with:

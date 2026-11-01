@@ -1,0 +1,10 @@
+build/
+*.elf
+*.map
+# The ROM is built by CI (Actions tab: download the wordPass.nds artifact) or by ./build.sh.
+wordPass.nds
+
+__pycache__/
+nitrofiles/
+
+.claude/
