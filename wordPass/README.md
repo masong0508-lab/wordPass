@@ -1,0 +1,122 @@
+# wordPass
+
+**Bookworm × Minesweeper for the Nintendo DS.**
+Chain letters into words on a hex grid of gems. Behind the board hides a
+password. Hold a shoulder button to *peek*: peel away letters you can spare
+and uncover the pass. Spell weak words and the shelf catches fire.
+
+![build](https://github.com/OWNER/wordPass/actions/workflows/build.yml/badge.svg)
+
+## How it plays
+
+- **Spell.** Drag the stylus across touching gems to chain a word (3+ letters),
+  then tap **SUBMIT** or press **A**. Scored tiles shatter and the column drops.
+- **Peek.** Hold **L** or **R** and tap a gem to peel it off the board.
+  Behind it is either a **pass letter** (a diamond you can still chain through)
+  or a **number**: how many of the six neighbouring cells hide a pass letter.
+  Peeled cells never refill, so every peel costs you a letter.
+- **Fire.** Short words build **heat**. When the meter fills, a gem ignites at
+  the top and burns one row down per turn (every other turn on early shelves).
+  Put it out by spelling a word through it. Empty cells and holes are
+  chimneys: fire falls straight through them. Diamonds are firebreaks.
+- **Scorching.** Peel a burning gem, or the gem directly under one, and the
+  flame hits the back layer. If a pass letter was hiding there, it is gone.
+
+### Fail states
+
+| Screen | Cause |
+| --- | --- |
+| LIBRARY LOST | a flame was still on the bottom row when the fire advanced |
+| PASS DESTROYED | you scorched a cell that held a pass letter |
+| OUT OF WORDS | no 3- or 4-letter word is left on the board |
+
+### Shelves
+
+Each shelf has its own pass (BOOK, PAGE, LAMP, SPELL, SHELF, QUILL ...).
+Shelves 1–3 are **Classic**: fire moves every other turn, the pass sits high.
+From shelf 6 on it is **Lockdown**: fire every turn, extra heat over time,
+the pass buried low, and the music drops into a minor key.
+
+## Controls
+
+| Input | Action |
+| --- | --- |
+| Stylus drag | chain letters |
+| A / SUBMIT button | submit word |
+| B / CLEAR button | clear chain |
+| Hold L or R | peek mode (tap a gem to peel it) |
+| START | pause |
+
+## Interface
+
+Bejeweled on the front, N+ behind. Letter gems are faceted and glossy, colour
+coded by letter group (vowels ruby, common consonants sapphire, rare letters
+amber). The frame and pass plaque are gold. Everything else, including the
+whole back layer you see in peek mode, is flat black with thin lines and a
+single accent colour. Holding peek dims the gems to outlines so the layer
+you are reading is always the one in colour.
+
+## Music
+
+No samples: the soundtrack is sequenced live on the DS PSG channels so stems
+can be mixed by game state.
+
+- A fixed four-bar **hook** that never stops. Each shelf transposes it to a
+  new key; Lockdown shelves play it in minor.
+- **Pulse** arpeggio always on. **Bass** enters while you keep spelling and
+  fades after three quiet bars. **Drums** layer up by word length and decay
+  back. **Pad** swells one chord tone per pass letter found.
+- **Alarm**: a clashing tone that climbs as the fire descends.
+- **Peek** ducks everything but the pulse; each reveal plays the next note of
+  the hook, so peeling a path plays the tune.
+- Word chimes are quantized to the beat. Finishing a pass hands the hook to a
+  bright octave-up voice for one loop. Failing cuts to the alarm sliding down.
+
+## Building
+
+Requires [devkitPro](https://devkitpro.org/wiki/Getting_Started) with the
+`nds-dev` group installed.
+
+```bash
+make
+```
+
+Produces `wordPass.nds`. Run it in melonDS or DeSmuME, or on hardware with a
+flashcart.
+
+Without a local toolchain, the devkitPro Docker image works:
+
+```bash
+docker run --rm -v "$PWD":/work -w /work devkitpro/devkitarm:20240511 make
+```
+
+The release ROM and CI use the `20240511` image (libnds 1.8). Current
+devkitPro (libnds 2 with calico) builds the same source without changes, but
+ROMs built with it do not boot in DeSmuME; use melonDS or real hardware.
+
+### Dictionary
+
+`data/dict.bin` is generated from the public-domain ENABLE list
+(words of 3–10 letters, 125k entries, 5 bits per letter, binary searched on
+device). Rebuild it from any word list with one word per line:
+
+```bash
+make dict WORDS=path/to/wordlist.txt
+```
+
+## Layout
+
+```
+source/main.c    state machine, input
+source/board.c   hex grid, chaining, scoring, gravity, fire, peeling
+source/dict.c    packed dictionary lookup
+source/gfx.c     software renderer for both screens
+source/music.c   PSG sequencer and adaptive stems
+source/font.c    5x7 bitmap font
+tools/gen_dict.py
+data/dict.bin
+```
+
+## License
+
+MIT. Word list: ENABLE, public domain.

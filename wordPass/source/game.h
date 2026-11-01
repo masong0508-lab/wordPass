@@ -1,0 +1,129 @@
+// wordPass - shared game definitions
+#ifndef WORDPASS_GAME_H
+#define WORDPASS_GAME_H
+
+#include <nds.h>
+#include <stdbool.h>
+
+#define COLS 7
+#define ROWS 8
+#define MAX_CHAIN 10
+
+#define TILE_W 24
+#define TILE_H 22
+#define GRID_X 4
+#define GRID_Y 2
+#define ODD_SHIFT 11          // odd columns are pushed down half a tile
+
+#define SCREEN_W 256
+#define SCREEN_H 192
+
+// Cell states on the front layer
+enum {
+    CELL_EMPTY = 0,   // nothing here (lower segments below a hole never refill)
+    CELL_TILE,        // normal letter gem
+    CELL_BURN,        // burning gem, creeps downward
+    CELL_HOLE,        // peeled: shows the back layer number forever
+    CELL_SECRET       // revealed pass letter: diamond, chainable, firebreak
+};
+
+typedef struct {
+    u8 letter;        // 0..25 ('q' - 'a' stands for Qu)
+    u8 state;
+    s16 yoff;         // falling animation offset in pixels (negative = above)
+    u8 flash;         // frames of white flash left (word removal)
+} Cell;
+
+enum {
+    ST_TITLE = 0,
+    ST_PLAY,
+    ST_PASSED,        // pass accepted, shelf cleared
+    ST_FAIL,
+    ST_PAUSE
+};
+
+enum {
+    FAIL_NONE = 0,
+    FAIL_FIRE,        // Library Lost
+    FAIL_SCORCH,      // Pass Destroyed
+    FAIL_WORDS        // Out of Words
+};
+
+typedef struct {
+    Cell cell[COLS][ROWS];
+    u8   back[COLS][ROWS];    // 0 = empty, else pass letter index + 1
+    u8   scorched[COLS][ROWS];
+
+    char pass[12];            // the shelf's password
+    u8   passLen;
+    u8   found[12];           // per pass letter: revealed?
+
+    u8   chainC[MAX_CHAIN], chainR[MAX_CHAIN];
+    u8   chainLen;
+
+    int  shelf;               // 1-based level
+    int  score, shelfStartScore;
+    int  turn;
+    int  heat, heatThreshold;
+    int  burnEvery;           // fire advances every N turns
+    int  burnTimer;
+    int  fail;
+    int  state, prevState;
+    int  stateTimer;
+    int  peekHeld;
+    int  wordsThisShelf;
+    int  lastWordLen, lastWordScore;
+    char lastWord[16];
+    char msg[32];
+    int  msgTimer;
+    bool lockdown;
+} Game;
+
+extern Game G;
+
+// board.c
+void boardNewShelf(Game *g);
+bool boardTryAddToChain(Game *g, int c, int r);
+void boardClearChain(Game *g);
+int  boardSubmit(Game *g);           // returns score gained, 0 if invalid
+int  boardPeel(Game *g, int c, int r); // returns 0 none, 1 hole, 2 secret, 3 scorched, -1 fail
+void boardAnimate(Game *g);
+bool boardIsChainable(const Game *g, int c, int r);
+int  boardNeighbors(int c, int r, int outC[6], int outR[6]);
+int  boardBackNumber(const Game *g, int c, int r);
+bool boardHasWords(const Game *g);
+int  boardLowestFireRow(const Game *g);
+bool boardFireAbove(const Game *g, int c, int r);
+void boardChainWord(const Game *g, char *out);
+bool boardPassComplete(const Game *g);
+int  letterValue(int letter);
+
+// dict.c
+void dictInit(void);
+bool dictLookup(const char *word, int len);
+
+// gfx.c
+void gfxInit(void);
+void gfxFrame(const Game *g);        // draws both screens and flips
+int  gfxCellAt(int px, int py, int *c, int *r);
+bool gfxInSubmit(int px, int py);
+bool gfxInClear(int px, int py);
+
+// music.c
+void musicInit(void);
+void musicTick(const Game *g);       // once per vblank
+void musicNewShelf(int shelf, bool lockdown);
+void musicWord(int len, int score);
+void musicCascade(int tiles);
+void musicPeek(bool on);
+void musicReveal(bool secret);
+void musicPassComplete(void);
+void musicFail(void);
+void musicStopAll(void);
+
+// font.c
+extern const u8 font5x7[][7];
+int fontIndex(char ch);
+int fontLogoIndex(char ch);   // lowercase w o r d for the wordmark
+
+#endif

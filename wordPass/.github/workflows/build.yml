@@ -1,0 +1,29 @@
+name: build
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  nds:
+    runs-on: ubuntu-latest
+    # Pinned: ROMs from this image boot in DeSmuME as well as melonDS and hardware.
+    # devkitpro/devkitarm:latest (libnds 2 / calico) also builds but needs melonDS or hardware.
+    container: devkitpro/devkitarm:20240511
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build ROM
+        run: make
+      - name: Upload ROM
+        uses: actions/upload-artifact@v4
+        with:
+          name: wordPass.nds
+          path: wordPass.nds
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: wordPass.nds
