@@ -10,6 +10,7 @@ from wp import Emu, COLS, ROWS, EMPTY, TILE, BURN, HOLE, SECRET, ST_TITLE, ST_PL
 
 rom = sys.argv[1]; out = sys.argv[2] if len(sys.argv) > 2 else '/tmp'
 e = Emu(rom)
+e.run(10)                                 # a first frame, so the DBG mirror is valid even when WP_ONLY skips the early scenarios
 fails = 0
 C = 3   # the column every board scenario pokes
 
@@ -1046,6 +1047,175 @@ def _():
 def _():
     set_hand(False); e.start_classic()
     check_dpad('right')
+
+# ---- panel and HUD (item 12) ------------------------------------------------------------
+def px5(px, x, y): return tuple(v >> 3 for v in px[x, y])
+def count_color(px, x0, y0, x1, y1, rgb, tol=2):
+    """Pixels of the screenshot rectangle within `tol` (5-bit units) of the colour `rgb`."""
+    n = 0
+    for y in range(y0, y1):
+        for x in range(x0, x1):
+            c = px5(px, x, y)
+            if abs(c[0] - rgb[0]) <= tol and abs(c[1] - rgb[1]) <= tol and abs(c[2] - rgb[2]) <= tol: n += 1
+    return n
+FIRE1_C, FIRE2_C, GOLD_LT_C, ACCENT1_C = (31, 12, 2), (31, 24, 4), (31, 29, 18), (6, 28, 24)
+def panel_x(): return 4 if e.bx else 176
+def lit_outside_panel(px, y0=192, y1=384, thr=60):
+    """Lit pixels in the margins around the panel text: the 76 px panel is x 176..251 right-handed, 4..79 left-handed."""
+    if e.bx: xs = list(range(0, 4)) + [80, 81]
+    else: xs = [252, 253, 254, 255]
+    return [(x, y) for y in range(y0, y1) for x in xs if sum(px[x, y]) > thr]
+
+def spell_cells(word, c=C, r0=0):
+    for i, ch in enumerate(word): e.set_cell(c, r0 + i, TILE, ch)
+    e.run(3); return [(c, r0 + i) for i in range(len(word))]
+
+def check_panel(tag):
+    g = calm(); X = panel_x()
+    # the pause button: a tap pauses (and only inside the button), START resumes
+    e.tap(X + 50, 12, settle=10); assert e.state()['state'] == ST_PLAY, f'{tag}: a tap beside the pause button paused'
+    e.tap(X + 70, 12, settle=10); g = e.state(); assert g['state'] == ST_PAUSE, f'{tag}: the pause button did not pause: {g["state"]}'
+    e.press('START', settle=20); assert e.state()['state'] == ST_PLAY
+    # worst-case text: a six-digit score, a nine-letter pass with some letters found, a long turn count
+    e.set_score(999999); e.set_pass(9, 0b101010101); e.set_turn(150); e.run(10)
+    e.shot(f'{out}/rules_panel_worst_{tag}.png'); px = e.pixels()
+    bad = lit_outside_panel(px); assert not bad, f'{tag}: panel text reaches the margin: {len(bad)} lit px, first {bad[:3]}'
+    # the tracker: found slots are filled diamonds (white), the others gold outlines
+    found_px = count_color(px, X, 192 + 42, X + 72, 192 + 52, (31, 31, 31), 1)
+    outline_px = count_color(px, X, 192 + 42, X + 72, 192 + 52, (16, 11, 2), 1)
+    assert found_px > 5 * 30 and outline_px > 4 * 20, f'{tag}: tracker found {found_px} outline {outline_px}'
+    assert count_color(px, X + 72, 192 + 42, X + 76, 192 + 52, (31, 31, 31), 4) == 0, f'{tag}: the tracker runs past x+72'
+    # a valid chain previews its value, multiplier and heat
+    e.set_score(0); e.set_turn(0); e.set_pass(4, 0); e.press('Y', settle=5)
+    path = spell_cells('bread'); e.chain(path); e.run(8)
+    g = e.state(); assert g['chainScore'] == 160 and g['chainLen'] == 5, f'{tag}: bread {g["chainScore"]}'
+    px = e.pixels()
+    assert count_color(px, X, 192 + 84, X + 40, 192 + 91, GOLD_LT_C, 2) > 15, f'{tag}: no +160 line'
+    assert count_color(px, X + 50, 192 + 84, X + 76, 192 + 91, ACCENT1_C, 2) > 8, f'{tag}: no X2 multiplier'
+    assert count_color(px, X + 28, 192 + 94, X + 76, 192 + 101, FIRE2_C, 2) > 20, f'{tag}: no +1 HEAT preview'
+    e.shot(f'{out}/rules_panel_preview_{tag}.png')
+    e.press('Y', settle=5)
+    path = spell_cells('letters'); e.chain(path); e.run(8)
+    px = e.pixels()
+    assert count_color(px, X + 28, 192 + 94, X + 76, 192 + 101, ACCENT1_C, 2) > 20, f'{tag}: a 7-letter word should preview NO HEAT'
+    assert not lit_outside_panel(px), f'{tag}: preview text reaches the margin'
+    e.press('Y', settle=5)
+    # fire: pips for the turns to the next fire step, and the label blinks FIRE / NEXT on the last one
+    e.set_cell(C, 6, BURN, 'a'); e.set_burn(0, 3); e.run(6)
+    px = e.pixels()
+    assert count_color(px, X + 30, 192 + 112, X + 76, 192 + 117, FIRE1_C, 1) >= 3 * 25, f'{tag}: three filled pips expected'
+    e.set_burn(2, 3); e.run(6); px = e.pixels()
+    filled = count_color(px, X + 30, 192 + 112, X + 50, 192 + 117, FIRE1_C, 1)
+    assert 20 <= filled <= 26, f'{tag}: one turn left should leave one filled pip, got {filled} px'
+    seen = set()
+    for i in range(24):
+        e.run(2); px = e.pixels()
+        seen.add(count_color(px, X, 192 + 111, X + 24, 192 + 118, FIRE1_C, 1) > 5)   # NEXT is FIRE1, FIRE is FIRE2
+    assert seen == {True, False}, f'{tag}: the last turn must blink NEXT, saw {seen}'
+    e.shot(f'{out}/rules_panel_fire_{tag}.png')
+    e.set_burn(0, 99); e.set_cell(C, 6, TILE, 'e')
+    # OVERTIME: past turn 24 the label blinks and a valid chain previews the number only
+    e.set_turn(40)
+    path = spell_cells('bed'); e.chain(path); e.press('A', settle=30)
+    g = e.state(); assert g['overtime'] == 1 and g['turn'] == 41, f'{tag}: turn {g["turn"]} overtime {g["overtime"]}'
+    e.set_heat(0); path = spell_cells('bead', r0=3); e.chain(path); e.run(4)
+    lit_seen = set()
+    for i in range(24):
+        e.run(2); px = e.pixels()
+        lit_seen.add(count_color(px, X, 192 + 94, X + 48, 192 + 101, FIRE1_C, 1) > 15)
+    assert True in lit_seen, f'{tag}: no OVERTIME label'
+    px = e.pixels(); assert not lit_outside_panel(px), f'{tag}: OVERTIME with a heat preview reaches the margin'
+    assert count_color(px, X + 56, 192 + 94, X + 76, 192 + 101, FIRE2_C, 2) > 8, f'{tag}: the short heat number is missing next to OVERTIME'
+    e.shot(f'{out}/rules_panel_overtime_{tag}.png')
+    e.press('Y', settle=5); e.set_turn(0)
+    # pressed buttons look pressed, then let go
+    e.tap(X + 38, 130, hold=4, settle=0); assert e.state()['pressBits'] & 1, f'{tag}: SUBMIT not pressed'
+    e.run(12); e.tap(X + 38, 158, hold=4, settle=0); assert e.state()['pressBits'] & 2, f'{tag}: CLEAR not pressed'
+    e.run(12); e.tap(X + 38, 182, hold=4, settle=0); assert e.state()['pressBits'] & 4, f'{tag}: PEEK not pressed'
+    e.run(12); e.tap(X + 38, 182, settle=0)  # unlatch the peek again
+    e.run(20); assert e.state()['pressBits'] == 0, f'{tag}: a button stayed pressed'
+    assert e.fps() == 120, f'{tag}: panel fps'
+
+@scenario('panel HUD (left hand): pause button, tracker, chain value, heat preview, fire pips, OVERTIME; nothing past the margins')
+def _():
+    set_hand(True); e.start_classic()
+    check_panel('left')
+
+@scenario('panel HUD (right hand): pause button, tracker, chain value, heat preview, fire pips, OVERTIME; nothing past the margins')
+def _():
+    set_hand(False); e.start_classic()
+    check_panel('right')
+
+def check_callouts(tag):
+    g = calm()
+    # a five-letter word: GOOD! pops over the board, settles and goes; the message stays for the top screen
+    path = spell_cells('bread'); e.chain(path); e.press('A', settle=3)
+    g = e.state(); assert g['msg'] == 'GOOD!' and g['callout'] == 'GOOD!' and g['calloutLife'] > 30, f'{tag}: msg {g["msg"]!r} callout {g["callout"]!r} life {g["calloutLife"]}'
+    px = e.pixels()
+    assert count_color(px, e.bx + 20, 192 + 70, e.bx + 150, 192 + 100, GOLD_LT_C, 2) > 60, f'{tag}: no gold callout over the board'
+    e.shot(f'{out}/rules_callout_good_{tag}.png')
+    e.run(50); assert e.state()['calloutLife'] == 0, f'{tag}: the callout never ended'
+    # a word that is no word: red rims on the chained gems and the callout; the full reason stays in msg
+    e.press('Y', settle=5)
+    path = spell_cells('xxx'); e.chain(path); e.press('A', settle=2)
+    g = e.state(); assert g['msg'] == 'NOT IN THE LIBRARY' and g['callout'] == 'NOT A WORD', f'{tag}: msg {g["msg"]!r} callout {g["callout"]!r}'
+    px = e.pixels(); x0, y0, x1, y1 = e.cell_rect(C, 1)
+    rim = count_color(px, x0, y0 - 2, x1, y1, FIRE1_C, 3)
+    assert rim > 10, f'{tag}: the rejected chain should flash red ({rim} px)'
+    e.shot(f'{out}/rules_callout_invalid_{tag}.png')
+    e.run(60); assert e.state()['calloutLife'] == 0
+    e.press('Y', settle=5)
+    # peeling a pass letter calls it out in accent
+    e.set_back(C, 1, 1); e.set_cell(C, 1, TILE, 'e'); e.set_cell(C, 0, TILE, 'e'); e.set_heat(0); e.set_burn(0, 99); e.run(5)
+    e.hold('L', False); e.press('X', settle=3)
+    x, y = e.center(C, 1); e.tap(x, y, hold=5, settle=2)
+    g = e.state(); assert g['callout'] == 'PASS LETTER!' and g['found'][0] == 1, f'{tag}: callout {g["callout"]!r} found {g["found"]}'
+    e.run(6); e.shot(f'{out}/rules_callout_pass_{tag}.png')
+    e.run(50)
+    # scorch: SCORCHED pops at 3x in fire colours
+    e.set_cell(C, 4, BURN, 'a'); e.set_cell(C, 5, TILE, 'b'); e.set_back(C, 5, 0); e.set_back(C, 1, 0)
+    e.press('X', settle=3); x, y = e.center(C, 5); e.tap(x, y, hold=5, settle=2)
+    g = e.state()
+    if g['state'] == ST_PLAY:
+        assert g['callout'] == 'SCORCHED', f'{tag}: callout {g["callout"]!r}'
+        e.run(4); e.shot(f'{out}/rules_callout_scorched_{tag}.png')
+
+@scenario('board callouts (right hand): length tags, NOT A WORD with red rims, PASS LETTER!, SCORCHED')
+def _():
+    set_hand(False); e.start_classic()
+    check_callouts('right')
+
+@scenario('board callouts (left hand): the same, mirrored strip')
+def _():
+    set_hand(True); e.start_classic()
+    check_callouts('left')
+
+@scenario('HUD top row: mode label, a 20-letter chain stays left of the fire meter, long words and the last word fit')
+def _():
+    set_hand(False); e.start_classic()
+    g = calm(); e.set_pass(9, 0b110011001); e.run(40)             # the found letters pop for 24 frames
+    px = e.pixels()
+    assert count_color(px, 16, 36, 60, 43, ACCENT1_C, 2) > 25, 'no CLASSIC label under the logo'
+    # the plaque of nine letters ends before the meter column at x 222
+    assert count_color(px, 221, 60, 236, 87, (31, 31, 31), 1) == 0, 'the nine-letter pass runs into the fire meter'
+    e.shot(f'{out}/rules_top_label.png')
+    for word in ('lophophores', 'livingnesses', 'kindheartednesses', 'lymphogranulomatoses'):
+        e.press('Y', settle=5)
+        path = [(0, r) for r in range(8)] + [(1, r) for r in range(7, -1, -1)] + [(2, r) for r in range(8)]
+        for (c, r), ch in zip(path, word): e.set_cell(c, r, TILE, ch)
+        e.run(3); e.chain(path[:len(word)]); e.run(10)
+        g = e.state(); assert g['chainLen'] == len(word) and g['chainScore'] > 0, f'{word}: {g["chainLen"]} {g["chainScore"]}'
+        e.shot(f'{out}/rules_top_chain_{len(word)}.png'); px = e.pixels()
+        hot = [(x, y) for y in range(100, 122) for x in range(222, 242) if sum(px[x, y]) > 300]
+        assert not hot, f'{word}: the chain word reaches the fire meter column, first {hot[:3]}'
+        left = [(x, y) for y in range(100, 122) for x in range(10, 12) if sum(px[x, y]) > 300]   # just inside the plaque border (x 8..9)
+        assert not left, f'{word}: the chain word reaches the plaque border, first {left[:3]}'
+        assert count_color(px, 60, 122, 200, 136, (31, 24, 4), 5) > 30 or count_color(px, 60, 122, 200, 136, (31, 28, 14), 6) > 30, f'{word}: no +value under the word'
+        e.press('A', settle=70)
+        px = e.pixels()
+        hot = [(x, y) for y in range(100, 116) for x in range(222, 242) if sum(px[x, y]) > 300]
+        assert not hot, f'{word}: the last word reaches the fire meter column'
+    e.press('Y', settle=5)
 
 print('RULES OK' if not fails else f'RULES FAILED: {fails}')
 sys.exit(fails)

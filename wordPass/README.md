@@ -45,7 +45,7 @@ and uncover the pass. Spell weak words and the shelf catches fire.
   letters scores double. Spelling a word you already spelled on this shelf
   halves it (the shelf remembers its last eight words: the ledger on the top
   screen shows the last five). The panel previews exactly what the chain is
-  worth before you submit.
+  worth before you submit, with its length multiplier and the heat it will add.
 - **Pass letters.** Every pass letter found pays 100 x shelf on the spot.
 - **Clearing a shelf.** Shelf bonus 1000 x shelf, a speed bonus of
   25 x shelf for every turn under 40, and a peel bonus: **PERFECT PASS**
@@ -192,7 +192,7 @@ three. Daily Pass has no bookmarks: one attempt.
 | D-pad | move the hex cursor (see below) |
 | Hold L or R | peek mode (touch a gem to arm it, lift to peel it; slide away to cancel) |
 | X / PEEK button | latch peek on for one peel (press again to cancel); with the cursor shown, A then peels the gem under it |
-| START | pause (then START resume, SELECT restart shelf for one bookmark, B quit to title) |
+| START / the II button on the panel | pause (then START resume, SELECT restart shelf for one bookmark, B quit to title) |
 | Y (title) | options |
 | X (title) | THE LEDGER |
 | SELECT (title) | Daily Pass |
@@ -241,6 +241,21 @@ and the shelf, speed and perfect/clean pass bonuses. Finding a pass letter
 pops its reward over the gem, a word through a diamond calls out PASS LINK,
 a repeat says AGAIN, and the top screen keeps a fading ledger of the last
 five words.
+
+The panel keeps the books for you. Under the score the pass is a row of
+small slots that fill with diamonds as you find its letters, then PEELS and
+TURN. A chained word shows what it is worth and its length multiplier (X2 to
+X4), and the HEAT line previews what the word will add to the meter, Lockdown
+pulse and overtime included (NO HEAT for a free word). Past the turn budget
+the label reads OVERTIME. While a flame burns, a row of pips counts the turns
+to the next fire step and the label blinks NEXT on the last one (the FIRE
+label on the top screen blinks with it). The buttons sink when you press
+them, and a rejected word flashes its chain red. The big callout that pops
+over the middle of the board (GOOD!, PASS LINK!, NOT A WORD, PASS LETTER!,
+SCORCHED) stays out of the way while you are peeking. The top screen names
+the mode under the logo (CLASSIC, LOCKDOWN II, DAILY EMBER, PRACTICE) with
+the shelf's twist beside it for the first two seconds, and shows what the
+chained word is worth under the big letters.
 
 ## Music
 

@@ -43,7 +43,9 @@ typedef struct {
     s32 dailyPlayed, dailyLast, dailyLastScore;   // 528, 532, 536: S.dailyPlayedDate, S.dailyLastDate, S.dailyLastScore
     s32 peek, armed, armC, armR;            // 540, 544, 548, 552: peekHeld || peekLatch, the armed peel and its cell
     s32 curC, curR, curOn;                  // 556, 560, 564: the d-pad cursor
-} DebugView;                                // total 568
+    s32 calloutLife, pressBits;             // 568, 572: frames left of the board callout; panel buttons pressed (gfxPressBits)
+    char callout[20];                       // 576..595: the callout's text
+} DebugView;                                // total 596
 
 #define PIN(field, off) _Static_assert(offsetof(DebugView, field) == (off), "DebugView." #field " moved: update tools/emu/wp.py OFF")
 PIN(magic, 0); PIN(frame, 4); PIN(state, 8); PIN(mode, 12); PIN(shelf, 16); PIN(score, 20);
@@ -63,7 +65,8 @@ PIN(practice, 504); PIN(dailyMod, 508); PIN(clockOk, 512); PIN(statWords, 516); 
 PIN(dailyPlayed, 528); PIN(dailyLast, 532); PIN(dailyLastScore, 536);
 PIN(curC, 556); PIN(curR, 560); PIN(curOn, 564);
 PIN(peek, 540); PIN(armed, 544); PIN(armC, 548); PIN(armR, 552);
-_Static_assert(sizeof(DebugView) == 568, "DebugView size changed: update tools/emu/wp.py");
+PIN(calloutLife, 568); PIN(pressBits, 572); PIN(callout, 576);
+_Static_assert(sizeof(DebugView) == 596, "DebugView size changed: update tools/emu/wp.py");
 
 volatile DebugView DBG;
 
@@ -79,7 +82,8 @@ enum {
     POKE_SCORE,     // score = a0 (panel layout checks)
     POKE_SPELL,     // S.spelling = a0 (0 both, 1 American, 2 British)
     POKE_CLOCK,     // the DS clock reads YYYYMMDD a0 (0 = the real clock)
-    POKE_DAILY      // S.dailyPlayedDate = a0, S.dailyLastDate = a1, S.dailyStreak = a2 (records only; nothing is saved)
+    POKE_DAILY,     // S.dailyPlayedDate = a0, S.dailyLastDate = a1, S.dailyStreak = a2 (records only; nothing is saved)
+    POKE_PASS       // the pass becomes a0 letters (1..9: "abcdefghi" truncated) with the letters in bitmask a1 found (layout checks; the back layer is left alone)
 };
 
 static void applyPoke(Game *g)
@@ -106,6 +110,12 @@ static void applyPoke(Game *g)
         case POKE_SPELL:    if (a0 >= 0 && a0 < SPELL_COUNT) S.spelling = (u8)a0; break;
         case POKE_CLOCK:    settingsDebugClock(a0); break;
         case POKE_DAILY:    S.dailyPlayedDate = a0; S.dailyLastDate = a1; S.dailyStreak = a2; break;
+        case POKE_PASS:
+            if (a0 >= 1 && a0 <= 9) {
+                g->passLen = (u8)a0;
+                for (int i = 0; i < 12; i++) { g->pass[i] = i < a0 ? (char)('a' + i) : 0; g->found[i] = (i < a0 && ((a1 >> i) & 1)) ? 1 : 0; }
+            }
+            break;
     }
     DBG.cmd = 0;
 }
@@ -145,6 +155,8 @@ void debugSync(Game *g)
     DBG.practice = g->practice; DBG.dailyMod = g->dailyMod; DBG.clockOk = g->clockOk;
     DBG.peek = g->peekHeld; DBG.armed = g->armed; DBG.armC = g->armC; DBG.armR = g->armR;
     DBG.curC = g->curC; DBG.curR = g->curR; DBG.curOn = g->curOn;
+    DBG.calloutLife = gfxCalloutLife(); DBG.pressBits = gfxPressBits();
+    strncpy((char *)DBG.callout, gfxCalloutText(), 19); DBG.callout[19] = 0;
     DBG.statWords = S.wordsSpelled; DBG.statGames = S.gamesPlayed; DBG.streak = S.dailyStreak;
     DBG.dailyPlayed = S.dailyPlayedDate; DBG.dailyLast = S.dailyLastDate; DBG.dailyLastScore = S.dailyLastScore;
 }

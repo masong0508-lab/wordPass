@@ -12,6 +12,9 @@
 static int fails;
 #define CHECK(name, cond) do { if (cond) printf("PASS %s\n", name); else { printf("FAIL %s (%s) at %s:%d\n", name, #cond, __FILE__, __LINE__); fails++; } } while (0)
 
+static bool quietOk = true;
+#define CHECK_QUIET(cond) do { if (!(cond)) quietOk = false; } while (0)
+
 static Game g;
 
 // a board of plain tiles, every one the given letter, no pass, calm fire
@@ -308,6 +311,36 @@ int main(int argc, char **argv)
 
     // ---- heat table
     CHECK("boardHeatFor: 3, 2, 1, 1, 0, 0", boardHeatFor(3) == 3 && boardHeatFor(4) == 2 && boardHeatFor(5) == 1 && boardHeatFor(6) == 1 && boardHeatFor(7) == 0 && boardHeatFor(10) == 0);
+
+    // ---- the length multiplier and the heat preview behind the panel's HEAT line
+    CHECK("boardLenMult: x1 to 4 letters, x2 for 5-6, x3 for 7-8, x4 beyond", boardLenMult(3) == 1 && boardLenMult(4) == 1 && boardLenMult(5) == 2 && boardLenMult(6) == 2 &&
+          boardLenMult(7) == 3 && boardLenMult(8) == 3 && boardLenMult(9) == 4 && boardLenMult(20) == 4);
+    {
+        // boardTurnHeat is exactly what endTurn books: spell "bed" (heat 3) and a 7-letter word (heat 0)
+        // on every turn 0..80 of a plain shelf and of a Lockdown shelf, and compare
+        bool exact = true, pulse = false, over = false;
+        for (int lock = 0; lock < 2; lock++)
+            for (int turn = 0; turn <= 80; turn++)
+                for (int word = 0; word < 2; word++) {
+                    boardOf('e'); plantWord();
+                    g.lockdown = lock; g.pulseEvery = 6 - lock; g.turn = turn; g.heat = 0; g.heatThreshold = 999;
+                    int len = word ? 7 : 3;
+                    for (int r = 0; r < len; r++) set(1, r, CELL_TILE, word ? "letters"[r] : "bed"[r]);
+                    for (int r = 0; r < len; r++) boardTryAddToChain(&g, 1, r);
+                    int want = boardTurnHeat(&g, boardHeatFor(len));
+                    if (boardSubmit(&g) <= 0 || g.heat != want || g.turn != turn + 1) { exact = false; printf("   turn %d lock %d len %d: preview %d heat %d\n", turn, lock, len, want, g.heat); }
+                    if (lock && want >= boardHeatFor(len) + 2 && turn < 16) pulse = true;
+                    if (turn >= 24 && want > boardHeatFor(len)) over = true;
+                    CHECK_QUIET(g.overtime == (turn + 1 > (lock ? 16 : 24)));
+                }
+        CHECK("boardTurnHeat matches the heat a word books on every turn, plain and Lockdown", exact && quietOk);
+        CHECK("the preview includes the Lockdown pulse and the overtime heat", pulse && over);
+        boardOf('e'); g.turn = 5; g.lockdown = 0; g.pulseEvery = 6;
+        CHECK("a 7-letter word on a calm turn previews no heat; a 3-letter one previews 3",
+              boardTurnHeat(&g, boardHeatFor(7)) == 0 && boardTurnHeat(&g, boardHeatFor(3)) == 3);
+        g.turn = 23; CHECK("turn 24 is the last free one: a 7-letter word on it still previews no heat", boardTurnHeat(&g, 0) == 0);
+        g.turn = 24; CHECK("turn 25 is overtime: a free word previews heat", boardTurnHeat(&g, 0) == 1);
+    }
 
     // ---- per-segment refill: the gems under a hole come back
     boardOf('e');

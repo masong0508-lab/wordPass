@@ -53,6 +53,13 @@ static int bright, shakeFrames, invalidTimer;
 static bool chainValidNow;      // computed once per frame
 static char chainWordNow[WORD_BUF];
 static u8 prevFound[12], letterPop[12];
+static int pressSubmit, pressClear, pressPeek, pressPause, submitFlash;   // panel button feedback, frames left
+static int shelfAge;            // frames since the shelf began (the twist name rides the HUD label for the first 120)
+static int fireLow;             // boardLowestFireRow(g), once per frame
+static int chainScoreNow;       // boardChainScore(g) while the chain is a word, else 0
+// the board callout: one big word that pops over the middle of the strip (kind 0 gold, 1 fire, 2 accent)
+typedef struct { char txt[20]; u8 life, kind; } Callout;
+static Callout callout;
 
 #define C(r,g,b) ARGB16(1,(r),(g),(b))
 #define BLACK      C(1,1,2)
@@ -635,6 +642,20 @@ int gfxCellAt(int pxl, int pyl, int *c, int *r)
 bool gfxInSubmit(int x, int y) { return x >= PANEL_X && x < PANEL_X + 76 && y >= SUBMIT_Y && y < SUBMIT_Y + 24; }
 bool gfxInClear(int x, int y)  { return x >= PANEL_X && x < PANEL_X + 76 && y >= CLEAR_Y && y < CLEAR_Y + 16; }
 bool gfxInPeekButton(int x, int y) { return x >= PANEL_X && x < PANEL_X + 76 && y >= 174 && y < 190; }
+#define PAUSE_X (PANEL_X + 64)        // the 12 x 12 pause button; it answers to two more pixels on every side
+#define PAUSE_Y 6
+bool gfxInPauseButton(int x, int y) { return x >= PAUSE_X - 2 && x < PAUSE_X + 14 && y >= PAUSE_Y - 2 && y < PAUSE_Y + 14; }
+void gfxPress(int which)
+{
+    switch (which) {
+        case PRESS_SUBMIT: pressSubmit = 6; break;
+        case PRESS_CLEAR:  pressClear = 6; break;
+        case PRESS_PEEK:   pressPeek = 6; break;
+        case PRESS_PAUSE:  pressPause = 6; break;
+    }
+}
+void gfxSubmitFlash(void) { submitFlash = 3; }
+int gfxPressBits(void) { return (pressSubmit ? 1 : 0) | (pressClear ? 2 : 0) | (pressPeek ? 4 : 0) | (pressPause ? 8 : 0) | (submitFlash ? 16 : 0); }
 
 void gfxApplySettings(void)
 {
@@ -682,10 +703,17 @@ void gfxPopup(int c, int r, const char *txt, int gold)
     }
 }
 
-void gfxFadeIn(void)  { bright = -16; }
+void gfxFadeIn(void)  { bright = -16; shelfAge = 0; callout.life = 0; }
 void gfxFlash(void)   { bright = 10; }
 void gfxShake(int frames) { shakeFrames = frames; }
 void gfxInvalidWord(void) { invalidTimer = 24; }
+void gfxCallout(const char *txt, int kind)
+{
+    strncpy(callout.txt, txt, sizeof(callout.txt) - 1); callout.txt[sizeof(callout.txt) - 1] = 0;
+    callout.life = 40; callout.kind = (u8)kind;
+}
+int gfxCalloutLife(void) { return callout.life; }
+const char *gfxCalloutText(void) { return callout.txt; }
 static int nopeC, nopeR, nopeTimer;
 void gfxNope(int c, int r) { nopeC = c; nopeR = r; nopeTimer = 6; }
 
@@ -736,7 +764,7 @@ static void dangerSetup(const Game *g)
 {
     dangerRows = 0;
     if (g->state != ST_PLAY) return;
-    int low = boardLowestFireRow(g);
+    int low = fireLow;
     if (low < 4) return;
     int strength = (low - 3) * 4 + ((frame & 16) ? 2 : 0);   // 4..18
     for (int j = 0; j < DANGER_ROWS; j++) {
@@ -745,6 +773,23 @@ static void dangerSetup(const Game *g)
         dangerA[j] = (u8)(a > 12 ? 12 : a);
         dangerRows = j + 1;
     }
+}
+
+// The callout: pops in big (three times, or twice for a long word), settles at 2x, and in its
+// last eight frames drops to 1x and rises a pixel a frame. It is centred on the strip, never
+// wider than 166 px, and stays out of the way while the player is reading the back layer.
+static void drawCallout(const Game *g)
+{
+    if (!callout.life || g->peekHeld) return;
+    int life = callout.life, base = textWidth(callout.txt, 2) <= 166 ? 2 : 1, sc;
+    if (life > 32) sc = textWidth(callout.txt, 3) <= 160 ? 3 : base;
+    else if (life > 8) sc = base;
+    else sc = 1;
+    u16 col = callout.kind == 1 ? FIRE1 : callout.kind == 2 ? ACCENT : GOLD_LT;
+    if (life <= 8) col = lerp15(BLACK, col, life * 2);
+    int y = 84 - (7 * sc) / 2 - (life <= 8 ? 8 - life : 0), tw = textWidth(callout.txt, sc), x = BX(86) - tw / 2;
+    if (life > 8) fillRect(x - 4, y - 3, tw + 8, 7 * sc + 6, BLACK);   // one dark plate keeps the word readable over busy gems
+    drawTextShadow(x, y, callout.txt, col, sc);
 }
 
 // N+ dot grid behind the gems (dots under solid gems are hidden anyway)
@@ -905,6 +950,10 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
             if (cl->flash) {
                 rectOutline(x, y, TILE_W, TILE_H, lerp15(BLACK, WHITE, cl->flash > 14 ? 16 : cl->flash + 2));
             }
+            if (lit && invalidTimer) {                         // a rejected word: the chained gems' lit rims go red
+                rectOutline(x, yd, TILE_W, TILE_H, FIRE1);
+                rectOutline(x + 1, yd + 1, TILE_W - 2, TILE_H - 2, lerp15(FIRE1, WHITE, 4));
+            }
             if (nopeTimer > 0 && c == nopeC && r == nopeR) {   // the drag could not reach this gem
                 rectOutline(x, yd, TILE_W, TILE_H, FIRE1);
                 rectOutline(x + 1, yd + 1, TILE_W - 2, TILE_H - 2, lerp15(FIRE1, WHITE, nopeTimer * 2));
@@ -936,6 +985,7 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
     // chain links: gold rope that turns to the shelf accent once the word is valid
     bool chainValid = chainValidNow;
     u16 ropeDk = chainValid ? lerp15(ACCENT, BLACK, 8) : GOLD_DK, ropeLt = chainValid ? ACCENT : GOLD_LT;
+    if (invalidTimer) { ropeDk = lerp15(FIRE1, BLACK, 8); ropeLt = FIRE1; }     // a rejected word: the rope and rims flash red
     for (int i = 1; i < g->chainLen; i++) {
         int x0, y0, x1, y1;
         cellOrigin(g->chainC[i - 1], g->chainR[i - 1], &x0, &y0);
@@ -944,7 +994,7 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
         for (int t = 0; t <= 10; t++) {
             int xx = x0 + (x1 - x0) * t / 10, yy = y0 + (y1 - y0) * t / 10;
             fillRect(xx - 2, yy - 2, 4, 4, ropeDk);
-            fillRect(xx - 1, yy - 1, 2, 2, ((t + (frame >> 1)) % 5 == 0) ? WHITE : ropeLt);
+            fillRect(xx - 1, yy - 1, 2, 2, ((t + (frame >> 1)) % 5 == 0) ? (invalidTimer ? FIRE2 : WHITE) : ropeLt);
         }
     }
     // a valid word: a gold ring on the tail gem advertises the tap that submits it
@@ -999,6 +1049,17 @@ static ITCM_CODE __attribute__((noinline)) void drawDanger(const Game *g)
     }
 }
 
+// a label on the left of a panel row, its value right-aligned to the panel edge
+static void panelRow(int y, const char *label, const char *val, u16 vcol)
+{
+    drawText(PANEL_X, y, label, DIM_TEXT, 1);
+    drawText(PANEL_X + 76 - textWidth(val, 1), y, val, vcol, 1);
+}
+
+// Panel rows (every string is at most 12 characters, 71 px, so it fits the 76 px panel):
+//   6 logo and pause   22 score   42 pass tracker   55 PEELS   64 TURN   74 chain word (or the peek hint)
+//   84 chain value   94 HEAT / OVERTIME and the heat preview   102 heat bar   111 fire countdown
+//   120 SUBMIT   150 CLEAR   166 RED: SCORCH   174 PEEK
 static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
 {
     drawBoardFrame();
@@ -1006,49 +1067,105 @@ static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
     if (S.hand == HAND_LEFT) fillRect(0, 0, boardX0, SCREEN_H, BLACK);
     else fillRect(PANEL_X - 2, 0, SCREEN_W - PANEL_X + 2, SCREEN_H, BLACK);
     drawLogo(PANEL_X, 6, 1);
+    {   // pause button: two bars in a 12 x 12 box
+        bool pr = pressPause > 0;
+        if (pr) fillRect(PAUSE_X, PAUSE_Y, 12, 12, lerp15(BLACK, INK, 3));
+        rectOutline(PAUSE_X, PAUSE_Y, 12, 12, pr ? INK : DIM_TEXT);
+        fillRect(PAUSE_X + 3, PAUSE_Y + 3, 2, 6, INK); fillRect(PAUSE_X + 7, PAUSE_Y + 3, 2, 6, INK);
+    }
     char s[32];
     fmtInt(s, g->score);
     if (textWidth(s, 2) <= 80) drawTextShadow(PANEL_X, 22, s, GOLD, 2);   // 80 px of panel: six digits at 2x
     else drawTextShadow(PANEL_X, 26, s, GOLD, 1);                           // a million and up drops to 1x
-    strcpy(s, "SHELF "); fmtInt(s + 6, g->shelf);
-    drawText(PANEL_X, 42, s, INK, 1);
-    if (g->mode == MODE_DAILY) drawText(PANEL_X, 52, "DAILY", GOLD_LT, 1);
-    else if (!g->lockdown) drawText(PANEL_X, 52, "CLASSIC", ACCENT, 1);
-    else {
-        static const char *const TIER[4] = { "LOCKDOWN", "LOCKDOWN II", "LOCKDOWN III", "LOCKDOWN IV" };
-        drawText(PANEL_X, 52, TIER[g->lockTier & 3], FIRE1, 1);   // 71 px at most: inside the 76 px panel
+
+    // the pass: one 7 x 10 slot per letter (nine fit the 76 px panel), a diamond once found
+    for (int i = 0; i < g->passLen; i++) {
+        int x = PANEL_X + i * 8;
+        if (g->found[i]) {
+            fillRect(x, 42, 7, 10, letterPop[i] > 12 ? GOLD_LT : GEM_DIAMOND.light);
+            drawChar(x + 1, 44, 'A' + (g->pass[i] - 'a'), C(4,6,10), 1);
+        } else {
+            rectOutline(x, 42, 7, 10, GOLD_DK);
+            hline(x + 2, 50, 3, GOLD);
+        }
     }
+    fmtInt(s, g->peels); panelRow(55, "PEELS", s, WHITE);
+    fmtInt(s, g->turn);  panelRow(64, "TURN", s, g->overtime ? FIRE1 : WHITE);
 
     char w[WORD_BUF]; strcpy(w, chainWordNow);
     for (char *p = w; *p; p++) *p -= 32;
-    bool valid = chainValidNow;
+    bool valid = chainValidNow, peek = g->peekHeld != 0;
     if (strlen(w) > 12) { memmove(w + 1, w + strlen(w) - 11, 12); w[0] = '.'; }   // the last 11 letters fit the panel
-    drawText(PANEL_X, 70, w, valid ? GOLD_LT : WHITE, 1);
-    if (g->chainLen >= 3 && !g->peekHeld) drawText(PANEL_X, 82, valid ? "VALID" : "...", valid ? ACCENT : DIM_TEXT, 1);
+    if (w[0]) drawText(PANEL_X, 74, w, valid ? GOLD_LT : WHITE, 1);
+    else if (!peek) drawText(PANEL_X, 74, "L OR R: PEEK", DIM_TEXT, 1);
+    if (g->chainLen >= 3 && !peek) {
+        if (valid) {   // what the word is worth, and its length multiplier
+            s[0] = '+'; fmtInt(s + 1, chainScoreNow);
+            drawText(PANEL_X, 84, s, GOLD_LT, 1);
+            int mult = boardLenMult((int)strlen(chainWordNow));
+            if (mult > 1) { s[0] = 'X'; s[1] = (char)('0' + mult); s[2] = 0; drawText(PANEL_X + 76 - textWidth(s, 1), 84, s, ACCENT, 1); }
+        } else drawText(PANEL_X, 84, "...", DIM_TEXT, 1);
+    }
 
-    // heat: small flame glyph grows with the bar
-    drawText(PANEL_X, 98, "HEAT", DIM_TEXT, 1);
+    // heat: OVERTIME replaces the label past the shelf's turn budget, and a valid chain previews its cost
     int hw = HEAT_W * g->heat / (g->heatThreshold ? g->heatThreshold : 1);
     if (hw > HEAT_W) hw = HEAT_W;
-    rectOutline(PANEL_X, 108, 72, 6, DIM);
-    {   // rows 109..112, precomputed gradient (the panel is always inside the touch screen)
-        u16 *row = cur + 109 * SCREEN_W + PANEL_X + 1;
+    const char *hl = g->overtime ? "OVERTIME" : "HEAT";
+    drawText(PANEL_X, 94, hl, g->overtime ? ((frame & 16) ? FIRE1 : lerp15(BLACK, FIRE1, 8)) : DIM_TEXT, 1);
+    bool preview = valid && !peek;
+    if (preview) {
+        int cost = boardTurnHeat(g, boardHeatFor((int)strlen(chainWordNow)));
+        char pv[12];
+        if (cost > 0) { pv[0] = '+'; fmtInt(pv + 1, cost); strcat(pv, " HEAT"); } else strcpy(pv, "NO HEAT");
+        if (textWidth(hl, 1) + 5 + textWidth(pv, 1) > 76) { pv[0] = '+'; fmtInt(pv + 1, cost); }   // OVERTIME leaves room for the number only
+        drawText(PANEL_X + 76 - textWidth(pv, 1), 94, pv, cost > 0 ? FIRE2 : ACCENT, 1);
+    }
+    rectOutline(PANEL_X, 102, 72, 6, DIM);
+    {   // rows 103..106, precomputed gradient (the panel is always inside the touch screen)
+        u16 *row = cur + 103 * SCREEN_W + PANEL_X + 1;
         for (int i = 0; i < hw; i++) { row[i] = heatTop[i]; row[SCREEN_W + i] = heatBody[i]; row[2 * SCREEN_W + i] = heatBody[i]; row[3 * SCREEN_W + i] = heatBody[i]; }
     }
-    if (hw > 50 && (frame & 8)) drawText(PANEL_X + 30, 98, "!", FIRE2, 1);
+    if (hw > 50 && (frame & 8) && !preview && !g->overtime) drawText(PANEL_X + 30, 94, "!", FIRE2, 1);
 
-    // submit button: jeweled, pulses when a valid word is chained
+    // fire countdown: one pip per turn between fire steps, filled for the turns left; the last one blinks NEXT
+    if (fireLow >= 0) {
+        int left = g->burnEvery - g->burnTimer, n = g->burnEvery;
+        if (left < 1) left = 1;
+        if (n > 6) n = 6;                                   // a poked burnEvery of 99 still fits the panel
+        bool next = left == 1 && (frame & 8);
+        drawText(PANEL_X, 111, next ? "NEXT" : "FIRE", next ? FIRE1 : FIRE2, 1);
+        for (int i = 0; i < n; i++) {
+            if (i < left) fillRect(PANEL_X + 30 + i * 7, 112, 5, 5, FIRE1);
+            else rectOutline(PANEL_X + 30 + i * 7, 112, 5, 5, DIM_TEXT);
+        }
+    }
+
+    // submit button: jeweled, pulses when a valid word is chained; sunk by two pixels while pressed
     u16 bc = valid ? lerp15(GOLD_DK, GOLD, ((frame & 31) < 16) ? (frame & 15) : 15 - (frame & 15)) : DIM;
-    roundRect(PANEL_X, SUBMIT_Y, 76, 24, bc);
-    if (valid) { hline(PANEL_X + 3, SUBMIT_Y + 2, 70, GOLD_LT); hline(PANEL_X + 2, SUBMIT_Y + 21, 72, GOLD_DK); }
-    drawTextCenter(PANEL_X + 38, SUBMIT_Y + 8, "SUBMIT", valid ? BLACK : INK, 1);
-    rectOutline(PANEL_X, CLEAR_Y, 76, 16, DIM);
-    drawTextCenter(PANEL_X + 38, CLEAR_Y + 4, "CLEAR", INK, 1);
+    if (submitFlash) bc = WHITE;
+    bool pr = pressSubmit > 0;
+    int in = pr ? 2 : 0;
+    if (pr) fillRect(PANEL_X, SUBMIT_Y, 76, 24, DIM2);
+    roundRect(PANEL_X + in, SUBMIT_Y + in, 76 - in * 2, 24 - in * 2, bc);
+    if (valid || submitFlash) {
+        hline(PANEL_X + 3 + in, SUBMIT_Y + 2 + in, 70 - in * 2, pr ? GOLD_DK : GOLD_LT);
+        hline(PANEL_X + 2 + in, SUBMIT_Y + 21 - in, 72 - in * 2, pr ? GOLD_LT : GOLD_DK);
+    }
+    drawTextCenter(PANEL_X + 38, SUBMIT_Y + 8 + (pr ? 1 : 0), "SUBMIT", (valid || submitFlash) ? BLACK : INK, 1);
+    if (pressClear > 0) {
+        fillRect(PANEL_X, CLEAR_Y, 76, 16, lerp15(BLACK, INK, 3));
+        rectOutline(PANEL_X + 2, CLEAR_Y + 2, 72, 12, INK);
+    } else rectOutline(PANEL_X, CLEAR_Y, 76, 16, DIM);
+    drawTextCenter(PANEL_X + 38, CLEAR_Y + 4 + (pressClear > 0 ? 1 : 0), "CLEAR", pressClear > 0 ? WHITE : INK, 1);
 
-    if (g->peekHeld && boardLowestFireRow(g) >= 0) drawTextCenter(PANEL_X + 38, 166, "RED: SCORCH", FIRE1, 1);
-    if (g->peekHeld) {      // PEEK button: filled while a shoulder is held or the latch is on
+    if (peek && fireLow >= 0) drawTextCenter(PANEL_X + 38, 166, "RED: SCORCH", FIRE1, 1);
+    if (peek) {      // PEEK button: filled while a shoulder is held or the latch is on
         fillRect(PANEL_X, 174, 76, 16, ACCENT);
         drawTextCenter(PANEL_X + 38, 178, g->peekLatch ? "PEEK ON" : "PEEK", BLACK, 1);
+    } else if (pressPeek > 0) {
+        fillRect(PANEL_X, 174, 76, 16, lerp15(BLACK, ACCENT, 5));
+        rectOutline(PANEL_X + 2, 176, 72, 12, ACCENT);
+        drawTextCenter(PANEL_X + 38, 179, "PEEK", WHITE, 1);
     } else {
         rectOutline(PANEL_X, 174, 76, 16, ACCENT);
         drawTextCenter(PANEL_X + 38, 178, "PEEK", INK, 1);
@@ -1129,14 +1246,26 @@ static void drawTop(const Game *g)
 
     drawLogo(16, 16, 2);
     char s[40];
-    if (g->mode == MODE_DAILY) { strcpy(s, "DAILY "); fmtInt(s + 6, g->dailySeed % 10000); }   // MMDD
+    {   // the mode under the logo: CLASSIC, LOCKDOWN (tiers), DAILY <modifier> or PRACTICE <modifier>, then the twist for a moment
+        static const char *const TIER[4] = { "LOCKDOWN", "LOCKDOWN II", "LOCKDOWN III", "LOCKDOWN IV" };
+        const char *ml; u16 mc;
+        if (g->mode == MODE_DAILY) {
+            strcpy(s, g->practice ? "PRACTICE " : "DAILY "); strcat(s, boardDailyModName(g->dailyMod));
+            ml = s; mc = g->practice ? DIM_TEXT : GOLD_LT;
+        } else if (g->lockdown) { ml = TIER[g->lockTier & 3]; mc = FIRE1; }
+        else { ml = "CLASSIC"; mc = ACCENT; }
+        drawText(16, 36, ml, mc, 1);
+        if (g->twist && shelfAge < 120) drawText(16 + (int)(strlen(ml) + 1) * 6, 36, boardTwistName(g->twist), GOLD_LT, 1);   // 131 px at most with LOCKDOWN III
+    }
+    if (g->mode == MODE_DAILY) siprintf(s, "DAILY %02d%02d", g->dailySeed / 100 % 100, g->dailySeed % 100);   // MMDD
     else { strcpy(s, "SHELF "); fmtInt(s + 6, g->shelf); }
     drawText(170, 18, s, INK, 1);
     drawText(170, 28, fmtInt(s, g->score), GOLD, 1);
 
     // the pass: gem-cut blanks that pop when found
-    int n = g->passLen, bw = PLAQUE_W, gap = 4;
+    int n = g->passLen, bw = PLAQUE_W, gap = n >= 9 ? 1 : 4;   // nine letters squeeze to one pixel between gems
     int x0 = ((SCREEN_W - (n * bw + (n - 1) * gap)) / 2) & ~1, y0 = 60;   // x even: word-aligned blits; the popped gem spans y 50..95, inside HUD slice 1
+    if (x0 + n * bw + (n - 1) * gap > 220) x0 = (220 - (n * bw + (n - 1) * gap)) & ~1;   // a long pass slides left of the fire meter (x 222..)
     strcpy(s, "PASS - "); strcpy(s + 7, boardPassTheme(g));
     drawTextCenter(SCREEN_W / 2, 50, s, DIM_TEXT, 1);
     for (int i = 0; i < n; i++) {
@@ -1162,19 +1291,33 @@ static void drawTop(const Game *g)
         int jx = invalidTimer ? ((invalidTimer & 2) ? 3 : -3) : 0;
         u16 wc = invalidTimer ? ((invalidTimer & 4) ? FIRE1 : WHITE) : (valid ? GOLD_LT : WHITE);
         int wl = (int)strlen(w);
-        if (wl <= 13) {            // 3x letters, 18 px apart, up to 13 across
-            int cx3 = SCREEN_W / 2 - textWidth(w, 3) / 2 + jx;
+        // The word lives left of the fire meter (x 222..): 3x letters 18 px apart up to eleven across,
+        // then 2x letters at up to 12 px (twenty letters squeeze to 10 px). It is centred on the screen
+        // and slides left only as far as it must to stay inside x 12..220.
+        if (wl <= 11) {
+            int wd = wl * 18 - 3, cx3 = SCREEN_W / 2 - wd / 2;
+            if (cx3 + wd > 220) cx3 = 220 - wd;
+            cx3 += jx;
             for (const char *p = w; *p; p++, cx3 += 18) drawChar3Shadow(cx3, 100, *p, wc, DIM2);
-        } else {                   // longer words drop to 2x, 12 px apart: 20 letters take 240 px
-            int cx2 = SCREEN_W / 2 - textWidth(w, 2) / 2 + jx;
-            for (const char *p = w; *p; p++, cx2 += 12) drawChar2Shadow(cx2, 104, *p, wc, DIM2);
+        } else {
+            int pitch = 198 / (wl - 1); if (pitch > 12) pitch = 12;
+            int wd = (wl - 1) * pitch + 10, cx2 = SCREEN_W / 2 - wd / 2;
+            if (cx2 + wd > 220) cx2 = 220 - wd;
+            cx2 += jx;
+            for (const char *p = w; *p; p++, cx2 += pitch) drawChar2Shadow(cx2, 104, *p, wc, DIM2);
         }
     } else if (g->lastWord[0]) {
         char lw[MAX_WORD + 1]; strcpy(lw, g->lastWord);
         for (char *p = lw; *p; p++) *p -= 32;
-        drawTextCenter(SCREEN_W / 2, 100, lw, INK, textWidth(lw, 2) <= 224 ? 2 : 1);
+        int lsc = textWidth(lw, 2) <= 200 ? 2 : 1, lx = SCREEN_W / 2 - textWidth(lw, lsc) / 2;   // 17 letters at 2x; the fire meter starts at x 222
+        if (lx + textWidth(lw, lsc) > 220) lx = 220 - textWidth(lw, lsc);
+        drawText(lx, 100, lw, INK, lsc);
         s[0] = '+'; fmtInt(s + 1, g->lastWordScore);
         drawTextCenter(SCREEN_W / 2, 118, s, GOLD, 1);
+    }
+    if (w[0] && chainScoreNow > 0) {   // what the chained word is worth, under the big letters (rows 122..135; the ledger line is at 137)
+        s[0] = '+'; fmtInt(s + 1, chainScoreNow);
+        drawTextCenter(SCREEN_W / 2, 122, s, GOLD, 2);
     }
 
     // bookmarks: three small books, filled while you still hold them (Classic only)
@@ -1189,9 +1332,11 @@ static void drawTop(const Game *g)
         }
 
     // fire meter with a flame cap
-    drawText(222, 46, "FIRE", DIM_TEXT, 1);
+    int low = fireLow;
+    bool fireNext = low >= 0 && g->burnEvery - g->burnTimer <= 1;   // the fire steps on the next turn
+    if (fireNext && (frame & 8)) drawText(222, 46, "NEXT", FIRE2, 1);
+    else drawText(222, 46, "FIRE", DIM_TEXT, 1);
     rectOutline(226, 54, 8, ROWS * 10 + 2, DIM);   // rows 54..135: clear of the ledger line below
-    int low = boardLowestFireRow(g);
     for (int r = 0; r <= low; r++) fillRect(227, 55 + r * 10, 6, 9, lerp15(FIRE2, FIRE1, r * 2));
     if (low >= 0) { int fy = 55 + low * 10 + 9; px(229 + (frame & 1), fy - 12 - (frame & 3), FIRE2); px(230, fy - 11, FIRE2); }
 
@@ -1570,10 +1715,12 @@ void gfxFrame(const Game *g)
         buildHeatTables();
     }
     boardChainWord(g, chainWordNow);
+    fireLow = boardLowestFireRow(g);
     dangerSetup(g);
     chainMask = 0;
     for (int i = 0; i < g->chainLen; i++) chainMask |= (u64)1 << (g->chainC[i] * ROWS + g->chainR[i]);
     chainValidNow = g->chainLen >= 3 && boardWordOk(chainWordNow, strlen(chainWordNow));
+    chainScoreNow = chainValidNow ? boardChainScore(g) : 0;
     // per-letter pop timers for the pass plaque
     for (int i = 0; i < g->passLen; i++) {
         if (g->found[i] && !prevFound[i]) letterPop[i] = 24;
@@ -1594,6 +1741,13 @@ void gfxFrame(const Game *g)
     stepPopups();
     if (invalidTimer) invalidTimer--;
     if (nopeTimer) nopeTimer--;
+    if (pressSubmit) pressSubmit--;
+    if (pressClear) pressClear--;
+    if (pressPeek) pressPeek--;
+    if (pressPause) pressPause--;
+    if (submitFlash) submitFlash--;
+    if (callout.life) callout.life--;
+    if (shelfAge < 1000) shelfAge++;
 
     PROF_START();
     cur = vramBack;            // draw the touch screen straight into the hidden VRAM bank
@@ -1613,6 +1767,7 @@ void gfxFrame(const Game *g)
         drawBoard(g);     PROF(1);
         drawParticles();
         drawPopups();
+        drawCallout(g);
         drawDanger(g);    PROF(2);
         drawPanel(g);     PROF(3);
         PROF(4);
@@ -1623,7 +1778,8 @@ void gfxFrame(const Game *g)
         drawBackdrop(g);  PROF(0);
         drawBoard(g);     PROF(1);
         drawParticles();
-        drawPopups();     PROF(2);
+        drawPopups();
+        drawCallout(g);   PROF(2);
         drawPanel(g);     PROF(3);
         drawOverlay(g);   PROF(4);
     }

@@ -217,6 +217,8 @@ int  boardSubmit(Game *g);           // returns score gained, 0 if invalid
 int  boardChainScore(const Game *g); // exactly what boardSubmit would award for the current chain (0 if invalid)
 int  ledgerIndex(const Game *g, int age);   // ring index of the age-th newest ledger entry (0 = newest)
 int  boardHeatFor(int len);          // heat a word of this length adds: 3, 2, 1, 1, 0 (3,4,5,6,7+)
+int  boardTurnHeat(const Game *g, int baseHeat);   // all the heat the next turn adds: baseHeat plus the Lockdown pulse and overtime
+int  boardLenMult(int len);          // length multiplier of a word: 1 (to 4 letters), 2, 3, 4 (9 and up)
 int  boardPeel(Game *g, int c, int r); // returns 0 none, 1 hole, 2 secret, 3 scorched, -1 fail; a peel is a turn
 void boardAnimate(Game *g);
 bool boardIsChainable(const Game *g, int c, int r);
@@ -251,6 +253,15 @@ int  gfxCellAt(int px, int py, int *c, int *r);
 bool gfxInSubmit(int px, int py);
 bool gfxInClear(int px, int py);
 bool gfxInPeekButton(int px, int py);
+bool gfxInPauseButton(int px, int py);   // the 12 x 12 "II" button at the top of the panel
+enum { PRESS_SUBMIT = 0, PRESS_CLEAR, PRESS_PEEK, PRESS_PAUSE };
+void gfxPress(int which);            // a panel button looks pressed for six frames
+void gfxSubmitFlash(void);           // the SUBMIT button flashes white for three frames (a word scored)
+enum { CALLOUT_GOLD = 0, CALLOUT_FIRE, CALLOUT_ACCENT };
+void gfxCallout(const char *txt, int kind);   // one big word over the board (at most 19 characters); a newer one replaces it
+int  gfxPressBits(void);             // debug: bit 0 submit, 1 clear, 2 peek, 3 pause pressed, 4 submit flash
+int  gfxCalloutLife(void);           // debug: frames left of the callout (0 = none)
+const char *gfxCalloutText(void);
 void gfxNope(int c, int r);          // red flash on a gem the drag could not reach
 enum { BURST_SHATTER = 0, BURST_REVEAL, BURST_SCORCH, BURST_FIRE };
 void gfxBurst(int c, int r, int kind, int letter);   // letter colours the shards; gfxBurst never reads G

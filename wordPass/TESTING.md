@@ -49,7 +49,8 @@ to `DebugView`, add its `PIN(...)`, bump the size assert, add it to `OFF`, and r
 chainLen, peels, lockdown, bestWordScore, dailySeed, passLen, lastWordTier, rareWords,
 library, heatThreshold, burnEvery, burnTimer, optRow, pulseEvery, lockTier, overtime,
 chainScore, speedBonus, peelBonus, passBonusKind, ledgerN, newBest, lives, passTheme,
-twist`; `chainScore` is `boardChainScore(g)` every frame, the exact gain the current chain
+twist, calloutLife, pressBits`; `callout` is the text of the board callout (`calloutLife` frames left;
+`pressBits` bit 0 SUBMIT, 1 CLEAR, 2 PEEK, 3 pause pressed, 4 the SUBMIT flash); `chainScore` is `boardChainScore(g)` every frame, the exact gain the current chain
 would submit for; `passTheme` indexes `wp.PASS_THEMES`, `twist` is 0 none, 1 INK SPILL,
 2 DAMP, 3 BURIED),
 `pass`, `found`, `cell[c][r] =
@@ -64,7 +65,9 @@ Daily and persistence: `set_clock(ymd)` makes the game's clock read a date (0 = 
 Helpers: `set_cell(c, r, state, letter)` (state EMPTY/TILE/BURN/HOLE/SECRET = 0..4,
 letter `'a'..'z'` or 0..25; motion and flash cleared), `set_back(c, r, v)` (0 or pass
 index + 1), `set_heat(h)`, `set_burn(timer, every)`, `fire_step()` (one fire advance plus
-gravity, no turn: `boardDebugFireStep`), `set_turn(n)`, `set_score(n)` (command 8), `set_lives(n)` (command 7: bookmarks).
+gravity, no turn: `boardDebugFireStep`), `set_turn(n)`, `set_score(n)` (command 8), `set_lives(n)` (command 7: bookmarks), `set_pass(n, found)`
+(command 12, layout checks only: the pass becomes the first n letters of the alphabet, 1..9, with the bitmask `found`
+shown as found; the back layer is left alone, so do not peel afterwards).
 Pokes bypass the game's own invariants, so set up whole columns explicitly.
 
 Recipes: `set_burn(0, 99)` keeps the fire still across submits, `set_burn(0, 1)` makes it
@@ -111,3 +114,7 @@ A peek touch only arms a gem; the peel happens when the stylus lifts (`keysUp() 
 ## Button play
 
 B steps the chain back one gem (hold it 20 frames to clear all) and Y clears, so a test that wants an empty chain presses `Y`, not `B`. The `d-pad play` scenarios use `goto(c, r)` to walk the cursor and cover the clamps, A to chain and submit, B, Y, X plus A to peel, and a touch hiding the cursor.
+
+## Panel and HUD
+
+The panel scenarios (`panel HUD`, both hands) read the screenshot rather than the mirror: `count_color(px, x0, y0, x1, y1, rgb)` counts pixels near a 5-bit colour in a rectangle, and `lit_outside_panel(px)` lists lit pixels in the margins around the 76 px panel (x 176..251 right-handed, 4..79 left-handed), so a string that grows past the panel edge fails the test. They poke the worst cases (a six-digit score, a nine-letter pass, turn 150, a 20-letter chain, burnEvery 99) and take the screenshots to read. `HUD top row` checks the mode label, that the nine-letter plaque and a 20-letter chain stay left of the fire meter (x 222..) and inside the plaque border, and the `+value` under the big word. The `board callouts` scenarios cover the word tags, `NOT A WORD` with the red rims, `PASS LETTER!` and `SCORCHED` in both hands. Buttons are pressed with `e.tap(..., settle=0)` and read through `pressBits`; leave a few frames between two taps, or the game never sees the stylus lift.

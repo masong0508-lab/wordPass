@@ -53,21 +53,23 @@ OFF = {
     'dailyPlayed': 528, 'dailyLast': 532, 'dailyLastScore': 536,
     'peek': 540, 'armed': 544, 'armC': 548, 'armR': 552,
     'curC': 556, 'curR': 560, 'curOn': 564,
+    'calloutLife': 568, 'pressBits': 572, 'callout': 576,
 }
-DBG_SIZE = 568
+DBG_SIZE = 596
 I32_FIELDS = ['state', 'mode', 'shelf', 'score', 'fail', 'turn', 'heat', 'chainLen', 'peels', 'lockdown',
               'bestWordScore', 'dailySeed', 'passLen', 'lastWordTier', 'rareWords', 'library',
               'heatThreshold', 'burnEvery', 'burnTimer', 'optRow', 'pulseEvery', 'lockTier', 'overtime',
               'chainScore', 'speedBonus', 'peelBonus', 'passBonusKind', 'ledgerN', 'newBest',
               'lives', 'passTheme', 'twist', 'spelling', 'practice', 'dailyMod', 'clockOk', 'statWords', 'statGames',
-              'streak', 'dailyPlayed', 'dailyLast', 'dailyLastScore', 'peek', 'armed', 'armC', 'armR', 'curC', 'curR', 'curOn']
+              'streak', 'dailyPlayed', 'dailyLast', 'dailyLastScore', 'peek', 'armed', 'armC', 'armR', 'curC', 'curR', 'curOn',
+              'calloutLife', 'pressBits']
 PASS_THEMES = ['BINDERY', 'INK', 'VERSE', 'TALES', 'ATLAS', 'ARCHIVE', 'LAMP', 'STUDY']
 TWIST_NONE, TWIST_INK, TWIST_DAMP, TWIST_BURIED = range(4)
 VOWELS = {0, 4, 8, 14, 20}; RARE = {9, 16, 23, 25}   # a e i o u; j q x z
 # letter values (board.c letterValue), Q stands for Qu
 LETTER_VALUE = [1,3,3,2,1,4,2,4,1,8,5,1,3,1,1,3,10,1,1,1,1,4,4,8,4,10]
 # poke commands (debug.c applyPoke)
-POKE_CELL, POKE_BACK, POKE_HEAT, POKE_BURN, POKE_FIRESTEP, POKE_TURN, POKE_LIVES, POKE_SCORE, POKE_SPELL, POKE_CLOCK, POKE_DAILY = range(1, 12)
+POKE_CELL, POKE_BACK, POKE_HEAT, POKE_BURN, POKE_FIRESTEP, POKE_TURN, POKE_LIVES, POKE_SCORE, POKE_SPELL, POKE_CLOCK, POKE_DAILY, POKE_PASS = range(1, 13)
 
 def symbol(elf, name):
     """Address of a symbol via arm-none-eabi-nm inside the toolchain container."""
@@ -140,9 +142,10 @@ class Emu:
         g['msg'] = self.cstr(raw, OFF['msg'], 32)
         g['lastWord'] = self.cstr(raw, OFF['lastWord'], 16)
         g['bestWord'] = self.cstr(raw, OFF['bestWord'], 16)
+        g['callout'] = self.cstr(raw, OFF['callout'], 20)
         g['settings'] = dict(zip(['theme', 'hand', 'fire', 'music'], raw[OFF['theme']:OFF['theme'] + 4]))
         cc = raw[OFF['chainC']:OFF['chainC'] + MAX_CHAIN]; cr = raw[OFF['chainR']:OFF['chainR'] + MAX_CHAIN]
-        g['chain'] = [(cc[i], cr[i]) for i in range(g['chainLen'])]
+        g['chain'] = [(cc[i], cr[i]) for i in range(min(g['chainLen'], MAX_CHAIN))]   # the mirror holds the first ten
         return g
     def fps(self, frames=120):
         a = self.state()['frame']; self.run(frames); return self.state()['frame'] - a
@@ -182,6 +185,10 @@ class Emu:
     def set_daily(self, played=0, last=0, streak=0):
         """Daily records: the date of the attempt already used, of the last scored Daily, and the streak."""
         self.poke(POKE_DAILY, played, last, streak)
+    def set_pass(self, n, found=0):
+        """Layout checks: the pass becomes the first n letters of the alphabet (1..9), `found` is a bitmask of the
+        letters shown as found. The back layer is left alone, so do not peel after this."""
+        self.poke(POKE_PASS, n, found)
     def set_lives(self, n):
         """Bookmarks left in the Classic run (3 at the start; a fail or a pause restart costs one)."""
         self.poke(POKE_LIVES, n)

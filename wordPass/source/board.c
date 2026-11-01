@@ -555,18 +555,28 @@ int boardHeatFor(int len)
     return len <= 3 ? 3 : len == 4 ? 2 : len <= 6 ? 1 : 0;
 }
 
+// The heat the next turn adds in all: the move's own (`baseHeat`, boardHeatFor(len) for a word),
+// the Lockdown pulse when this turn lands on one, and the overtime heat once the shelf is past
+// its turn budget. endTurn books exactly this, and the panel previews it.
+int boardTurnHeat(const Game *g, int baseHeat)
+{
+    int turn = g->turn + 1, heat = baseHeat;
+    if (g->lockdown && g->pulseEvery > 0 && (turn % g->pulseEvery) == 0) heat += 2;   // Lockdown pulse
+    int over = turn - (g->lockdown ? 16 : 24);                                        // shelf overtime
+    if (over > 0) heat += 1 + over / 24;
+    return heat;
+}
+
 // Every word and every peel is a turn. Order matters: the cells the turn vacated are
 // refilled before the fire moves (no chimney through your own word), and a new flame is
 // lit after the fire step, so it sits on its spawn row for a full burnEvery before it
 // starts to creep.
 static void endTurn(Game *g, int heatAdd)
 {
+    int add = boardTurnHeat(g, heatAdd);
     g->turn++;
-    g->heat += heatAdd;
-    if (g->lockdown && g->pulseEvery > 0 && (g->turn % g->pulseEvery) == 0) g->heat += 2;   // Lockdown pulse
-    int over = g->turn - (g->lockdown ? 16 : 24);                                        // shelf overtime
-    if (over > 0) g->heat += 1 + over / 24;
-    g->overtime = over > 0;
+    g->heat += add;
+    g->overtime = g->turn > (g->lockdown ? 16 : 24);
 
     int spawned = applyGravity(g);
     g->burnTimer++;
@@ -633,6 +643,13 @@ static bool ledgerHas(const Game *g, const char *w)
     return false;
 }
 
+// The length multiplier of a word: x1 up to four letters, x2 for five and six, x3 for seven and
+// eight, x4 beyond.
+int boardLenMult(int len)
+{
+    return (len <= 4) ? 1 : (len <= 6) ? 2 : (len <= 8) ? 3 : 4;
+}
+
 // The score a chain is worth, with the parts the callouts and the ledger need. Returns 0
 // when the chain is not an accepted word. Curve: letter values x length multiplier x 10,
 // +200 for seven letters and up, +30 per letter for a word through a flame, +50% per
@@ -653,7 +670,7 @@ static int chainScoreDetail(const Game *g, char *w, int *lenOut, int *tierOut, i
         if (cl->state == CELL_SECRET) diamonds++;
     }
     if (diamonds > 2) diamonds = 2;
-    int mult = (len <= 4) ? 1 : (len <= 6) ? 2 : (len <= 8) ? 3 : 4;
+    int mult = boardLenMult(len);
     int gained = base * mult * 10 + (len >= 7 ? 200 : 0) + 30 * len * usedBurn;
     gained += gained * diamonds / 2;
     int repeat = ledgerHas(g, w) ? 1 : 0;

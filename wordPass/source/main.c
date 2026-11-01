@@ -188,8 +188,9 @@ static void submitChain(void)
         char ps[12]; siprintf(ps, "+%d", gained);
         gfxPopup(cc[cn / 2], cr[cn / 2], ps, 1);
         musicWord(G.lastWordLen, gained);
-        // callout, one per word, in priority order
-        if (G.lastWordLen >= 8) setMsg("SPECTACULAR!", 60);
+        gfxSubmitFlash();
+        // callout, one per word, in priority order: the top-screen message and the word over the board
+        if (G.lastWordLen >= 8) { setMsg("SPECTACULAR!", 60); gfxCallout("SPECTACULAR!", CALLOUT_GOLD); }
         else if (G.lastWordDiamonds >= 1) {
             // the "+N" popup sits on the middle gem: put PASS LINK on the diamond (or the
             // chain's first gem when the diamond is the middle one) so the two never stack
@@ -197,12 +198,12 @@ static void submitChain(void)
             for (int i = 0; i < cn; i++) if (G.cell[cc[i]][cr[i]].state == CELL_SECRET) { d = i; break; }
             if (d == cn / 2) d = 0;
             gfxPopup(cc[d], cr[d], "PASS LINK", 1);
-            setMsg("PASS LINK!", 60);
+            setMsg("PASS LINK!", 60); gfxCallout("PASS LINK!", CALLOUT_ACCENT);
         }
-        else if (G.lastWordLen >= 7) setMsg("EXCELLENT!", 60);
-        else if (G.lastWordLen >= 5) setMsg("GOOD!", 60);
-        else if (G.lastWordRepeat) setMsg("AGAIN", 45);
-        else if (G.lastWordTier == 2) setMsg("RARE WORD", 60);
+        else if (G.lastWordLen >= 7) { setMsg("EXCELLENT!", 60); gfxCallout("EXCELLENT!", CALLOUT_GOLD); }
+        else if (G.lastWordLen >= 5) { setMsg("GOOD!", 60); gfxCallout("GOOD!", CALLOUT_GOLD); }
+        else if (G.lastWordRepeat) { setMsg("AGAIN", 45); gfxCallout("AGAIN", CALLOUT_ACCENT); }
+        else if (G.lastWordTier == 2) { setMsg("RARE WORD", 60); gfxCallout("RARE WORD", CALLOUT_GOLD); }
         burstNewFlames();
         if (G.fail) enterFail();
     } else if (G.chainLen >= 3) {
@@ -210,24 +211,27 @@ static void submitChain(void)
         int dialect = boardWordSpelling(w, strlen(w));
         bool obscure = S.library == LIB_COMMON && boardWordTier(w, strlen(w)) == 2;
         setMsg(dialect == 2 ? "BRITISH SPELLING" : dialect == 1 ? "AMERICAN SPELLING" : obscure ? "TOO OBSCURE" : "NOT IN THE LIBRARY", 45);
+        // the board callout stays short enough to pop at 2x (the top-screen message carries the full reason)
+        gfxCallout(dialect == 2 ? "UK SPELLING" : dialect == 1 ? "US SPELLING" : obscure ? "TOO OBSCURE" : "NOT A WORD", CALLOUT_FIRE);
         gfxInvalidWord();
     }
 }
 
 static void handlePlay(u32 down, u32 held, touchPosition *t)
 {
-    if (down & KEY_X) G.peekLatch = !G.peekLatch;
-    if ((down & KEY_TOUCH) && gfxInPeekButton(t->px, t->py)) G.peekLatch = !G.peekLatch;
+    if (down & KEY_X) { G.peekLatch = !G.peekLatch; gfxPress(PRESS_PEEK); }
+    if ((down & KEY_TOUCH) && gfxInPeekButton(t->px, t->py)) { G.peekLatch = !G.peekLatch; gfxPress(PRESS_PEEK); }
+    if ((down & KEY_TOUCH) && gfxInPauseButton(t->px, t->py)) { gfxPress(PRESS_PAUSE); G.armed = 0; G.state = ST_PAUSE; return; }
     bool peekNow = (held & (KEY_L | KEY_R)) != 0 || G.peekLatch;
     if (peekNow != G.peekHeld) { G.peekHeld = peekNow; musicPeek(peekNow); }
     if (!peekNow) G.armed = 0;
 
-    if (down & KEY_START) { G.armed = 0; G.state = ST_PAUSE; return; }   // a held chain survives the pause
+    if (down & KEY_START) { gfxPress(PRESS_PAUSE); G.armed = 0; G.state = ST_PAUSE; return; }   // a held chain survives the pause
     // B steps the chain back one gem, held for 20 frames it clears it; Y clears at once
     static int bHeld;
     if (held & KEY_B) { if (++bHeld == 20) boardClearChain(&G); } else bHeld = 0;
     if ((down & KEY_B) && G.chainLen > 0) G.chainLen--;
-    if (down & KEY_Y) boardClearChain(&G);
+    if (down & KEY_Y) { boardClearChain(&G); gfxPress(PRESS_CLEAR); }
 
     // the d-pad moves a hex cursor; a real touch hands control back to the stylus
     if (down & (KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT)) {
@@ -265,9 +269,9 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
                 musicReveal(true);
                 if (boardPassComplete(&G)) {
                     char s[32]; siprintf(s, "SHELF %d CLEARED", G.shelf); setMsg(s, 400);
-                } else setMsg("PASS LETTER FOUND", 90);
+                } else { setMsg("PASS LETTER FOUND", 90); gfxCallout("PASS LETTER!", CALLOUT_ACCENT); }
             } else if (res == 1) musicReveal(false);
-            else if (res == 3 || res == -1) { setMsg("SCORCHED", 60); gfxBurst(c, r, BURST_SCORCH, letter); gfxShake(6); }
+            else if (res == 3 || res == -1) { setMsg("SCORCHED", 60); gfxCallout("SCORCHED", CALLOUT_FIRE); gfxBurst(c, r, BURST_SCORCH, letter); gfxShake(6); }
             burstNewFlames();
             // the peel that completes the pass wins the shelf even if its turn ended badly
             if (G.fail && !boardPassComplete(&G)) { enterFail(); return; }
@@ -326,20 +330,20 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
             if (ct == CT_SUBMIT_TAP) { submitChain(); ignoreStroke = true; }
             else if (ct == CT_NOT_ADJACENT) gfxNope(c, r);
         } else if (fresh) {
-            if (gfxInSubmit(t->px, t->py)) submitChain();
-            else if (gfxInClear(t->px, t->py)) boardClearChain(&G);
+            if (gfxInSubmit(t->px, t->py)) { gfxPress(PRESS_SUBMIT); submitChain(); }
+            else if (gfxInClear(t->px, t->py)) { gfxPress(PRESS_CLEAR); boardClearChain(&G); }
         }
         lastTx = t->px; lastTy = t->py; wasTouching = true;
     }
     if (down & KEY_A) {
         if (G.curOn) {
             int tc = G.chainLen ? G.chainC[G.chainLen - 1] : -1, tr = G.chainLen ? G.chainR[G.chainLen - 1] : -1;
-            if (G.chainLen >= 3 && tc == G.curC && tr == G.curR) submitChain();
+            if (G.chainLen >= 3 && tc == G.curC && tr == G.curR) { gfxPress(PRESS_SUBMIT); submitChain(); }
             else {
                 enum ChainTouch ct = boardChainTouch(&G, G.curC, G.curR, G.chainLen == 0);
                 if (ct == CT_NOT_ADJACENT || ct == CT_RESTARTED) gfxNope(G.curC, G.curR);
             }
-        } else submitChain();
+        } else { gfxPress(PRESS_SUBMIT); submitChain(); }
     }
     // first-shelf nudge: three words in and no peek yet
     if (G.shelf == 1 && G.mode == MODE_CLASSIC && !G.hintShown && G.peels == 0 && G.wordsThisShelf >= 3) {
