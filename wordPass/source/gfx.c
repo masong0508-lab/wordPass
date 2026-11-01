@@ -125,12 +125,27 @@ static ITCM_CODE __attribute__((noinline)) void fillRect(int x, int y, int w, in
     if (y + h > clipY1) h = clipY1 - y;
     if (w <= 0 || h <= 0) return;
     u32 col2 = col | ((u32)col << 16);
-    for (int j = 0; j < h; j++) {
+    int rows = h, span = w;
+    if (x == 0 && w == SCREEN_W) { rows = 1; span = w * h; }   // full-width rows are one contiguous run
+    for (int j = 0; j < rows; j++) {
         u16 *p = cur + (y + j) * SCREEN_W + x;
-        int n = w;
+        int n = span;
         if (((uintptr_t)p & 2) && n) { *p++ = col; n--; }
         u32 *p32 = (u32 *)p;
-        for (; n >= 8; n -= 8) { p32[0] = col2; p32[1] = col2; p32[2] = col2; p32[3] = col2; p32 += 4; }
+        if (n >= 16) {
+            // eight words per stmia: one instruction per 32 bytes instead of a store and
+            // loop step per word, which is what the screen clears and the backdrop spend
+            // most of their time on (VRAM takes the words at the same bus rate either way)
+            int k = n >> 4;
+            u32 c1 = col2, c2 = col2, c3 = col2, c4 = col2, c5 = col2, c6 = col2, c7 = col2;
+            asm volatile(
+                "1: stmia %0!, {%2, %3, %4, %5, %6, %7, %8, %9}\n\t"
+                "subs %1, %1, #1\n\t"
+                "bne 1b"
+                : "+r"(p32), "+r"(k), "+r"(col2), "+r"(c1), "+r"(c2), "+r"(c3), "+r"(c4), "+r"(c5), "+r"(c6), "+r"(c7)
+                : : "memory", "cc");
+            n &= 15;
+        }
         for (; n >= 2; n -= 2) *p32++ = col2;
         if (n) *(u16 *)p32 = col;
     }
@@ -1100,7 +1115,6 @@ static void overlayCard(int x, int y, int w, int h)
 
 static void drawOverlay(const Game *g)
 {
-    dimOn = false;
     if (g->state == ST_PLAY) return;
     if (g->state == ST_TITLE) { drawTitle(g); return; }
     if (g->state == ST_OPTIONS) { drawOptions(g); return; }
@@ -1207,6 +1221,9 @@ void gfxFrame(const Game *g)
     PROF_START();
     cur = vramBack;            // draw the touch screen straight into the hidden VRAM bank
     clipY0 = 0; clipY1 = SCREEN_H;
+    // The hardware dim is re-requested by overlayCard every frame it is wanted; a state
+    // that draws no card (play) must not inherit it from the previous frame's card.
+    dimOn = false;
     if (g->state == ST_TITLE || g->state == ST_OPTIONS) {
         // menus paint their own black strip and frame: no board, no panel. Particles and
         // popups that outlive the game go on top of the menu, not under it.

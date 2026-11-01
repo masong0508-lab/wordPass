@@ -12,6 +12,13 @@ fps = e.fps(); assert fps >= 118, f'title fps too low: {fps}/120 (expect 120)'
 e.tap(52, 147); e.run(150)
 g = e.state(); assert g['state'] == 1, f'not in play after CLASSIC tap: {g["state"]}'
 fps = e.fps(); assert fps >= 110, f'play fps too low: {fps}/120 (expect 120)'
+# pause dims the board strip in hardware; resuming must switch the effect back off
+lit = e.strip_brightness()
+e.press('START', settle=30); dim = e.strip_brightness(); e.shot(f'{out}/smoke_pause.png')
+e.press('START', settle=30); back = e.strip_brightness()
+assert e.state()['state'] == 1, 'START did not resume play'
+assert dim < lit * 0.7, f'pause did not dim the board: {dim} vs {lit} lit'
+assert back > lit * 0.9, f'board still dim after resume: {back} vs {lit} lit'
 # spell three long words
 for i in range(3):
     g = e.state(); ws = e.find_words(g); assert ws, 'solver found no words'

@@ -81,6 +81,12 @@ class Emu:
         return g
     def fps(self, frames=120):
         a = self.state()['frame']; self.run(frames); return self.state()['frame'] - a
+    def strip_brightness(self):
+        """Mean R+G+B over the touch screen's board strip (0..765): ~260 lit, ~120 under the
+        pause/results dim. Catches a brightness-decrease effect left on after a state change."""
+        px = self.emu.screenshot().convert('RGB').load()
+        x0 = self.bx
+        return sum(sum(px[x, y]) for y in range(196, 380) for x in range(x0, x0 + 174)) // (184 * 174)
     # ---- board helpers
     def center(self, c, r):
         return self.bx + GX + c*TW + TW//2, GY + r*TH + (ODD if c & 1 else 0) + TH//2
