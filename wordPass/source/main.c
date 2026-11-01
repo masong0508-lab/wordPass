@@ -16,6 +16,7 @@ static void setMsg(const char *m, int frames)
 static void startShelf(void)
 {
     boardNewShelf(&G);
+    gfxFadeIn();
     musicNewShelf(G.shelf, G.lockdown);
     char s[32];
     sprintf(s, "FIND THE %d LETTER PASS", G.passLen);
@@ -33,6 +34,8 @@ static void newGame(void)
 static void enterFail(void)
 {
     G.state = ST_FAIL;
+    gfxShake(14);
+    gfxFlash();
     G.peekHeld = 0;
     musicPeek(false);
     G.stateTimer = 0;
@@ -55,10 +58,12 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
         if ((down & KEY_TOUCH) && gfxCellAt(t->px, t->py, &c, &r)) {
             int res = boardPeel(&G, c, r);
             if (res == 2) {
+                gfxBurst(c, r, BURST_REVEAL);
+                gfxPopup(c, r, "FOUND", 1);
                 musicReveal(true);
                 setMsg(boardPassComplete(&G) ? "PASS COMPLETE!" : "PASS LETTER FOUND", 90);
             } else if (res == 1) musicReveal(false);
-            else if (res == 3) setMsg("SCORCHED", 60);
+            else if (res == 3) { setMsg("SCORCHED", 60); gfxBurst(c, r, BURST_SCORCH); gfxShake(6); }
             if (G.fail) { enterFail(); return; }
             if (boardPassComplete(&G)) {
                 G.state = ST_PASSED; G.stateTimer = 0;
@@ -80,8 +85,13 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
     }
     if (down & KEY_A) {
 submit:;
+        u8 cc[MAX_CHAIN], cr[MAX_CHAIN]; int cn = G.chainLen;
+        memcpy(cc, G.chainC, cn); memcpy(cr, G.chainR, cn);
         int gained = boardSubmit(&G);
         if (gained > 0) {
+            for (int i = 0; i < cn; i++) gfxBurst(cc[i], cr[i], BURST_SHATTER);
+            char ps[12]; sprintf(ps, "+%d", gained);
+            gfxPopup(cc[cn / 2], cr[cn / 2], ps, 1);
             musicWord(G.lastWordLen, gained);
             char s[32];
             const char *tag = G.lastWordLen >= 8 ? "SPECTACULAR" : G.lastWordLen >= 7 ? "EXCELLENT" : G.lastWordLen >= 5 ? "GOOD" : "";

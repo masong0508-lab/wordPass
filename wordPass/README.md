@@ -47,6 +47,8 @@ the pass buried low, and the music drops into a minor key.
 | Hold L or R | peek mode (tap a gem to peel it) |
 | START | pause |
 
+![wordPass](screenshot.png) ![fire](screenshot-fire.png)
+
 ## Interface
 
 Bejeweled on the front, N+ behind. Letter gems are faceted and glossy, colour
@@ -55,6 +57,13 @@ amber). The frame and pass plaque are gold. Everything else, including the
 whole back layer you see in peek mode, is flat black with thin lines and a
 single accent colour. Holding peek dims the gems to outlines so the layer
 you are reading is always the one in colour.
+
+Everything that happens gets juice: scored gems shatter into shards and the
+score floats up from the chain, a found pass letter cracks open in a ring of
+stars and pops into the plaque on the top screen, burning gems pulse with
+flame tongues and shed sparks, callouts pop in at double size, shelves fade
+in, and a failed run flashes and shakes the screen. The gold frames carry a
+travelling shimmer and the submit gem breathes while a valid word is chained.
 
 ## Music
 

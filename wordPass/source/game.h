@@ -108,6 +108,12 @@ void gfxFrame(const Game *g);        // draws both screens and flips
 int  gfxCellAt(int px, int py, int *c, int *r);
 bool gfxInSubmit(int px, int py);
 bool gfxInClear(int px, int py);
+enum { BURST_SHATTER = 0, BURST_REVEAL, BURST_SCORCH, BURST_FIRE };
+void gfxBurst(int c, int r, int kind);
+void gfxPopup(int c, int r, const char *txt, int gold);
+void gfxFadeIn(void);
+void gfxFlash(void);
+void gfxShake(int frames);
 
 // music.c
 void musicInit(void);
