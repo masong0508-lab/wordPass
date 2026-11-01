@@ -305,6 +305,19 @@ void musicReveal(bool secret);
 void musicPassComplete(void);
 void musicFail(void);
 void musicBuildNotes(u16 *out);     // 128-entry MIDI note -> Hz table (shared with tools/check)
+// One-shot sound effects on the chime and second noise voices, with priorities (music.c SFX_TAB)
+enum { SFX_TAP = 0, SFX_UNTAP, SFX_INVALID, SFX_PEEL, SFX_SCORCH, SFX_IGNITE, SFX_FIRESTEP, SFX_MENU, SFX_COUNT };
+void musicSfx(int id, int param);   // param: the chain length after the change for SFX_TAP / SFX_UNTAP
+// What the sequencer last sent to the sound hardware, mirrored by debug.c (tools/emu/wp.py music())
+typedef struct {
+    u16 hz[8];                      // per voice: HOOK PULSE BASS PAD ALARM CHIME DRUM NOISE2
+    u8  vol[8];
+    u8  duty[8];                    // the libnds DutyCycle value (0 12.5%, 1 25%, 2 37.5%, 3 50%)
+    u8  step, section, tempo, drumLevel;   // the step most recently sequenced (255 = none yet), A/B section, frames per step
+    s16 lastSfx;                    // the last sound effect that started (-1 none)
+    u16 sfxCount;                   // sound effects started since boot
+} MusicDbg;
+void musicDebug(MusicDbg *out);
 
 // debug.c
 void debugSync(Game *g);             // mirrors state for the emulator harness and applies pokes

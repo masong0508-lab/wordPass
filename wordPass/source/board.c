@@ -489,6 +489,7 @@ static bool spawnFire(Game *g)
     g->fireN = 0;
     if (!igniteColumn(g, -1)) return false;
     if (g->lockTier >= 2) igniteColumn(g, g->fireC[0]);
+    musicSfx(SFX_IGNITE, 0);
     return true;
 }
 
@@ -508,6 +509,7 @@ static void fireStep(Game *g)
             if (g->cell[c][r].state == CELL_BURN && r == ROWS - 1) { g->fail = FAIL_FIRE; return; }
 
     bool moved[COLS][ROWS] = {{false}};
+    bool anyMoved = false;
     for (int c = 0; c < COLS; c++) {
         for (int r = ROWS - 1; r >= 0; r--) {
             if (g->cell[c][r].state != CELL_BURN || moved[c][r]) continue;
@@ -520,7 +522,7 @@ static void fireStep(Game *g)
                 f.letter = g->cell[c][rr].letter;
                 g->cell[c][rr] = f;
                 g->cell[c][rr].yoff = 0;
-                moved[c][rr] = true;
+                moved[c][rr] = true; anyMoved = true;
                 continue;
             }
             // blocked at rr (SECRET or BURN), or fell out the bottom (rr == ROWS): walk back up
@@ -536,9 +538,10 @@ static void fireStep(Game *g)
             g->cell[c][r].state = CELL_EMPTY;
             g->cell[c][dest] = f;
             g->cell[c][dest].yoff = 0;
-            moved[c][dest] = true;
+            moved[c][dest] = true; anyMoved = true;
         }
     }
+    if (anyMoved) musicSfx(SFX_FIRESTEP, 0);
 }
 
 // Test channel (debug.c poke 5): one fire advance and the gravity that follows it, with

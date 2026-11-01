@@ -56,8 +56,9 @@ OFF = {
     'calloutLife': 568, 'pressBits': 572, 'callout': 576,
     'shownScore': 596, 'pauseRow': 600, 'pauseArm': 604,
     'tutorStep': 608, 'tutorDone': 612, 'tipIndex': 616, 'msgTimer': 620,
+    'seq': 624,
 }
-DBG_SIZE = 624
+DBG_SIZE = 664
 I32_FIELDS = ['state', 'mode', 'shelf', 'score', 'fail', 'turn', 'heat', 'chainLen', 'peels', 'lockdown',
               'bestWordScore', 'dailySeed', 'passLen', 'lastWordTier', 'rareWords', 'library',
               'heatThreshold', 'burnEvery', 'burnTimer', 'optRow', 'pulseEvery', 'lockTier', 'overtime',
@@ -279,3 +280,18 @@ class Emu:
         self.run(200); self.tap(self.bx + 52, 147); self.run(150)
     def start_daily(self):
         self.run(200); self.tap(self.bx + 120, 147); self.run(150)
+    # ---- music: the sequencer's mirror (source/music.c MusicDbg, 40 bytes at OFF['seq'])
+    VOICES = ['hook', 'pulse', 'bass', 'pad', 'alarm', 'chime', 'drum', 'noise2']
+    def music(self):
+        """What the sequencer last sent to the hardware: hz/vol/duty lists per voice (HOOK PULSE BASS PAD ALARM CHIME
+        DRUM NOISE2; duty is the libnds enum, 0 12.5% 1 25% 2 37.5% 3 50%), step (255 = none yet), section, tempo
+        (frames per step), drumLevel, lastSfx (-1 none) and sfxCount."""
+        v = struct.unpack_from('<8H8B8B4BhH', self.raw(), OFF['seq'])
+        return {'hz': list(v[0:8]), 'vol': list(v[8:16]), 'duty': list(v[16:24]), 'step': v[24], 'section': v[25],
+                'tempo': v[26], 'drumLevel': v[27], 'lastSfx': v[28], 'sfxCount': v[29]}
+    def wait_step(self, n, limit=600):
+        """Run frame by frame until the sequencer has sequenced step n (its notes were sent on that frame)."""
+        for _ in range(limit):
+            self.run(1)
+            if self.music()['step'] == n: return self.music()
+        raise AssertionError(f'step {n} never came (last {self.music()["step"]})')

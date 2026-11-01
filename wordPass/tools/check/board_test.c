@@ -61,6 +61,131 @@ static bool loadDict(const char *path, const char *poolPath, const char *variant
     return true;
 }
 
+// ---- music: the sequencer is compiled in and the stubs keep what it sent to each channel
+extern int stubHz[32], stubVol[32], stubDuty[32], stubPan[32], stubWrites, stubRedundant;
+static MusicDbg mdbg(void) { MusicDbg d; musicDebug(&d); return d; }
+static void mrun(int n) { for (int i = 0; i < n; i++) musicTick(&g); }
+
+static void musicTests(void)
+{
+    u16 nhz[128];
+    musicBuildNotes(nhz);
+    static const int keys[8] = { 60, 62, 57, 65, 64, 67, 55, 69 };
+    boardOf('a'); g.passLen = 0;
+    memset(&S, 0, sizeof(S)); S.music = 1;
+    musicInit();
+
+    // the voices sit where the spec puts them in the stereo field
+    static const int PAN[8] = { 64, 64, 64, 72, 24, 70, 60, 92 };
+    bool pans = true;
+    for (int v = 0; v < 8; v++) if (stubPan[v] != PAN[v]) pans = false;
+    CHECK("stereo: hook 64 pulse 64 bass 64 pad 72 alarm 24 chime 70 drum 60 noise2 92", pans);
+    CHECK("no sequenced step yet reads 255", mdbg().step == 255);
+
+    // register window: the lead stays in a singable range in every key, major and minor
+    {
+        bool top = true, low = true;
+        for (int lock = 0; lock < 2; lock++)
+            for (int shelf = 1; shelf <= 8; shelf++) {
+                int root = keys[shelf - 1];
+                musicNewShelf(shelf, lock);
+                int hi = 0, lo = 99999;
+                for (int f = 0; f < 64 * 8 * 4; f++) {
+                    musicTick(&g);
+                    if (mdbg().step == 255) continue;
+                    int h = mdbg().hz[0];
+                    if (h > hi) hi = h;
+                    if (h < lo) lo = h;
+                }
+                int topNote = root >= 64 ? 85 : 90;
+                int floorNote = root == 64 || root == 65 ? 64 : 67;   // the E and F keys cannot reach G4 on scale degree 1
+                if (hi > nhz[topNote] * 102 / 100) top = false;
+                if (lo < nhz[floorNote] * 98 / 100) low = false;
+            }
+        CHECK("register window: the hook never goes above C#6 (high keys) or F#6 (low keys)", top);
+        CHECK("register window: the hook never goes below G4 (E4 for the E and F keys)", low);
+    }
+
+    // the hook's envelope: instant onset at 64 on a 12.5% pulse, 50% after three frames, settles at 44, vibrato after ten
+    {
+        musicNewShelf(1, false);
+        int f = 0;
+        while (mdbg().step != 0 && f++ < 40) musicTick(&g);
+        MusicDbg d = mdbg();
+        CHECK("step 0 is visible on the frame its notes are sent (note C5, vol 64, 12.5% duty)", f < 40 && d.hz[0] == nhz[72] && d.vol[0] == 64 && d.duty[0] == DutyCycle_12);
+        int base = d.hz[0], vol3 = 0, duty3 = -1, vol7 = 0, vibMin = 9999, vibMax = 0, early = 1;
+        for (int i = 1; i <= 15; i++) {
+            musicTick(&g); d = mdbg();
+            if (i == 3) { vol3 = d.vol[0]; duty3 = d.duty[0]; }
+            if (i == 7) vol7 = d.vol[0];
+            if (i < 10 && d.hz[0] != base) early = 0;
+            if (i >= 10) { if (d.hz[0] < vibMin) vibMin = d.hz[0]; if (d.hz[0] > vibMax) vibMax = d.hz[0]; }
+        }
+        CHECK("hook decays 3 per frame and settles at 44", vol3 == 55 && vol7 == 44);
+        CHECK("hook duty goes 12.5% -> 50% after three frames", duty3 == DutyCycle_50);
+        CHECK("hook vibrato starts after ten frames and stays within 1/96 of the note", early && vibMin < base && vibMax > base && vibMax <= base + base / 96 && vibMin >= base - base / 96);
+    }
+
+    // sound effects: priorities, pitch rules, the mirror
+    {
+        musicNewShelf(1, false);
+        mrun(200);
+        int c0 = mdbg().sfxCount;
+        musicSfx(SFX_SCORCH, 0);
+        musicSfx(SFX_TAP, 3);
+        MusicDbg d = mdbg();
+        CHECK("a priority 1 tap does not cut a running scorch (prio 3)", d.sfxCount == c0 + 1 && d.lastSfx == SFX_SCORCH);
+        mrun(1); d = mdbg();
+        CHECK("scorch: noise burst at vol 72 and the chime on C5+18 duty 50", d.vol[7] == 72 && d.hz[5] == nhz[60 + 18] && d.duty[5] == DutyCycle_50);
+        mrun(40);
+        d = mdbg();
+        CHECK("scorch ends: both effect voices fall silent", d.vol[7] == 0 && d.vol[5] == 0);
+        int pitch[4] = { 1, 5, 12, 0 }, want[4] = { 72, 81, 93, 72 };
+        bool tap = true;
+        for (int i = 0; i < 4; i++) {
+            musicSfx(SFX_TAP, pitch[i]); mrun(1);
+            if (mdbg().hz[5] != nhz[want[i]] || mdbg().vol[5] != 48) tap = false;
+            mrun(30);
+        }
+        CHECK("TAP climbs the pentatonic by chain length and clamps at ten", tap);
+        musicSfx(SFX_UNTAP, 0); mrun(1);
+        CHECK("UNTAP uses the same rule (minimum 1), softer and shorter", mdbg().hz[5] == nhz[72] && mdbg().vol[5] == 36);
+        mrun(30);
+        c0 = mdbg().sfxCount;
+        musicSfx(SFX_INVALID, 0); mrun(1);
+        CHECK("INVALID: C#5 pair at 60", mdbg().hz[5] == nhz[73] && mdbg().vol[5] == 60);
+        musicSfx(SFX_PEEL, 0);
+        CHECK("an equal priority replaces a running effect", mdbg().sfxCount == c0 + 2 && mdbg().lastSfx == SFX_PEEL);
+        mrun(1);
+        CHECK("PEEL: 3 frame noise rush from 32000 Hz and a one frame click", mdbg().hz[7] == 32000 && mdbg().vol[7] == 56 && mdbg().hz[5] == nhz[96] && mdbg().vol[5] == 40);
+        mrun(1);
+        CHECK("PEEL noise falls 6000 Hz per frame", mdbg().hz[7] == 26000);
+        mrun(30);
+        musicSfx(SFX_IGNITE, 0); musicSfx(SFX_FIRESTEP, 0);
+        CHECK("a firestep (prio 2) does not cut an ignite (prio 3)", mdbg().lastSfx == SFX_IGNITE);
+        mrun(1);
+        CHECK("IGNITE: 1500 Hz rising 1300 per frame at vol 50", mdbg().hz[7] == 1500 && mdbg().vol[7] == 50);
+        mrun(1);
+        CHECK("IGNITE keeps rising", mdbg().hz[7] == 2800);
+        mrun(30);
+        c0 = mdbg().sfxCount;
+        musicSfx(-1, 0); musicSfx(SFX_COUNT, 0);
+        CHECK("an out-of-range effect id is ignored", mdbg().sfxCount == c0);
+    }
+
+    // MUSIC off silences every channel, and nothing was ever written twice
+    {
+        S.music = 0; mrun(2);
+        bool quiet = true;
+        for (int v = 0; v < 8; v++) if (mdbg().vol[v]) quiet = false;
+        musicSfx(SFX_SCORCH, 0); mrun(3);
+        for (int v = 0; v < 8; v++) if (mdbg().vol[v]) quiet = false;
+        CHECK("MUSIC OFF holds every channel at volume 0, effects included", quiet);
+        S.music = 1; mrun(300);
+        CHECK("the sequencer never writes a value the hardware already holds", stubRedundant == 0 && stubWrites > 100);
+    }
+}
+
 int main(int argc, char **argv)
 {
     if (!loadDict(argc > 1 ? argv[1] : "data/dict.bin", argc > 2 ? argv[2] : "data/pools.bin", argc > 3 ? argv[3] : "data/variants.bin")) return 1;
@@ -769,6 +894,8 @@ int main(int argc, char **argv)
     CHECK("note table C4 = 262 Hz", hz[60] == 262);
     CHECK("note table A4 = 440 Hz", hz[69] == 440);
     CHECK("note table octaves double", hz[81] == 880 && hz[57] == 220);
+
+    musicTests();
 
     printf("%s: %d failure(s)\n", fails ? "CHECK FAILED" : "CHECK OK", fails);
     return fails;

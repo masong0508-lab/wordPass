@@ -1663,5 +1663,98 @@ def _():
         assert lit == left, f'title tagline for the {"left" if left else "right"} hand: lit={lit}'
     set_hand(False)
 
+# ---- music: the sequencer through the debug mirror (nothing here is judged by ear) -------------
+SFX_TAP, SFX_UNTAP, SFX_INVALID, SFX_PEEL, SFX_SCORCH, SFX_IGNITE, SFX_FIRESTEP, SFX_MENU = range(8)
+HOOK_C = 523                      # shelf 1 is in C: the hook's first note is C5
+
+@scenario('music mirror: step 0 lands with its notes on the same frame, hook onset 64 on a 12.5% pulse, 8 frames a step')
+def _():
+    to_title(); e.run(5)
+    assert e.state()['settings']['music'] == 1, 'MUSIC defaults to ON'
+    m = e.wait_step(0)
+    assert m['tempo'] == 8, f'tempo {m["tempo"]}'
+    assert m['hz'][0] == HOOK_C and m['vol'][0] == 64 and m['duty'][0] == 0, f'hook at step 0: {m["hz"][0]} Hz vol {m["vol"][0]} duty {m["duty"][0]}'
+    seen = []
+    for _ in range(9):
+        e.run(1); seen.append(e.music())
+    assert [x['duty'][0] for x in seen[:3]] == [0, 0, 3], 'the hook goes from 12.5% to 50% duty on the third frame'
+    assert seen[6]['vol'][0] == 44, f'the hook settles at 44 after seven frames, read {seen[6]["vol"][0]}'
+    assert seen[7]['step'] == 1 and seen[6]['step'] == 0, 'the next step arrives eight frames later'
+    m = e.wait_step(2)
+    assert m['hz'][0] == 659 and m['vol'][0] == 64, f'step 2 retriggers on E5: {m["hz"][0]} Hz'   # degree 3: C5 + 4 semitones
+
+@scenario('music: the MUSIC option silences every channel, effects included, and ON brings the hook back')
+def _():
+    to_title(); e.run(5)
+    e.tap(e.bx + 86, 170); e.run(10)
+    assert e.state()['state'] == ST_OPTIONS
+    e.tap(130, opt_row_y(5)); e.run(4)                      # MUSIC: any half steps a two-valued row
+    assert e.state()['settings']['music'] == 0
+    m = e.music(); assert not any(m['vol']), f'MUSIC OFF but a channel is at {m["vol"]}'
+    e.tap(130, opt_row_y(0)); e.run(2)                      # a menu blip while off stays silent too
+    assert not any(e.music()['vol']), 'effects ignore the MUSIC option'
+    e.tap(130, opt_row_y(5)); e.run(4)
+    assert e.state()['settings']['music'] == 1
+    m = e.wait_step(0); assert m['vol'][0] == 64, 'the hook returns at full onset'
+    e.press('B', settle=20)
+
+@scenario('music effects from play: taps climb, an untap steps back, a bad word, peels, scorch, ignite, firestep')
+def _():
+    ensure_play(); fresh_shelf(); e.set_heat(0); e.set_burn(0, 99); e.run(40)
+    g = e.state(); ws = e.find_words(g, minlen=4, maxlen=5)
+    assert ws, 'no word on the board'
+    word, path = ws[0]
+    c0 = e.music()['sfxCount']
+    e.chain(path, release=False)
+    m = e.music()
+    assert m['sfxCount'] - c0 == len(path) and m['lastSfx'] == SFX_TAP, f'{len(path)} taps expected, got {m["sfxCount"] - c0} (last {m["lastSfx"]})'
+    c1 = m['sfxCount']
+    e.emu.input.touch_release(); e.run(3)
+    e.press('B', settle=3)                                  # B steps the chain back one gem
+    m = e.music(); assert m['sfxCount'] == c1 + 1 and m['lastSfx'] == SFX_UNTAP, f'untap: count {m["sfxCount"] - c1} last {m["lastSfx"]}'
+    e.press('Y', settle=5)
+    # a three-gem chain that is not a word: INVALID
+    for r in (3, 4, 5): e.set_cell(C, r, TILE, 'x')
+    e.run(20); c1 = e.music()['sfxCount']
+    e.chain([(C, 3), (C, 4), (C, 5)]); e.press('A', settle=3)
+    m = e.music(); assert m['lastSfx'] == SFX_INVALID, f'a non-word should fire INVALID, last {m["lastSfx"]}'
+    e.press('Y', settle=5); e.run(30)
+    # a peel that finds nothing: PEEL
+    g = e.state()
+    plain = [(c, r) for c in range(COLS) for r in range(ROWS) if not g['back'][c][r] and g['cell'][c][r][1] == TILE and (c, r) != (C, 3)]
+    pc, pr = plain[0]; e.peel(pc, pr)
+    assert e.music()['lastSfx'] == SFX_PEEL, f'a peel that finds nothing fires PEEL, last {e.music()["lastSfx"]}'
+    e.run(30)
+    # a peel under a flame scorches: SCORCH
+    g = e.state()
+    sc = [(c, r) for c in range(COLS) for r in range(2, ROWS) if not g['back'][c][r] and (c, r) != (pc, pr) and g['cell'][c][r][1] == TILE and c != C]
+    qc, qr = sc[0]; e.set_cell(qc, qr - 1, BURN, 'a'); e.peel(qc, qr)
+    assert e.music()['lastSfx'] == SFX_SCORCH, f'peeling under a flame fires SCORCH, last {e.music()["lastSfx"]}'
+    e.run(60); ensure_play(); e.run(20)
+    # a word with the meter full lights a flame: IGNITE
+    e.set_burn(0, 99); g = e.state()
+    for c, r in e.burn_cells(g): e.set_cell(c, r, TILE, 'e')
+    e.set_heat(g['heatThreshold']); g = e.state(); ws = e.find_words(g, minlen=4, maxlen=5)
+    e.chain(ws[0][1]); e.press('A', settle=2)
+    assert e.music()['lastSfx'] == SFX_IGNITE, f'a flame lighting fires IGNITE, last {e.music()["lastSfx"]}'
+    e.run(40)
+    # the fire moving: FIRESTEP
+    c1 = e.music()['sfxCount']; e.fire_step(); m = e.music()
+    assert m['lastSfx'] == SFX_FIRESTEP and m['sfxCount'] == c1 + 1, f'a flame moving fires FIRESTEP once, last {m["lastSfx"]}'
+    e.set_heat(0); e.run(30)
+
+@scenario('music: menu taps blip (title buttons, options rows, pause rows)')
+def _():
+    to_title(); e.run(30); c0 = e.music()['sfxCount']
+    e.tap(e.bx + 86, 170); e.run(4)
+    assert e.music()['lastSfx'] == SFX_MENU and e.music()['sfxCount'] == c0 + 1, 'OPTIONS fires MENU'
+    c0 = e.music()['sfxCount']; e.press('DOWN', settle=2)
+    assert e.music()['sfxCount'] == c0 + 1, 'walking the options list fires MENU'
+    e.press('B', settle=20)
+    ensure_play(); e.press('START', settle=10); c0 = e.music()['sfxCount']
+    e.press('DOWN', settle=2)
+    assert e.music()['lastSfx'] == SFX_MENU and e.music()['sfxCount'] == c0 + 1, 'a pause row move fires MENU'
+    e.press('START', settle=20)
+
 print('RULES OK' if not fails else f'RULES FAILED: {fails}')
 sys.exit(fails)

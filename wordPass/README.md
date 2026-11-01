@@ -298,6 +298,21 @@ can be mixed by game state.
   the hook, so peeling a path plays the tune.
 - Word chimes are quantized to the beat. Finishing a pass hands the hook to a
   bright octave-up voice for one loop. Failing cuts to the alarm sliding down.
+- Eight voices (six pulse waves and two noise channels), each with its own
+  instrument: the hook starts on a thin 12.5% pulse and fills out to 50%
+  with a late vibrato, the pulse is plucked, the bass is round and the pad
+  swells in. The lead sits an octave lower in the high keys (E, F, G, A), so
+  the tune stays in a singable range in every key.
+- **Stereo**: hook, bass and pulse in the middle, the pad a little right, the
+  drums a little left, the chimes right, the hiss and noise effects far right,
+  and the alarm far left.
+- **Sound effects** run on their own small sequencer with priorities, so a
+  small sound never cuts a bigger one: a rising pentatonic tap for each gem you
+  chain (it climbs with the chain length and tops out at ten gems), a short
+  step back when you drop one, a buzzing pair of notes for a refused word, a
+  rush of air for a peel that finds nothing, a falling hiss and a sliding
+  chime for a scorch, a rising flare when a flame is lit, a low crackle when
+  the fire creeps, and a soft blip on every menu move.
 
 ## Performance
 
