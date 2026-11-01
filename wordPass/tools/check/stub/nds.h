@@ -22,13 +22,15 @@ typedef int64_t  s64;
 
 // PSG API used by music.c
 typedef enum {
-    DutyCycle_0 = 0, DutyCycle_12, DutyCycle_25, DutyCycle_37,
-    DutyCycle_50, DutyCycle_62, DutyCycle_75, DutyCycle_87
+    DutyCycle_0 = 7, DutyCycle_12 = 0, DutyCycle_25 = 1, DutyCycle_37 = 2,
+    DutyCycle_50 = 3, DutyCycle_62 = 4, DutyCycle_75 = 5, DutyCycle_87 = 6
 } DutyCycle;
 void soundEnable(void);
 int  soundPlayPSG(DutyCycle cycle, u16 freq, u8 volume, u8 pan);
 int  soundPlayNoise(u16 freq, u8 volume, u8 pan);
 void soundSetFreq(int soundId, u16 freq);
 void soundSetVolume(int soundId, u8 volume);
+void soundSetWaveDuty(int soundId, DutyCycle cycle);
+void soundSetPan(int soundId, u8 pan);
 
 #endif

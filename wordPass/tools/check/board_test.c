@@ -61,6 +61,513 @@ static bool loadDict(const char *path, const char *poolPath, const char *variant
     return true;
 }
 
+// ---- music: the sequencer is compiled in and the stubs keep what it sent to each channel
+extern int stubHz[32], stubVol[32], stubDuty[32], stubPan[32], stubWrites, stubRedundant;
+static MusicDbg mdbg(void) { MusicDbg d; musicDebug(&d); return d; }
+static void mrun(int n) { for (int i = 0; i < n; i++) musicTick(&g); }
+
+// One recorded sequencer step: what had been sent to the hardware on the frame the step was sequenced
+typedef struct { int hz[8], vol[8], duty[8], pulsePan, tempo, section, step; } Snap;
+// Run the sequencer until n more steps were sequenced and record each one. word = 1 keeps the words coming
+// (musicWord before every bar line, so bass and drums stay in); word = 2 puts out the flame on row 5 after step 16.
+static void capture(Snap *out, int n, int word)
+{
+    int got = 0, prev = mdbg().step;
+    for (int f = 0; got < n && f < n * 16 + 400; f++) {
+        musicTick(&g);
+        MusicDbg d = mdbg();
+        if (d.step == prev) continue;
+        prev = d.step;
+        Snap *s = &out[got];
+        for (int v = 0; v < 8; v++) { s->hz[v] = d.hz[v]; s->vol[v] = d.vol[v]; s->duty[v] = d.duty[v]; }
+        s->pulsePan = stubPan[1]; s->tempo = d.tempo; s->section = d.section; s->step = d.step;
+        if (word == 1 && got % 16 == 15) musicWord(7, 0, false);
+        if (word == 2 && got == 16) g.cell[3][5].state = CELL_TILE;
+        got++;
+    }
+}
+
+static void musicTests(void)
+{
+    u16 nhz[128];
+    musicBuildNotes(nhz);
+    static const int keys[8] = { 60, 62, 57, 65, 64, 67, 55, 69 };
+    boardOf('a'); g.passLen = 0;
+    memset(&S, 0, sizeof(S)); S.music = 1;
+    musicInit();
+
+    // the voices sit where the spec puts them in the stereo field
+    static const int PAN[8] = { 64, 64, 64, 72, 24, 70, 60, 92 };
+    bool pans = true;
+    for (int v = 0; v < 8; v++) if (stubPan[v] != PAN[v]) pans = false;
+    CHECK("stereo: hook 64 pulse 64 bass 64 pad 72 alarm 24 chime 70 drum 60 noise2 92", pans);
+    CHECK("no sequenced step yet reads 255", mdbg().step == 255);
+
+    // register window: the lead stays in a singable range in every key, major and minor
+    {
+        bool top = true, low = true;
+        for (int lock = 0; lock < 2; lock++)
+            for (int shelf = 1; shelf <= 8; shelf++) {
+                int root = keys[shelf - 1];
+                musicNewShelf(shelf, lock);
+                int hi = 0, lo = 99999;
+                for (int f = 0; f < 64 * 8 * 4; f++) {
+                    musicTick(&g);
+                    if (mdbg().step == 255) continue;
+                    int h = mdbg().hz[0];
+                    if (h > hi) hi = h;
+                    if (h < lo) lo = h;
+                }
+                int topNote = root >= 64 ? 85 : 90;
+                int floorNote = root == 64 || root == 65 ? 64 : 67;   // the E and F keys cannot reach G4 on scale degree 1
+                if (hi > nhz[topNote] * 102 / 100) top = false;
+                if (lo < nhz[floorNote] * 98 / 100) low = false;
+            }
+        CHECK("register window: the hook never goes above C#6 (high keys) or F#6 (low keys)", top);
+        CHECK("register window: the hook never goes below G4 (E4 for the E and F keys)", low);
+    }
+
+    // the hook's envelope: instant onset at 64 on a 12.5% pulse, 50% after three frames, settles at 44, vibrato after ten
+    {
+        musicNewShelf(1, false);
+        int f = 0;
+        while (mdbg().step != 16 && f++ < 400) musicTick(&g);
+        MusicDbg d = mdbg();
+        CHECK("the hook enters on step 16, visible on the frame its note is sent (C5, vol 64, 12.5% duty)", f < 400 && d.hz[0] == nhz[72] && d.vol[0] == 64 && d.duty[0] == DutyCycle_12);
+        int base = d.hz[0], vol3 = 0, duty3 = -1, vol7 = 0, vibMin = 9999, vibMax = 0, early = 1;
+        for (int i = 1; i <= 15; i++) {
+            musicTick(&g); d = mdbg();
+            if (i == 3) { vol3 = d.vol[0]; duty3 = d.duty[0]; }
+            if (i == 7) vol7 = d.vol[0];
+            if (i < 10 && d.hz[0] != base) early = 0;
+            if (i >= 10) { if (d.hz[0] < vibMin) vibMin = d.hz[0]; if (d.hz[0] > vibMax) vibMax = d.hz[0]; }
+        }
+        CHECK("hook decays 3 per frame and settles at 44", vol3 == 55 && vol7 == 44);
+        CHECK("hook duty goes 12.5% -> 50% after three frames", duty3 == DutyCycle_50);
+        CHECK("hook vibrato starts after ten frames and stays within 1/96 of the note", early && vibMin < base && vibMax > base && vibMax <= base + base / 96 && vibMin >= base - base / 96);
+    }
+
+    // sound effects: priorities, pitch rules, the mirror
+    {
+        musicNewShelf(1, false);
+        mrun(200);
+        int c0 = mdbg().sfxCount;
+        musicSfx(SFX_SCORCH, 0);
+        musicSfx(SFX_TAP, 3);
+        MusicDbg d = mdbg();
+        CHECK("a priority 1 tap does not cut a running scorch (prio 3)", d.sfxCount == c0 + 1 && d.lastSfx == SFX_SCORCH);
+        mrun(1); d = mdbg();
+        CHECK("scorch: noise burst at vol 72 and the chime on C5+18 duty 50", d.vol[7] == 72 && d.hz[5] == nhz[60 + 18] && d.duty[5] == DutyCycle_50);
+        mrun(40);
+        d = mdbg();
+        CHECK("scorch ends: both effect voices fall silent", d.vol[7] == 0 && d.vol[5] == 0);
+        int pitch[4] = { 1, 5, 12, 0 }, want[4] = { 72, 81, 93, 72 };
+        bool tap = true;
+        for (int i = 0; i < 4; i++) {
+            musicSfx(SFX_TAP, pitch[i]); mrun(1);
+            if (mdbg().hz[5] != nhz[want[i]] || mdbg().vol[5] != 48) tap = false;
+            mrun(30);
+        }
+        CHECK("TAP climbs the pentatonic by chain length and clamps at ten", tap);
+        musicSfx(SFX_UNTAP, 0); mrun(1);
+        CHECK("UNTAP uses the same rule (minimum 1), softer and shorter", mdbg().hz[5] == nhz[72] && mdbg().vol[5] == 36);
+        mrun(30);
+        c0 = mdbg().sfxCount;
+        musicSfx(SFX_INVALID, 0); mrun(1);
+        CHECK("INVALID: C#5 pair at 60", mdbg().hz[5] == nhz[73] && mdbg().vol[5] == 60);
+        musicSfx(SFX_PEEL, 0);
+        CHECK("an equal priority replaces a running effect", mdbg().sfxCount == c0 + 2 && mdbg().lastSfx == SFX_PEEL);
+        mrun(1);
+        CHECK("PEEL: 3 frame noise rush from 32000 Hz and a one frame click", mdbg().hz[7] == 32000 && mdbg().vol[7] == 56 && mdbg().hz[5] == nhz[96] && mdbg().vol[5] == 40);
+        mrun(1);
+        CHECK("PEEL noise falls 6000 Hz per frame", mdbg().hz[7] == 26000);
+        mrun(30);
+        musicSfx(SFX_IGNITE, 0); musicSfx(SFX_FIRESTEP, 0);
+        CHECK("a firestep (prio 2) does not cut an ignite (prio 3)", mdbg().lastSfx == SFX_IGNITE);
+        mrun(1);
+        CHECK("IGNITE: 1500 Hz rising 1300 per frame at vol 50", mdbg().hz[7] == 1500 && mdbg().vol[7] == 50);
+        mrun(1);
+        CHECK("IGNITE keeps rising", mdbg().hz[7] == 2800);
+        mrun(30);
+        c0 = mdbg().sfxCount;
+        musicSfx(-1, 0); musicSfx(SFX_COUNT, 0);
+        CHECK("an out-of-range effect id is ignored", mdbg().sfxCount == c0);
+    }
+
+    // composition: A A B A form, the harmonic-minor fifth, the groove, the bass riff, the pad, the pulse, the alarm, the tempo
+    {
+        Snap sn[64 * 8];
+        musicNewShelf(1, false);
+        capture(sn, 64 * 8, 0);
+        bool form = true;
+        static const int want[8] = { 0, 0, 1, 0, 0, 0, 1, 0 };
+        for (int l = 0; l < 8; l++) if (sn[l * 64].section != want[l] || sn[l * 64].step != 0) form = false;
+        CHECK("the tune is A A B A: the B section is the third of every four loops", form);
+        CHECK("section A's hook: bar 3 climbs to degree 9 and bar 4 ends on the tonic (C5 at step 48 is degree 3)", sn[32].hz[0] == nhz[81] && sn[36].hz[0] == nhz[60 + 14 + 12] && sn[48].hz[0] == nhz[76]);
+        CHECK("section B opens on degree 6 and reaches degree 10", sn[64 * 2].hz[0] == nhz[81] && sn[64 * 2 + 4].hz[0] == nhz[88]);
+
+        musicNewShelf(1, true);                                   // Lockdown: the minor key, harmonic on the fifth chord
+        capture(sn, 64 * 3, 0);
+        CHECK("minor: degree 7 over the vi chord is the natural 7th (Bb5), over the V chord the raised one (B5)",
+              sn[24].hz[0] == nhz[60 + 10 + 12] && sn[52].hz[0] == nhz[60 + 11 + 12]);
+        CHECK("minor: the B section's last bar also raises its degree 7 (step 56 of loop 2)", sn[64 * 2 + 56].hz[0] == nhz[60 + 11 + 12]);
+        CHECK("the pulse arpeggio over the V chord uses the raised 7th (G, B, D, G in minor)", sn[49].hz[1] == nhz[71]);
+
+        musicNewShelf(1, false);
+        capture(sn, 128, 0);
+        CHECK("pulse: a plucked arpeggio C E G C that ping-pongs 44 / 84", sn[0].hz[1] == nhz[60] && sn[1].hz[1] == nhz[64] && sn[2].hz[1] == nhz[67] && sn[3].hz[1] == nhz[72] &&
+              sn[0].pulsePan == 44 && sn[1].pulsePan == 84 && sn[2].pulsePan == 44 && sn[0].vol[1] == 26 && sn[0].duty[1] == DutyCycle_12);
+        CHECK("pad: an octave under the lead, a third above the chord root (C5 over the vi chord at step 16), duty 37.5% then 50% every four steps", sn[16].hz[3] == nhz[72] && sn[16].duty[3] == DutyCycle_37 && sn[20].duty[3] == DutyCycle_50 && sn[24].duty[3] == DutyCycle_37);
+        {
+            bool lone = true;                      // the first bar of a shelf is bass and pulse only
+            for (int i = 0; i < 16; i++) if (sn[i].vol[0] || sn[i].vol[3] || sn[i].vol[6] || sn[i].vol[7] || sn[i].vol[4]) lone = false;
+            CHECK("pickup bar: only the bass riff and the pulse play in the first bar of a shelf", lone && sn[0].vol[2] == 64 && sn[0].vol[1] == 26 && sn[16].vol[0] == 64);
+        }
+
+        // drums by level (the second loop: the first one opens with the pickup bar)
+        Snap *q = sn + 64;
+        musicNewShelf(1, false); musicWord(3, 0, false);
+        capture(sn, 128, 0);
+        bool l1 = true, l1noise = true;
+        for (int i = 0; i < 64; i++) {
+            if (q[i].vol[6] != 0) l1 = false;
+            bool wantHat = (i % 16) % 4 == 2;
+            if ((q[i].vol[7] == 16 && q[i].hz[7] == 16000) != wantHat || (q[i].vol[7] && !wantHat)) l1noise = false;
+        }
+        CHECK("drum level 1: closed hats on steps 2, 6, 10, 14 (vol 16, 16000 Hz), no kick or snare", l1 && l1noise);
+        musicNewShelf(1, false); musicWord(5, 0, false);
+        capture(sn, 128, 0);
+        CHECK("drum level 2: kick on 0 and 8 (2400 Hz, vol 54), snare on 4 and 12 (7000 Hz, vol 46), ghost kick vol 30 on step 14 of bars 2 and 4",
+              q[0].vol[6] == 54 && q[0].hz[6] == 2400 && q[8].vol[6] == 54 && q[4].vol[6] == 46 && q[4].hz[6] == 7000 && q[12].vol[6] == 46 &&
+              q[14].vol[6] == 0 && q[16 + 14].vol[6] == 30 && q[32 + 14].vol[6] == 0 && q[48 + 14].vol[6] == 30 && q[2].vol[6] == 0);
+        musicNewShelf(1, false); musicWord(7, 0, false);
+        capture(sn, 128, 0);
+        bool acc = true, fill = true, quiet = true;
+        for (int i = 1; i < 64; i++) {
+            static const int A[4] = { 16, 8, 12, 8 };
+            if (q[i].vol[7] != A[i & 3] || q[i].hz[7] != 16000) acc = false;
+            if (q[i].vol[7] > 16) quiet = false;
+        }
+        static const int F[4] = { 30, 36, 42, 50 };
+        for (int i = 60; i < 64; i++) if (q[i].vol[6] != F[i - 60] || q[i].hz[6] != 7000) fill = false;
+        CHECK("drum level 3: sixteenth hats with accents 16 8 12 8, an open hat (12000 Hz, vol 24) on step 0, closed hats never above 16", acc && quiet && q[0].vol[7] == 24 && q[0].hz[7] == 12000);
+        CHECK("drum level 3: the bar-4 fill is a snare on every sixteenth at 30, 36, 42, 50", fill && q[56].vol[6] == 54 && q[52].vol[6] == 46);
+
+        // bass riff (words keep arriving so the bass stays in)
+        musicNewShelf(1, false); musicWord(7, 0, false);
+        capture(sn, 128, 1);
+        CHECK("bass riff: root, root, fifth, root / root, octave, fifth on the 8ths; 64 on beats 1 and 3, softer between",
+              q[0].hz[2] == nhz[48] && q[0].vol[2] == 64 && q[2].hz[2] == nhz[48] && q[2].vol[2] == 49 && q[4].hz[2] == nhz[55] && q[10].hz[2] == nhz[60] && q[8].vol[2] == 64 && q[12].hz[2] == nhz[55]);
+        CHECK("bass riff: bar 4 (over the V chord) ends 0, 12, 10, 7 above the root", q[48 + 10].hz[2] == nhz[55 + 12] && q[48 + 12].hz[2] == nhz[55 + 10] && q[48 + 14].hz[2] == nhz[55 + 7]);
+
+        // the alarm
+        static const int lows[6] = { 1, 3, 5, 6, 4, 7 }, blips[6] = { 8, 16, 32, 64, 32, 64 }, vols[6] = { 33, 43, 53, 58, 48, 60 };
+        bool alarm = true;
+        for (int k = 0; k < 6; k++) {
+            g.cell[3][lows[k]].state = CELL_BURN;
+            musicNewShelf(1, false);
+            capture(sn, 128, 0);
+            int n = 0;
+            for (int i = 0; i < 64; i++) if (q[i].vol[4]) { n++; if (q[i].vol[4] != vols[k] || q[i].duty[4] != DutyCycle_12) alarm = false; }
+            if (n != blips[k]) alarm = false;
+            g.cell[3][lows[k]].state = CELL_TILE;
+        }
+        CHECK("alarm: a blip every 8 / 4 / 2 / 1 steps by the lowest flame, louder as it falls, 12.5% duty (vol min(60, 28 + 5 * row))", alarm);
+        g.cell[3][1].state = CELL_BURN;
+        musicNewShelf(1, false);
+        capture(sn, 25, 0);
+        CHECK("alarm: the first blip (step 16, after the pickup bar) is rootNote+13+2*row and the next is six semitones higher", sn[16].hz[4] == nhz[60 + 13 + 2] && sn[24].hz[4] == nhz[60 + 13 + 2 + 6]);
+        {   // a blip lasts four frames
+            musicNewShelf(1, false);
+            int f = 0; while (mdbg().step != 16 && f++ < 400) musicTick(&g);
+            int on = 0;
+            for (int i = 0; i < 7; i++) { if (mdbg().vol[4]) on++; musicTick(&g); }
+            CHECK("alarm: each blip sounds for four frames", on == 4);
+        }
+        g.cell[3][1].state = CELL_TILE;
+        musicNewShelf(1, false);
+        capture(sn, 128, 0);
+        bool silent = true;
+        for (int i = 0; i < 64; i++) if (q[i].vol[4]) silent = false;
+        CHECK("alarm: silent on a fire-free board", silent);
+
+        // tempo
+        musicNewShelf(1, false);
+        g.cell[3][5].state = CELL_BURN;
+        capture(sn, 49, 2);
+        CHECK("tempo: 6 frames a step with a flame on row 5, kept for one bar after it is out, then back to 8",
+              sn[0].tempo == 6 && sn[16].tempo == 6 && sn[32].tempo == 6 && sn[47].tempo == 6 && sn[48].tempo == 8);
+        musicNewShelf(1, false);
+        g.cell[3][3].state = CELL_BURN; capture(sn, 2, 0); g.cell[3][3].state = CELL_TILE;
+        int t3 = sn[0].tempo;
+        musicNewShelf(1, false);
+        g.cell[3][2].state = CELL_BURN; capture(sn, 2, 0); g.cell[3][2].state = CELL_TILE;
+        CHECK("tempo: 7 frames a step with the lowest flame on row 3, 8 on row 2", t3 == 7 && sn[0].tempo == 8);
+        {   // the real spacing between steps follows the tempo
+            musicNewShelf(1, false);
+            g.cell[3][5].state = CELL_BURN;
+            int f = 0, first = -1, second = -1;
+            for (int i = 0; i < 60; i++) {
+                musicTick(&g); f++;
+                if (mdbg().step == 0 && first < 0) first = f;
+                if (mdbg().step == 1 && second < 0) second = f;
+            }
+            CHECK("tempo: steps come 6 frames apart at tempo 6", second - first == 6);
+            g.cell[3][5].state = CELL_TILE;
+        }
+        musicNewShelf(1, false);
+    }
+
+    // cross-fade into a new shelf
+    {
+        g.state = ST_PLAY;
+        musicNewShelf(1, false); mrun(16 + 8 * 17 + 7);
+        int before = mdbg().vol[0];
+        musicNewShelf(2, false);
+        MusicDbg d = mdbg();
+        CHECK("a new shelf starts a 16 frame cross-fade, the step reads 255 until it is over", d.fade == 16 && d.step == 255 && d.pickup == 0);
+        mrun(1); int v1 = mdbg().vol[0];
+        mrun(1); int v2 = mdbg().vol[0];
+        CHECK("the music voices release 8 a frame through the fade", before > 0 && v1 == (before > 8 ? before - 8 : 0) && v2 == (v1 > 8 ? v1 - 8 : 0));
+        mrun(14); d = mdbg();
+        CHECK("the fade ends silent, then step 0 comes in the new key with one pickup bar", d.fade == 0 && d.vol[0] == 0 && d.vol[2] == 0 && d.vol[3] == 0 && d.pickup == 1 && d.step == 255);
+        while (mdbg().step != 0) mrun(1);
+        CHECK("the pickup bar opens on step 0 in D (the bass is on the D below)", mdbg().hz[2] == nhz[50] && mdbg().vol[2] == 64);
+    }
+
+    // word chimes by length, a steam hiss through fire, the pad accent of a long word
+    {
+        static const struct { int len, n, frames, vol; } W[] = {
+            { 3, 1, 6, 56 }, { 4, 2, 5, 60 }, { 5, 3, 5, 64 }, { 6, 3, 5, 64 }, { 7, 4, 4, 72 },
+            { 8, 6, 4, 76 }, { 12, 6, 4, 76 }, { 20, 6, 4, 76 }, { 25, 6, 4, 76 }, { 0, 1, 6, 56 },
+        };
+        static const int NOTE[6] = { 72, 76, 79, 84, 88, 91 };
+        bool chimes = true, plus = true;
+        for (int i = 0; i < 10; i++)
+            for (int sc = 0; sc < 2; sc++) {
+                musicNewShelf(1, false); mrun(40);
+                musicWord(W[i].len, sc * 600, false);
+                int vol = W[i].vol + (sc ? 8 : 0);
+                for (int f = 0; f < W[i].n * W[i].frames; f++) {
+                    mrun(1);
+                    if (f % W[i].frames == 0 && (mdbg().hz[5] != nhz[NOTE[f / W[i].frames]] || mdbg().vol[5] != vol || mdbg().duty[5] != DutyCycle_50)) chimes = false;
+                }
+                if (sc && mdbg().vol[5] != vol) plus = false;
+            }
+        CHECK("word chimes: 3 letters one note, 4 two, 5-6 three, 7 four, 8 and up six (clamped for any length), at the right pitches and levels", chimes);
+        CHECK("a word worth 500 or more rings 8 louder", plus);
+
+        musicNewShelf(1, false); mrun(40);
+        musicWord(7, 0, false); mrun(16);
+        int base = mdbg().hz[5], vmin = 99999, vmax = 0;
+        for (int f = 0; f < 16; f++) { mrun(1); int h = mdbg().hz[5]; if (h < vmin) vmin = h; if (h > vmax) vmax = h; }
+        CHECK("a seven-letter word holds its last note for 16 frames with vibrato", base == nhz[84] && vmin < base && vmax > base && vmax <= base + base / 96);
+        musicNewShelf(1, false); mrun(40);
+        musicWord(5, 0, false); mrun(16);
+        base = mdbg().hz[5]; bool still = true;
+        for (int f = 0; f < 4; f++) { mrun(1); if (mdbg().hz[5] != base) still = false; }
+        CHECK("a five-letter word has no vibrato", still);
+
+        int padMax = 0;
+        musicNewShelf(1, false); mrun(40); musicWord(8, 0, false);
+        for (int f = 0; f < 90; f++) { mrun(1); if (mdbg().vol[3] > padMax) padMax = mdbg().vol[3]; }
+        int padMax6 = 0;
+        musicNewShelf(1, false); mrun(40); musicWord(6, 0, false);
+        for (int f = 0; f < 90; f++) { mrun(1); if (mdbg().vol[3] > padMax6) padMax6 = mdbg().vol[3]; }
+        CHECK("a word of eight letters or more lifts the pad (about +24) for a moment, a shorter one does not", padMax >= 22 && padMax <= 26 && padMax6 == 0);
+
+        musicNewShelf(1, false); mrun(40);
+        musicWord(5, 0, true); mrun(1);
+        int hz0 = mdbg().hz[7], v0 = mdbg().vol[7];
+        mrun(1);
+        CHECK("a word through a flame hisses: 20 frames of noise from 12000 Hz falling 500 a frame at 44", hz0 == 12000 && v0 == 44 && mdbg().hz[7] == 11500);
+        mrun(30);
+        musicWord(5, 0, false); mrun(1);
+        CHECK("a word that missed the fire does not", mdbg().vol[7] != 44);
+        mrun(40);
+    }
+
+    // the three fail stingers and the bed
+    {
+        g.state = ST_FAIL;
+        musicNewShelf(1, false); mrun(80);
+        int stepAt = mdbg().step;
+        musicFail(FAIL_FIRE); mrun(1);
+        MusicDbg d = mdbg();
+        CHECK("FAIL_FIRE: the alarm starts its slide at 734 Hz at vol 70 with a crackle under it", d.failPhase == 1 && d.hz[4] == 734 && d.vol[4] == 70 && d.vol[7] == 40 && d.hz[7] >= 3000 && d.hz[7] <= 9000 && d.mix == 4);
+        mrun(10);
+        int h10 = mdbg().hz[4]; mrun(1);
+        CHECK("FAIL_FIRE: the slide falls 6 Hz a frame, the crackle decays one a frame", mdbg().hz[4] == h10 - 6 && mdbg().vol[7] == 29);
+        mrun(30);
+        d = mdbg();
+        CHECK("FAIL_FIRE: everything else is silent", d.vol[0] == 0 && d.vol[1] == 0 && d.vol[2] == 0 && d.vol[3] == 0 && d.vol[6] == 0 && d.vol[4] == 70);
+        mrun(40);
+        CHECK("FAIL_FIRE: the slide ends 10 frames early and the bed follows at 90 frames", mdbg().vol[4] == 0 && mdbg().failPhase == 1);
+        while (mdbg().failPhase != 2) mrun(1);
+        CHECK("FAIL_FIRE: after 90 frames the bed starts", true);
+        int tolls = 0, tollFrames = 0, prevVol = 0, first = -1, second = -1, padVol = 0;
+        for (int f = 0; f < 200; f++) {
+            mrun(1); d = mdbg();
+            if (d.vol[2] == 40 && d.hz[2] == nhz[48]) { tollFrames++; if (prevVol != 40) { tolls++; if (first < 0) first = f; else if (second < 0) second = f; } }
+            prevVol = d.vol[2];
+            if (d.vol[3] > padVol) padVol = d.vol[3];
+        }
+        d = mdbg();
+        CHECK("the bed: the pad holds C4+3 at 22 on a 50% pulse, a bass toll (C3, vol 40) every 48 frames for 6 frames",
+              padVol == 22 && d.hz[3] == nhz[63] && d.vol[3] == 22 && d.duty[3] == DutyCycle_50 && tolls == 5 && second - first == 48 && tollFrames == tolls * 6);
+        CHECK("the bed is quiet apart from the pad and the toll, and the step sequencer stays stopped", d.vol[0] == 0 && d.vol[1] == 0 && d.vol[4] == 0 && d.vol[6] == 0 && d.step == stepAt);
+        S.music = 0; mrun(2);
+        CHECK("the bed respects the MUSIC option", mdbg().vol[3] == 0 && mdbg().vol[2] == 0);
+        S.music = 1;
+        musicNewShelf(1, false);
+        CHECK("a new shelf ends the bed and fades out", mdbg().failPhase == 0 && mdbg().fade == 16);
+
+        musicNewShelf(1, false); mrun(80);
+        musicFail(FAIL_SCORCH); mrun(1); d = mdbg();
+        CHECK("FAIL_SCORCH: a 110 crack, a square stab (hook C5, chime F#5, vol 80, duty 50) and a slide that starts at 464 Hz",
+              d.vol[7] == 110 && d.hz[0] == nhz[72] && d.vol[0] == 80 && d.duty[0] == DutyCycle_50 && d.hz[5] == nhz[78] && d.vol[5] == 80 && d.hz[4] == 464 && d.vol[4] == 70);
+        mrun(3);
+        CHECK("FAIL_SCORCH: the crack lasts three frames", mdbg().vol[7] == 0);
+        mrun(3);
+        CHECK("FAIL_SCORCH: the stab holds for eight frames, then is gone", mdbg().vol[0] == 80);
+        mrun(2);
+        CHECK("FAIL_SCORCH: the stab has ended", mdbg().vol[0] == 0);
+        mrun(35);
+        CHECK("FAIL_SCORCH: the slide is 45 frames long", mdbg().failPhase == 1 && mdbg().vol[4] == 0);
+        mrun(8);
+        CHECK("FAIL_SCORCH: the bed follows", mdbg().failPhase == 2);
+
+        musicNewShelf(1, false); mrun(80);
+        musicFail(FAIL_WORDS);
+        static const int down[4] = { 79, 77, 75, 72 };
+        bool words = true;
+        for (int i = 0; i < 4; i++) {
+            mrun(1); d = mdbg();
+            if (d.hz[0] != nhz[down[i]] || d.vol[0] != 50 || d.duty[0] != DutyCycle_25 || d.vol[4] != 0) words = false;
+            mrun(19);
+        }
+        CHECK("FAIL_WORDS: no alarm, the hook sighs down 7, 5, 3, 0 over C5 at 20 frames each (vol 50, 25% duty)", words && mdbg().failPhase == 2);
+        musicNewShelf(1, false);
+    }
+
+    // the pass fanfare
+    {
+        g.state = ST_PLAY;
+        musicNewShelf(1, false); mrun(200);
+        g.state = ST_PASSED; musicPassComplete();
+        CHECK("a completed pass waits for the next beat", mdbg().fanfare == 0 || mdbg().fanfare == 1);
+        int f = 0;
+        while (mdbg().fanfare != 2 && f++ < 60) mrun(1);
+        MusicDbg d = mdbg();
+        CHECK("the fanfare starts on a beat (a step divisible by four)", f < 60 && d.fanfare == 2 && d.step % 4 == 0 && d.mix == 3);
+        CHECK("on the fanfare's first frame: chime C5 at 80 (25% duty), the pad snaps to 60, the bass holds the tonic at 70, a snare",
+              d.hz[5] == nhz[72] && d.vol[5] == 80 && d.duty[5] == DutyCycle_25 && d.vol[3] == 60 && d.hz[2] == nhz[48] && d.vol[2] == 70 && d.vol[6] == 30 && d.drumLevel == 0);
+        static const int NOTE[6] = { 72, 76, 79, 84, 88, 91 };
+        bool run = true;
+        for (int k = 1; k < 6; k++) { mrun(8); if (mdbg().hz[5] != nhz[NOTE[k]] || mdbg().vol[5] != 80) run = false; }
+        CHECK("the fanfare climbs the chord: degrees 1 3 5 8 10 12, eight frames each", run);
+        int vmin = 99999, vmax = 0;
+        for (int i = 0; i < 24; i++) { mrun(1); int h = mdbg().hz[5]; if (h < vmin) vmin = h; if (h > vmax) vmax = h; }
+        CHECK("then it holds degree 12 for 24 frames with vibrato", vmin < nhz[91] && vmax > nhz[91]);
+        while (mdbg().fanfare == 2) mrun(1);
+        d = mdbg();
+        CHECK("after two beats the results loop takes over: no drums, pad at 60, no bass", d.fanfare == 3 && d.drumLevel == 0);
+        bool hookUp = false, quiet = true;
+        for (int i = 0; i < 160; i++) {
+            mrun(1); d = mdbg();
+            if (d.vol[0] == 89) hookUp = true;
+            if (d.vol[6] || d.vol[7]) quiet = false;
+        }
+        CHECK("the hook loops an octave up at vol 90 (89 after the integer scale) for the rest of the card, with no drums", hookUp && quiet && mdbg().vol[3] == 60);
+        musicNewShelf(1, false);
+        CHECK("the next shelf clears the fanfare", mdbg().fanfare == 0);
+        g.state = ST_PLAY;
+    }
+
+    // state mixes
+    {
+        bool mixes = true;
+        for (int st = 0; st < 12; st++) {
+            g.state = st; mrun(1);
+            int want = st == ST_PLAY ? 0 : st == ST_PASSED ? 3 : st == ST_FAIL ? 4 : st == ST_PAUSE ? 2 : 1;
+            if (mdbg().mix != want) mixes = false;
+        }
+        CHECK("every game state has a mix (play 0, results 3, fail 4, pause 2, everything else the attract mix)", mixes);
+
+        Snap sn[128];
+        g.state = ST_TITLE;
+        musicNewShelf(1, false);
+        capture(sn, 40, 0);
+        mrun(60);
+        CHECK("attract mix: the hook at 60 on a 50% pulse, the bass in without any words, hats, the pad holding the third at 36",
+              sn[16].vol[0] == 60 && sn[16].duty[0] == DutyCycle_50 && sn[18].vol[7] == 16 && mdbg().drumLevel >= 1 && mdbg().vol[3] == 36);
+        bool bass = false;
+        for (int i = 16; i < 40; i++) if (sn[i].vol[2]) bass = true;
+        CHECK("attract mix: the bass plays", bass);
+        g.state = ST_PLAY;
+        musicNewShelf(1, false);
+        capture(sn, 40, 0);
+        CHECK("starting a shelf is an audible drop: no bass, no drums, the hook back to 64 on a 12.5% pulse", sn[20].vol[2] == 0 && sn[18].vol[7] == 0 && mdbg().drumLevel == 0 && sn[16].vol[0] == 64 && sn[16].duty[0] == DutyCycle_12);
+
+        // pause: the music at a quarter, the pulse an octave down, the alarm halved, and back on resume
+        g.state = ST_PLAY; musicNewShelf(1, false);
+        while (mdbg().step != 16) mrun(1);
+        mrun(7);
+        int hv = mdbg().vol[0];
+        g.state = ST_PAUSE;
+        bool slew = true, within = false;
+        int prev = hv;
+        for (int i = 1; i <= 14; i++) {
+            mrun(1); int v = mdbg().vol[0];
+            if (prev - v > 3) slew = false;
+            if (v <= 16) within = true;
+            prev = v;
+        }
+        CHECK("pause: the hook (sustaining at 44) falls at most 3 a frame and is at 16 or less within 14 frames", hv == 44 && slew && within && prev <= 16);
+        while (mdbg().step != 17) mrun(1);
+        CHECK("pause: the pulse is an octave lower at 30 on a 50% pulse", mdbg().hz[1] == nhz[60] && mdbg().vol[1] == 30 && mdbg().duty[1] == DutyCycle_50);
+        int nowv = mdbg().vol[0];
+        g.state = ST_PLAY;
+        mrun(1);
+        CHECK("resume: the hook comes back with a short attack (8 a frame), not at once", mdbg().vol[0] == nowv + 8);
+        while (mdbg().step != 19) mrun(1);
+        CHECK("resume: the pulse is plucked again", mdbg().duty[1] == DutyCycle_12 && mdbg().vol[1] == 26);
+
+        g.cell[3][4].state = CELL_BURN;
+        g.state = ST_PAUSE; musicNewShelf(1, false);
+        capture(sn, 40, 0);
+        CHECK("pause: the alarm is at half volume (48 -> 24)", sn[20].vol[4] == 24 || sn[22].vol[4] == 24);
+        g.cell[3][4].state = CELL_TILE;
+
+        // peek: the music ducked to a fifth, the pulse a heartbeat an octave down
+        g.state = ST_PLAY; musicNewShelf(1, false);
+        while (mdbg().step != 16) mrun(1);
+        mrun(7);
+        musicPeek(true); mrun(1);
+        CHECK("peek: the hook is a fifth of its level", mdbg().vol[0] == 44 / 5);
+        while (mdbg().step != 18) mrun(1);
+        CHECK("peek: the pulse beats on steps 0 and 2 of each beat, an octave down at 34 on a 50% pulse", mdbg().hz[1] == nhz[64] && mdbg().vol[1] == 34 && mdbg().duty[1] == DutyCycle_50);
+        mrun(8 + 3);
+        CHECK("peek: and rests on the steps between", mdbg().step == 19 && mdbg().vol[1] == 0);
+        musicPeek(false);
+        while (mdbg().step != 21) mrun(1);
+        CHECK("peek over: the plucked arpeggio is back", mdbg().duty[1] == DutyCycle_12 && mdbg().vol[1] == 26);
+        musicNewShelf(1, false);
+    }
+
+    // MUSIC off silences every channel, and nothing was ever written twice
+    {
+        S.music = 0; mrun(2);
+        bool quiet = true;
+        for (int v = 0; v < 8; v++) if (mdbg().vol[v]) quiet = false;
+        musicSfx(SFX_SCORCH, 0); mrun(3);
+        for (int v = 0; v < 8; v++) if (mdbg().vol[v]) quiet = false;
+        CHECK("MUSIC OFF holds every channel at volume 0, effects included", quiet);
+        S.music = 1; mrun(300);
+        CHECK("the sequencer never writes a value the hardware already holds", stubRedundant == 0 && stubWrites > 100);
+    }
+}
+
 int main(int argc, char **argv)
 {
     if (!loadDict(argc > 1 ? argv[1] : "data/dict.bin", argc > 2 ? argv[2] : "data/pools.bin", argc > 3 ? argv[3] : "data/variants.bin")) return 1;
@@ -1059,6 +1566,8 @@ int main(int argc, char **argv)
     CHECK("note table C4 = 262 Hz", hz[60] == 262);
     CHECK("note table A4 = 440 Hz", hz[69] == 440);
     CHECK("note table octaves double", hz[81] == 880 && hz[57] == 220);
+
+    musicTests();
 
     printf("%s: %d failure(s)\n", fails ? "CHECK FAILED" : "CHECK OK", fails);
     return fails;

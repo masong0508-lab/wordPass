@@ -221,6 +221,7 @@ static void cycleOption(int row, int dir)
         case 8: cycleLanguage(dir); break;
     }
     gfxApplySettings();
+    musicSfx(SFX_MENU, 0);
 }
 
 // The pause menu's rows: Daily has no RESTART (its one attempt cannot be retried)
@@ -276,7 +277,7 @@ static void enterFail(void)
     G.peekHeld = 0; G.armed = 0; G.peekLatch = 0;
     musicPeek(false);
     G.stateTimer = 0;
-    musicFail();
+    musicFail(G.fail);
 }
 
 // Sparks on the gem(s) that caught fire this turn (spawnFire leaves them in fireC/fireR).
@@ -300,7 +301,7 @@ static void submitChain(void)
         for (int i = 0; i < cn; i++) gfxBurst(cc[i], cr[i], BURST_SHATTER, cl[i]);
         char ps[12]; siprintf(ps, "+%d", gained);
         gfxPopup(cc[cn / 2], cr[cn / 2], ps, 1);
-        musicWord(G.lastWordLen, gained);
+        musicWord(G.lastWordLen, gained, G.lastWordBurn != 0);
         gfxSubmitFlash();
         tutorWord();
         // callout, one per word, in priority order: the top-screen message and the word over the board
@@ -328,6 +329,7 @@ static void submitChain(void)
         // the board callout stays short enough to pop at 2x (the top-screen message carries the full reason)
         gfxCallout(dialect == 2 ? "UK SPELLING" : dialect == 1 ? "US SPELLING" : obscure ? "TOO OBSCURE" : "NOT A WORD", CALLOUT_FIRE);
         gfxInvalidWord();
+        musicSfx(SFX_INVALID, 0);
     }
 }
 
@@ -398,6 +400,15 @@ static void updateCue(u32 held)
     if (G.cue == CUE_GHOST && G.cueAge > G.hintLen * GHOST_GEM_FRAMES + 30) { G.cue = CUE_NONE; G.cueAge = 0; }
 }
 
+// The chain grew or shrank this frame: a rising pentatonic tap or a short step back. A submit or a clear
+// (the chain emptied from more than one gem) has its own sounds, so it is silent here.
+static void chainSfx(int before)
+{
+    int now = G.chainLen;
+    if (now > before) musicSfx(SFX_TAP, now);
+    else if (now < before && !(now == 0 && before > 1)) musicSfx(SFX_UNTAP, now < 1 ? 1 : now);
+}
+
 static void handlePlay(u32 down, u32 held, touchPosition *t)
 {
     if (down & KEY_X) { G.peekLatch = !G.peekLatch; gfxPress(PRESS_PEEK); }
@@ -408,6 +419,7 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
     if (!peekNow) G.armed = 0;
 
     if (down & KEY_START) { enterPause(); return; }
+    int chainBefore = G.chainLen;
     // B steps the chain back one gem, held for 20 frames it clears it; Y clears at once
     static int bHeld;
     if (held & KEY_B) { if (++bHeld == 20) boardClearChain(&G); } else bHeld = 0;
@@ -451,8 +463,8 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
                 if (boardPassComplete(&G)) {
                     char s[32]; siprintf(s, "SHELF %d CLEARED", G.shelf); setMsg(s, 400);
                 } else { setMsg("PASS LETTER FOUND", 90); gfxCallout("PASS LETTER!", CALLOUT_ACCENT); }
-            } else if (res == 1) musicReveal(false);
-            else if (res == 3 || res == -1) { setMsg("SCORCHED", 60); gfxCallout("SCORCHED", CALLOUT_FIRE); gfxBurst(c, r, BURST_SCORCH, letter); gfxShake(6); }
+            } else if (res == 1) { musicSfx(SFX_PEEL, 0); musicReveal(false); }
+            else if (res == 3 || res == -1) { musicSfx(SFX_SCORCH, 0); setMsg("SCORCHED", 60); gfxCallout("SCORCHED", CALLOUT_FIRE); gfxBurst(c, r, BURST_SCORCH, letter); gfxShake(6); }
             burstNewFlames();
             if (res >= 1 && !G.fail && !boardPassComplete(&G)) tutorPeel(res, c, r);   // after the gameplay messages, so the guide's line wins
             // the peel that completes the pass wins the shelf even if its turn ended badly
@@ -509,7 +521,7 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
         if (gfxCellAt(t->px, t->py, &c, &r)) {
             enum ChainTouch ct = boardChainTouch(&G, c, r, fresh);
             if (ct == CT_SUBMIT_TAP) { submitChain(); ignoreStroke = true; }
-            else if (ct == CT_NOT_ADJACENT) gfxNope(c, r);
+            else if (ct == CT_NOT_ADJACENT) { gfxNope(c, r); if (fresh) musicSfx(SFX_INVALID, 0); }
         } else if (fresh) {
             if (gfxInSubmit(t->px, t->py)) { gfxPress(PRESS_SUBMIT); submitChain(); }
             else if (gfxInClear(t->px, t->py)) { gfxPress(PRESS_CLEAR); boardClearChain(&G); }
@@ -522,10 +534,11 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
             if (G.chainLen >= 3 && tc == G.curC && tr == G.curR) { gfxPress(PRESS_SUBMIT); submitChain(); }
             else {
                 enum ChainTouch ct = boardChainTouch(&G, G.curC, G.curR, G.chainLen == 0);
-                if (ct == CT_NOT_ADJACENT || ct == CT_RESTARTED) gfxNope(G.curC, G.curR);
+                if (ct == CT_NOT_ADJACENT || ct == CT_RESTARTED) { gfxNope(G.curC, G.curR); if (ct == CT_NOT_ADJACENT) musicSfx(SFX_INVALID, 0); }
             }
         } else { gfxPress(PRESS_SUBMIT); submitChain(); }
     }
+    chainSfx(chainBefore);
     // first-shelf nudge: three words in and no peek yet (the guide says it better, so this is for players past it)
     if (G.shelf == 1 && G.mode == MODE_CLASSIC && S.tutorDone && !G.hintShown && G.peels == 0 && G.wordsThisShelf >= 3) {
         G.hintShown = 1;
@@ -570,18 +583,18 @@ int main(void)
                 if (down & KEY_TOUCH) {
                     // only the drawn buttons do anything; a stray tap elsewhere is ignored
                     srand(seedCounter ^ (t.px << 8) ^ t.py);
-                    if (gfxInTitleOptions(t.px, t.py)) { G.state = ST_OPTIONS; G.optRow = 0; }
+                    if (gfxInTitleOptions(t.px, t.py)) { G.state = ST_OPTIONS; G.optRow = 0; musicSfx(SFX_MENU, 0); }
                     else if (gfxInTitleDaily(t.px, t.py)) newGame(MODE_DAILY);
                     else if (gfxInTitleClassic(t.px, t.py)) newGame(MODE_CLASSIC);
-                    else if (gfxInTitleLedger(t.px, t.py)) G.state = ST_STATS;
+                    else if (gfxInTitleLedger(t.px, t.py)) { G.state = ST_STATS; musicSfx(SFX_MENU, 0); }
                     else if (gfxInTitleGuide(t.px, t.py)) openGuide(ST_TITLE);
                     else if (gfxInTitleLanguage(t.px, t.py)) { G.langPick = langCur(); G.langFrom = ST_TITLE; G.state = ST_LANGPICK; }
                 } else if (down & (KEY_START | KEY_A)) { srand(seedCounter); newGame(MODE_CLASSIC); }
-                else if (down & (KEY_LEFT | KEY_L)) gfxTipFlip(-1);
-                else if (down & (KEY_RIGHT | KEY_R)) gfxTipFlip(1);
+                else if (down & (KEY_LEFT | KEY_L)) { gfxTipFlip(-1); musicSfx(SFX_MENU, 0); }
+                else if (down & (KEY_RIGHT | KEY_R)) { gfxTipFlip(1); musicSfx(SFX_MENU, 0); }
                 else if (down & KEY_SELECT) newGame(MODE_DAILY);
-                else if (down & KEY_Y) { G.state = ST_OPTIONS; G.optRow = 0; }
-                else if (down & KEY_X) G.state = ST_STATS;
+                else if (down & KEY_Y) { G.state = ST_OPTIONS; G.optRow = 0; musicSfx(SFX_MENU, 0); }
+                else if (down & KEY_X) { G.state = ST_STATS; musicSfx(SFX_MENU, 0); }
                 else if (down & KEY_B) openGuide(ST_TITLE);
                 break;
             case ST_GUIDE: {     // eight pages: LEFT/RIGHT or L/R or the buttons or a page dot flip them; B, START or BACK leaves
@@ -608,15 +621,15 @@ int main(void)
                 break;
             }
             case ST_STATS:       // THE LEDGER: B, X, A, START or any tap leaves
-                if (down & (KEY_B | KEY_X | KEY_A | KEY_START | KEY_TOUCH)) G.state = ST_TITLE;
+                if (down & (KEY_B | KEY_X | KEY_A | KEY_START | KEY_TOUCH)) { G.state = ST_TITLE; musicSfx(SFX_MENU, 0); }
                 break;
             case ST_OPTIONS: {
                 // a touch gives row * 2 + (the right half): the left half steps a value back, the right half forwards
                 int hit = (down & KEY_TOUCH) ? gfxOptionRowAt(t.px, t.py) : -1;
-                if (hit == OPT_ROWS * 2 || (down & KEY_B)) { settingsSave(); G.state = ST_TITLE; break; }
+                if (hit == OPT_ROWS * 2 || (down & KEY_B)) { settingsSave(); G.state = ST_TITLE; musicSfx(SFX_MENU, 0); break; }
                 if (hit >= 0) { int dir = (hit & 1) ? 1 : -1; G.optRow = hit >> 1; cycleOption(G.optRow, dir); gfxOptionNudge(dir); }
-                if (down & KEY_UP)    G.optRow = (G.optRow + OPT_ROWS - 1) % OPT_ROWS;
-                if (down & KEY_DOWN)  G.optRow = (G.optRow + 1) % OPT_ROWS;
+                if (down & KEY_UP)    { G.optRow = (G.optRow + OPT_ROWS - 1) % OPT_ROWS; musicSfx(SFX_MENU, 0); }
+                if (down & KEY_DOWN)  { G.optRow = (G.optRow + 1) % OPT_ROWS; musicSfx(SFX_MENU, 0); }
                 if ((down & KEY_A) && G.optRow == 8) { G.langPick = langCur(); G.langFrom = ST_OPTIONS; G.state = ST_LANGPICK; break; }   // A on LANGUAGE opens the chooser
                 if (down & (KEY_RIGHT | KEY_A)) { cycleOption(G.optRow, 1); gfxOptionNudge(1); }
                 if (down & KEY_LEFT)  { cycleOption(G.optRow, -1); gfxOptionNudge(-1); }
@@ -649,17 +662,17 @@ int main(void)
             case ST_PAUSE: {
                 int ids[PAUSE_ROWS_MAX], n = pauseRows(&G, ids);
                 if (G.pauseArm > 0) G.pauseArm--;
-                if (down & (KEY_START | KEY_B)) { G.state = ST_PLAY; break; }
+                if (down & (KEY_START | KEY_B)) { G.state = ST_PLAY; musicSfx(SFX_MENU, 0); break; }
                 if (G.pauseRow >= n) G.pauseRow = n - 1;
                 bool activate = (down & KEY_A) != 0;
-                if (down & KEY_UP)   { G.pauseRow = (G.pauseRow + n - 1) % n; G.pauseArm = 0; }
-                if (down & KEY_DOWN) { G.pauseRow = (G.pauseRow + 1) % n; G.pauseArm = 0; }
+                if (down & KEY_UP)   { G.pauseRow = (G.pauseRow + n - 1) % n; G.pauseArm = 0; musicSfx(SFX_MENU, 0); }
+                if (down & KEY_DOWN) { G.pauseRow = (G.pauseRow + 1) % n; G.pauseArm = 0; musicSfx(SFX_MENU, 0); }
                 int tapRow = (down & KEY_TOUCH) ? gfxPauseRowAt(t.px, t.py, n) : -1;
                 if (tapRow >= 0) {      // a tap on the highlighted row activates it; on another row it only highlights it
                     if (tapRow == G.pauseRow) activate = true;
-                    else { G.pauseRow = tapRow; G.pauseArm = 0; }
+                    else { G.pauseRow = tapRow; G.pauseArm = 0; musicSfx(SFX_MENU, 0); }
                 }
-                if (activate) pauseActivate(ids[G.pauseRow]);
+                if (activate) { musicSfx(SFX_MENU, 0); pauseActivate(ids[G.pauseRow]); }
                 break;
             }
         }

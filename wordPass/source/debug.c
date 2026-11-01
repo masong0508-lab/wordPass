@@ -51,7 +51,8 @@ typedef struct {
     s32 guidePage, guideFrom;               // 624, 628: the in-game guide's page and the state it returns to
     s32 cue, cueAge, hintLen;               // 632, 636, 640: the guided shelf's in-world cue (CUE_*), its age in frames, the ghost drag's length
     s32 language, loadMs, langMask;         // 644, 648, 652: S.language (LANG_*), ms the last language load took, bit i = language i is on the ROM filesystem, bit 31 = the raw card path is in use
-} DebugView;                                // total 656
+    MusicDbg seq;                           // 656..703: what the sequencer last sent to the sound hardware (music.c)
+} DebugView;                                // total 704
 
 #define PIN(field, off) _Static_assert(offsetof(DebugView, field) == (off), "DebugView." #field " moved: update tools/emu/wp.py OFF")
 PIN(magic, 0); PIN(frame, 4); PIN(state, 8); PIN(mode, 12); PIN(shelf, 16); PIN(score, 20);
@@ -76,7 +77,8 @@ PIN(shownScore, 596); PIN(pauseRow, 600); PIN(pauseArm, 604);
 PIN(tutorStep, 608); PIN(tutorDone, 612); PIN(tipIndex, 616); PIN(msgTimer, 620);
 PIN(language, 644); PIN(loadMs, 648); PIN(langMask, 652);
 PIN(guidePage, 624); PIN(guideFrom, 628); PIN(cue, 632); PIN(cueAge, 636); PIN(hintLen, 640);
-_Static_assert(sizeof(DebugView) == 656, "DebugView size changed: update tools/emu/wp.py");
+PIN(seq, 656);
+_Static_assert(sizeof(DebugView) == 704, "DebugView size changed: update tools/emu/wp.py");
 
 volatile DebugView DBG;
 
@@ -181,5 +183,6 @@ void debugSync(Game *g)
     DBG.statWords = S.wordsSpelled; DBG.statGames = S.gamesPlayed; DBG.streak = S.dailyStreak;
     DBG.language = langCur(); DBG.loadMs = langLoadMs();
     { int m = 0; for (int i = 0; i < LANG_COUNT; i++) if (langAvailable(i)) m |= 1 << i; if (langFastPath()) m |= (int)0x80000000u; DBG.langMask = m; }
+    { MusicDbg m; musicDebug(&m); memcpy((void *)&DBG.seq, &m, sizeof m); }
     DBG.dailyPlayed = S.dailyPlayedDate; DBG.dailyLast = S.dailyLastDate; DBG.dailyLastScore = S.dailyLastScore;
 }
