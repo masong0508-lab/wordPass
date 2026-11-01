@@ -21,11 +21,21 @@ static int clipY0 = 0, clipY1 = SCREEN_H;
 // The framed board strip is BOARD_W pixels wide: x 0..173 right-handed, 82..255 left-handed.
 // Every frame repaints the strip edge to edge, since VRAM holds whatever was there last.
 #define BOARD_W 174
-// Pause/results/fail: once the board is at rest, the dimmed board strip is rendered once
-// into this snapshot and restored each frame instead of being redrawn.
-static u16 ALIGN(4) overlayBase[SCREEN_H][BOARD_W];
-static u32 baseKey;
-static int lastState = -1;
+// Pause/results/fail: the board strip is dimmed by the 2D engine (brightness-decrease
+// colour effect on BG3, windowed to the strip with the card cut out), not by the CPU.
+// drawOverlay records the card rectangle here and gfxFrame programs the windows at vblank.
+static bool dimOn;
+static int dimCardX, dimCardY, dimCardW, dimCardH;
+#define REG_WIN0H (*(vu16 *)0x04000040)
+#define REG_WIN1H (*(vu16 *)0x04000042)
+#define REG_WIN0V (*(vu16 *)0x04000044)
+#define REG_WIN1V (*(vu16 *)0x04000046)
+#define WIN_BG3        0x08             // layer bits for WIN_IN / WIN_OUT
+#define WIN_BG3_EFFECT 0x28             // BG3 with the colour effect enabled
+// The HUD on the top screen has two layouts (title/options and in-game). When the layout
+// changes, all four slices are redrawn over two frames (two per vblank) so the whole screen
+// updates at once without crowding the vblank.
+static int lastTopKind = -1, topBurst;
 // Build with -DWP_PROFILE to expose per-stage render timings in dbgT[]
 #ifdef WP_PROFILE
 u32 dbgT[10];
@@ -157,19 +167,6 @@ static u16 lerp15(u16 a, u16 b, int t)
     int ar = a & 31, ag = (a >> 5) & 31, ab = (a >> 10) & 31;
     int br = b & 31, bg = (b >> 5) & 31, bb = (b >> 10) & 31;
     return C(ar + ((br - ar) * t) / 16, ag + ((bg - ag) * t) / 16, ab + ((bb - ab) * t) / 16);
-}
-
-// halve the brightness of a region: x must be even and w a multiple of 2 (word ops)
-static ITCM_CODE __attribute__((noinline)) void dimRect(int x, int y, int w, int h)
-{
-    int y1 = y + h;
-    if (y < clipY0) y = clipY0;
-    if (y1 > clipY1) y1 = clipY1;
-    int n = w / 2;
-    for (int j = y; j < y1; j++) {
-        u32 *p = (u32 *)(cur + j * SCREEN_W + x);
-        for (int i = 0; i < n; i++) p[i] = ((p[i] >> 1) & 0x3DEF3DEF) | 0x80008000;
-    }
 }
 
 // one 5x7 glyph at any scale: fully inside the screen and slice it is written directly,
@@ -542,7 +539,6 @@ void gfxApplySettings(void)
     if (S.hand == HAND_LEFT) { boardX0 = SCREEN_W - BOARD_W; gridX = boardX0 + GRID_X; panelX = 4; }   // gridX 86: even, so gem blits stay word aligned
     else { boardX0 = 0; gridX = GRID_X; panelX = 176; }
     buildGemCache();
-    baseKey = 0;
 }
 
 // ---------------------------------------------------------------- effects API
@@ -584,7 +580,7 @@ void gfxPopup(int c, int r, const char *txt, int gold)
     }
 }
 
-void gfxFadeIn(void)  { bright = -16; baseKey = 0; }
+void gfxFadeIn(void)  { bright = -16; }
 void gfxFlash(void)   { bright = 10; }
 void gfxShake(int frames) { shakeFrames = frames; }
 void gfxInvalidWord(void) { invalidTimer = 24; }
@@ -661,7 +657,7 @@ static ITCM_CODE __attribute__((noinline)) void drawBackdrop(const Game *g)
             const Cell *cl = &g->cell[c][r];
             int y = top + r * TILE_H;
             bool solid = (cl->state == CELL_TILE || cl->state == CELL_SECRET) && cl->yoff == 0 && !cl->squash && !cl->flash
-                         && g->state == ST_PLAY && !g->peekHeld && !inChain(g, c, r);
+                         && !g->peekHeld && !inChain(g, c, r);
             if (solid) {
                 // only the rounded-corner pixels and the one-pixel rim show through
                 fillRect(x, y, TILE_W, 1, BLACK); fillRect(x, y + TILE_H - 1, TILE_W, 1, BLACK);
@@ -1095,8 +1091,16 @@ static void drawTipCard(int which)
     }
 }
 
+// the card over the dimmed board: drawn black and excluded from the dim window
+static void overlayCard(int x, int y, int w, int h)
+{
+    fillRect(x, y, w, h, BLACK);
+    dimOn = true; dimCardX = x; dimCardY = y; dimCardW = w; dimCardH = h;
+}
+
 static void drawOverlay(const Game *g)
 {
+    dimOn = false;
     if (g->state == ST_PLAY) return;
     if (g->state == ST_TITLE) { drawTitle(g); return; }
     if (g->state == ST_OPTIONS) { drawOptions(g); return; }
@@ -1105,7 +1109,7 @@ static void drawOverlay(const Game *g)
         int t = g->stateTimer;
         int slide = t < 12 ? (12 - t) * (12 - t) : 0;
         int cx = 86, cy = 28 + slide, cw = 150, ch = 140;
-        fillRect(BX(cx - cw / 2), cy, cw, ch, BLACK);
+        overlayCard(BX(cx - cw / 2), cy, cw, ch);
         rectOutline(BX(cx - cw / 2), cy, cw, ch, GOLD_LT);
         rectOutline(BX(cx - cw / 2 + 2), cy + 2, cw - 4, ch - 4, GOLD_DK);
         drawTextShadow(BX(cx - textWidth("PASS ACCEPTED", 1) / 2), cy + 8, g->mode == MODE_DAILY ? "DAILY PASS DONE" : "PASS ACCEPTED", GOLD_LT, 1);
@@ -1138,7 +1142,7 @@ static void drawOverlay(const Game *g)
         else { sprintf(s, "SHELF %d OPEN", g->shelf + 1); drawTextCenter(BX(cx), rowy, s, ACCENT, 1); }
         if (t > 30 && (frame & 32)) drawTextCenter(BX(cx), cy + ch - 12, "TAP TO CONTINUE", INK, 1);
     } else if (g->state == ST_FAIL) {
-        fillRect(BX(16), 66, 140, 60, BLACK);
+        overlayCard(BX(16), 66, 140, 60);
         rectOutline(BX(16), 66, 140, 60, (frame & 8) ? FIRE1 : FIRE2);
         const char *t = g->fail == FAIL_FIRE ? "LIBRARY LOST" : g->fail == FAIL_SCORCH ? "PASS DESTROYED" : "OUT OF WORDS";
         drawTextShadow(BX(86 - textWidth(t, 1) / 2), 76, t, FIRE2, 1);
@@ -1146,7 +1150,7 @@ static void drawOverlay(const Game *g)
         drawTextCenter(BX(86), 90, why, INK, 1);
         if (frame & 32) drawTextCenter(BX(86), 110, g->mode == MODE_DAILY ? "TAP FOR TITLE" : "TAP TO RETRY SHELF", WHITE, 1);
     } else if (g->state == ST_PAUSE) {
-        fillRect(BX(26), 66, 120, 64, BLACK);
+        overlayCard(BX(26), 66, 120, 64);
         rectOutline(BX(26), 66, 120, 64, ACCENT);
         drawTextCenter(BX(86), 74, "PAUSED", ACCENT, 1);
         drawText(BX(36), 90, "START", GOLD_LT, 1);  drawText(BX(80), 90, "RESUME", INK, 1);
@@ -1204,11 +1208,12 @@ void gfxFrame(const Game *g)
     cur = vramBack;            // draw the touch screen straight into the hidden VRAM bank
     clipY0 = 0; clipY1 = SCREEN_H;
     if (g->state == ST_TITLE || g->state == ST_OPTIONS) {
-        // menus paint their own black strip and frame: no board, no panel
-        PROF(0); PROF(1);
-        drawParticles();
-        drawPopups();     PROF(2); PROF(3);
+        // menus paint their own black strip and frame: no board, no panel. Particles and
+        // popups that outlive the game go on top of the menu, not under it.
+        PROF(0); PROF(1); PROF(2); PROF(3);
         drawOverlay(g);   PROF(4);
+        drawParticles();
+        drawPopups();
     } else if (g->state == ST_PLAY) {
         drawBackdrop(g);  PROF(0);
         drawBoard(g);     PROF(1);
@@ -1218,36 +1223,11 @@ void gfxFrame(const Game *g)
         drawPanel(g);     PROF(3);
         PROF(4);
     } else {
-        // pause / results / fail: a dimmed board under a card. While gems still fall,
-        // squash or flash it is rendered live; once at rest it is rendered once into
-        // overlayBase and restored from there (87 words per row) every frame.
-        bool atRest = g->chainLen == 0;
-        for (int c = 0; c < COLS && atRest; c++)
-            for (int r = 0; r < ROWS; r++) {
-                const Cell *cl = &g->cell[c][r];
-                if (cl->yoff < 0 || cl->squash || cl->flash) { atRest = false; break; }
-            }
-        u32 key = atRest ? (u32)g->state | (S.hand << 8) | (g->peekHeld ? 1u << 9 : 0) | ((u32)(g->peels & 63) << 10)
-                            | ((u32)g->shelf << 16) | ((u32)g->turn << 24) : 0;
-        if (key && key == baseKey) {
-            // 192 row DMAs: cheaper than CPU reads of main RAM, and the snapshot was flushed when taken
-            for (int j = 0; j < SCREEN_H; j++) dmaCopyWords(3, overlayBase[j], cur + j * SCREEN_W + boardX0, BOARD_W * 2);
-            PROF(0); PROF(1);
-        } else {
-            drawBackdrop(g);  PROF(0);
-            drawBoard(g);
-            dimRect(boardX0, 0, BOARD_W, SCREEN_H);
-            if (key) {
-                for (int j = 0; j < SCREEN_H; j++) {
-                    const u32 *src = (const u32 *)(cur + j * SCREEN_W + boardX0);
-                    u32 *dst = (u32 *)overlayBase[j];
-                    for (int i = 0; i < BOARD_W / 2; i++) dst[i] = src[i];
-                }
-                DC_FlushRange(overlayBase, sizeof(overlayBase));
-            }
-            baseKey = key;
-            PROF(1);
-        }
+        // pause / results / fail: the live board (gems keep falling and flashing) under a
+        // card. The strip is dimmed by the 2D engine at vblank, so this costs the same as
+        // a play frame plus the card.
+        drawBackdrop(g);  PROF(0);
+        drawBoard(g);     PROF(1);
         drawParticles();
         drawPopups();     PROF(2);
         drawPanel(g);     PROF(3);
@@ -1269,14 +1249,44 @@ void gfxFrame(const Game *g)
     bgSetMapBase(bgMain, backBank ? 8 : 0);   // bitmap base in 16 KB units: bank B sits at +128 KB
     bgUpdate();
     { u16 *t = vramFront; vramFront = vramBack; vramBack = t; backBank ^= 1; }
+    // Pause/results/fail: halve the brightness of the board strip in hardware. BG3 is the
+    // first blend target of a brightness-decrease effect (EVY 8/16), window 0 cuts the
+    // card out of it, and window 1 keeps the effect off the panel (window 1 covers the
+    // strip right-handed and the panel left-handed, so neither window ends at x = 256).
+    // The windows follow the shake scroll, which moves the bitmap under them.
+    if (dimOn) {
+        int x0 = dimCardX - sx, y0 = dimCardY - sy, x1 = x0 + dimCardW, y1 = y0 + dimCardH;
+        if (x0 < 0) x0 = 0;
+        if (y0 < 0) y0 = 0;
+        if (x1 > SCREEN_W - 1) x1 = SCREEN_W - 1;
+        if (y1 > SCREEN_H) y1 = SCREEN_H;
+        REG_WIN0H = (x0 << 8) | x1;
+        REG_WIN0V = (y0 << 8) | y1;
+        int w1 = (boardX0 ? boardX0 : BOARD_W) - sx;
+        if (w1 < 1) w1 = 1;
+        if (w1 > SCREEN_W - 1) w1 = SCREEN_W - 1;
+        REG_WIN1H = w1;
+        REG_WIN1V = SCREEN_H;
+        WIN_IN  = WIN_BG3 | ((boardX0 ? WIN_BG3 : WIN_BG3_EFFECT) << 8);
+        WIN_OUT = boardX0 ? WIN_BG3_EFFECT : WIN_BG3;
+        REG_BLDCNT = BLEND_FADE_BLACK | BLEND_SRC_BG3;
+        REG_BLDY = 8;
+        REG_DISPCNT |= DISPLAY_WIN0_ON | DISPLAY_WIN1_ON;
+    } else if (REG_BLDCNT) {
+        REG_DISPCNT &= ~(DISPLAY_WIN0_ON | DISPLAY_WIN1_ON);
+        REG_BLDCNT = 0;
+    }
     PROF(6);
 
     // The top screen HUD is drawn straight into VRAM_C while the beam is in vblank,
-    // one 48-row slice per frame (every region still refreshes at 15 Hz). The first
-    // frame of a new state draws all four slices so screens appear at once.
+    // one 48-row slice per frame (every region still refreshes at 15 Hz). When the
+    // layout changes (title/options <-> in-game) all four slices are redrawn, two per
+    // frame, so the screen updates at once while each vblank stays well under budget.
     cur = vramSub;
+    int kind = (g->state == ST_TITLE || g->state == ST_OPTIONS);
+    if (kind != lastTopKind) { lastTopKind = kind; topBurst = 2; }
     int s0 = frame & 3, s1 = s0;
-    if (g->state != lastState) { lastState = g->state; s0 = 0; s1 = 3; }
+    if (topBurst) { topBurst--; s0 = topBurst ? 0 : 2; s1 = s0 + 1; }
     for (int slice = s0; slice <= s1; slice++) {
         clipY0 = slice * 48; clipY1 = clipY0 + 48;
         drawTop(g);

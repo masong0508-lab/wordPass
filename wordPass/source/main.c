@@ -99,7 +99,7 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
     bool peekNow = (held & (KEY_L | KEY_R)) != 0;
     if (peekNow != G.peekHeld) { G.peekHeld = peekNow; musicPeek(peekNow); }
 
-    if (down & KEY_START) { G.prevState = G.state; G.state = ST_PAUSE; boardClearChain(&G); return; }   // the renderer snapshots the board at rest
+    if (down & KEY_START) { G.prevState = G.state; G.state = ST_PAUSE; return; }   // a held chain survives the pause
     if (down & KEY_B) boardClearChain(&G);
 
     int c, r;

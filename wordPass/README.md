@@ -123,14 +123,18 @@ buffer and no per-frame copy. The touch screen uses banks A and B as a full
 top screen HUD has no back buffer, so it is drawn into bank C inside vblank,
 one 48-row slice per frame: every primitive honours a vertical clip band, so
 each region refreshes at 15 Hz without ever tearing or flickering, and a
-state change draws all four slices at once. Every state runs at 60 fps: the
-title and options screens skip the board entirely, and pause, results and
-fail screens render the dimmed board once it is at rest into a snapshot that
-is restored by DMA each frame. The hot blitters (fills, gem blits, glyphs,
+change of layout (title/options to in-game or back) redraws all four slices
+over two frames. Every state, including the results-card slide-in, the fail
+shake and a pause pressed mid-cascade, runs at 60 fps: the title and options
+screens skip the board entirely, and pause, results and fail screens render
+the live board and let the 2D engine halve its brightness (a brightness-
+decrease colour effect on the bitmap layer, windowed to the board strip with
+the card cut out), so no CPU time goes into dimming or snapshotting. The hot
+blitters (fills, gem blits, glyphs,
 outlines, particles, backdrop, board, panel) live in ITCM and the gem sprite
 cache, particles and popups in DTCM; the backdrop is skipped under gems that
 are fully redrawn, glyphs and gems are written directly after a single
-bounds test, and fills, dims and blits use word-aligned 32-bit stores (the
+bounds test, and fills and blits use word-aligned 32-bit stores (the
 left-hand layout starts the grid on an even x for the same reason). Build
 with `-DWP_PROFILE` to expose per-stage timings in `dbgT[]`.
 
