@@ -233,6 +233,7 @@ int main(void)
         if (G.msgTimer > 0 && --G.msgTimer == 0) G.msg[0] = 0;
         boardAnimate(&G);
         musicTick(&G);
+        debugSync(&G);
         gfxFrame(&G);
     }
     return 0;

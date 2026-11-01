@@ -4,3 +4,4 @@ build/
 # The built ROM is attached to GitHub releases / CI artifacts.
 # Remove the next line if you prefer to commit it.
 !wordPass.nds
+

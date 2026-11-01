@@ -170,6 +170,9 @@ void musicPassComplete(void);
 void musicFail(void);
 void musicStopAll(void);
 
+// debug.c
+void debugSync(const Game *g);
+
 // font.c
 extern const u8 font5x7[][7];
 int fontIndex(char ch);
