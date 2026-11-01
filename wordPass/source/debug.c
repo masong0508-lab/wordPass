@@ -48,8 +48,8 @@ typedef struct {
     s32 shownScore, pauseRow, pauseArm;     // 596, 600, 604: the HUD score (counts up in the results tally), the pause menu's row, frames left of its confirm
     s32 tutorStep, tutorDone, tipIndex;     // 608, 612, 616: the guided first shelf (TUTOR_*), S.tutorDone, the title's tip card
     s32 msgTimer;                           // 620: frames left of the message line (-1 = sticky)
-    MusicDbg seq;                           // 624..663: what the sequencer last sent to the sound hardware (music.c)
-} DebugView;                                // total 664
+    MusicDbg seq;                           // 624..671: what the sequencer last sent to the sound hardware (music.c)
+} DebugView;                                // total 672
 
 #define PIN(field, off) _Static_assert(offsetof(DebugView, field) == (off), "DebugView." #field " moved: update tools/emu/wp.py OFF")
 PIN(magic, 0); PIN(frame, 4); PIN(state, 8); PIN(mode, 12); PIN(shelf, 16); PIN(score, 20);
@@ -72,7 +72,7 @@ PIN(peek, 540); PIN(armed, 544); PIN(armC, 548); PIN(armR, 552);
 PIN(calloutLife, 568); PIN(pressBits, 572); PIN(callout, 576);
 PIN(shownScore, 596); PIN(pauseRow, 600); PIN(pauseArm, 604);
 PIN(tutorStep, 608); PIN(tutorDone, 612); PIN(tipIndex, 616); PIN(msgTimer, 620); PIN(seq, 624);
-_Static_assert(sizeof(DebugView) == 664, "DebugView size changed: update tools/emu/wp.py");
+_Static_assert(sizeof(DebugView) == 672, "DebugView size changed: update tools/emu/wp.py");
 
 volatile DebugView DBG;
 

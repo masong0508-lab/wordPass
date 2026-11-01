@@ -305,10 +305,29 @@ can be mixed by game state.
   fire has burned (every eighth step on the top rows, every step near the
   bottom). While a flame is on row 3 or lower the whole tune speeds up, and on
   row 5 or lower faster still; it relaxes one bar after the shelf is fire-free.
-- **Peek** ducks everything but the pulse; each reveal plays the next note of
-  the hook, so peeling a path plays the tune.
-- Word chimes are quantized to the beat. Finishing a pass hands the hook to a
-  bright octave-up voice for one loop. Failing cuts to the alarm sliding down.
+- **Word chimes** climb the chord with the length of the word: one note for
+  three letters, two for four, three for five or six, four for seven (the last
+  held with vibrato) and a six-note run for eight and up, which also lifts the
+  pad for a moment. A word worth 500 or more rings louder, and a word that went
+  through a flame hisses like steam.
+- **Peek** ducks everything but the chimes and the alarm to a fifth and thins
+  the pulse to a slow heartbeat an octave down; each reveal plays the next note
+  of the hook, so peeling a path plays the tune.
+- **Pausing** pulls the music down to a quarter (the alarm to half) and drops
+  the pulse an octave; resuming brings it back with a short swell.
+- **Finishing a pass** lands a fanfare on the next beat (a rising chord run on
+  the chime, the pad snapping up, the bass on the tonic, a snare fill), then
+  the hook loops an octave up, bright and without drums, for as long as the
+  results card is open.
+- **Failing** has three endings. Library lost slides the alarm down over a
+  crackle; a scorched pass cracks and stabs, then slides; running out of words
+  lets the hook sigh down four notes with no alarm. All three settle into a
+  quiet bed (one low pad note and a slow bass toll) that never restarts the
+  tune.
+- **A new shelf** fades the old one out over a quarter second and comes in on
+  the new key with one bar of bass and pulse alone, so starting a shelf from
+  the title is an audible drop: the title plays the fuller attract mix (bass
+  and hats always in, a steady pad and the hook at 60 on a mellow pulse).
 - Eight voices (six pulse waves and two noise channels), each with its own
   instrument: the hook starts on a thin 12.5% pulse and fills out to 50%
   with a late vibrato, the pulse is plucked, the bass is round and the pad

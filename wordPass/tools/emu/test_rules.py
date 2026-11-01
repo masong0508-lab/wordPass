@@ -1667,23 +1667,31 @@ def _():
 SFX_TAP, SFX_UNTAP, SFX_INVALID, SFX_PEEL, SFX_SCORCH, SFX_IGNITE, SFX_FIRESTEP, SFX_MENU = range(8)
 HOOK_C = 523                      # shelf 1 is in C: the hook's first note is C5
 
-@scenario('music mirror: step 0 lands with its notes on the same frame, hook onset 64 on a 12.5% pulse, 8 frames a step')
+@scenario('music mirror: a new shelf fades out, plays one pickup bar of bass and pulse, then the hook enters on step 16 at 64 on a 12.5% pulse')
 def _():
-    to_title(); e.run(5)
+    to_title(); e.run(60)
     assert e.state()['settings']['music'] == 1, 'MUSIC defaults to ON'
-    m = e.wait_step(0)
-    assert m['tempo'] == 8, f'tempo {m["tempo"]}'
-    assert m['hz'][0] == HOOK_C and m['vol'][0] == 64 and m['duty'][0] == 0, f'hook at step 0: {m["hz"][0]} Hz vol {m["vol"][0]} duty {m["duty"][0]}'
+    e.tap(e.bx + 52, 147, settle=0)                       # CLASSIC
+    fade = bass = False; m = e.music()
+    for _ in range(400):
+        e.run(1); m = e.music()
+        if m['fade'] > 0:
+            fade = True; assert m['step'] == 255, f'step {m["step"]} during the fade'
+        if m['pickup'] == 1 and m['step'] < 16:
+            assert not (m['vol'][0] or m['vol'][3] or m['vol'][6] or m['vol'][7] or m['vol'][4]), f'pickup bar: only bass and pulse may play, volumes {m["vol"]}'
+            bass |= m['vol'][2] > 0
+        if m['step'] == 16: break
+    assert fade and bass, f'fade {fade} bass in the pickup bar {bass}'
+    assert m['tempo'] == 8 and m['mix'] == 0, f'tempo {m["tempo"]} mix {m["mix"]}'
+    assert m['hz'][0] == HOOK_C and m['vol'][0] == 64 and m['duty'][0] == 0, f'hook at step 16: {m["hz"][0]} Hz vol {m["vol"][0]} duty {m["duty"][0]}'
     seen = []
     for _ in range(9):
         e.run(1); seen.append(e.music())
     assert [x['duty'][0] for x in seen[:3]] == [0, 0, 3], 'the hook goes from 12.5% to 50% duty on the third frame'
     assert seen[6]['vol'][0] == 44, f'the hook settles at 44 after seven frames, read {seen[6]["vol"][0]}'
-    assert seen[7]['step'] == 1 and seen[6]['step'] == 0, 'the next step arrives eight frames later'
-    m = e.wait_step(2)
-    assert m['hz'][0] == 659 and m['vol'][0] == 64, f'step 2 retriggers on E5: {m["hz"][0]} Hz'   # degree 3: C5 + 4 semitones
+    assert seen[7]['step'] == 17 and seen[6]['step'] == 16, 'the next step arrives eight frames later'
 
-@scenario('music: the MUSIC option silences every channel, effects included, and ON brings the hook back')
+@scenario('music: the MUSIC option silences every channel, effects included, and ON brings the hook back (attract mix: 60 on a 50% pulse)')
 def _():
     to_title(); e.run(5)
     e.tap(e.bx + 86, 170); e.run(10)
@@ -1695,7 +1703,8 @@ def _():
     assert not any(e.music()['vol']), 'effects ignore the MUSIC option'
     e.tap(130, opt_row_y(5)); e.run(4)
     assert e.state()['settings']['music'] == 1
-    m = e.wait_step(0); assert m['vol'][0] == 64, 'the hook returns at full onset'
+    m = e.wait_step(0)
+    assert m['mix'] == 1 and m['vol'][0] == 60 and m['duty'][0] == 3, f'attract mix hook: vol {m["vol"][0]} duty {m["duty"][0]} mix {m["mix"]}'
     e.press('B', settle=20)
 
 @scenario('music effects from play: taps climb, an untap steps back, a bad word, peels, scorch, ignite, firestep')
@@ -1805,6 +1814,75 @@ def _():
         kick |= m['vol'][6] == 54 and m['hz'][6] == 2400
         bass |= m['vol'][2] > 0
     assert kick and bass, f'kick {kick} bass {bass}'
+
+@scenario('music words: the chime follows the length of the word (C5 first, 64 for five or six letters, 72 for seven, 76 for eight and more)')
+def _():
+    fresh_shelf(); e.set_heat(0); e.set_burn(0, 99); e.run(5)
+    g = e.state(); ws = e.find_words(g, minlen=5, maxlen=7)
+    assert ws, 'no five-letter word on the board'
+    word, path = ws[0]
+    w0 = e.music()['wordCount']
+    e.chain(path); e.press('A', hold=2, settle=0)
+    m = e.music()
+    assert m['wordCount'] == w0 + 1, 'musicWord was not called'
+    want = 64 if len(word) <= 6 else 72
+    assert m['hz'][5] == HOOK_C and m['vol'][5] in (want, want + 8) and m['duty'][5] == 3, f'{word}: chime {m["hz"][5]} Hz vol {m["vol"][5]}'
+
+@scenario('music: a failed shelf plays its stinger and settles into the quiet bed; the next shelf fades it out')
+def _():
+    fresh_shelf(); e.set_heat(0); e.set_burn(0, 99); e.run(150)
+    force_fail()
+    m = e.music(); assert m['mix'] == 4 and m['failPhase'] in (1, 2), f'mix {m["mix"]} phase {m["failPhase"]} after the fail'
+    e.run(120); m = e.music(); st = m['step']
+    assert m['failPhase'] == 2, 'the stinger gives way to the bed'
+    e.run(80); m = e.music()
+    assert m['vol'][3] == 22 and m['hz'][3] == 311 and not (m['vol'][0] or m['vol'][1] or m['vol'][4] or m['vol'][6] or m['vol'][7]), f'bed: {m["vol"]}'
+    assert m['step'] == st, 'the step sequencer stays stopped under the bed'
+    e.tap(e.bx + 100, 100, hold=2, settle=0); e.run(2)
+    m = e.music(); assert m['failPhase'] == 0 and m['fade'] > 0 and m['mix'] == 0, f'next shelf: phase {m["failPhase"]} fade {m["fade"]} mix {m["mix"]}'
+
+@scenario('music: a cleared shelf plays the fanfare, then the octave-up hook with no drums; tapping on fades into the next shelf')
+def _():
+    fresh_shelf(); e.set_heat(0); e.set_burn(0, 99); e.run(60)
+    force_pass()
+    m = e.music(); assert m['mix'] == 3 and m['fanfare'] in (1, 2, 3), f'mix {m["mix"]} fanfare {m["fanfare"]}'
+    e.run(120); m = e.music()
+    assert m['fanfare'] == 3 and m['drumLevel'] == 0, f'fanfare {m["fanfare"]} drum level {m["drumLevel"]}'
+    top = 0
+    for _ in range(300):
+        e.run(1); m = e.music(); top = max(top, m['vol'][0])
+        assert not (m['vol'][6] or m['vol'][7]) and m['vol'][2] == 0, 'the results loop has no drums and no bass'
+    assert top == 89 and m['vol'][3] == 60, f'octave-up hook vol {top}, pad {m["vol"][3]}'
+    e.tap(e.bx + 100, 100, hold=2, settle=0); e.run(2)
+    m = e.music(); assert m['fanfare'] == 0 and m['fade'] > 0, f'next shelf: fanfare {m["fanfare"]} fade {m["fade"]}'
+    ensure_play()
+
+@scenario('music mixes: pause drops the music to a quarter, peek to a fifth; the title is the attract mix and starting a shelf drops out of it')
+def _():
+    ensure_play(); fresh_shelf(); e.set_heat(0); e.set_burn(0, 99); e.run(200)
+    top = 0
+    for _ in range(160):
+        e.run(1); top = max(top, e.music()['vol'][0])
+    assert top == 64, f'hook peak in play {top}'
+    e.hold('L', True); e.run(30)
+    peak = 0
+    for _ in range(160):
+        e.run(1); peak = max(peak, e.music()['vol'][0])
+    e.hold('L', False)
+    assert 0 < peak <= 64 // 5, f'peeking: hook peak {peak}'
+    e.press('START', settle=30); m = e.music(); assert m['mix'] == 2
+    pk = 0
+    for _ in range(160):
+        e.run(1); pk = max(pk, e.music()['vol'][0])
+    assert 0 < pk <= 16, f'paused: hook peak {pk}'
+    e.press('START', settle=20); assert e.music()['mix'] == 0
+    to_title(); e.run(30); m = e.music(); assert m['mix'] == 1
+    bass = hats = False
+    for _ in range(300):
+        e.run(1); m = e.music(); bass |= m['vol'][2] > 0; hats |= m['vol'][7] > 0
+    assert bass and hats and m['drumLevel'] >= 1, f'attract: bass {bass} hats {hats} drums {m["drumLevel"]}'
+    e.tap(e.bx + 52, 147); e.run(400); m = e.music()
+    assert m['mix'] == 0 and m['drumLevel'] == 0, f'playing: mix {m["mix"]} drums {m["drumLevel"]}'
 
 print('RULES OK' if not fails else f'RULES FAILED: {fails}')
 sys.exit(fails)

@@ -243,7 +243,7 @@ static void enterFail(void)
     G.peekHeld = 0; G.armed = 0; G.peekLatch = 0;
     musicPeek(false);
     G.stateTimer = 0;
-    musicFail();
+    musicFail(G.fail);
 }
 
 // Sparks on the gem(s) that caught fire this turn (spawnFire leaves them in fireC/fireR).
@@ -267,7 +267,7 @@ static void submitChain(void)
         for (int i = 0; i < cn; i++) gfxBurst(cc[i], cr[i], BURST_SHATTER, cl[i]);
         char ps[12]; siprintf(ps, "+%d", gained);
         gfxPopup(cc[cn / 2], cr[cn / 2], ps, 1);
-        musicWord(G.lastWordLen, gained);
+        musicWord(G.lastWordLen, gained, G.lastWordBurn != 0);
         gfxSubmitFlash();
         tutorWord();
         // callout, one per word, in priority order: the top-screen message and the word over the board
