@@ -402,6 +402,12 @@ typedef struct {
 } LangTables;
 const char *langCode(int idx);                // "en" "es" ...
 const char *langName(int idx);                // "ENGLISH" "ESPANOL" ...: the label of the options row (A-Z, at most ten letters)
+#include "ui_strings.h"
+#define UI_MAX_SLOTS 8
+const char *ui(int id);                           // the active language's text for a UI_* id (English is the default)
+void uiTestLang(int lang);                        // tests: make ui() answer in this language (-1: follow langCur)
+const char *uiIn(int id, int lang);               // the text of one language (the tests walk all of them)
+int  uiFmt(char *out, int cap, int id, ...);      // fill the %d / %s / %02d / %2$d slots of a string; returns its length
 int  langCur(void);                           // the active language
 const LangTables *langTables(void);
 bool langParseLetters(const u8 *b, size_t n, LangTables *out);

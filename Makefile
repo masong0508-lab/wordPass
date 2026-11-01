@@ -104,7 +104,7 @@ variants:
 # Native rule tests: board.c, dict.c, pools.c, music.c, guide.c and font.c under gcc with the stubs in tools/check/stub,
 # after settings.c on its own (stub fat.h, a scratch file for the card). The last line is CHECK OK.
 #   make check
-CHECK_SRC := tools/check/board_test.c tools/check/stubs.c source/board.c source/dict.c source/pools.c source/lang.c source/langload.c source/music.c source/guide.c source/font.c
+CHECK_SRC := tools/check/board_test.c tools/check/stubs.c source/board.c source/dict.c source/pools.c source/lang.c source/langload.c source/music.c source/guide.c source/font.c source/ui.c source/ui_strings.c
 LANG_SRC  := tools/check/lang_test.c tools/check/stubs.c source/dict.c source/pools.c
 check:
 	@mkdir -p $(BUILD)
@@ -113,6 +113,8 @@ check:
 	$(BUILD)/settings_check
 	gcc -std=gnu11 -Wall -Wextra -Wshadow -I tools/check/stub -I source $(LANG_SRC) -o $(BUILD)/lang_check
 	$(BUILD)/lang_check
+	gcc -std=gnu11 -Wall -Wextra -Wshadow -I tools/check/stub -I source tools/check/ui_test.c source/ui.c source/ui_strings.c -o $(BUILD)/ui_check
+	$(BUILD)/ui_check
 	gcc -std=gnu11 -Wall -Wextra -Wshadow -I tools/check/stub -I source $(CHECK_SRC) -o $(BUILD)/check
 	$(BUILD)/check
 

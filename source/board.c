@@ -6,20 +6,19 @@
 // Pass pools live in data/pools.bin (pools.c): 40 themes and about 18,000 words. Shelf n draws from
 // theme (n - 1) % 40, the first eight being the original bookish shelves. Each pool runs from
 // familiar to obscure, and the window of it a shelf may draw from widens as the shelves climb.
-static const char *const TWIST_NAMES[4] = { "", "INK SPILL", "DAMP", "BURIED" };
+static const short TWIST_IDS[4] = { -1, UI_W_INK, UI_W_DAMP, UI_W_BURIED };
 
 const char *boardPassTheme(const Game *g) { return poolName(g->passTheme); }
-const char *boardTwistName(int twist) { return TWIST_NAMES[(twist >= 0 && twist < 4) ? twist : 0]; }
+const char *boardTwistName(int twist) { return (twist > 0 && twist < 4) ? ui(TWIST_IDS[twist]) : ""; }
 
-const char *boardFailName(int fail) { return fail == FAIL_FIRE ? "LIBRARY LOST" : fail == FAIL_SCORCH ? "PASS DESTROYED" : "OUT OF WORDS"; }
+const char *boardFailName(int fail) { return ui(fail == FAIL_FIRE ? UI_F_LOST : fail == FAIL_SCORCH ? UI_F_DESTROYED : UI_F_OUTWORDS); }
 const char *boardFailWhy(int fail)
 {
-    return fail == FAIL_FIRE ? "FIRE REACHED THE FLOOR" : fail == FAIL_SCORCH ? "A PASS LETTER BURNED" : "NO WORDS LEFT TO SPELL";
+    return ui(fail == FAIL_FIRE ? UI_F_WHY_FIRE : fail == FAIL_SCORCH ? UI_F_WHY_SCORCH : UI_F_WHY_WORDS);
 }
 const char *boardLockdownName(int tier)
 {
-    static const char *const names[4] = { "LOCKDOWN", "LOCKDOWN II", "LOCKDOWN III", "LOCKDOWN IV" };
-    return names[(tier >= 0 && tier < 4) ? tier : 0];
+    return ui(UI_LD1 + ((tier >= 0 && tier < 4) ? tier : 0));
 }
 
 // ---- board RNG: xorshift32, seeded per shelf (from the Daily date or libc rand()). Every
@@ -153,8 +152,8 @@ int boardDailyMod(int seed)
 
 const char *boardDailyModName(int mod)
 {
-    static const char *const names[DAILYMOD_COUNT] = { "STANDARD", "EMBER", "DEEP", "LONG" };
-    return (mod >= 0 && mod < DAILYMOD_COUNT) ? names[mod] : "";
+    static const short ids[DAILYMOD_COUNT] = { UI_D_STANDARD, UI_D_EMBER, UI_D_DEEP, UI_D_LONG };
+    return (mod >= 0 && mod < DAILYMOD_COUNT) ? ui(ids[mod]) : "";
 }
 
 // Pick the shelf's pass from its theme pool. Classic: the target length climbs with the

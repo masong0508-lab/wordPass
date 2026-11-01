@@ -167,8 +167,16 @@ The honest limits:
   sharp s is SS, the ae and oe ligatures are AE and OE) and words that become the same collapse into one. You
   spell the stripped word. A letter a language hardly uses has no tile (no K or W in Spanish, no Q in Dutch
   and the Nordic languages), and words that need it are not in the dictionary.
-- **The menus, the guide and the prompts stay English**; only the words, the pass words and the theme names
-  are translated. The guide's examples are English whatever the language.
+- **The menus and prompts are translated too**: the title, options, panel, ledger, pause menu, results and fail
+  cards, callouts, messages and the guide's animations are in the active language, in capitals and plain A to Z
+  like the English text, shortened where a language needs more room. All of it lives in one file,
+  `tools/lang/ui_strings.tsv` (id, scale, pixel budget, sample, then the eleven texts), which
+  `python3 tools/lang/gen_ui.py` turns into `source/ui_strings.[ch]`; `make check` measures every string in every
+  language against the width of the slot it is drawn in, so a long translation fails the build instead of being
+  clipped. The eight in-game guide pages (HOW TO PLAY) come from the same file: each line is an id with colour codes
+  and number slots, the numbers still computed from the rules, and every page in every language is checked
+  for 38 characters a line and its 139 px of height. The guide's example word (INK) and the English pass
+  theme names it quotes stay as they are.
 - **Daily boards are per language**: the Daily uses the active language's letter bag and pass pool, so a Daily
   in Spanish is a different board from the English one (and the same for everyone playing Spanish that day).
   Records (best scores, the streak) are shared across languages.
