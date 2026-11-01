@@ -152,6 +152,7 @@ The honest limits:
 - **Daily boards are per language**: the Daily uses the active language's letter bag and pass pool, so a Daily
   in Spanish is a different board from the English one (and the same for everyone playing Spanish that day).
   Records (best scores, the streak) are shared across languages.
+- **The first start shows a LANGUAGE chooser** (before the title; also from the title tag and A on the LANGUAGE row).
 - **Spelling is English only** (it is about US and UK spellings); the option reads ENGLISH ONLY elsewhere.
 - **The dictionaries are "every word a player is likely to type", not complete** (see `docs/LANGUAGES-DATA.md`:
   rare inflections are missing, Finnish has the weakest list, Swedish and Danish the thinnest pass pools).

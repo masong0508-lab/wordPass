@@ -112,6 +112,9 @@ int main(void)
     S.language = LANG_FI;
     n = settingsEncode(buf); settingsDefaults(); ok = settingsDecode(buf, n);
     CHECK("a saved language round-trips", ok && S.language == LANG_FI);
+    S.languageChosen = 1;
+    n = settingsEncode(buf); settingsDefaults(); ok = settingsDecode(buf, n);
+    CHECK("languageChosen round-trips and defaults to 0", ok && S.languageChosen == 1 && (settingsDefaults(), S.languageChosen == 0));
     S.language = 200;
     n = settingsEncode(buf); settingsDefaults(); ok = settingsDecode(buf, n);
     CHECK("an unknown language in a file with a good CRC falls back to English", ok && S.language == LANG_EN);

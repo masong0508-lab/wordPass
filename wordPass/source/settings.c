@@ -68,7 +68,8 @@ static void settingsValid(void)
     if (S.spelling >= SPELL_COUNT) S.spelling = SPELL_BOTH;
     if (S.tutorDone > 1) S.tutorDone = 1;
     if (S.language >= LANG_COUNT) S.language = LANG_EN;     // availability (the files on the ROM) is checked at startup, not here
-    memset(S.reserved, 0, sizeof(S.reserved));
+    if (S.languageChosen > 1) S.languageChosen = 1;
+    S.reserved = 0;
     S.bestClassic = clampInt(S.bestClassic, 0, 999999999);
     S.bestClassicShelf = clampInt(S.bestClassicShelf, 0, 9999);
     S.bestDaily = clampInt(S.bestDaily, 0, 999999999);

@@ -7,7 +7,7 @@ import sys, os, traceback
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from wp import Emu, COLS, ROWS, EMPTY, TILE, BURN, HOLE, SECRET, ST_TITLE, ST_PLAY, ST_PASSED, ST_FAIL, ST_PAUSE, ST_OPTIONS, \
     FAIL_FIRE, FAIL_SCORCH, FAIL_WORDS, Keys, keymask, load_words, POKE_SPELL, ST_STATS, ST_GUIDE, POKE_GUIDENAV, \
-    LANG_CODES, LANG_NAMES, REPO
+    LANG_CODES, LANG_NAMES, REPO, ST_LANGPICK
 
 rom = sys.argv[1]; out = sys.argv[2] if len(sys.argv) > 2 else '/tmp'
 e = Emu(rom)
@@ -2101,14 +2101,17 @@ def _():
 @scenario('languages: the title tag cycles the language, LIBRARY COMMON works per language, English comes back whole')
 def _():
     set_hand(False); to_title(); e.set_language(0)
-    e.tap(40, 15, settle=10); n = 0
+    e.tap(40, 15, settle=10); assert e.state()['state'] == ST_LANGPICK, 'tapping the tag opens the language chooser'
+    e.shot(f'{out}/rules_lang_picker.png')
+    e.tap(60, 22 + 13 * 1 + 6, settle=10); n = 0     # the second row: Espanol
     while e.state()['language'] != 1 and n < 400: e.run(5); n += 5
-    assert e.state()['language'] == 1 and e.state()['state'] == ST_TITLE, 'tapping the tag should load the next language'
+    assert e.state()['language'] == 1 and e.state()['state'] == ST_TITLE, 'tapping a row of the chooser should load it'
     e.tap(150, 15, settle=10); assert e.state()['state'] == ST_GUIDE, 'the GUIDE button beside the tag must still open the guide'
     e.press('B', settle=20)
-    e.tap(40, 15, settle=10); n = 0
+    e.tap(40, 15, settle=10); assert e.state()['state'] == ST_LANGPICK
+    e.press('DOWN', settle=3); e.press('A', settle=3); n = 0      # d-pad and A: Francais
     while e.state()['language'] != 2 and n < 400: e.run(5); n += 5
-    assert e.state()['language'] == 2
+    assert e.state()['language'] == 2 and e.state()['state'] == ST_TITLE
     # a shelf in French, then English again: the same words and the same letter tables as before
     lang_shelf(2)
     g = e.state(); assert g['library'] == 0

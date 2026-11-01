@@ -33,7 +33,7 @@ IMAGE = 'devkitpro/devkitarm:20240511'
 EMPTY, TILE, BURN, HOLE, SECRET = 0, 1, 2, 3, 4
 FAIL_NONE, FAIL_FIRE, FAIL_SCORCH, FAIL_WORDS = 0, 1, 2, 3
 CUE_NONE, CUE_GHOST, CUE_TAIL, CUE_PEEKBTN, CUE_ARMED = range(5)
-ST_TITLE, ST_PLAY, ST_PASSED, ST_FAIL, ST_PAUSE, ST_OPTIONS, ST_STATS, ST_GUIDE = range(8)
+ST_TITLE, ST_PLAY, ST_PASSED, ST_FAIL, ST_PAUSE, ST_OPTIONS, ST_STATS, ST_GUIDE, ST_LANGPICK = range(9)
 
 # byte offsets into DebugView (source/debug.c pins every one of these with _Static_assert)
 OFF = {
@@ -109,6 +109,9 @@ class Emu:
         self.dbg = dbg_addr or symbol(elf or rom.replace('.nds', '.elf'), 'DBG')
         self.bx = 82 if left_hand else 0          # left-hand layout shifts the board right
         self.words = None
+        self.run(10)
+        if self.state()['state'] == ST_LANGPICK:       # the first-boot language chooser (no saved settings in the emulator): keep English
+            self.press('A', settle=20)
     def set_hand(self, left):
         """Switch the coordinate mapping only (the ROM's own HAND option must already match).
         DeSmuME has no FAT, so a reboot comes back right-handed; flip hands inside one boot."""

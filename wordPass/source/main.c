@@ -192,6 +192,7 @@ void gameSetLanguage(int idx)
     if (idx < 0 || idx >= LANG_COUNT || !langAvailable(idx)) idx = LANG_EN;
     if (!langLoad(idx)) idx = LANG_EN;
     S.language = (u8)langCur();
+    S.languageChosen = 1;
     boardNewShelf(&G);
 }
 
@@ -550,6 +551,11 @@ int main(void)
     }
     boardNewShelf(&G);
     refreshClock();
+    if (!S.languageChosen) {         // first boot: choose a language before the title (only when there is a choice)
+        bool other = false;
+        for (int i = 1; i < LANG_COUNT; i++) other = other || langAvailable(i);
+        if (other) { G.langPick = langCur(); G.langFrom = ST_TITLE; G.state = ST_LANGPICK; }
+    }
     unsigned seedCounter = 0;
 
     while (1) {
@@ -569,7 +575,7 @@ int main(void)
                     else if (gfxInTitleClassic(t.px, t.py)) newGame(MODE_CLASSIC);
                     else if (gfxInTitleLedger(t.px, t.py)) G.state = ST_STATS;
                     else if (gfxInTitleGuide(t.px, t.py)) openGuide(ST_TITLE);
-                    else if (gfxInTitleLanguage(t.px, t.py)) { cycleLanguage(1); settingsSave(); }
+                    else if (gfxInTitleLanguage(t.px, t.py)) { G.langPick = langCur(); G.langFrom = ST_TITLE; G.state = ST_LANGPICK; }
                 } else if (down & (KEY_START | KEY_A)) { srand(seedCounter); newGame(MODE_CLASSIC); }
                 else if (down & (KEY_LEFT | KEY_L)) gfxTipFlip(-1);
                 else if (down & (KEY_RIGHT | KEY_R)) gfxTipFlip(1);
@@ -591,6 +597,16 @@ int main(void)
                 if (dir) G.guidePage = (G.guidePage + GUIDE_PAGES + dir) % GUIDE_PAGES;
                 break;
             }
+            case ST_LANGPICK: {  // tap a language, or UP/DOWN and A; B backs out once a language has been chosen
+                int hit = (down & KEY_TOUCH) ? gfxLangPickRowAt(t.px, t.py) : -1;
+                if (down & KEY_UP)   G.langPick = (G.langPick + LANG_COUNT - 1) % LANG_COUNT;
+                if (down & KEY_DOWN) G.langPick = (G.langPick + 1) % LANG_COUNT;
+                bool go = (down & (KEY_A | KEY_START)) != 0;
+                if (hit >= 0) { G.langPick = hit; go = true; }
+                if ((down & KEY_B) && S.languageChosen) { G.state = G.langFrom; break; }
+                if (go) { G.state = G.langFrom; gameSetLanguage(G.langPick); settingsSave(); }
+                break;
+            }
             case ST_STATS:       // THE LEDGER: B, X, A, START or any tap leaves
                 if (down & (KEY_B | KEY_X | KEY_A | KEY_START | KEY_TOUCH)) G.state = ST_TITLE;
                 break;
@@ -601,6 +617,7 @@ int main(void)
                 if (hit >= 0) { int dir = (hit & 1) ? 1 : -1; G.optRow = hit >> 1; cycleOption(G.optRow, dir); gfxOptionNudge(dir); }
                 if (down & KEY_UP)    G.optRow = (G.optRow + OPT_ROWS - 1) % OPT_ROWS;
                 if (down & KEY_DOWN)  G.optRow = (G.optRow + 1) % OPT_ROWS;
+                if ((down & KEY_A) && G.optRow == 8) { G.langPick = langCur(); G.langFrom = ST_OPTIONS; G.state = ST_LANGPICK; break; }   // A on LANGUAGE opens the chooser
                 if (down & (KEY_RIGHT | KEY_A)) { cycleOption(G.optRow, 1); gfxOptionNudge(1); }
                 if (down & KEY_LEFT)  { cycleOption(G.optRow, -1); gfxOptionNudge(-1); }
                 break;

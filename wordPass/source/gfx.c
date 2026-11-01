@@ -1241,7 +1241,7 @@ static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
 }
 
 // the title, options and ledger screens: no board, no panel, the title layout on the top screen
-static inline bool menuState(int st) { return st == ST_TITLE || st == ST_OPTIONS || st == ST_STATS || st == ST_GUIDE; }
+static inline bool menuState(int st) { return st == ST_TITLE || st == ST_OPTIONS || st == ST_STATS || st == ST_GUIDE || st == ST_LANGPICK; }
 
 // ---------------------------------------------------------------- top screen
 // Everything below draws on the top screen, which is never mirrored for the left hand:
@@ -2663,12 +2663,42 @@ static void drawPauseCard(const Game *g)
     }
 }
 
+// the language chooser: the eleven names in a list like the options, the highlighted one boxed
+#define PICK_Y0 22
+#define PICK_DY 13
+int gfxLangPickRowAt(int x, int y)
+{
+    if (x < 12 || x >= 160 || y < PICK_Y0) return -1;
+    int r = (y - PICK_Y0) / PICK_DY;
+    return r < LANG_COUNT ? r : -1;
+}
+
+static void drawLangPick(const Game *g)
+{
+    int savedX0 = boardX0;
+    boardX0 = 0;
+    fillRect(0, 0, SCREEN_W, SCREEN_H, BLACK);
+    drawBoardDots();
+    drawBoardFrame();
+    boardX0 = savedX0;
+    drawTextShadow(86 - textWidth("LANGUAGE", 2) / 2, 7, "LANGUAGE", GOLD_LT, 2);
+    for (int i = 0; i < LANG_COUNT; i++) {
+        int y = PICK_Y0 + i * PICK_DY;
+        bool on = i == g->langPick, ok = langAvailable(i);
+        if (on) { fillRect(12, y, 148, PICK_DY - 1, lerp15(BLACK, ACCENT, 4)); rectOutline(12, y, 148, PICK_DY - 1, ACCENT); }
+        drawText(86 - textWidth(langName(i), 1) / 2, y + 3, langName(i), on ? WHITE : ok ? INK : DIM2, 1);
+        if (i == langCur()) drawChar(18, y + 3, '*', GOLD_LT, 1);
+    }
+    drawTextCenter(86, 172, "TAP ONE, OR D-PAD AND A", DIM_TEXT, 1);
+}
+
 static void drawOverlay(const Game *g)
 {
     if (g->state == ST_PLAY) return;
     if (g->state == ST_TITLE) { drawTitle(g); return; }
     if (g->state == ST_OPTIONS) { drawOptions(g); return; }
     if (g->state == ST_STATS) { drawStats(g); return; }
+    if (g->state == ST_LANGPICK) { drawLangPick(g); return; }
     if (g->state == ST_GUIDE) { drawGuide(g); return; }
     if (g->state == ST_PASSED) drawResultsCard(g);
     else if (g->state == ST_FAIL) drawFailCard(g);

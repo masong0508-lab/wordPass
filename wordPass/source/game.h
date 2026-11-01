@@ -56,7 +56,8 @@ enum {
     ST_PAUSE,
     ST_OPTIONS,       // 5
     ST_STATS,         // 6: THE LEDGER, the lifetime stats screen (entered from the title)
-    ST_GUIDE          // 7: HOW TO PLAY, the in-game guide (from the title or the pause menu)
+    ST_GUIDE,         // 7: HOW TO PLAY, the in-game guide (from the title or the pause menu)
+    ST_LANGPICK       // 8: the LANGUAGE chooser (first boot, the title tag, the options row)
 };
 
 enum {
@@ -141,6 +142,7 @@ typedef struct {
     // ---- the in-game guide (item 19)
     int  guidePage;           // 0..GUIDE_PAGES-1
     int  guideFrom;           // the state the guide returns to: ST_TITLE or ST_PAUSE
+    int  langPick, langFrom;  // the language chooser: highlighted language, and the state it returns to (ST_TITLE or ST_OPTIONS)
     // ---- the in-world cues of the guided first shelf: a ring and a pointer on what to act on, and a ghost drag
     int  cue;                 // CUE_*: what is being pointed at this frame (CUE_NONE while the player is busy)
     int  cueAge;              // frames since the cue began
@@ -252,7 +254,8 @@ typedef struct {
     u16 version, crc;       // crc16 over bytes 8..end
     u8  theme, frame, accent, hand, fire, music, library, spelling, tutorDone;
     u8  language;           // LANG_*: 0 English; an unknown one reads as English
-    u8  reserved[2];
+    u8  languageChosen;     // 1 once the player has picked a language (the first-boot chooser shows until then)
+    u8  reserved;
     int bestClassic;        // best Classic score
     int bestClassicShelf;   // highest shelf cleared
     int bestDaily;          // best Daily score
@@ -290,6 +293,7 @@ void gfxTipFlip(int dir);             // the title's tip card: -1 previous, +1 n
 int  gfxTipIndex(void);               // debug: which tip card shows
 bool gfxInTitleOptions(int px, int py);
 bool gfxInTitleLedger(int px, int py);   // the BEST line under the title buttons: opens THE LEDGER
+int  gfxLangPickRowAt(int px, int py);  // the chooser's row under a touch (0..LANG_COUNT-1), -1 none
 bool gfxInTitleLanguage(int px, int py); // the language tag in the title's other top corner: next language
 bool gfxInTitleGuide(int px, int py);    // the GUIDE button in the title's top corner
 enum { GH_NONE = -1, GH_BACK = 0, GH_PREV, GH_NEXT, GH_DOT };
