@@ -50,8 +50,10 @@ typedef struct {
 static Voice V[NVOICE];
 static s16 lastSent[NVOICE];            // the volume last written to each channel
 static u16 noteHz[128];
-static int stepTimer, step, lastStep = 255;
-static int stepFrames = STEP_FRAMES;
+static int stepTimer, step, lastStep = 255, lastSection;
+static int stepFrames = STEP_FRAMES, calmBars;
+static int loop;               // completed passes through the 64 steps; section B plays on loop 2 of every four
+static int alarmFlip;
 static int rootNote = 60;      // C4
 static int leadOct = 1;        // register window: the lead sits an octave lower in the high keys
 static bool minorMode;
@@ -64,24 +66,35 @@ static int cascadeLeft, cascadeTimer, cascadeNote;
 static int lastWordStep = -100;
 static int lastSfx = -1, sfxCount;
 
-// Hook: scale degrees (1..14), 0 = hold, 99 = rest. Same rhythm every shelf.
+// The tune is A A B A over four loops. Hook: scale degrees (1..14), 0 = hold, 99 = rest. Same rhythm every shelf.
 static const u8 HOOK[PATTERN] = {
     1,0,3,0, 5,0,3,0, 6,0,5,0, 0,0,3,0,
     1,0,3,0, 5,0,8,0, 7,0,5,0, 0,0,99,0,
-    6,0,8,0, 7,0,5,0, 3,0,5,0, 6,0,5,0,
-    3,0,2,0, 1,0,0,0, 5,0,0,0, 1,0,99,0,
+    6,0,8,0, 9,0,8,0, 6,0,5,0, 4,0,5,0,
+    3,0,2,0, 7,0,0,0, 5,0,2,0, 7,0,99,0,
 };
-// chord roots per bar (I vi IV V) as degrees
+static const u8 HOOK_B[PATTERN] = {
+    6,0,8,0, 10,0,8,0, 6,0,5,0, 0,0,3,0,
+    4,0,6,0, 8,0,9,0, 8,0,6,0, 0,0,99,0,
+    5,0,3,0, 1,0,3,0, 5,0,6,0, 8,0,6,0,
+    5,0,4,0, 2,0,0,0, 7,0,0,0, 9,0,99,0,
+};
+// chord roots per bar (I vi IV V, and vi iv I V in the B section) as degrees
 static const u8 CHORD[4] = { 1, 6, 4, 5 };
+static const u8 CHORD_B[4] = { 6, 4, 1, 5 };
 static const u8 MAJOR[7] = { 0, 2, 4, 5, 7, 9, 11 };
 static const u8 MINOR[7] = { 0, 2, 3, 5, 7, 8, 10 };
 
-static int degreeToNote(int degree, int octave)
+// `chord` is the degree of the bar's chord (0 = none): in Lockdown's minor key the chord on the fifth
+// takes the raised seventh (harmonic minor), so the V chord is a major chord that pulls home.
+static int degreeToNote(int degree, int octave, int chord)
 {
     const u8 *sc = minorMode ? MINOR : MAJOR;
     int d = degree - 1;
     int oct = d / 7; d %= 7;
-    return rootNote + sc[d] + 12 * (oct + octave);
+    int semi = sc[d];
+    if (minorMode && chord == 5 && d == 6) semi = 11;
+    return rootNote + semi + 12 * (oct + octave);
 }
 
 static DutyCycle dutyOf(int pct)
@@ -130,14 +143,6 @@ static void notePlay(int v, int note, int scalePct)
 }
 
 static void noteOff(int v) { V[v].gate = false; }
-
-// A held level that follows `vol` without retriggering (the alarm).
-static void voiceHold(int v, int note, int vol)
-{
-    Voice *x = &V[v];
-    if (note >= 0 && note < 128) { x->baseHz = noteHz[note]; vFreq(x, x->baseHz); }
-    x->gate = vol > 0; x->cur = x->sus = vol; x->dec = 0; x->atk = 0; x->life = 0;
-}
 
 // A noise hit: starts at hz, moves `slope` Hz per frame, starts at vol and falls by `decay` per frame,
 // and closes after `life` frames.
@@ -195,6 +200,7 @@ static void tickTone(void)
     if (!t->on) return;
     Voice *x = &V[V_CHIME];
     int run = t->s.n * t->s.frames;
+    if (t->frame >= run + t->s.hold) { t->on = false; t->prio = -1; noteOff(V_CHIME); return; }   // the frame after the last: release
     if (t->frame < run && t->frame % t->s.frames == 0) {
         int note = t->base + t->s.semi[t->frame / t->s.frames];
         x->baseHz = noteHz[note < 0 ? 0 : note > 127 ? 127 : note];
@@ -204,7 +210,7 @@ static void tickTone(void)
         x->noteFrames = 0; x->vibDiv = 0; x->fresh = true;
     }
     if (t->frame >= run && t->s.vib) { x->vibDelay = 0; x->vibDiv = 96; }
-    if (++t->frame >= run + t->s.hold) { t->on = false; t->prio = -1; noteOff(V_CHIME); }
+    t->frame++;
 }
 
 static void tickNoise(void)
@@ -212,11 +218,12 @@ static void tickNoise(void)
     SfxState *t = &sfxNoise;
     if (!t->on) return;
     Voice *x = &V[V_NOISE2];
+    if (t->frame >= t->s.noiseFrames) { t->on = false; t->prio = -1; x->gate = false; x->cur = 0; return; }
     int hz = t->s.noiseStart + t->s.noiseSlope * t->frame;
     x->gate = true; x->cur = x->sus = t->s.noiseVol; x->dec = 0; x->atk = 0; x->life = 0; x->slope = 0;
     x->baseHz = hz < 100 ? 100 : hz;
     vFreq(x, x->baseHz);
-    if (++t->frame >= t->s.noiseFrames) { t->on = false; t->prio = -1; x->gate = false; x->cur = 0; }
+    t->frame++;
 }
 
 // Fire a sound effect. `param` is the chain length for SFX_TAP / SFX_UNTAP (after the change).
@@ -275,14 +282,15 @@ void musicNewShelf(int shelf, bool lockdown)
     passFlourish = failing = false;
     drumLevel = 0; bassLife = 0;
     peekHookIdx = 0;
-    step = 0; stepTimer = 0; lastStep = 255;
+    step = 0; stepTimer = 0; lastStep = 255; lastSection = 0;
+    loop = 0; stepFrames = STEP_FRAMES; calmBars = 0; alarmFlip = 0;
 }
 
 void musicWord(int len, int score)
 {
     // quantized chime: pitch follows score, volume held until next step
     Sfx s = { {0}, 1, 10, 50, 70, 3, 0, 0, 0, 0, 0, 0 };
-    s.semi[0] = (s8)(degreeToNote(1 + (score / 60) % 8, leadOct) - rootNote);
+    s.semi[0] = (s8)(degreeToNote(1 + (score / 60) % 8, leadOct, 0) - rootNote);
     startTone(&s, rootNote, 3);
     bassLife = 3;
     int lvl = len >= 7 ? 3 : len >= 5 ? 2 : 1;
@@ -303,75 +311,121 @@ void musicPeek(bool on) { peeking = on; }
 void musicReveal(bool secret)
 {
     // play the hook, one note per reveal
-    int tries = 0, n;
-    do { n = HOOK[peekHookIdx]; peekHookIdx = (peekHookIdx + 1) % PATTERN; }
+    int tries = 0, n, at;
+    do { at = peekHookIdx; n = HOOK[at]; peekHookIdx = (peekHookIdx + 1) % PATTERN; }
     while ((n == 0 || n == 99) && ++tries < PATTERN);
     Sfx s = { {0}, 1, secret ? 24 : 7, 50, 70, 3, 0, 0, 0, 0, 0, 0 };
-    s.semi[0] = (s8)(degreeToNote(n, leadOct + (secret ? 1 : 0)) - rootNote);
+    s.semi[0] = (s8)(degreeToNote(n, leadOct + (secret ? 1 : 0), CHORD[at / 16]) - rootNote);
     startTone(&s, rootNote, 3);
 }
 
 void musicPassComplete(void) { passFlourish = true; flourishSteps = PATTERN; drumLevel = 3; drumDecay = PATTERN; }
 void musicFail(void) { failing = true; failFrames = 90; }
 
+// A noise hit on the hat channel, below every sound effect (priority 0).
+static void hat(int hz, int frames, int vol)
+{
+    Sfx s = { {0}, 0, 0, 0, 0, 0, 0, 0, (u8)frames, (u8)vol, (s16)hz, 0 };
+    startNoise(&s, 0);
+}
+
+static void snare(int vol) { noiseHit(V_DRUM, 7000, 0, vol, 8, stepFrames < 6 ? stepFrames : 6); }
+static void kick(int vol) { noiseHit(V_DRUM, 2400, -400, vol, vol / 4 + 1, 4); }
+
+static const u8 BASS_RIFF[2][8] = {
+    { 0, 0, 7, 0, 0, 12, 7, 0 },
+    { 0, 0, 7, 0, 0, 12, 10, 7 },        // the fourth bar climbs back into the loop
+};
+
 static void sequenceStep(const Game *g)
 {
-    int bar = (step / 16) % 4;
-    int chord = CHORD[bar];
+    int sec = (loop & 3) == 2;
+    const u8 *hook = sec ? HOOK_B : HOOK;
+    const u8 *chords = sec ? CHORD_B : CHORD;
+    int bar = (step / 16) % 4, sb = step % 16;
+    int chord = chords[bar];
     int hookScale = passFlourish ? 160 : 100;
+    int low = boardLowestFireRow(g);
+
+    // the tempo lifts under fire and relaxes a bar after the last flame is gone; only ever chosen on a bar line
+    if (sb == 0) {
+        if (low >= 0) { calmBars = 0; stepFrames = low >= 5 ? 6 : low >= 3 ? 7 : STEP_FRAMES; }
+        else if (calmBars < 1) calmBars++;
+        else stepFrames = STEP_FRAMES;
+    }
 
     // hook: never leaves
-    int h = HOOK[step];
+    int h = hook[step];
     if (h == 99) noteOff(V_HOOK);
-    else if (h) notePlay(V_HOOK, degreeToNote(h, leadOct), hookScale);
+    else if (h) notePlay(V_HOOK, degreeToNote(h, leadOct, chord), hookScale);
 
-    // pulse: chord-tone arpeggio, always on, plucked
-    static const u8 arp[4] = { 0, 2, 4, 2 };
-    notePlay(V_PULSE, degreeToNote(chord + arp[step & 3], 0), 100);
+    // pulse: a plucked chord-tone arpeggio, ping-ponging across the stereo field
+    static const u8 arp[4] = { 0, 2, 4, 7 };
+    notePlay(V_PULSE, degreeToNote(chord + arp[step & 3], 0, chord), 100);
+    vPan(&V[V_PULSE], (step & 1) ? 84 : 44);
 
-    // bass: 8ths on the chord root while words keep coming
+    // bass: a riff in 8ths on the chord root while words keep coming
     if ((step & 1) == 0) {
-        if (bassLife > 0) notePlay(V_BASS, degreeToNote(chord, -1), 100);
-        else noteOff(V_BASS);
+        if (bassLife > 0) {
+            int note = degreeToNote(chord, -1, chord) + BASS_RIFF[bar == 3][sb / 2];
+            notePlay(V_BASS, note, (sb == 0 || sb == 8) ? 100 : 78);
+        } else noteOff(V_BASS);
     }
-    if ((step % 16) == 0 && bassLife > 0 && step != lastWordStep) bassLife--;
+    if (sb == 0 && bassLife > 0 && step != lastWordStep) bassLife--;
 
-    // pad: swells with the pass, slow alternation of chord tones; the duty flips every four steps
+    // pad: swells with the pass, slow alternation of chord tones an octave under the lead; the duty flips every four steps
     int found = 0;
     for (int i = 0; i < g->passLen; i++) found += g->found[i];
     int padVol = g->passLen ? (40 * found) / g->passLen : 0;
     Voice *pad = &V[V_PAD];
     if ((step % 8) == 0) {
-        int note = degreeToNote(chord + ((step / 8) & 1 ? 4 : 2), leadOct);
+        int note = degreeToNote(chord + ((step / 8) & 1 ? 4 : 2), leadOct - 1, chord);
         pad->baseHz = noteHz[note]; vFreq(pad, pad->baseHz);
     }
     if ((step % 4) == 0) vDuty(pad, (step / 4) & 1 ? INST[V_PAD].dutySus : INST[V_PAD].dutyAtk);
     pad->gate = true; pad->sus = padVol; pad->atk = 1; pad->dec = 0;
 
-    // drums: noise bursts by level
-    bool kick = (step % 8) == 0, hat = (step & 2) != 0, snare = (step % 16) == 8;
-    int dv = 0, df = 0;
-    if (drumLevel >= 1 && hat && (step & 1) == 0) { dv = 18; df = 14000; }
-    if (drumLevel >= 2 && kick) { dv = 48; df = 1800; }
-    if (drumLevel >= 3 && snare) { dv = 44; df = 6000; }
-    if (dv) noiseHit(V_DRUM, df, 0, dv, dv / 4 + 1, 12);
+    // drums: kick and snare on V_DRUM, hats on V_NOISE2 (any sound effect there wins; the hats return next step)
+    if (drumLevel >= 1) {
+        bool fill = drumLevel >= 3 && step >= 60;
+        if (drumLevel >= 3) {
+            static const u8 acc[4] = { 16, 8, 12, 8 };
+            if (step == 0) hat(12000, 10, 24);                  // an open hat marks the top of every loop
+            else hat(16000, 2, acc[step & 3]);
+        } else if ((sb & 3) == 2) hat(16000, 2, 16);
+        if (drumLevel >= 2) {
+            if (sb == 0 || sb == 8) kick(54);
+            if (fill) snare(30 + 6 * (step - 60) + (step == 63 ? 2 : 0));   // 30, 36, 42, 50
+            else if (sb == 4 || sb == 12) snare(46);
+            if (sb == 14 && (bar == 1 || bar == 3) && !fill) kick(30);   // a ghost kick before the next bar
+        }
+    }
     if (drumDecay > 0 && --drumDecay == 0 && drumLevel > 0) { drumLevel--; drumDecay = PATTERN; }
 
-    // alarm: a clashing tone that climbs as fire descends
-    int low = boardLowestFireRow(g);
-    if (low >= 0) voiceHold(V_ALARM, rootNote + 13 + low * 2, 20 + low * 5);
-    else voiceHold(V_ALARM, -1, 0);
+    // alarm: two-tone blips that come faster and louder as the fire descends
+    if (low >= 0) {
+        int every = low <= 1 ? 8 : low <= 3 ? 4 : low <= 5 ? 2 : 1;
+        if (step % every == 0) {
+            int note = rootNote + 13 + low * 2 + (alarmFlip ? 6 : 0);
+            int vol = 28 + low * 5; if (vol > 60) vol = 60;
+            alarmFlip ^= 1;
+            noteOn(V_ALARM, note, vol, vol, 0);
+            V[V_ALARM].life = 4;
+        }
+    }
 
     if (passFlourish) {
-        if (h && h != 99) {
+        int fh = HOOK[step];                            // the flourish keeps walking the A hook
+        if (fh && fh != 99) {
             Sfx s = { {0}, 1, 6, 50, 70, 3, 0, 0, 0, 0, 0, 0 };
-            s.semi[0] = (s8)(degreeToNote(h, leadOct + 1) - rootNote);
+            s.semi[0] = (s8)(degreeToNote(fh, leadOct + 1, CHORD[bar]) - rootNote);
             startTone(&s, rootNote, 3);
         }
         if (--flourishSteps <= 0) passFlourish = false;
     }
-    lastStep = step;
+    lastStep = step; lastSection = sec;
     step = (step + 1) % PATTERN;
+    if (step == 0) loop++;
 }
 
 // One frame of one voice: envelope, vibrato, noise slide, then the level the channel gets
@@ -425,7 +479,7 @@ void musicTick(const Game *g)
     // cascade: a rising run of chimes, one per five frames (a louder sound effect wins)
     if (cascadeLeft > 0 && --cascadeTimer <= 0) {
         Sfx s = { {0}, 1, 4, 50, 70, 2, 0, 0, 0, 0, 0, 0 };
-        s.semi[0] = (s8)(degreeToNote(1 + cascadeNote, leadOct + 1) - rootNote);
+        s.semi[0] = (s8)(degreeToNote(1 + cascadeNote, leadOct + 1, 0) - rootNote);
         startTone(&s, rootNote, 2);
         cascadeNote++; cascadeLeft--; cascadeTimer = 5;
     }
@@ -444,7 +498,7 @@ void musicDebug(MusicDbg *out)
         out->duty[v] = (u8)V[v].duty;
     }
     out->step = (u8)lastStep;
-    out->section = 0;
+    out->section = (u8)lastSection;
     out->tempo = (u8)stepFrames;
     out->drumLevel = (u8)drumLevel;
     out->lastSfx = (s16)lastSfx;

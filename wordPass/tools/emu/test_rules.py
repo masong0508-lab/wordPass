@@ -1756,5 +1756,55 @@ def _():
     assert e.music()['lastSfx'] == SFX_MENU and e.music()['sfxCount'] == c0 + 1, 'a pause row move fires MENU'
     e.press('START', settle=20)
 
+@scenario('music composition: A A B A over four loops (section in the mirror), restarting with the shelf')
+def _():
+    to_title(); e.run(5)
+    secs = []
+    for _ in range(8):
+        m = e.wait_step(0); secs.append(m['section'])
+    cyc = [0, 0, 1, 0] * 3
+    assert any(secs == cyc[k:k + 8] for k in range(4)), f'sections of eight loops {secs} are not a run of A A B A'
+    ensure_play(); fresh_shelf(); e.run(5)
+    m = e.wait_step(0); assert m['section'] == 0, 'a new shelf starts in section A'
+
+@scenario('music under fire: alarm blips by the lowest flame, tempo lifts to 6 on row 5 and relaxes a bar after the fire is out')
+def _():
+    fresh_shelf(); e.set_heat(0); e.set_burn(0, 99); e.run(5)
+    e.wait_step(15); e.wait_step(0)
+    assert e.music()['tempo'] == 8, 'a fire-free shelf plays at 8 frames a step'
+    blips = 0
+    for _ in range(64 * 8):                                  # a loop with no fire: the alarm is silent
+        e.run(1); blips += e.music()['vol'][4] > 0
+    assert blips == 0, f'alarm sounded {blips} frames with no fire'
+    e.set_cell(C, 5, BURN, 'a')
+    e.wait_step(15); m = e.wait_step(0)
+    assert m['tempo'] == 6, f'tempo {m["tempo"]} with a flame on row 5'
+    n = 0; vols = set(); duty = set()
+    for _ in range(16 * 6):
+        e.run(1); m = e.music()
+        if m['vol'][4]: n += 1; vols.add(m['vol'][4]); duty.add(m['duty'][4])
+    assert vols and vols <= {53}, f'row 5 alarm volume {vols}'     # min(60, 28 + 5 * 5)
+    assert duty == {0}, f'the alarm is a 12.5% pulse: {duty}'
+    assert 28 <= n <= 36, f'eight four-frame blips a bar: {n} frames lit'
+    e.wait_step(20); e.set_cell(C, 5, TILE, 'e')
+    seen = []
+    for st in (32, 48):
+        e.wait_step(st); seen.append(e.music()['tempo'])
+    assert seen == [6, 8], f'the tempo should hold one bar after the fire is out, then relax: {seen}'
+
+@scenario('music: a word brings in the bass riff and the groove (the drum level and the kick are visible in the mirror)')
+def _():
+    fresh_shelf(); e.set_heat(0); e.set_burn(0, 99); e.run(5)
+    g = e.state(); ws = e.find_words(g, minlen=5, maxlen=7)
+    assert ws, 'no five-letter word on the board'
+    e.chain(ws[0][1]); e.press('A', settle=2)
+    assert e.music()['drumLevel'] >= 2, f'a five-letter word lifts the groove: level {e.music()["drumLevel"]}'
+    kick = False; bass = False
+    for _ in range(64 * 8 // 2):
+        e.run(1); m = e.music()
+        kick |= m['vol'][6] == 54 and m['hz'][6] == 2400
+        bass |= m['vol'][2] > 0
+    assert kick and bass, f'kick {kick} bass {bass}'
+
 print('RULES OK' if not fails else f'RULES FAILED: {fails}')
 sys.exit(fails)

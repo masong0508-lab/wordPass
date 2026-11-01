@@ -66,6 +66,27 @@ extern int stubHz[32], stubVol[32], stubDuty[32], stubPan[32], stubWrites, stubR
 static MusicDbg mdbg(void) { MusicDbg d; musicDebug(&d); return d; }
 static void mrun(int n) { for (int i = 0; i < n; i++) musicTick(&g); }
 
+// One recorded sequencer step: what had been sent to the hardware on the frame the step was sequenced
+typedef struct { int hz[8], vol[8], duty[8], pulsePan, tempo, section, step; } Snap;
+// Run the sequencer until n more steps were sequenced and record each one. word = 1 keeps the words coming
+// (musicWord before every bar line, so bass and drums stay in); word = 2 puts out the flame on row 5 after step 16.
+static void capture(Snap *out, int n, int word)
+{
+    int got = 0, prev = mdbg().step;
+    for (int f = 0; got < n && f < n * 16 + 400; f++) {
+        musicTick(&g);
+        MusicDbg d = mdbg();
+        if (d.step == prev) continue;
+        prev = d.step;
+        Snap *s = &out[got];
+        for (int v = 0; v < 8; v++) { s->hz[v] = d.hz[v]; s->vol[v] = d.vol[v]; s->duty[v] = d.duty[v]; }
+        s->pulsePan = stubPan[1]; s->tempo = d.tempo; s->section = d.section; s->step = d.step;
+        if (word == 1 && got % 16 == 15) musicWord(7, 0);
+        if (word == 2 && got == 16) g.cell[3][5].state = CELL_TILE;
+        got++;
+    }
+}
+
 static void musicTests(void)
 {
     u16 nhz[128];
@@ -171,6 +192,124 @@ static void musicTests(void)
         c0 = mdbg().sfxCount;
         musicSfx(-1, 0); musicSfx(SFX_COUNT, 0);
         CHECK("an out-of-range effect id is ignored", mdbg().sfxCount == c0);
+    }
+
+    // composition: A A B A form, the harmonic-minor fifth, the groove, the bass riff, the pad, the pulse, the alarm, the tempo
+    {
+        Snap sn[64 * 8];
+        musicNewShelf(1, false);
+        capture(sn, 64 * 8, 0);
+        bool form = true;
+        static const int want[8] = { 0, 0, 1, 0, 0, 0, 1, 0 };
+        for (int l = 0; l < 8; l++) if (sn[l * 64].section != want[l] || sn[l * 64].step != 0) form = false;
+        CHECK("the tune is A A B A: the B section is the third of every four loops", form);
+        CHECK("section A's hook: bar 3 climbs to degree 9 and bar 4 ends on the tonic (C5 at step 48 is degree 3)", sn[32].hz[0] == nhz[81] && sn[36].hz[0] == nhz[60 + 14 + 12] && sn[48].hz[0] == nhz[76]);
+        CHECK("section B opens on degree 6 and reaches degree 10", sn[64 * 2].hz[0] == nhz[81] && sn[64 * 2 + 4].hz[0] == nhz[88]);
+
+        musicNewShelf(1, true);                                   // Lockdown: the minor key, harmonic on the fifth chord
+        capture(sn, 64 * 3, 0);
+        CHECK("minor: degree 7 over the vi chord is the natural 7th (Bb5), over the V chord the raised one (B5)",
+              sn[24].hz[0] == nhz[60 + 10 + 12] && sn[52].hz[0] == nhz[60 + 11 + 12]);
+        CHECK("minor: the B section's last bar also raises its degree 7 (step 56 of loop 2)", sn[64 * 2 + 56].hz[0] == nhz[60 + 11 + 12]);
+        CHECK("the pulse arpeggio over the V chord uses the raised 7th (G, B, D, G in minor)", sn[49].hz[1] == nhz[71]);
+
+        musicNewShelf(1, false);
+        capture(sn, 64, 0);
+        CHECK("pulse: a plucked arpeggio C E G C that ping-pongs 44 / 84", sn[0].hz[1] == nhz[60] && sn[1].hz[1] == nhz[64] && sn[2].hz[1] == nhz[67] && sn[3].hz[1] == nhz[72] &&
+              sn[0].pulsePan == 44 && sn[1].pulsePan == 84 && sn[2].pulsePan == 44 && sn[0].vol[1] == 26 && sn[0].duty[1] == DutyCycle_12);
+        CHECK("pad: an octave under the lead, a third above the chord root, duty 37.5% then 50% every four steps", sn[0].hz[3] == nhz[64] && sn[0].duty[3] == DutyCycle_37 && sn[4].duty[3] == DutyCycle_50 && sn[8].duty[3] == DutyCycle_37);
+
+        // drums by level
+        musicNewShelf(1, false); musicWord(3, 0);
+        capture(sn, 64, 0);
+        bool l1 = true, l1noise = true;
+        for (int i = 0; i < 64; i++) {
+            if (sn[i].vol[6] != 0) l1 = false;
+            bool wantHat = (i % 16) % 4 == 2;
+            if ((sn[i].vol[7] == 16 && sn[i].hz[7] == 16000) != wantHat || (sn[i].vol[7] && !wantHat)) l1noise = false;
+        }
+        CHECK("drum level 1: closed hats on steps 2, 6, 10, 14 (vol 16, 16000 Hz), no kick or snare", l1 && l1noise);
+        musicNewShelf(1, false); musicWord(5, 0);
+        capture(sn, 64, 0);
+        CHECK("drum level 2: kick on 0 and 8 (2400 Hz, vol 54), snare on 4 and 12 (7000 Hz, vol 46), ghost kick vol 30 on step 14 of bars 2 and 4",
+              sn[0].vol[6] == 54 && sn[0].hz[6] == 2400 && sn[8].vol[6] == 54 && sn[4].vol[6] == 46 && sn[4].hz[6] == 7000 && sn[12].vol[6] == 46 &&
+              sn[14].vol[6] == 0 && sn[16 + 14].vol[6] == 30 && sn[32 + 14].vol[6] == 0 && sn[48 + 14].vol[6] == 30 && sn[2].vol[6] == 0);
+        musicNewShelf(1, false); musicWord(7, 0);
+        capture(sn, 64, 0);
+        bool acc = true, fill = true, quiet = true;
+        for (int i = 1; i < 64; i++) {
+            static const int A[4] = { 16, 8, 12, 8 };
+            if (sn[i].vol[7] != A[i & 3] || sn[i].hz[7] != 16000) acc = false;
+            if (sn[i].vol[7] > 16) quiet = false;
+        }
+        static const int F[4] = { 30, 36, 42, 50 };
+        for (int i = 60; i < 64; i++) if (sn[i].vol[6] != F[i - 60] || sn[i].hz[6] != 7000) fill = false;
+        CHECK("drum level 3: sixteenth hats with accents 16 8 12 8, an open hat (12000 Hz, vol 24) on step 0, closed hats never above 16", acc && quiet && sn[0].vol[7] == 24 && sn[0].hz[7] == 12000);
+        CHECK("drum level 3: the bar-4 fill is a snare on every sixteenth at 30, 36, 42, 50", fill && sn[56].vol[6] == 54 && sn[52].vol[6] == 46);
+
+        // bass riff (words keep arriving so the bass stays in)
+        musicNewShelf(1, false); musicWord(7, 0);
+        capture(sn, 64, 1);
+        CHECK("bass riff: root, root, fifth, root / root, octave, fifth on the 8ths; 64 on beats 1 and 3, softer between",
+              sn[0].hz[2] == nhz[48] && sn[0].vol[2] == 64 && sn[2].hz[2] == nhz[48] && sn[2].vol[2] == 49 && sn[4].hz[2] == nhz[55] && sn[10].hz[2] == nhz[60] && sn[8].vol[2] == 64 && sn[12].hz[2] == nhz[55]);
+        CHECK("bass riff: bar 4 (over the V chord) ends 0, 12, 10, 7 above the root", sn[48 + 10].hz[2] == nhz[55 + 12] && sn[48 + 12].hz[2] == nhz[55 + 10] && sn[48 + 14].hz[2] == nhz[55 + 7]);
+
+        // the alarm
+        static const int lows[6] = { 1, 3, 5, 6, 4, 7 }, blips[6] = { 8, 16, 32, 64, 32, 64 }, vols[6] = { 33, 43, 53, 58, 48, 60 };
+        bool alarm = true;
+        for (int k = 0; k < 6; k++) {
+            g.cell[3][lows[k]].state = CELL_BURN;
+            musicNewShelf(1, false);
+            capture(sn, 64, 0);
+            int n = 0;
+            for (int i = 0; i < 64; i++) if (sn[i].vol[4]) { n++; if (sn[i].vol[4] != vols[k] || sn[i].duty[4] != DutyCycle_12) alarm = false; }
+            if (n != blips[k]) alarm = false;
+            g.cell[3][lows[k]].state = CELL_TILE;
+        }
+        CHECK("alarm: a blip every 8 / 4 / 2 / 1 steps by the lowest flame, louder as it falls, 12.5% duty (vol min(60, 28 + 5 * row))", alarm);
+        g.cell[3][1].state = CELL_BURN;
+        musicNewShelf(1, false);
+        capture(sn, 9, 0);
+        CHECK("alarm: the first blip is rootNote+13+2*row and the second is six semitones higher", sn[0].hz[4] == nhz[60 + 13 + 2] && sn[8].hz[4] == nhz[60 + 13 + 2 + 6]);
+        {   // a blip lasts four frames
+            musicNewShelf(1, false);
+            int f = 0; while (mdbg().step != 0 && f++ < 50) musicTick(&g);
+            int on = 0;
+            for (int i = 0; i < 7; i++) { if (mdbg().vol[4]) on++; musicTick(&g); }
+            CHECK("alarm: each blip sounds for four frames", on == 4);
+        }
+        g.cell[3][1].state = CELL_TILE;
+        musicNewShelf(1, false);
+        capture(sn, 64, 0);
+        bool silent = true;
+        for (int i = 0; i < 64; i++) if (sn[i].vol[4]) silent = false;
+        CHECK("alarm: silent on a fire-free board", silent);
+
+        // tempo
+        musicNewShelf(1, false);
+        g.cell[3][5].state = CELL_BURN;
+        capture(sn, 49, 2);
+        CHECK("tempo: 6 frames a step with a flame on row 5, kept for one bar after it is out, then back to 8",
+              sn[0].tempo == 6 && sn[16].tempo == 6 && sn[32].tempo == 6 && sn[47].tempo == 6 && sn[48].tempo == 8);
+        musicNewShelf(1, false);
+        g.cell[3][3].state = CELL_BURN; capture(sn, 2, 0); g.cell[3][3].state = CELL_TILE;
+        int t3 = sn[0].tempo;
+        musicNewShelf(1, false);
+        g.cell[3][2].state = CELL_BURN; capture(sn, 2, 0); g.cell[3][2].state = CELL_TILE;
+        CHECK("tempo: 7 frames a step with the lowest flame on row 3, 8 on row 2", t3 == 7 && sn[0].tempo == 8);
+        {   // the real spacing between steps follows the tempo
+            musicNewShelf(1, false);
+            g.cell[3][5].state = CELL_BURN;
+            int f = 0, first = -1, second = -1;
+            for (int i = 0; i < 60; i++) {
+                musicTick(&g); f++;
+                if (mdbg().step == 0 && first < 0) first = f;
+                if (mdbg().step == 1 && second < 0) second = f;
+            }
+            CHECK("tempo: steps come 6 frames apart at tempo 6", second - first == 6);
+            g.cell[3][5].state = CELL_TILE;
+        }
+        musicNewShelf(1, false);
     }
 
     // MUSIC off silences every channel, and nothing was ever written twice

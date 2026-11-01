@@ -291,6 +291,9 @@ class Emu:
                 'tempo': v[26], 'drumLevel': v[27], 'lastSfx': v[28], 'sfxCount': v[29]}
     def wait_step(self, n, limit=600):
         """Run frame by frame until the sequencer has sequenced step n (its notes were sent on that frame)."""
+        for _ in range(8):                              # already on step n: let it pass, the next onset is wanted
+            if self.music()['step'] != n: break
+            self.run(1)
         for _ in range(limit):
             self.run(1)
             if self.music()['step'] == n: return self.music()

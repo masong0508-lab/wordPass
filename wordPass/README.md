@@ -288,12 +288,23 @@ chained word is worth under the big letters.
 No samples: the soundtrack is sequenced live on the DS PSG channels so stems
 can be mixed by game state.
 
-- A fixed four-bar **hook** that never stops. Each shelf transposes it to a
-  new key; Lockdown shelves play it in minor.
-- **Pulse** arpeggio always on. **Bass** enters while you keep spelling and
-  fades after three quiet bars. **Drums** layer up by word length and decay
-  back. **Pad** swells one chord tone per pass letter found.
-- **Alarm**: a clashing tone that climbs as the fire descends.
+- A fixed **hook** that never stops, in the form **A A B A**: the four-bar
+  tune plays twice, then a four-bar answer phrase over a different chord
+  walk (vi IV I V), then the tune again. Each shelf transposes it to a new
+  key; Lockdown shelves play it in minor, with the raised seventh on the V
+  chord (harmonic minor) so the turn home still pulls.
+- **Pulse** arpeggio always on, plucked and ping-ponging between the
+  speakers. **Bass** plays a riff of eighths (root, fifth, octave) while you
+  keep spelling and fades after three quiet bars. **Pad** sits an octave
+  under the lead and swells one chord tone per pass letter found.
+- **Drums** layer up by word length and decay back. Level 1 is a closed hat
+  on the off-beats; level 2 adds kick and snare (and a ghost kick before bars
+  two and four); level 3 runs sixteenth hats with accents, an open hat at the
+  top of every loop and a snare fill into the last beat of the fourth bar.
+- **Alarm**: a pulsed two-tone blip that comes faster and louder the lower the
+  fire has burned (every eighth step on the top rows, every step near the
+  bottom). While a flame is on row 3 or lower the whole tune speeds up, and on
+  row 5 or lower faster still; it relaxes one bar after the shelf is fire-free.
 - **Peek** ducks everything but the pulse; each reveal plays the next note of
   the hook, so peeling a path plays the tune.
 - Word chimes are quantized to the beat. Finishing a pass hands the hook to a
