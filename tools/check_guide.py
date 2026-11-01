@@ -177,7 +177,7 @@ def build_facts(queries=()):
     with open(cfile, 'w') as f: f.write(FACTS_C)
     cmd = ['gcc', '-std=gnu11', '-w', '-I', os.path.join(REPO, 'tools/check/stub'), '-I', SRC, cfile,
            os.path.join(REPO, 'tools/check/stubs.c'), os.path.join(SRC, 'board.c'), os.path.join(SRC, 'dict.c'),
-           os.path.join(SRC, 'pools.c'), os.path.join(SRC, 'lang.c'), os.path.join(SRC, 'langload.c'), os.path.join(SRC, 'music.c'), '-o', exe]
+           os.path.join(SRC, 'pools.c'), os.path.join(SRC, 'lang.c'), os.path.join(SRC, 'langload.c'), os.path.join(SRC, 'music.c'), os.path.join(SRC, 'ui.c'), os.path.join(SRC, 'ui_strings.c'), '-o', exe]
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode: raise SystemExit('cannot build the facts program:\n' + r.stderr)
     qfile = os.path.join(out, 'queries.txt')
@@ -248,11 +248,19 @@ def variants_counts():
         off += counts[i] * r
     return us, uk
 
+def ui_english():
+    """id -> English text, from tools/lang/ui_strings.tsv (the interface text lives there, the code names ids)."""
+    out = {}
+    for line in read(os.path.join(HERE, 'lang', 'ui_strings.tsv')).split('\n'):
+        f = line.split('\t')
+        if line and not line.startswith('#') and len(f) > 4: out[f[0]] = f[4]
+    return out
+
 def gfx_names():
-    t = read(os.path.join(SRC, 'gfx.c'))
+    t = read(os.path.join(SRC, 'gfx.c')); en = ui_english()
     def arr(name):
         m = re.search(name + r'\[[A-Z_]*\]\s*=\s*\{(.*?)\};', t, re.S)
-        return re.findall(r'"([^"]*)"', m.group(1))
+        return [en[i] for i in re.findall(r'UI_([A-Z0-9_]+)', m.group(1))]
     return {k: arr(k) for k in ('OPT_NAMES', 'LIB_NAMES', 'SPELL_NAMES', 'THEME_NAMES', 'FRAME_NAMES', 'ACCENT_NAMES', 'FIRE_NAMES')}
 
 # ---------------------------------------------------------------------------------------------
@@ -556,7 +564,7 @@ def main():
             if tok not in keys: fail(f'control table names {tok}, which main.c never reads')
 
     # ---- messages and callouts quoted in the guide exist in the source
-    allsrc = read(os.path.join(SRC, 'main.c')) + read(os.path.join(SRC, 'gfx.c')) + read(os.path.join(SRC, 'board.c'))
+    allsrc = read(os.path.join(SRC, 'main.c')) + read(os.path.join(SRC, 'gfx.c')) + read(os.path.join(SRC, 'board.c')) + ''.join('"' + v + '"' for v in ui_english().values())
     for tname in ('messages', 'callouts'):
         t = need(tname)           # | Message | When |
         for r in (t or []):

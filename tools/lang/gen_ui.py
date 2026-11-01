@@ -19,6 +19,8 @@ import os, re, sys
 LANGS = "en es fr de it pt nl sv pl da fi".split()
 OK = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .,:!?'-+/=<>()%_@")
 SLOT = re.compile(r"%(?:(\d)\$)?(0?\d?)([ds])")
+CODE = re.compile(r"\{([AGFBDW])\}")        # guide colour codes: accent gold fire base dim white (game.h GM_*, bytes 1..6)
+CODES = {"A": "\\001", "G": "\\002", "F": "\\003", "B": "\\004", "D": "\\005", "W": "\\006"}
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 TSV = os.path.join(ROOT, "tools", "lang", "ui_strings.tsv")
 
@@ -33,7 +35,8 @@ def slots(s):
     return out
 
 
-def expand(s, samp):
+def expand(s, samp, lang=0, rows=None):
+    s = CODE.sub('', s)
     toks = samp.split("|") if samp != "-" else []
     seq = [0]
 
@@ -42,7 +45,10 @@ def expand(s, samp):
         if not m.group(1):
             seq[0] += 1
         if pos - 1 < len(toks):
-            return toks[pos - 1]
+            t = toks[pos - 1]
+            if t.startswith("@") and rows is not None:      # another id's text in the same language (a name that goes in this slot)
+                return CODE.sub('', rows[t[1:]][lang])
+            return t
         return "99" if m.group(3) == "d" else "WWWW"
     return SLOT.sub(rep, s)
 
@@ -66,6 +72,7 @@ def load():
 
 def validate(rows):
     bad, seen = [], set()
+    byid = {r[1]: r[5] for r in rows}
     for ln, id_, scale, budget, samp, txt in rows:
         if id_ in seen:
             bad.append(f"line {ln}: duplicate id {id_}")
@@ -74,20 +81,20 @@ def validate(rows):
         for lang, s in zip(LANGS, txt):
             if not s:
                 bad.append(f"{id_} {lang}: empty")
-            for ch in SLOT.sub('', s):
+            for ch in SLOT.sub('', CODE.sub('', s)):
                 if ch not in OK:
                     bad.append(f"{id_} {lang}: character {ch!r} in {s!r}")
                     break
             if slots(s) != base:
                 bad.append(f"{id_} {lang}: slots differ from English in {s!r}")
-            w = width(expand(s, samp), scale)
+            w = width(expand(s, samp, LANGS.index(lang), byid), scale)
             if w > budget:
                 bad.append(f"{id_} {lang}: {w}px > {budget}px: {s!r}")
     return bad
 
 
 def cstr(s):
-    return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    return '"' + CODE.sub(lambda m: CODES[m.group(1)], s.replace("\\", "\\\\").replace('"', '\\"')) + '"'
 
 
 def main():

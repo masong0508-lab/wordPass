@@ -14,7 +14,9 @@ const char *uiIn(int id, int lang)
     return UI_TEXT[id][lang];
 }
 
-const char *ui(int id) { return uiIn(id, langCur()); }
+static int forced = -1;
+void uiTestLang(int lang) { forced = lang; }
+const char *ui(int id) { return uiIn(id, forced >= 0 ? forced : langCur()); }
 
 typedef struct { char kind; int width; bool zero; int pos; } UiSlot;   // kind 'd' or 's'; pos is 1 based
 

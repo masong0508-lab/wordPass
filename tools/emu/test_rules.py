@@ -1675,13 +1675,13 @@ def guide_open_from_title():
     e.tap(e.bx + 137, 15, settle=20)
     g = e.state(); assert g['state'] == ST_GUIDE and g['guideFrom'] == ST_TITLE and g['guidePage'] == 0, f'GUIDE did not open: {g["state"]} from {g["guideFrom"]} page {g["guidePage"]}'
 
-def guide_margins(tag, page, ticks=60):
+def guide_margins(tag, page, ticks=60, step=1):
     """Watch a whole four second loop of both screens (a screenshot per tick) and fail on any lit pixel where text must
     not be: the touch screen's body keeps clear of the frame and the buttons, the top screen's captions and diagrams
     clear of the plaque border and of everything outside it."""
     bad = []
     for k in range(ticks):
-        e.run(4); px = e.pixels()
+        e.run(4 * step); px = e.pixels()
         for y in range(0, 192):                                   # top screen: nothing outside the plaque, nor in the two columns inside its border
             for x in list(range(0, 8)) + list(range(248, 256)) + ([10, 11, 244, 245] if 10 <= y < 182 else []):
                 if sum(px[x, y]) > 200: bad.append(('top', x, y, k))
@@ -2385,6 +2385,117 @@ def _():
     assert bass and hats and m['drumLevel'] >= 1, f'attract: bass {bass} hats {hats} drums {m["drumLevel"]}'
     e.tap(e.bx + 52, 147); e.run(400); m = e.music()
     assert m['mix'] == 0 and m['drumLevel'] == 0, f'playing: mix {m["mix"]} drums {m["drumLevel"]}'
+
+# ---- the interface in every language: nothing lit on a frame edge or in the gutter beside the next element -----------------
+def ui_lit(px, xs, ys, thr=200, lattice=False):
+    """Lit pixels (brightness sum over thr) in the columns xs and rows ys; the top screen's accent dot lattice is skipped."""
+    return [(x, y) for y in ys for x in xs if sum(px[x, y]) > thr and not (lattice and x % 8 == 4 and y % 8 == 4)]
+
+def ui_top(px, what):
+    """The top screen's plaque (frame at x 8..9 and 246..247): text stays clear of both sides."""
+    bad = ui_lit(px, [10, 11, 245], range(12, 180), lattice=True)
+    assert not bad, f'{what}: top screen text touches the plaque frame: {bad[:3]}'
+
+def ui_check_title(tag):
+    b = e.bx; px = e.pixels(); Y = 192
+    # (the button texts and the language tag are measured against their boxes by the native test; the gem rain falls through the gutters)
+    bad = ui_lit(px, [b + 18, b + 19, b + 152, b + 153], range(Y + 79, Y + 129))     # the tagline box: two pixels clear of its border
+    assert not bad, f'{tag}: title: a tagline touches its box: {bad[:3]}'
+    ui_top(px, f'{tag}: title')
+
+def ui_check_options(tag):
+    px = e.pixels(); Y = 192
+    def ys(rows): return [Y + 32 + 13 * i + t for i in rows for t in range(3, 10)]     # the 7 px text lines of those rows
+    chev = [i for i in range(9) if i != 7 or LANG_CODES[e.state()['language']] == 'en']   # SPELLING is a note without chevrons outside English
+    bad = ui_lit(px, list(range(2, 10)) + list(range(163, 170)), range(Y + 30, Y + 150))   # the row boxes are x 12..160
+    assert not bad, f'{tag}: options: text outside the rows: {bad[:3]}'
+    bad = ui_lit(px, range(72, 76), ys(range(9)))                                    # a label ends before the left chevron (x 76)
+    assert not bad, f'{tag}: options: a label reaches the chevron: {bad[:3]}'
+    bad = ui_lit(px, list(range(81, 84)) + list(range(146, 149)), ys(chev))          # a value stays between the chevrons
+    assert not bad, f'{tag}: options: a value reaches a chevron: {bad[:3]}'
+    bad = ui_lit(px, range(155, 159), ys([7])) if len(chev) < 9 else []                                     # the note of SPELLING ends inside its row
+    assert not bad, f'{tag}: options: a note leaves its row: {bad[:3]}'
+    ui_top(px, f'{tag}: options')
+
+def ui_check_ledger(tag):
+    b = 0; px = e.pixels(); Y = 192                                                  # the ledger follows the hand like the board
+    b = e.bx
+    bad = ui_lit(px, list(range(b + 2, b + 10)) + list(range(b + 161, b + 169)), range(Y + 30, Y + 155))
+    assert not bad, f'{tag}: ledger: text reaches the frame: {bad[:3]}'
+
+def ui_check_panel(tag):
+    px = e.pixels()
+    bad = lit_outside_panel(px)
+    assert not bad, f'{tag}: panel text reaches the margin: {bad[:3]}'
+    ui_top(px, f'{tag}: play')
+
+def ui_check_card(tag, x0, x1, y0, y1, thr=150):
+    px = e.pixels()
+    bad = ui_lit(px, list(range(x0 + 4, x0 + 9)) + list(range(x1 - 9, x1 - 4)), range(192 + y0, 192 + y1), thr=thr)
+    assert not bad, f'{tag}: text on the card margin: {bad[:3]}'
+
+@scenario('ui text: title, options, ledger, panel, pause, fail and results in every language and both hands, no lit pixel on a frame edge or in a gutter')
+def _():
+    for left in (False, True):
+        set_hand(left); b = e.bx; hand = 'left' if left else 'right'
+        for i in range(0, 11):
+            code = LANG_CODES[i]; tag = f'{code} {hand}'
+            lang_title(i); e.run(40)
+            e.shot(f'{out}/ui_title_{code}_{hand}.png'); ui_check_title(tag)
+            e.tap(b + 86, 170, settle=10); assert e.state()['state'] == ST_OPTIONS
+            for row in range(9):
+                if row: e.press('DOWN', settle=4)
+                if row == 0 or row >= 7: e.shot(f'{out}/ui_options_{code}_{hand}_{row}.png')
+                ui_check_options(f'{tag} row {row}')
+            e.press('B', settle=20)
+            e.tap(b + 86, 185, settle=10); assert e.state()['state'] == ST_STATS
+            e.shot(f'{out}/ui_ledger_{code}_{hand}.png'); ui_check_ledger(tag)
+            e.tap(b + 20, 20, settle=10)
+            e.start_classic(); e.set_heat(0); e.set_burn(0, 99)
+            e.set_pass(9, 0b101010101); e.set_score(999999); e.set_turn(150); e.run(20)
+            g = e.state(); path = spell_cells('bed' if i == 0 else 'tes', c=C, r0=0); e.chain(path, release=False); e.run(10)
+            e.shot(f'{out}/ui_panel_{code}_{hand}.png'); ui_check_panel(tag)
+            e.hold('L', True); e.run(10); e.shot(f'{out}/ui_peek_{code}_{hand}.png'); ui_check_panel(tag + ' peek'); e.hold('L', False)
+            untouch(); e.press('Y', settle=5); e.set_turn(0)
+            e.press('START', settle=15); e.shot(f'{out}/ui_pause_{code}_{hand}.png')
+            px = e.pixels()
+            bad = ui_lit(px, [b + 30, b + 31, b + 140, b + 141], [192 + 88 + 16 * k + t for k in range(4) for t in range(4, 11)])
+            assert not bad, f'{tag} pause: a label touches the card margin: {bad[:3]}'
+            bad = ui_lit(px, list(range(b + 30, b + 33)) + list(range(b + 140, b + 143)), range(192 + 72, 192 + 84))
+            assert not bad, f'{tag} pause: PAUSED touches the card margin: {bad[:3]}'
+            e.press('START', settle=20)
+            fresh_shelf(); e.set_heat(0); e.set_burn(0, 99);
+            try: force_fail()
+            except AssertionError as ex: raise AssertionError(f'{tag}: {ex}')
+            e.shot(f'{out}/ui_fail_{code}_{hand}.png')
+            ui_check_card(f'{tag} fail', b + 11, b + 161, 30, 168)
+            e.run(60); e.tap(b + 100, 100); e.run(150)
+            if e.state()['state'] != ST_PLAY: e.start_classic()
+            e.set_lives(3); e.set_heat(0); e.set_burn(0, 99); e.set_turn(0)
+            force_pass(); e.run(80); e.shot(f'{out}/ui_results_{code}_{hand}.png')
+            ui_check_card(f'{tag} results', b + 11, b + 161, 30, 168)
+            assert e.fps() == 120, f'{tag}: fps {e.fps()}'
+            to_title()
+    set_hand(False); lang_title(0)
+
+
+@scenario('guide in every language: the eight pages and their animations (captions, tables, headers) stay inside their bounds, both hands, and the title screen text stays inside too')
+def _():
+    for left in (False, True):
+        tag = 'left' if left else 'right'
+        for i in range(1, 11):
+            code = LANG_CODES[i]
+            set_hand(left); lang_title(i); e.set_tutor(1); e.run(20)
+            guide_open_from_title()
+            for page in range(GUIDE_PAGES):
+                g = e.state(); assert g['guidePage'] == page, f'{code} {tag}: expected page {page}, on {g["guidePage"]}'
+                e.run(50)
+                if page in (0, 3, 5, 6): e.shot(f'{out}/ui_guide_{code}_{tag}_{page + 1}.png')
+                guide_margins(f'{code} {tag}', page, ticks=32, step=2)
+                if page < GUIDE_PAGES - 1: e.tap(*GUIDE_NEXT, settle=10)
+            e.tap(*guide_back(left), settle=15); g = e.state(); assert g['state'] == ST_TITLE, f'{code} {tag}: BACK did not return to the title: {g["state"]}'
+    set_hand(False); lang_title(0)
+
 
 print('RULES OK' if not fails else f'RULES FAILED: {fails}')
 sys.exit(fails)

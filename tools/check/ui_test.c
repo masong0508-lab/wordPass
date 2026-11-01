@@ -52,7 +52,7 @@ static int slots(const char *f, char *kinds)
 }
 
 // the text with its slots filled from the sample (the same rule as gen_ui.py)
-static void expand(const char *f, const char *samp, char *out)
+static void expand(const char *f, const char *samp, char *out, int lang)
 {
     char toks[4][16];
     int nt = 0;
@@ -67,6 +67,7 @@ static void expand(const char *f, const char *samp, char *out)
     }
     int seq = 0, len = 0;
     for (; *f; f++) {
+        if ((unsigned char)*f < 7) continue;                                   // a guide colour code takes no room
         if (*f != '%') { out[len++] = *f; continue; }
         const char *p = f + 1;
         int pos = 0;
@@ -76,6 +77,12 @@ static void expand(const char *f, const char *samp, char *out)
         if (*p != 'd' && *p != 's') { out[len++] = *f; continue; }
         if (!pos) pos = ++seq;
         const char *t = pos - 1 < nt ? toks[pos - 1] : (*p == 'd' ? "99" : "WWWW");
+        char ref[64];
+        if (pos - 1 < nt && toks[pos - 1][0] == '@') {                         // another id's text in this language
+            ref[0] = 0;
+            for (int k = 0; k < UI_COUNT; k++) if (!strcmp(UI_IDNAME[k], toks[pos - 1] + 1)) { strcpy(ref, uiIn(k, lang)); break; }
+            t = ref;
+        }
         while (*t) out[len++] = *t++;
         f = p;
     }
@@ -102,7 +109,7 @@ int main(void)
             CHECK(s && s[0], "%s lang %d is empty", UI_IDNAME[id], l);
             slots(s, kinds);
             CHECK(!memcmp(kinds, kinds0, 8), "%s lang %s: slots differ from English: %s", UI_IDNAME[id], langCode(l), s);
-            expand(s, UI_SAMPLE[id], buf);
+            expand(s, UI_SAMPLE[id], buf, l);
             for (const char *c = buf; *c; c++) CHECK(fontHas(*c), "%s lang %s: glyph %c in %s", UI_IDNAME[id], langCode(l), *c, s);
             int w = (int)strlen(buf) * 6 * UI_SCALE[id] - UI_SCALE[id];
             CHECK(w <= UI_BUDGET[id], "%s lang %s: %d px > %d px: %s", UI_IDNAME[id], langCode(l), w, UI_BUDGET[id], s);
