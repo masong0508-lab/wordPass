@@ -10,8 +10,12 @@ and uncover the pass. Spell weak words and the shelf catches fire.
 ## How it plays
 
 - **Spell.** Drag the stylus across touching gems to chain a word (3+ letters),
-  then tap **SUBMIT** or press **A**. Scored tiles shatter and the column drops.
-  Every word is a turn.
+  then tap **SUBMIT**, tap the last gem again, or press **A**. Scored tiles
+  shatter and the column drops. Every word is a turn. The stylus is forgiving:
+  a gem answers to a 12 px circle around its centre, a quick flick that skips a
+  gem still picks it up when there is only one way through, and a drag never
+  restarts the chain by accident (a gem it cannot reach flashes red instead).
+  Tap an earlier gem to cut the chain back to it.
 - **Peek.** Hold **L** or **R** and tap a gem to peel it off the board.
   Behind it is either a **pass letter** (a diamond you can still chain through)
   or a **number**: how many of the six neighbouring cells hide a pass letter.
@@ -176,7 +180,10 @@ three. Daily Pass has no bookmarks: one attempt.
 
 | Input | Action |
 | --- | --- |
-| Stylus drag | chain letters |
+| Stylus drag | chain letters (drag back onto the previous gem to undo one) |
+| Tap the last gem again | submit a valid word (it wears a gold ring) |
+| Tap an earlier gem | cut the chain back to it |
+| Tap a gem away from the chain | start a new chain there |
 | A / SUBMIT button | submit word |
 | B / CLEAR button | clear chain |
 | Hold L or R | peek mode (tap a gem to peel it) |

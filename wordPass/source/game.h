@@ -206,7 +206,9 @@ const char *boardTwistName(int twist);       // "INK SPILL", "DAMP", "BURIED" ("
 void boardBagReset(void);            // next randomLetter() refills the bag (tests; boardNewShelf does it)
 int  boardRandomLetter(void);        // one draw from the shuffled letter bag (exposed for tools/check)
 void boardDebugFireStep(Game *g);    // test channel: one fire advance plus gravity, no turn
-bool boardTryAddToChain(Game *g, int c, int r);
+enum ChainTouch { CT_IGNORED, CT_ADDED, CT_BACKTRACKED, CT_TRUNCATED, CT_BRIDGED, CT_RESTARTED, CT_NOT_ADJACENT, CT_SUBMIT_TAP };
+enum ChainTouch boardChainTouch(Game *g, int c, int r, bool fresh);   // one touch sample; fresh = a new tap, false = a drag
+bool boardTryAddToChain(Game *g, int c, int r);   // a drag sample: true if the chain grew, shrank by one or bridged
 void boardClearChain(Game *g);
 int  boardSubmit(Game *g);           // returns score gained, 0 if invalid
 int  boardChainScore(const Game *g); // exactly what boardSubmit would award for the current chain (0 if invalid)
@@ -245,6 +247,7 @@ void gfxFrame(const Game *g);        // draws both screens and flips
 int  gfxCellAt(int px, int py, int *c, int *r);
 bool gfxInSubmit(int px, int py);
 bool gfxInClear(int px, int py);
+void gfxNope(int c, int r);          // red flash on a gem the drag could not reach
 enum { BURST_SHATTER = 0, BURST_REVEAL, BURST_SCORCH, BURST_FIRE };
 void gfxBurst(int c, int r, int kind, int letter);   // letter colours the shards; gfxBurst never reads G
 void gfxPopup(int c, int r, const char *txt, int gold);

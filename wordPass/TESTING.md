@@ -99,3 +99,7 @@ completion) for exact score assertions.
 ## Long words and spelling
 
 `make check` covers words of 11 to 20 letters, a 20-gem chain that spells a 20-letter word, and the SPELLING setting (BOTH, AMERICAN, BRITISH, the shared and -ize/-ise words, `boardWordSpelling`). The emulator suite cycles the SPELLING row on the options screen and uses `POKE_SPELL`. The check binary loads `data/variants.bin` as its fourth argument, after dict, pools and variants default to `data/`.
+
+## Chain input
+
+`boardChainTouch(g, c, r, fresh)` is the one entry point for a touch sample (`fresh` = a new stylus-down, false while dragging); `make check` covers cut-back, bridge, restart-on-tap, the tail-tap submit and the 20-gem cap. `boardTryAddToChain` is a thin drag wrapper. `gfxCellAt` is a 12 px circle hit test over the hex centres. In `test_rules.py` the `chain input` scenarios (both hands) drive real stylus strokes: `touch(x, y)` holds a point, `untouch()` lifts, `e.tap` is a fresh tap. Set `WP_ONLY="chain input|other name"` to run just the scenarios whose name contains one of those words (a development filter; the full suite must still pass).

@@ -13,9 +13,12 @@ e = Emu(rom)
 fails = 0
 C = 3   # the column every board scenario pokes
 
+ONLY = [k for k in os.environ.get('WP_ONLY', '').split('|') if k]   # development filter: run scenarios whose name has one of these
+
 def scenario(name):
     def deco(fn):
         global fails
+        if ONLY and not any(k in name for k in ONLY): return
         try:
             fn(); print('PASS', name)
         except Exception as ex:
@@ -209,8 +212,8 @@ def _():
     e.chain([(C, 0)], release=False); g = e.state()
     assert g['chain'] == [(C, 0)], f'second backtrack: {g["chain"]}'
     e.chain([(C, 1), (C, 2), (C, 3)], release=False)
-    e.chain([(C, 1)], release=False); g = e.state()          # two back: a revisit, not a backtrack
-    assert g['chainLen'] == 4, f'revisit changed the chain: {g["chain"]}'
+    e.chain([(C, 1)], release=False); g = e.state()          # a held jump two gems back retraces the gems it crosses
+    assert g['chain'] == [(C, 0), (C, 1)], f'retrace: {g["chain"]}'
     e.emu.input.touch_release(); e.run(3); e.press('B', settle=5)
 
 @scenario('shatter shards after an all-vowel word are ruby-dominant')
@@ -832,6 +835,90 @@ def _():
     daily_title(20270320, played=20270320, last=20270320, streak=3)
     e.shot(f'{out}/rules_left_title_practice.png')
     e.set_clock(0); e.set_daily(0, 0, 0)
+
+# ---- chain input grammar (item 10) -------------------------------------------------------
+def touch(x, y, frames=5):
+    e.emu.input.touch_set_pos(x + e.bx, y); e.run(frames)
+def untouch(frames=8):
+    e.emu.input.touch_release(); e.run(frames)
+def to_play_calm():
+    if e.state()['state'] != ST_PLAY: to_title(); e.start_classic()
+    return calm()
+def set_hand(left):
+    """Be on the title with the HAND option (and the harness mapping) set to `left`."""
+    e.run(5)
+    to_title()
+    if bool(e.state()['settings']['hand']) != left:
+        e.tap(e.bx + 86, 170); e.run(10)              # OPTIONS
+        e.tap(e.bx + 86, 78); e.run(10)               # HAND row (row 3)
+        e.tap(e.bx + 86, 170); e.run(20)              # BACK
+        assert bool(e.state()['settings']['hand']) == left, 'HAND did not flip'
+    e.set_hand(left)
+
+def check_chain_input(tag):
+    g = to_play_calm()
+    for c in range(COLS):
+        for r in range(ROWS): e.set_cell(c, r, TILE, 'e')
+    for r, l in enumerate('bed'): e.set_cell(C, r, TILE, l)
+    e.run(3)
+    # a wider hit area: the old rectangle dead-zoned x 22..24 of a cell; the 12 px circle takes it
+    ox, oy = e.center(0, 0)
+    e.tap(ox + 10, oy - 1); g = e.state()
+    assert g['chain'] == [(0, 0)], f'{tag}: a tap near the right edge of (0,0): {g["chain"]}'
+    e.press('B', settle=5)
+    e.tap(30 + e.bx, 14); assert e.state()['chainLen'] == 0, f'{tag}: the gap between hexes must be dead'
+    # a stroke down column 3, then tap an earlier gem: the chain is cut back to it
+    for r in range(4):
+        x, y = e.center(C, r); touch(x - e.bx, y)
+    untouch()
+    g = e.state(); assert g['chain'] == [(C, 0), (C, 1), (C, 2), (C, 3)], f'{tag}: stroke {g["chain"]}'
+    x, y = e.center(C, 1); e.tap(x, y)
+    g = e.state(); assert g['chain'] == [(C, 0), (C, 1)], f'{tag}: tap an earlier gem should cut back: {g["chain"]}'
+    # a fast stylus: one jump over two gems still chains them, and never restarts mid-drag
+    e.press('B', settle=5)
+    x, y = e.center(C, 0); touch(x - e.bx, y)
+    x, y = e.center(C, 3); touch(x - e.bx, y)
+    g = e.state(); assert g['chain'][:1] == [(C, 0)] and g['chainLen'] == 4, f'{tag}: fast drag {g["chain"]}'
+    # past a hole the stylus has no gem to bridge through: the held chain is kept and the gem flashes red
+    untouch(); e.press('B', settle=5)
+    e.set_cell(C, 6, HOLE, 'a'); e.run(3)
+    x, y = e.center(C, 4); touch(x - e.bx, y)
+    x, y = e.center(C, 7); touch(x - e.bx, y, 4)
+    g = e.state(); assert g['chain'] == [(C, 4), (C, 5)], f'{tag}: a held gem past a hole must not restart or bridge: {g["chain"]}'
+    e.shot(f'{out}/rules_nope_{tag}.png')
+    px = e.pixels(); x0, y0, x1, y1 = e.cell_rect(C, 7)
+    red = px[x0, (y0 + y1) // 2]
+    assert red[0] > 200 and red[1] < 150 and red[2] < 80, f'{tag}: no red nope outline at {(x0, (y0 + y1) // 2)}: {red}'
+    untouch(20)
+    g = e.state(); assert g['chain'] == [(C, 4), (C, 5)], f'{tag}: chain lost on release {g["chain"]}'
+    e.set_cell(C, 6, TILE, 'e')
+    # a tap far away on a fresh stroke restarts
+    e.tap(*e.center(6, 6))
+    g = e.state(); assert g['chain'] == [(6, 6)], f'{tag}: a tap elsewhere should restart: {g["chain"]}'
+    # a valid word: gold ring on the tail, tail tap submits, and the stylus does not start a new chain
+    e.press('B', settle=5)
+    for r in range(3):
+        x, y = e.center(C, r); touch(x - e.bx, y)
+    untouch()
+    g = e.state(); assert g['chainLen'] == 3 and g['chainScore'] > 0, f'{tag}: bed should be valid: {g["chain"]} {g["chainScore"]}'
+    e.run(20); e.shot(f'{out}/rules_tailring_{tag}.png')
+    sc = g['score']
+    x, y = e.center(C, 2); e.tap(x, y, hold=8)
+    g = e.state(); assert g['lastWord'] == 'bed' and g['score'] > sc, f'{tag}: tail tap did not submit: {g["lastWord"]!r} {g["score"]}'
+    assert g['chainLen'] == 0, f'{tag}: a new chain started under the submit tap: {g["chain"]}'
+    assert e.fps() == 120, 'fps'
+
+@scenario('chain input (left hand): wide hit circles, cut back, bridge, no restart mid-drag, red nope, tail-tap submit')
+def _():
+    set_hand(True)
+    e.start_classic()
+    check_chain_input('left')
+
+@scenario('chain input (right hand): the same grammar on the right-handed board')
+def _():
+    set_hand(False)
+    e.start_classic()
+    check_chain_input('right')
 
 print('RULES OK' if not fails else f'RULES FAILED: {fails}')
 sys.exit(fails)

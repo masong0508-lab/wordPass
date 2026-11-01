@@ -315,30 +315,73 @@ void boardNewShelf(Game *g)
     }
 }
 
-bool boardTryAddToChain(Game *g, int c, int r)
+static int chainIndexOf(const Game *g, int c, int r)
 {
-    if (!boardIsChainable(g, c, r)) return false;
+    for (int i = 0; i < g->chainLen; i++)
+        if (g->chainC[i] == c && g->chainR[i] == r) return i;
+    return -1;
+}
+
+// The one cell adjacent to both the chain's tail and (c, r) that a skipped step would have crossed:
+// chainable and not already in the chain. Returns false unless there is exactly one.
+static bool bridgeCell(const Game *g, int c, int r, int *bc, int *br)
+{
+    int tc = g->chainC[g->chainLen - 1], tr = g->chainR[g->chainLen - 1];
+    int nc[6], nr[6], n = boardNeighbors(tc, tr, nc, nr), found = 0;
+    for (int i = 0; i < n; i++) {
+        if (!boardIsChainable(g, nc[i], nr[i]) || chainIndexOf(g, nc[i], nr[i]) >= 0) continue;
+        if (!adjacent(nc[i], nr[i], c, r)) continue;
+        *bc = nc[i]; *br = nr[i]; found++;
+    }
+    return found == 1;
+}
+
+// One touch sample on gem (c, r). `fresh` is a new stylus-down (a tap), false while dragging:
+// a tap may cut the chain back, restart it or submit it; a drag never restarts mid-stroke.
+enum ChainTouch boardChainTouch(Game *g, int c, int r, bool fresh)
+{
+    if (!boardIsChainable(g, c, r)) return CT_IGNORED;
     if (g->chainLen == 0) {
         g->chainC[0] = c; g->chainR[0] = r; g->chainLen = 1;
-        return true;
+        return CT_ADDED;
     }
     int lc = g->chainC[g->chainLen - 1], lr = g->chainR[g->chainLen - 1];
-    if (lc == c && lr == r) return false;
+    if (lc == c && lr == r) return (fresh && g->chainLen >= 3) ? CT_SUBMIT_TAP : CT_IGNORED;
     // backtrack onto the previous tile
     if (g->chainLen >= 2 && g->chainC[g->chainLen - 2] == c && g->chainR[g->chainLen - 2] == r) {
         g->chainLen--;
-        return true;
+        return CT_BACKTRACKED;
     }
-    for (int i = 0; i < g->chainLen; i++)
-        if (g->chainC[i] == c && g->chainR[i] == r) return false;
+    int at = chainIndexOf(g, c, r);
+    if (at >= 0) {                      // an earlier gem: a tap cuts the chain back to it
+        if (!fresh) return CT_IGNORED;
+        g->chainLen = at + 1;
+        return CT_TRUNCATED;
+    }
     if (adjacent(lc, lr, c, r)) {
-        if (g->chainLen >= MAX_CHAIN) return false;
+        if (g->chainLen >= MAX_CHAIN) return CT_IGNORED;
         g->chainC[g->chainLen] = c; g->chainR[g->chainLen] = r; g->chainLen++;
-        return true;
+        return CT_ADDED;
     }
-    // not adjacent: start a new chain here
-    g->chainC[0] = c; g->chainR[0] = r; g->chainLen = 1;
-    return true;
+    int bc, br;
+    if (g->chainLen + 2 <= MAX_CHAIN && bridgeCell(g, c, r, &bc, &br)) {   // a fast stylus skipped one gem
+        g->chainC[g->chainLen] = bc; g->chainR[g->chainLen] = br;
+        g->chainC[g->chainLen + 1] = c; g->chainR[g->chainLen + 1] = r;
+        g->chainLen += 2;
+        return CT_BRIDGED;
+    }
+    if (fresh) {                        // a tap elsewhere starts a new chain
+        g->chainC[0] = c; g->chainR[0] = r; g->chainLen = 1;
+        return CT_RESTARTED;
+    }
+    return CT_NOT_ADJACENT;
+}
+
+// A drag sample: true if the gem was added, backtracked or bridged (the older rule-test entry point).
+bool boardTryAddToChain(Game *g, int c, int r)
+{
+    enum ChainTouch t = boardChainTouch(g, c, r, false);
+    return t == CT_ADDED || t == CT_BACKTRACKED || t == CT_BRIDGED;
 }
 
 void boardClearChain(Game *g) { g->chainLen = 0; }

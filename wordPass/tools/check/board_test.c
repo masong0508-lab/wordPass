@@ -182,11 +182,49 @@ int main(int argc, char **argv)
     bool two = g.chainLen == 2 && g.chainC[1] == 0 && g.chainR[1] == 1;
     boardTryAddToChain(&g, 0, 0);
     bool one = g.chainLen == 1;
-    boardTryAddToChain(&g, 5, 5);               // not adjacent: a fresh chain
+    boardChainTouch(&g, 5, 5, true);            // a tap elsewhere: a fresh chain
     CHECK("chain backtracking", three && two && one && g.chainLen == 1 && g.chainC[0] == 5 && g.chainR[0] == 5);
     boardTryAddToChain(&g, 5, 6); boardTryAddToChain(&g, 5, 7);
     bool rejected = !boardTryAddToChain(&g, 5, 5);   // two steps back: not a backtrack, a revisit
     CHECK("chain rejects a revisit of an earlier tile", rejected && g.chainLen == 3);
+
+    // ---- chain input grammar (item 10): truncate, bridge, restart only on a tap, submit tap
+    boardOf('e');
+    {
+        // column 0 is a vertical run, so (0,r) neighbours (0,r+-1) only within the column
+        bool t1 = boardChainTouch(&g, 0, 0, true) == CT_ADDED;
+        bool t2 = boardChainTouch(&g, 0, 1, false) == CT_ADDED;
+        bool t3 = boardChainTouch(&g, 0, 2, false) == CT_ADDED;
+        bool t4 = boardChainTouch(&g, 0, 3, false) == CT_ADDED;
+        CHECK("drag over earlier gems does nothing", t1 && t2 && t3 && t4 && boardChainTouch(&g, 0, 0, false) == CT_IGNORED && g.chainLen == 4);
+        CHECK("tail tap on a chain of three or more is a submit tap", boardChainTouch(&g, 0, 3, true) == CT_SUBMIT_TAP && g.chainLen == 4);
+        CHECK("tail drag is ignored", boardChainTouch(&g, 0, 3, false) == CT_IGNORED);
+        CHECK("tap on an earlier gem cuts the chain back", boardChainTouch(&g, 0, 1, true) == CT_TRUNCATED && g.chainLen == 2 && g.chainC[1] == 0 && g.chainR[1] == 1);
+        CHECK("tap on the previous gem backtracks one", boardChainTouch(&g, 0, 0, true) == CT_BACKTRACKED && g.chainLen == 1);
+        CHECK("tail tap under three gems is ignored", boardChainTouch(&g, 0, 0, true) == CT_IGNORED);
+    }
+    boardOf('e');
+    {
+        boardChainTouch(&g, 0, 0, true);
+        // (0,0) and (1,1) share exactly the neighbour (0,1)? column 1 is odd: (1,0),(1,1) touch (0,0)... (0,0) even
+        // neighbours (0,1),(1,-1)x,(1,0); (1,1) is odd with neighbours (1,0),(1,2),(0,1),(0,2),(2,1),(2,2): shared (1,0) and (0,1) = two
+        CHECK("two possible bridges: a drag is not adjacent", boardChainTouch(&g, 1, 1, false) == CT_NOT_ADJACENT && g.chainLen == 1);
+        // (0,0) and (0,2): the only common neighbour is (0,1)
+        CHECK("one possible bridge: bridged", boardChainTouch(&g, 0, 2, false) == CT_BRIDGED && g.chainLen == 3 && g.chainR[1] == 1 && g.chainR[2] == 2);
+        CHECK("a far gem on a drag keeps the chain", boardChainTouch(&g, 5, 5, false) == CT_NOT_ADJACENT && g.chainLen == 3);
+        CHECK("a far gem on a tap restarts", boardChainTouch(&g, 5, 5, true) == CT_RESTARTED && g.chainLen == 1 && g.chainC[0] == 5);
+        set(0, 1, CELL_HOLE, 'a'); boardClearChain(&g); boardChainTouch(&g, 0, 0, true);
+        CHECK("a bridge cell that is a hole is not available", boardChainTouch(&g, 0, 2, false) == CT_NOT_ADJACENT);
+    }
+    boardOf('e');
+    {   // a full chain cannot take a bridge; the tail tap submits a valid chain
+        boardChainTouch(&g, 0, 0, true);
+        for (int r = 1; r < 8; r++) boardChainTouch(&g, 0, r, false);
+        for (int r = 7; r >= 0; r--) boardChainTouch(&g, 1, r, false);
+        for (int r = 0; r < 3; r++) boardChainTouch(&g, 2, r, false);   // 8 + 8 + 3 = 19
+        CHECK("19 gems chained", g.chainLen == 19);
+        CHECK("no room for a two-gem bridge", boardChainTouch(&g, 2, 4, false) == CT_NOT_ADJACENT && g.chainLen == 19);
+    }
 
     // ---- peeling (every peel is a turn: the board must still hold a word afterwards)
     boardOf('e'); plantWord();

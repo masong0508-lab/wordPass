@@ -266,13 +266,41 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
         return;
     }
 
-    if (touching) {
+    // Chain input. Between two samples a fast stylus can skip gems: walk the segment and feed every
+    // gem it crosses that touches the tail as a drag (never a restart), then the final point.
+    static int lastTx, lastTy;
+    static bool wasTouching, ignoreStroke;
+    if (!touching) { wasTouching = false; ignoreStroke = false; }
+    else if (!wasTouching && !(down & KEY_TOUCH)) ignoreStroke = true;   // the stylus came down on another screen (a title button): not a chain
+    else if (ignoreStroke) { lastTx = t->px; lastTy = t->py; }      // a submit tap's stylus is still down
+    else {
+        bool fresh = (down & KEY_TOUCH) != 0;
+        if (fresh) wasTouching = false;       // a new stroke never interpolates from an old one
+        if (wasTouching && G.chainLen > 0) {
+            int dx = t->px - lastTx, dy = t->py - lastTy;
+            int adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
+            int mx = adx > ady ? adx : ady;
+            if (mx > 8) {
+                int steps = mx / 4;
+                for (int i = 1; i < steps; i++) {
+                    int sx = lastTx + dx * i / steps, sy = lastTy + dy * i / steps;
+                    if (!gfxCellAt(sx, sy, &c, &r)) continue;
+                    int tc = G.chainC[G.chainLen - 1], tr = G.chainR[G.chainLen - 1];
+                    int nc[6], nr[6], n = boardNeighbors(tc, tr, nc, nr);
+                    for (int k = 0; k < n; k++)
+                        if (nc[k] == c && nr[k] == r) { boardChainTouch(&G, c, r, false); break; }
+                }
+            }
+        }
         if (gfxCellAt(t->px, t->py, &c, &r)) {
-            boardTryAddToChain(&G, c, r);
-        } else if (down & KEY_TOUCH) {
+            enum ChainTouch ct = boardChainTouch(&G, c, r, fresh);
+            if (ct == CT_SUBMIT_TAP) { submitChain(); ignoreStroke = true; }
+            else if (ct == CT_NOT_ADJACENT) gfxNope(c, r);
+        } else if (fresh) {
             if (gfxInSubmit(t->px, t->py)) submitChain();
             else if (gfxInClear(t->px, t->py)) boardClearChain(&G);
         }
+        lastTx = t->px; lastTy = t->py; wasTouching = true;
     }
     if (down & KEY_A) submitChain();
     // first-shelf nudge: three words in and no peek yet

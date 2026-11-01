@@ -605,17 +605,26 @@ static void cellOrigin(int c, int r, int *x, int *y)
     *y = GRID_Y + r * TILE_H + ((c & 1) ? ODD_SHIFT : 0);
 }
 
+// Hex-aware hit test: the gem whose centre is nearest the point, within a 12 px radius. The
+// rectangular cell plus the overlapping cells of the two neighbouring columns compete, so the
+// three-way gaps between hexes are a dead zone. Ties go to the lower row.
 int gfxCellAt(int pxl, int pyl, int *c, int *r)
 {
-    int cc = (pxl - gridX) / TILE_W;
-    if (pxl < gridX || cc < 0 || cc >= COLS) return 0;
-    int yy = pyl - GRID_Y - ((cc & 1) ? ODD_SHIFT : 0);
-    if (yy < 0) return 0;
-    int rr = yy / TILE_H;
-    if (rr >= ROWS) return 0;
-    int lx = (pxl - gridX) % TILE_W, ly = yy % TILE_H;
-    if (lx < 3 || lx > TILE_W - 4 || ly < 3 || ly > TILE_H - 4) return 0;
-    *c = cc; *r = rr;
+    int cc = (pxl - gridX + 2 * TILE_W) / TILE_W - 2;       // floor division for points left of the grid
+    int best = 145, bc = -1, br = -1;
+    for (int k = cc - 1; k <= cc + 1; k++) {
+        if (k < 0 || k >= COLS) continue;
+        int yy = pyl - GRID_Y - ((k & 1) ? ODD_SHIFT : 0);
+        int rk = (yy + 2 * TILE_H) / TILE_H - 2;
+        for (int rr = rk - 1; rr <= rk + 1; rr++) {
+            if (rr < 0 || rr >= ROWS) continue;
+            int x, y; cellOrigin(k, rr, &x, &y);
+            int dx = pxl - (x + 12), dy = pyl - (y + 11), d2 = dx * dx + dy * dy;
+            if (d2 < best || (d2 == best && bc >= 0 && rr < br)) { best = d2; bc = k; br = rr; }
+        }
+    }
+    if (bc < 0) return 0;
+    *c = bc; *r = br;
     return 1;
 }
 
@@ -675,6 +684,8 @@ void gfxFadeIn(void)  { bright = -16; }
 void gfxFlash(void)   { bright = 10; }
 void gfxShake(int frames) { shakeFrames = frames; }
 void gfxInvalidWord(void) { invalidTimer = 24; }
+static int nopeC, nopeR, nopeTimer;
+void gfxNope(int c, int r) { nopeC = c; nopeR = r; nopeTimer = 6; }
 
 // title buttons on the touch screen
 #define TB_Y 134
@@ -885,6 +896,10 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
             if (cl->flash) {
                 rectOutline(x, y, TILE_W, TILE_H, lerp15(BLACK, WHITE, cl->flash > 14 ? 16 : cl->flash + 2));
             }
+            if (nopeTimer > 0 && c == nopeC && r == nopeR) {   // the drag could not reach this gem
+                rectOutline(x, yd, TILE_W, TILE_H, FIRE1);
+                rectOutline(x + 1, yd + 1, TILE_W - 2, TILE_H - 2, lerp15(FIRE1, WHITE, nopeTimer * 2));
+            }
         }
         clipY0 = outerClip;
     }
@@ -901,6 +916,13 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
             fillRect(xx - 2, yy - 2, 4, 4, ropeDk);
             fillRect(xx - 1, yy - 1, 2, 2, ((t + (frame >> 1)) % 5 == 0) ? WHITE : ropeLt);
         }
+    }
+    // a valid word: a gold ring on the tail gem advertises the tap that submits it
+    if (chainValid) {
+        int x, y; cellOrigin(g->chainC[g->chainLen - 1], g->chainR[g->chainLen - 1], &x, &y);
+        y -= 2;
+        rectOutline(x, y, TILE_W, TILE_H, GOLD_LT);
+        rectOutline(x + 1, y + 1, TILE_W - 2, TILE_H - 2, GOLD_LT);
     }
     // chain order numbers float above the first gem
     if (g->chainLen) {
@@ -1539,6 +1561,7 @@ void gfxFrame(const Game *g)
     stepParticles();
     stepPopups();
     if (invalidTimer) invalidTimer--;
+    if (nopeTimer) nopeTimer--;
 
     PROF_START();
     cur = vramBack;            // draw the touch screen straight into the hidden VRAM bank
