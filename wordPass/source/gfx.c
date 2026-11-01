@@ -60,6 +60,8 @@ static int chainScoreNow;       // boardChainScore(g) while the chain is a word,
 // the board callout: one big word that pops over the middle of the strip (kind 0 gold, 1 fire, 2 accent)
 typedef struct { char txt[20]; u8 life, kind; } Callout;
 static Callout callout;
+static int shownScore;          // the score on the HUD: it is g->score except while the results tally counts up
+static int tallyPrev = -1, cardFlash;   // the state last frame; frames of white card border left
 
 #define C(r,g,b) ARGB16(1,(r),(g),(b))
 #define BLACK      C(1,1,2)
@@ -266,6 +268,14 @@ static char *fmtInt(char *buf, int v)
 }
 
 static int textWidth(const char *s, int scale) { return (int)strlen(s) * 6 * scale - scale; }
+
+// a score for a tight spot: below 100000 in full, then in thousands ("123K")
+static char *fmtScoreShort(char *buf, int v)
+{
+    if (v < 100000) return fmtInt(buf, v);
+    fmtInt(buf, v / 1000); strcat(buf, "K");
+    return buf;
+}
 
 static void drawTextCenter(int cx, int y, const char *s, u16 col, int scale)
 {
@@ -542,7 +552,7 @@ static void drawGemOutline(int x, int y)
 
 // ---------------------------------------------------------------- particles
 
-enum { P_SHARD = 0, P_SPARK, P_STAR };
+enum { P_SHARD = 0, P_SPARK, P_STAR, P_RAIN };   // P_RAIN: the title's falling gems (constant speed, no gravity)
 typedef struct { s16 x, y, vx, vy; u8 life, maxLife, kind; u16 col; } Particle;   // 1/8 px units
 #define MAXP 112
 static DTCM_BSS Particle P[MAXP];
@@ -580,6 +590,7 @@ static ITCM_CODE __attribute__((noinline)) void drawParticles(void)
             case P_SHARD: fillRect(x, y, 2, 2, col); break;
             case P_SPARK: px(x, y, col); if (fade > 8) px(x, y + 1, lerp15(BLACK, col, 8)); break;
             case P_STAR:  px(x, y, col); px(x - 1, y, col); px(x + 1, y, col); px(x, y - 1, col); px(x, y + 1, col); break;
+            case P_RAIN:  fillRect(x, y, 3, 3, col); px(x, y, lerp15(col, WHITE, 8)); break;
         }
     }
 }
@@ -1074,7 +1085,7 @@ static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
         fillRect(PAUSE_X + 3, PAUSE_Y + 3, 2, 6, INK); fillRect(PAUSE_X + 7, PAUSE_Y + 3, 2, 6, INK);
     }
     char s[32];
-    fmtInt(s, g->score);
+    fmtInt(s, shownScore);
     if (textWidth(s, 2) <= 80) drawTextShadow(PANEL_X, 22, s, GOLD, 2);   // 80 px of panel: six digits at 2x
     else drawTextShadow(PANEL_X, 26, s, GOLD, 1);                           // a million and up drops to 1x
 
@@ -1260,7 +1271,7 @@ static void drawTop(const Game *g)
     if (g->mode == MODE_DAILY) siprintf(s, "DAILY %02d%02d", g->dailySeed / 100 % 100, g->dailySeed % 100);   // MMDD
     else { strcpy(s, "SHELF "); fmtInt(s + 6, g->shelf); }
     drawText(170, 18, s, INK, 1);
-    drawText(170, 28, fmtInt(s, g->score), GOLD, 1);
+    drawText(170, 28, fmtInt(s, shownScore), GOLD, 1);
 
     // the pass: gem-cut blanks that pop when found
     int n = g->passLen, bw = PLAQUE_W, gap = n >= 9 ? 1 : 4;   // nine letters squeeze to one pixel between gems
@@ -1384,7 +1395,11 @@ static void drawTitle(const Game *g)
     fillRect(0, 0, SCREEN_W, SCREEN_H, BLACK);
     drawBoardDots();
     drawBoardFrame();
-    // the logo as a row of gems
+    drawParticles();     // the gem rain falls behind the band, the card and the buttons: it never covers the logo
+    // The logo band: a solid black strip with gold rules, the logo gems riding inside it.
+    // (A GUIDE button belongs in the free corner at BX(144)..BX(162), y 6..24.)
+    fillRect(BX(8), 30, 157, 44, BLACK);
+    hline(BX(8), 30, 157, GOLD_DK); hline(BX(8), 73, 157, GOLD_DK);
     static const char *letters = "wordPASS";
     const GemPal *th = THEMES[S.theme];
     const GemPal *pals[4] = { &th[TH_RUBY], &th[TH_SAPPHIRE], &th[TH_EMERALD], &th[TH_AMBER] };
@@ -1397,11 +1412,11 @@ static void drawTitle(const Game *g)
         if (ch >= 'a') drawGlyph(BX(x + 5), y + 5, font5x7[fontLogoIndex(ch)], WHITE, 2);
         else drawChar(BX(x + 5), y + 5, ch, C(4,6,10), 2);
     }
-    fillRect(BX(16), 72, 140, 56, BLACK);
-    rectOutline(BX(16), 72, 140, 56, GOLD);
-    drawTextCenter(BX(86), 80, "CRACK THE PASS", ACCENT, 1);
-    drawTextCenter(BX(86), 92, "DON'T BURN THE LIBRARY", INK, 1);
-    drawTextCenter(BX(86), 108, "DRAG SPELLS. L PEEKS", DIM_TEXT, 1);
+    fillRect(BX(16), 76, 140, 56, BLACK);
+    rectOutline(BX(16), 76, 140, 56, GOLD);
+    drawTextCenter(BX(86), 84, "CRACK THE PASS", ACCENT, 1);
+    drawTextCenter(BX(86), 96, "DON'T BURN THE LIBRARY", INK, 1);
+    drawTextCenter(BX(86), 112, "DRAG SPELLS. L PEEKS", DIM_TEXT, 1);
     // mode buttons
     bool blink = frame & 32;
     roundRect(BX(20), TB_Y, 64, 22, blink ? GOLD : GOLD_DK);
@@ -1428,12 +1443,16 @@ static void drawTitle(const Game *g)
     rectOutline(BX(54), TB_Y + 26, 64, 20, DIM);
     drawTextCenter(BX(86), TB_Y + 32, "OPTIONS", INK, 1);
     // the BEST line is also the way into THE LEDGER (tap it, or press X)
-    char s[32];
+    // Scores of six digits and up read as thousands (123K) so the two ends of the line never meet.
+    char s[32], n[16];
     int streak = g->clockOk ? settingsLiveStreak(g->dailySeed) : 0;
-    if (S.bestClassic) siprintf(s, "BEST %d", S.bestClassic); else strcpy(s, "LEDGER");
+    if (S.bestClassic) { fmtScoreShort(n, S.bestClassic); strcpy(s, "BEST "); strcat(s, n); } else strcpy(s, "LEDGER");
     drawText(BX(20), 180, s, DIM_TEXT, 1);
-    if (streak >= 2) { siprintf(s, "STREAK %d", streak); drawText(BX(152) - textWidth(s, 1), 180, s, GOLD_LT, 1); }
-    else if (S.bestDaily) { siprintf(s, "DAILY %d", S.bestDaily); drawText(BX(152) - textWidth(s, 1), 180, s, DIM_TEXT, 1); }
+    int leftEnd = BX(20) + textWidth(s, 1);
+    char r[32]; u16 rc = DIM_TEXT; r[0] = 0;
+    if (streak >= 2) { siprintf(r, "STREAK %d", streak); rc = GOLD_LT; }
+    else if (S.bestDaily) { fmtScoreShort(n, S.bestDaily); strcpy(r, "DAILY "); strcat(r, n); }
+    if (r[0] && BX(152) - textWidth(r, 1) >= leftEnd + 6) drawText(BX(152) - textWidth(r, 1), 180, r, rc, 1);
 }
 
 static const char *const OPT_NAMES[OPT_ROWS] = { "THEME", "FRAME", "ACCENT", "HAND", "FIRE", "MUSIC", "LIBRARY", "SPELLING" };
@@ -1594,101 +1613,220 @@ static void overlayCard(int x, int y, int w, int h)
     dimOn = true; dimCardX = x; dimCardY = y; dimCardW = w; dimCardH = h;
 }
 
+// ---- the cards. Results and fail share one geometry: a 150 x 154 card centred on the strip that
+// slides up in 12 frames. Rows are 9 px apart and every string is checked against the 130 px between the
+// card's inner margins (a 20-letter best word is centred on a row of its own).
+#define CARD_CX 86
+#define CARD_W 150
+#define CARD_H 154
+#define CARD_ROW_L (CARD_CX - CARD_W / 2 + 10)       // label edge
+#define CARD_ROW_R (CARD_CX + CARD_W / 2 - 10)       // value edge
+#define CARD_FIT 134                                 // widest string that clears the inner border
+
+static int cardTop(const Game *g)
+{
+    int t = g->stateTimer;
+    return 22 + (t < 12 ? (12 - t) * (12 - t) : 0);
+}
+
+// One row of a card: a label at the left edge, its value right-aligned to the right edge.
+static void drawStatRow(int lx, int rx, int y, const char *label, u16 lcol, const char *value, u16 vcol)
+{
+    drawText(BX(lx), y, label, lcol, 1);
+    drawText(BX(rx - textWidth(value, 1)), y, value, vcol, 1);
+}
+
+// the pass as 14 x 16 diamonds. Results: they light one every 6 frames from frame 12. Fail: the ones you
+// found sit lit, the others are red-rimmed blanks that flip to their letter one every 8 frames after frame 30.
+static void drawPassDiamonds(const Game *g, int y, bool fail)
+{
+    int n = g->passLen, bw = 14, gap = n >= 8 ? 1 : 2, x0 = CARD_CX - (n * bw + (n - 1) * gap) / 2, t = g->stateTimer, missed = 0;
+    for (int i = 0; i < n; i++) {
+        int lx = BX(x0 + i * (bw + gap));
+        char ch = (char)('A' + (g->pass[i] - 'a'));
+        if (!fail) {
+            int tl = t - (12 + 6 * i);
+            if (tl < 0) rectOutline(lx, y, bw, 16, GOLD_DK);
+            else { drawGemSized(lx, y, bw, 16, &GEM_DIAMOND, tl < 6); drawChar(lx + 5, y + 4, ch, C(4,6,10), 1); }
+        } else if (g->found[i]) {
+            drawGemSized(lx, y, bw, 16, &GEM_DIAMOND, false); drawChar(lx + 5, y + 4, ch, C(4,6,10), 1);
+        } else {
+            int tl = t - 30 - 8 * missed++;
+            if (tl < 0) rectOutline(lx, y, bw, 16, FIRE1);
+            else { drawGemSized(lx, y, bw, 16, &GEM_DIAMOND, false); rectOutline(lx, y, bw, 16, FIRE1); drawChar(lx + 5, y + 4, ch, C(22,2,0), 1); }
+        }
+    }
+}
+
+// The best word of the shelf: its label and points on one row, the word itself centred on the next.
+static void drawBestWord(const Game *g, int y)
+{
+    char s[24], lw[MAX_WORD + 1];
+    strcpy(lw, g->bestWord[0] ? g->bestWord : "-");
+    for (char *p = lw; *p; p++) if (*p >= 'a') *p -= 32;
+    if (g->bestWordScore) siprintf(s, "+%d", g->bestWordScore); else strcpy(s, "-");
+    drawStatRow(CARD_ROW_L, CARD_ROW_R, y, "BEST WORD", DIM_TEXT, s, g->bestWordScore ? GOLD : DIM_TEXT);
+    if (g->bestWord[0]) drawTextCenter(BX(CARD_CX), y + 9, lw, WHITE, 1);
+}
+
+static void drawResultsCard(const Game *g)
+{
+    int t = g->stateTimer, cy = cardTop(g), cx = CARD_CX, cw = CARD_W, ch = CARD_H;
+    int lx = CARD_ROW_L, rx = CARD_ROW_R;
+    overlayCard(BX(cx - cw / 2), cy, cw, ch);
+    rectOutline(BX(cx - cw / 2), cy, cw, ch, cardFlash ? WHITE : GOLD_LT);
+    rectOutline(BX(cx - cw / 2 + 2), cy + 2, cw - 4, ch - 4, cardFlash ? GOLD_LT : GOLD_DK);
+    char title[32], s[40];
+    if (g->mode == MODE_DAILY) strcpy(title, g->practice ? "PRACTICE DONE" : "DAILY PASS DONE");
+    else if (g->twist) {
+        siprintf(title, "PASS ACCEPTED: %s", boardTwistName(g->twist));
+        if (textWidth(title, 1) > CARD_FIT) siprintf(title, "PASSED: %s", boardTwistName(g->twist));   // INK SPILL is too wide with the full title
+    } else strcpy(title, "PASS ACCEPTED");
+    drawTextShadow(BX(cx - textWidth(title, 1) / 2), cy + 8, title, GOLD_LT, 1);
+    drawPassDiamonds(g, cy + 20, false);
+    hline(BX(lx), cy + 40, cw - 20, DIM);
+    drawBestWord(g, cy + 45);
+    siprintf(s, "%d", g->wordsThisShelf);
+    if (g->uniqueWords < g->wordsThisShelf) siprintf(s, "%d (%d UNIQUE)", g->wordsThisShelf, g->uniqueWords);
+    drawStatRow(lx, rx, cy + 63, "WORDS", DIM_TEXT, s, WHITE);
+    siprintf(s, "%d", g->peels);
+    drawStatRow(lx, rx, cy + 72, "PEELS", DIM_TEXT, s, g->peels == g->passLen ? GOLD_LT : g->peels <= g->passLen + 2 ? ACCENT : WHITE);
+    siprintf(s, "%d", g->turn);
+    drawStatRow(lx, rx, cy + 81, "TURNS", DIM_TEXT, s, WHITE);
+    hline(BX(lx), cy + 90, cw - 20, DIM);
+    // the three bonus rows count up with the score on the panel: shelf first, then speed, then the peel bonus
+    int shelfB = 1000 * g->shelf, shown[3];
+    boardTallySplit(shownScore - (g->score - shelfB - g->speedBonus - g->peelBonus), shelfB, g->speedBonus, g->peelBonus, shown);
+    siprintf(s, "+%d", shown[0]);
+    drawStatRow(lx, rx, cy + 93, "SHELF BONUS", DIM_TEXT, s, GOLD_LT);
+    if (g->speedBonus) siprintf(s, "+%d", shown[1]); else strcpy(s, "-");
+    drawStatRow(lx, rx, cy + 102, "SPEED", DIM_TEXT, s, g->speedBonus ? GOLD_LT : DIM_TEXT);
+    if (g->passBonusKind) {
+        siprintf(s, "+%d", shown[2]);
+        u16 bc = g->passBonusKind == 2 ? GOLD_LT : ACCENT;
+        drawStatRow(lx, rx, cy + 111, g->passBonusKind == 2 ? "PERFECT PASS" : "CLEAN PASS", bc, s, bc);
+    } else drawStatRow(lx, rx, cy + 111, "PEEL BONUS", DIM_TEXT, "-", DIM_TEXT);
+    if (g->mode == MODE_DAILY) {
+        siprintf(s, "FINAL %d", shownScore);
+        if (!g->practice && S.dailyStreak >= 2) {
+            char s2[48]; siprintf(s2, "%s  STREAK %d", s, S.dailyStreak);
+            if (textWidth(s2, 1) <= CARD_FIT) strcpy(s, s2);          // a long score drops the streak: the title shows it
+        }
+        drawTextCenter(BX(cx), cy + 122, s, GOLD_LT, 1);
+    } else { siprintf(s, "SHELF %d OPEN", g->shelf + 1); drawTextCenter(BX(cx), cy + 122, s, ACCENT, 1); }
+    if (g->practice) drawTextCenter(BX(cx), cy + 132, "NOT SCORED", DIM_TEXT, 1);
+    else if (g->newBest && (frame & 16)) drawTextCenter(BX(cx), cy + 132, "NEW BEST", GOLD_LT, 1);
+    if (t > 30 && (frame & 32)) drawTextCenter(BX(cx), cy + 141, "TAP TO CONTINUE", INK, 1);
+}
+
+static void drawFailCard(const Game *g)
+{
+    int t = g->stateTimer, cy = cardTop(g), cx = CARD_CX, cw = CARD_W, ch = CARD_H;
+    int lx = CARD_ROW_L, rx = CARD_ROW_R;
+    overlayCard(BX(cx - cw / 2), cy, cw, ch);
+    rectOutline(BX(cx - cw / 2), cy, cw, ch, (frame & 8) ? FIRE1 : FIRE2);
+    rectOutline(BX(cx - cw / 2 + 2), cy + 2, cw - 4, ch - 4, lerp15(FIRE1, BLACK, 8));
+    const char *title = g->fail == FAIL_FIRE ? "LIBRARY LOST" : g->fail == FAIL_SCORCH ? "PASS DESTROYED" : "OUT OF WORDS";
+    drawTextShadow(BX(cx - textWidth(title, 1) / 2), cy + 8, title, FIRE2, 1);
+    const char *why = g->fail == FAIL_FIRE ? "FIRE REACHED THE FLOOR" : g->fail == FAIL_SCORCH ? "A PASS LETTER BURNED" : "NO WORDS LEFT TO SPELL";
+    drawTextCenter(BX(cx), cy + 20, why, INK, 1);
+    drawPassDiamonds(g, cy + 34, true);
+    char s[40];
+    hline(BX(lx), cy + 54, cw - 20, DIM);
+    siprintf(s, "%d", g->wordsThisShelf);
+    drawStatRow(lx, rx, cy + 58, "WORDS", DIM_TEXT, s, WHITE);
+    drawBestWord(g, cy + 67);
+    siprintf(s, "%d", g->peels);
+    drawStatRow(lx, rx, cy + 85, "PEELS", DIM_TEXT, s, WHITE);
+    siprintf(s, "%d", g->turn);
+    drawStatRow(lx, rx, cy + 94, "TURNS", DIM_TEXT, s, WHITE);
+    hline(BX(lx), cy + 103, cw - 20, DIM);
+    bool runOver = g->mode == MODE_CLASSIC && g->lives <= 0;
+    if (g->mode == MODE_CLASSIC && !runOver) {
+        siprintf(s, "RETRY FROM %d", g->shelfStartScore);
+        drawTextCenter(BX(cx), cy + 107, s, ACCENT, 1);
+        siprintf(s, "%d BOOKMARK%s LEFT", g->lives, g->lives == 1 ? "" : "S");
+        drawTextCenter(BX(cx), cy + 117, s, INK, 1);
+    } else {
+        siprintf(s, "FINAL %d", g->score);
+        drawTextCenter(BX(cx), cy + 107, s, GOLD_LT, 1);
+        if (runOver) drawTextCenter(BX(cx), cy + 117, "RUN OVER", FIRE2, 1);
+        else if (g->practice) drawTextCenter(BX(cx), cy + 117, "PRACTICE: NOT SCORED", DIM_TEXT, 1);
+    }
+    if (g->newBest && (frame & 16)) drawTextCenter(BX(cx), cy + 132, "NEW BEST", GOLD_LT, 1);
+    if (t > 45 && (frame & 32)) drawTextCenter(BX(cx), cy + 141, (g->mode == MODE_CLASSIC && !runOver) ? "TAP TO RETRY" : "TAP FOR TITLE", WHITE, 1);
+}
+
+// The pause menu: a card with one 16 px row per entry (RESUME, RESTART SHELF, QUIT TO TITLE; room for a
+// fourth). The highlighted row is boxed; RESTART and QUIT ask for a second tap within 90 frames.
+#define PAUSE_X0 26
+#define PAUSE_Y0 88
+#define PAUSE_W 120
+int gfxPauseRowAt(int x, int y, int rows)
+{
+    if (x < BX(PAUSE_X0) || x >= BX(PAUSE_X0 + PAUSE_W) || y < PAUSE_Y0) return -1;
+    int r = (y - PAUSE_Y0) / 16;
+    return r < rows ? r : -1;
+}
+
+static void drawPauseCard(const Game *g)
+{
+    int ids[PAUSE_ROWS_MAX], n = pauseRows(g, ids), ch = 22 + 16 * n + 2;
+    overlayCard(BX(PAUSE_X0), 66, PAUSE_W, ch);
+    rectOutline(BX(PAUSE_X0), 66, PAUSE_W, ch, ACCENT);
+    drawTextCenter(BX(86), 74, "PAUSED", ACCENT, 1);
+    bool refused = g->msgTimer > 0 && !strcmp(g->msg, "LAST BOOKMARK");
+    for (int i = 0; i < n; i++) {
+        int y = PAUSE_Y0 + 16 * i, id = ids[i];
+        bool sel = i == g->pauseRow, armed = g->pauseArm > 0 && g->pauseArmId == id;
+        const char *label = id == PAUSE_RESUME ? "RESUME" : id == PAUSE_RESTART ? "RESTART SHELF" : "QUIT TO TITLE";
+        u16 col = sel ? WHITE : INK;
+        if (id == PAUSE_RESTART && g->mode == MODE_CLASSIC && g->lives <= 1) {      // the last bookmark cannot be spent
+            label = refused ? "LAST BOOKMARK" : "RESTART SHELF"; col = refused ? FIRE2 : DIM_TEXT;
+        } else if (armed) { label = id == PAUSE_QUIT ? "TAP AGAIN TO QUIT" : "TAP AGAIN: RESTART"; col = FIRE2; }
+        if (sel) { fillRect(BX(PAUSE_X0 + 2), y, PAUSE_W - 4, 15, lerp15(BLACK, ACCENT, 4)); rectOutline(BX(PAUSE_X0 + 2), y, PAUSE_W - 4, 15, ACCENT); }
+        drawTextCenter(BX(86), y + 4, label, col, 1);
+    }
+}
+
 static void drawOverlay(const Game *g)
 {
     if (g->state == ST_PLAY) return;
     if (g->state == ST_TITLE) { drawTitle(g); return; }
     if (g->state == ST_OPTIONS) { drawOptions(g); return; }
     if (g->state == ST_STATS) { drawStats(g); return; }
-    if (g->state == ST_PASSED) {
-        // results card slides up from the bottom and settles
-        int t = g->stateTimer;
-        int slide = t < 12 ? (12 - t) * (12 - t) : 0;
-        int cx = 86, cy = 28 + slide, cw = 150, ch = 140;
-        overlayCard(BX(cx - cw / 2), cy, cw, ch);
-        rectOutline(BX(cx - cw / 2), cy, cw, ch, GOLD_LT);
-        rectOutline(BX(cx - cw / 2 + 2), cy + 2, cw - 4, ch - 4, GOLD_DK);
-        char title[32];
-        if (g->mode == MODE_DAILY) strcpy(title, g->practice ? "PRACTICE DONE" : "DAILY PASS DONE");
-        else if (g->twist) siprintf(title, "PASS ACCEPTED: %s", boardTwistName(g->twist));   // 24 chars at most: 143 px
-        else strcpy(title, "PASS ACCEPTED");
-        drawTextShadow(BX(cx - textWidth(title, 1) / 2), cy + 8, title, GOLD_LT, 1);
-        // the pass itself as small diamonds
-        int n = g->passLen, bw = 14, gap = 2, x0 = cx - (n * bw + (n - 1) * gap) / 2;
-        for (int i = 0; i < n; i++) {
-            int lx = x0 + i * (bw + gap);
-            drawGemSized(BX(lx), cy + 20, bw, 16, &GEM_DIAMOND, (t / 4) % (n + 4) == i);
-            drawChar(BX(lx + 5), cy + 24, 'A' + (g->pass[i] - 'a'), C(4,6,10), 1);
-        }
-        // rows at a 9 px pitch: label DIM on the left, value right-aligned
-        char s[32], lw[MAX_WORD + 1];
-        int lx = cx - cw / 2 + 10, rx = cx + cw / 2 - 10;
-        hline(BX(lx), cy + 41, cw - 20, DIM);
-        strcpy(lw, g->bestWord[0] ? g->bestWord : "-");
-        for (char *p = lw; *p; p++) if (*p >= 'a') *p -= 32;
-        drawText(BX(lx), cy + 46, "BEST WORD", DIM_TEXT, 1);
-        if (strlen(lw) > 14) { lw[13] = '.'; lw[14] = 0; }    // a long best word keeps the label readable
-        drawText(BX(rx - textWidth(lw, 1)), cy + 46, lw, WHITE, 1);
-        if (g->bestWordScore) { siprintf(s, "+%d", g->bestWordScore); drawText(BX(rx - textWidth(s, 1)), cy + 55, s, GOLD, 1); }
-        else drawText(BX(rx - textWidth("-", 1)), cy + 55, "-", DIM_TEXT, 1);
-        drawText(BX(lx), cy + 64, "WORDS", DIM_TEXT, 1);
-        if (g->uniqueWords < g->wordsThisShelf) siprintf(s, "%d (%d UNIQUE)", g->wordsThisShelf, g->uniqueWords);
-        else siprintf(s, "%d", g->wordsThisShelf);
-        drawText(BX(rx - textWidth(s, 1)), cy + 64, s, WHITE, 1);
-        drawText(BX(lx), cy + 73, "PEELS", DIM_TEXT, 1); siprintf(s, "%d", g->peels);
-        u16 pc = g->peels == g->passLen ? GOLD_LT : g->peels <= g->passLen + 2 ? ACCENT : WHITE;
-        drawText(BX(rx - textWidth(s, 1)), cy + 73, s, pc, 1);
-        drawText(BX(lx), cy + 82, "TURNS", DIM_TEXT, 1); siprintf(s, "%d", g->turn);
-        drawText(BX(rx - textWidth(s, 1)), cy + 82, s, WHITE, 1);
-        hline(BX(lx), cy + 90, cw - 20, DIM);
-        drawText(BX(lx), cy + 92, "SHELF BONUS", DIM_TEXT, 1); siprintf(s, "+%d", 1000 * g->shelf);
-        drawText(BX(rx - textWidth(s, 1)), cy + 92, s, GOLD_LT, 1);
-        drawText(BX(lx), cy + 101, "SPEED", DIM_TEXT, 1);
-        if (g->speedBonus) { siprintf(s, "+%d", g->speedBonus); drawText(BX(rx - textWidth(s, 1)), cy + 101, s, GOLD_LT, 1); }
-        else drawText(BX(rx - textWidth("-", 1)), cy + 101, "-", DIM_TEXT, 1);
-        if (g->passBonusKind == 2) {
-            drawText(BX(lx), cy + 110, "PERFECT PASS", GOLD_LT, 1); siprintf(s, "+%d", g->peelBonus);
-            drawText(BX(rx - textWidth(s, 1)), cy + 110, s, GOLD_LT, 1);
-        } else if (g->passBonusKind == 1) {
-            drawText(BX(lx), cy + 110, "CLEAN PASS", ACCENT, 1); siprintf(s, "+%d", g->peelBonus);
-            drawText(BX(rx - textWidth(s, 1)), cy + 110, s, ACCENT, 1);
-        } else {
-            drawText(BX(lx), cy + 110, "PEELS", DIM_TEXT, 1);
-            drawText(BX(rx - textWidth("-", 1)), cy + 110, "-", DIM_TEXT, 1);
-        }
-        if (g->mode == MODE_DAILY) {
-            if (g->practice) siprintf(s, "FINAL %d  NOT SCORED", g->score);
-            else if (S.dailyStreak >= 2) siprintf(s, "FINAL %d  STREAK %d", g->score, S.dailyStreak);   // 130 px at most: the card is 150 wide
-            else siprintf(s, "FINAL %d", g->score);
-            drawTextCenter(BX(cx), cy + 120, s, GOLD_LT, 1);
-        }
-        else { siprintf(s, "SHELF %d OPEN", g->shelf + 1); drawTextCenter(BX(cx), cy + 120, s, ACCENT, 1); }
-        if (t > 30 && (frame & 32)) drawTextCenter(BX(cx), cy + 130, "TAP TO CONTINUE", INK, 1);
-    } else if (g->state == ST_FAIL) {
-        overlayCard(BX(6), 66, 162, 60);
-        rectOutline(BX(6), 66, 162, 60, (frame & 8) ? FIRE1 : FIRE2);
-        const char *t = g->fail == FAIL_FIRE ? "LIBRARY LOST" : g->fail == FAIL_SCORCH ? "PASS DESTROYED" : "OUT OF WORDS";
-        drawTextShadow(BX(86 - textWidth(t, 1) / 2), 76, t, FIRE2, 1);
-        const char *why = g->fail == FAIL_FIRE ? "FIRE REACHED THE FLOOR" : g->fail == FAIL_SCORCH ? "A PASS LETTER BURNED" : "NO WORDS LEFT TO SPELL";
-        drawTextCenter(BX(86), 90, why, INK, 1);
-        if (frame & 32) {
-            char s[32];
-            if (g->mode == MODE_DAILY) strcpy(s, "TAP FOR TITLE");
-            else if (g->lives <= 0) strcpy(s, "RUN OVER - TAP FOR TITLE");
-            else siprintf(s, "TAP TO RETRY (%d BOOKMARK%s)", g->lives, g->lives == 1 ? "" : "S");   // 26 chars: 155 px inside the 162 px card
-            drawTextCenter(BX(86), 110, s, WHITE, 1);
-        }
-    } else if (g->state == ST_PAUSE) {
-        overlayCard(BX(26), 66, 120, 64);
-        rectOutline(BX(26), 66, 120, 64, ACCENT);
-        drawTextCenter(BX(86), 74, "PAUSED", ACCENT, 1);
-        drawText(BX(36), 90, "START", GOLD_LT, 1);  drawText(BX(80), 90, "RESUME", INK, 1);
-        drawText(BX(36), 102, "SELECT", g->mode == MODE_DAILY ? DIM_TEXT : GOLD_LT, 1); drawText(BX(80), 102, "RESTART", g->mode == MODE_DAILY ? DIM_TEXT : INK, 1);
-        drawText(BX(36), 114, "B", GOLD_LT, 1);      drawText(BX(80), 114, "TITLE", INK, 1);
-    }
+    if (g->state == ST_PASSED) drawResultsCard(g);
+    else if (g->state == ST_FAIL) drawFailCard(g);
+    else if (g->state == ST_PAUSE) drawPauseCard(g);
 }
 
 // ---------------------------------------------------------------- frame
+
+int gfxShownScore(void) { return shownScore; }
+
+// The results tally. Outside the results card the HUD shows the score itself. On the card it starts from
+// the score before the bonuses, waits for the diamonds to start lighting (frame 18), then chases the final
+// score; the card's bonus rows count along with it. A state change snaps it, so a tap that leaves the card
+// early lands on the right number. When it arrives, stars burst from the bonus row and the border flashes.
+static void stepTally(const Game *g)
+{
+    if (cardFlash) cardFlash--;
+    if (g->state != ST_PASSED) { shownScore = g->score; tallyPrev = g->state; return; }
+    if (tallyPrev != ST_PASSED) {
+        tallyPrev = ST_PASSED;
+        shownScore = g->score - (1000 * g->shelf + g->speedBonus + g->peelBonus);
+        if (shownScore < 0) shownScore = 0;
+    }
+    if (g->stateTimer >= 18 && shownScore < g->score) {
+        shownScore = boardTallyNext(shownScore, g->score);
+        if ((g->stateTimer & 3) == 0) musicReveal(false);
+        if (shownScore == g->score) {
+            cardFlash = 4;
+            for (int i = 0; i < 12; i++)
+                spawn(P_STAR, BX(CARD_CX + (i - 6) * 10), 22 + 111, (i - 6) * 3, -(rand() % 10) - 6, 18 + (i & 3) * 3, GOLD_LT);
+        }
+    }
+}
 
 void gfxInit(void)
 {
@@ -1737,6 +1875,9 @@ void gfxFrame(const Game *g)
                     int x, y; cellOrigin(c, r, &x, &y);
                     spawn(P_SPARK, x + 3 + rand() % (TILE_W - 6), y + 1, (rand() % 5) - 2, -(rand() % 8) - 4, 10 + rand() % 8, (rand() & 1) ? FIRE2 : FIRE1);
                 }
+    if (g->state == ST_TITLE && (frame % 6) == 0)      // gem rain behind the title band
+        spawn(P_RAIN, BX(10 + rand() % 153), 0, 0, 10, 100, THEMES[S.theme][rand() % 5].light);
+    stepTally(g);
     stepParticles();
     stepPopups();
     if (invalidTimer) invalidTimer--;
@@ -1760,7 +1901,7 @@ void gfxFrame(const Game *g)
         // popups that outlive the game go on top of the menu, not under it.
         PROF(0); PROF(1); PROF(2); PROF(3);
         drawOverlay(g);   PROF(4);
-        drawParticles();
+        if (g->state != ST_TITLE) drawParticles();       // the title draws its own rain behind the band
         drawPopups();
     } else if (g->state == ST_PLAY) {
         drawBackdrop(g);  PROF(0);
@@ -1777,11 +1918,11 @@ void gfxFrame(const Game *g)
         // a play frame plus the card.
         drawBackdrop(g);  PROF(0);
         drawBoard(g);     PROF(1);
-        drawParticles();
         drawPopups();
         drawCallout(g);   PROF(2);
         drawPanel(g);     PROF(3);
-        drawOverlay(g);   PROF(4);
+        drawOverlay(g);                 // the card, then the sparks and stars over it (the tally's burst)
+        drawParticles();  PROF(4);
     }
     PROF(5);
 

@@ -130,7 +130,16 @@ typedef struct {
     bool practice;            // a Daily replay: today's attempt is already used, nothing is recorded
     bool clockOk;             // the DS clock reads a plausible date (settingsClockOk); Daily needs it
     int  dailyMod;            // DAILYMOD_*: today's modifier (set from the clock on the title, by boardNewShelf in Daily)
+    // ---- pause menu (item 13)
+    int  pauseRow;            // highlighted row (an index into the visible rows, see pauseRows)
+    int  pauseArm;            // frames left of a first activation of RESTART or QUIT that wants a second one (0 = none)
+    int  pauseArmId;          // which row that was (PAUSE_RESTART or PAUSE_QUIT)
 } Game;
+
+// pause menu rows; the visible ones are listed by pauseRows (Daily has no RESTART)
+enum { PAUSE_RESUME = 0, PAUSE_RESTART, PAUSE_QUIT, PAUSE_ROW_IDS };
+#define PAUSE_ROWS_MAX 4        // room for the HOW TO PLAY row a later item adds
+int  pauseRows(const Game *g, int ids[PAUSE_ROWS_MAX]);   // main.c: the visible rows in order; returns how many
 
 enum { DAILYMOD_STANDARD = 0, DAILYMOD_EMBER, DAILYMOD_DEEP, DAILYMOD_LONG, DAILYMOD_COUNT };
 
@@ -218,6 +227,8 @@ int  boardChainScore(const Game *g); // exactly what boardSubmit would award for
 int  ledgerIndex(const Game *g, int age);   // ring index of the age-th newest ledger entry (0 = newest)
 int  boardHeatFor(int len);          // heat a word of this length adds: 3, 2, 1, 1, 0 (3,4,5,6,7+)
 int  boardTurnHeat(const Game *g, int baseHeat);   // all the heat the next turn adds: baseHeat plus the Lockdown pulse and overtime
+int  boardTallyNext(int shown, int target);   // the counting score of the results tally: +1/6 of the gap, at least 10 a frame, capped at target
+void boardTallySplit(int tally, int shelfBonus, int speedBonus, int peelBonus, int out[3]);   // what each bonus row shows after `tally` points of counting
 int  boardLenMult(int len);          // length multiplier of a word: 1 (to 4 letters), 2, 3, 4 (9 and up)
 int  boardPeel(Game *g, int c, int r); // returns 0 none, 1 hole, 2 secret, 3 scorched, -1 fail; a peel is a turn
 void boardAnimate(Game *g);
@@ -253,6 +264,8 @@ int  gfxCellAt(int px, int py, int *c, int *r);
 bool gfxInSubmit(int px, int py);
 bool gfxInClear(int px, int py);
 bool gfxInPeekButton(int px, int py);
+int  gfxPauseRowAt(int px, int py, int rows);   // the pause menu row (0..rows-1) under a touch, -1 for none
+int  gfxShownScore(void);            // the score the HUD shows (counts up during the results tally)
 bool gfxInPauseButton(int px, int py);   // the 12 x 12 "II" button at the top of the panel
 enum { PRESS_SUBMIT = 0, PRESS_CLEAR, PRESS_PEEK, PRESS_PAUSE };
 void gfxPress(int which);            // a panel button looks pressed for six frames

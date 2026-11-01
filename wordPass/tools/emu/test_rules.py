@@ -46,18 +46,30 @@ def ensure_play():
         for r in range(ROWS):
             if g['cell'][c][r][1] == BURN: e.set_cell(c, r, TILE, 'e')
 
+def pause_rows():
+    """The pause menu's rows for the current mode (Daily has no RESTART)."""
+    return ['RESUME', 'QUIT'] if e.state()['mode'] == 1 else ['RESUME', 'RESTART', 'QUIT']
+
+def pause_do(name, settle=30):
+    """From play: open the pause menu, walk the d-pad to the row `name` and press A (twice for RESTART and
+    QUIT, which ask for a second activation)."""
+    e.press('START', settle=10)
+    for _ in range(pause_rows().index(name)): e.press('DOWN', settle=3)
+    if name == 'RESUME': e.press('A', settle=settle); return
+    e.press('A', settle=3); e.press('A', settle=settle)
+
 def to_title():
-    """Pause + B from play (or whatever state) back to the title screen."""
+    """Pause menu, QUIT TO TITLE (from play, or whatever state) back to the title screen."""
     ensure_play()
-    e.press('START', settle=10); e.press('B', settle=30)
-    g = e.state(); assert g['state'] == ST_TITLE, f'pause + B did not quit: state {g["state"]}'
+    pause_do('QUIT')
+    g = e.state(); assert g['state'] == ST_TITLE, f'pause menu QUIT did not quit: state {g["state"]}'
 
 def fresh_shelf():
-    """Pause + SELECT: restart the shelf on a fresh random board (no holes, nothing revealed),
+    """Pause menu, RESTART SHELF: a fresh random board (no holes, nothing revealed),
     with the shelf's own fire settings. A restart costs a bookmark, so the run is topped up first."""
     ensure_play()
     e.set_lives(3)
-    e.press('START', settle=10); e.press('SELECT', settle=150)
+    pause_do('RESTART', settle=150)
     g = e.state(); assert g['state'] == ST_PLAY and g['turn'] == 0, f'restart: state {g["state"]} turn {g["turn"]}'
     return g
 
@@ -571,10 +583,10 @@ def _():
     to_title(); e.start_classic()
     assert e.state()['lives'] == 3
     for want in (2, 1):
-        e.press('START', settle=10); e.press('SELECT', settle=150)
+        pause_do('RESTART', settle=150)
         g = e.state(); assert g['state'] == ST_PLAY and g['lives'] == want and g['turn'] == 0, f'restart: state {g["state"]} lives {g["lives"]}'
-    e.press('START', settle=10); e.press('SELECT', settle=20)
-    g = e.state(); assert g['state'] == ST_PAUSE and g['lives'] == 1 and g['msg'] == 'LAST BOOKMARK', f'refusal: state {g["state"]} lives {g["lives"]} msg {g["msg"]!r}'
+    e.press('START', settle=10); e.press('DOWN', settle=3); e.press('A', settle=20)
+    g = e.state(); assert g['state'] == ST_PAUSE and g['lives'] == 1 and g['msg'] == 'LAST BOOKMARK' and g['pauseArm'] == 0, f'refusal: state {g["state"]} lives {g["lives"]} msg {g["msg"]!r}'
     e.shot(f'{out}/rules_last_bookmark.png')
     e.press('START', settle=30); assert e.state()['state'] == ST_PLAY
     to_title(); e.start_classic()
@@ -657,8 +669,10 @@ def _():
     e.run(120)
     r = play_turn(shortest); assert r, 'no word to spell'
     g = e.state(); assert g['statWords'] == words0 + 1, f'scored Daily word counted: {g["statWords"]} (was {words0})'
-    e.press('START', settle=10); e.press('SELECT', settle=20)
-    g = e.state(); assert g['state'] == ST_PAUSE and g['msg'] == 'NO RESTART IN DAILY', f'Daily restart: state {g["state"]} msg {g["msg"]!r}'
+    e.press('START', settle=10)
+    g = e.state(); assert g['state'] == ST_PAUSE and pause_rows() == ['RESUME', 'QUIT'], f'Daily pause: state {g["state"]} rows {pause_rows()}'
+    e.press('DOWN', settle=3); assert e.state()['pauseRow'] == 1, 'Daily pause: DOWN goes to QUIT'
+    e.press('DOWN', settle=3); assert e.state()['pauseRow'] == 0, 'Daily pause has no RESTART row: DOWN wraps to RESUME'
     e.shot(f'{out}/rules_daily_pause.png')
     e.press('START', settle=30); assert e.state()['state'] == ST_PLAY
     score = e.state()['score']
@@ -710,7 +724,7 @@ def _():
     # walking away from a scored Daily forfeits it: the score so far stands and the attempt stays spent
     daily_title(d2, played=d1, last=d1, streak=1); tap_daily()
     assert e.state()['practice'] == 0
-    e.press('START', settle=10); e.press('B', settle=30)
+    pause_do('QUIT')
     g = e.state(); assert g['state'] == ST_TITLE and g['dailyPlayed'] == d2 and g['dailyLast'] == d2 and g['streak'] == 2, \
         f'quit Daily: {g["state"]} played {g["dailyPlayed"]} last {g["dailyLast"]} streak {g["streak"]}'
 
@@ -777,8 +791,8 @@ def _():
 @scenario('options HAND row: optRow 3, hand flips; left-hand title keeps the top screen inside its frame')
 def _():
     ensure_play()
-    e.press('START', settle=10); e.press('B', settle=30)
-    assert e.state()['state'] == ST_TITLE, 'pause + B did not quit to the title'
+    pause_do('QUIT')
+    assert e.state()['state'] == ST_TITLE, 'the pause menu did not quit to the title'
     e.tap(86, 170); e.run(10)
     g = e.state(); assert g['state'] == ST_OPTIONS and g['optRow'] == 0, f'options: {g["state"]} {g["optRow"]}'
     e.tap(86, 78); e.run(10)                      # rows are 12 px apart from y 36: HAND is row 3
@@ -797,8 +811,8 @@ def _():
 @scenario('options SPELLING row: BOTH -> AMERICAN -> BRITISH -> BOTH, and the screen shows each')
 def _():
     ensure_play()
-    e.press('START', settle=10); e.press('B', settle=30)
-    assert e.state()['state'] == ST_TITLE, 'pause + B did not quit to the title'
+    pause_do('QUIT')
+    assert e.state()['state'] == ST_TITLE, 'the pause menu did not quit to the title'
     e.tap(e.bx + 86, 170); e.run(10)
     g = e.state(); assert g['state'] == ST_OPTIONS and g['spelling'] == 0, f'options: {g["state"]} spelling {g["spelling"]}'
     seen = []
@@ -1216,6 +1230,202 @@ def _():
         hot = [(x, y) for y in range(100, 116) for x in range(222, 242) if sum(px[x, y]) > 300]
         assert not hot, f'{word}: the last word reaches the fire meter column'
     e.press('Y', settle=5)
+
+# ---- overlays: pause menu, results tally, fail card, title (item 13) -----------------------
+def pause_row_y(i): return 88 + 16 * i + 6          # a touch inside the i-th 16 px row of the pause menu
+
+def check_pause(tag):
+    fresh_shelf(); e.set_lives(3)
+    x = e.bx + 86
+    # a held chain is dropped when the menu opens, and the menu starts on RESUME
+    spell_cells('bed'); e.chain([(C, 0), (C, 1), (C, 2)]); assert e.state()['chainLen'] == 3
+    e.press('START', settle=10); g = e.state()
+    assert g['state'] == ST_PAUSE and g['chainLen'] == 0 and g['pauseRow'] == 0, f'{tag}: pause: state {g["state"]} chain {g["chainLen"]} row {g["pauseRow"]}'
+    e.shot(f'{out}/rules_pause_{tag}.png')
+    # START and B both resume; SELECT does nothing any more
+    e.press('B', settle=20); assert e.state()['state'] == ST_PLAY, f'{tag}: B did not resume'
+    e.press('START', settle=10); e.press('SELECT', settle=10); assert e.state()['state'] == ST_PAUSE and e.state()['lives'] == 3, f'{tag}: SELECT must do nothing in the pause menu'
+    e.press('START', settle=20); assert e.state()['state'] == ST_PLAY, f'{tag}: START did not resume'
+    # the d-pad walks the rows and wraps
+    e.press('START', settle=10); rows = []
+    for k in 'DOWN', 'DOWN', 'DOWN', 'UP': e.press(k, settle=3); rows.append(e.state()['pauseRow'])
+    assert rows == [1, 2, 0, 2], f'{tag}: pause rows {rows}'
+    # a tap on another row only highlights it; a tap on the highlighted row arms QUIT, a second one within 90 frames quits
+    e.tap(x, pause_row_y(0), settle=6); g = e.state()
+    assert g['state'] == ST_PAUSE and g['pauseRow'] == 0, f'{tag}: a tap on RESUME while QUIT was lit must only highlight: {g["state"]} {g["pauseRow"]}'
+    e.tap(x, pause_row_y(2), settle=6); g = e.state()
+    assert g['state'] == ST_PAUSE and g['pauseRow'] == 2 and g['pauseArm'] == 0, f'{tag}: tap on QUIT highlights it: row {g["pauseRow"]} arm {g["pauseArm"]}'
+    e.tap(x, pause_row_y(2), settle=6); g = e.state()
+    assert g['state'] == ST_PAUSE and g['pauseArm'] > 60, f'{tag}: the first QUIT activation must only arm: state {g["state"]} arm {g["pauseArm"]}'
+    e.shot(f'{out}/rules_pause_quit_{tag}.png')
+    e.run(95); assert e.state()['pauseArm'] == 0, f'{tag}: the confirmation never expired'
+    e.tap(x, pause_row_y(2), settle=6); assert e.state()['state'] == ST_PAUSE, f'{tag}: after the timeout one tap must arm again, not quit'
+    e.press('UP', settle=3); assert e.state()['pauseArm'] == 0, f'{tag}: moving the highlight must disarm'
+    e.press('DOWN', settle=3); e.press('A', settle=3); e.press('A', settle=30)
+    g = e.state(); assert g['state'] == ST_TITLE, f'{tag}: the second activation did not quit: {g["state"]}'
+    e.start_classic(); e.set_lives(3)
+    # RESTART costs a bookmark and is guarded too; a tap on the highlighted RESUME resumes
+    e.press('START', settle=10); e.press('DOWN', settle=3); e.press('A', settle=3)
+    g = e.state(); assert g['state'] == ST_PAUSE and g['lives'] == 3 and g['pauseArm'] > 0, f'{tag}: RESTART must ask first: lives {g["lives"]} arm {g["pauseArm"]}'
+    e.shot(f'{out}/rules_pause_restart_{tag}.png')
+    e.press('A', settle=150); g = e.state()
+    assert g['state'] == ST_PLAY and g['lives'] == 2 and g['turn'] == 0, f'{tag}: restart: state {g["state"]} lives {g["lives"]}'
+    e.press('START', settle=10); e.tap(x, pause_row_y(0), settle=20)
+    assert e.state()['state'] == ST_PLAY, f'{tag}: a tap on the lit RESUME row did not resume'
+    # the last bookmark cannot be spent
+    e.set_lives(1); e.press('START', settle=10); e.press('DOWN', settle=3); e.press('A', settle=10)
+    g = e.state(); assert g['state'] == ST_PAUSE and g['msg'] == 'LAST BOOKMARK' and g['lives'] == 1 and g['pauseArm'] == 0, f'{tag}: last bookmark: {g["msg"]!r} lives {g["lives"]}'
+    e.shot(f'{out}/rules_pause_last_{tag}.png')
+    e.press('START', settle=20)
+    assert e.fps() == 120, f'{tag}: pause fps'
+
+@scenario('pause menu (right hand): rows, d-pad and taps, guarded QUIT and RESTART, START and B resume, the chain is dropped')
+def _():
+    set_hand(False); e.start_classic()
+    check_pause('right')
+
+@scenario('pause menu (left hand): the same, mirrored')
+def _():
+    set_hand(True); e.start_classic()
+    check_pause('left')
+
+def pass_by_peeling():
+    """Peel the pass in order with the fire held off; the last peel is a stylus lift whose frame we stop on."""
+    g = e.state(); n = g['passLen']
+    for i in range(1, n + 1):
+        e.set_heat(0); e.set_turn(0); e.set_burn(0, 99)
+        g = e.state()
+        for c, r in e.burn_cells(g): e.set_cell(c, r, TILE, 'e')
+        c, r = e.secret_cells(g)[i]
+        if i < n: e.peel(c, r); continue
+        e.hold('L', True); e.emu.input.touch_set_pos(*e.center(c, r)); e.run(4); e.emu.input.touch_release()
+        for _ in range(8):
+            e.run(1)
+            if e.state()['state'] == ST_PASSED: break
+    e.hold('L', False)
+    g = e.state(); assert g['state'] == ST_PASSED, f'pass_by_peeling: state {g["state"]} fail {g["fail"]}'
+    return g
+
+def long_word_path(word):
+    path = [(0, r) for r in range(8)] + [(1, r) for r in range(7, -1, -1)] + [(2, r) for r in range(8)]
+    for (c, r), ch in zip(path, word): e.set_cell(c, r, TILE, ch)
+    e.run(3); return path[:len(word)]
+
+def card_text_inside(tag, px, cy, what):
+    """No lit pixel on the two columns just inside the card's inner border, over the rows of the card."""
+    bad = []
+    for y in range(cy + 6, cy + 148):
+        for x in (e.bx + 14, e.bx + 157):
+            if sum(px[x, 192 + y]) > 150: bad.append((x, y))
+    assert not bad, f'{tag}: {what}: text reaches the card border, first {bad[:3]}'
+
+def check_results(tag):
+    calm(); e.set_lives(3)
+    # a 20-letter best word, so the card is checked at its widest
+    e.chain(long_word_path('lymphogranulomatoses')); e.press('A', settle=60)
+    e.set_heat(0); e.set_turn(0); e.set_burn(0, 99)
+    assert e.state()['lastWord'].startswith('lymphogranulo'), f'{tag}: the long word did not score'
+    g = pass_by_peeling()
+    total = 1000 * g['shelf'] + g['speedBonus'] + g['peelBonus']
+    entry = g['score'] - total
+    assert g['shownScore'] == entry, f'{tag}: the HUD must show the score before the bonuses on entry: {g["shownScore"]} want {entry}'
+    series = [g['shownScore']]; flash = set(); shots = {}
+    for f in range(110):
+        e.run(1); g = e.state(); series.append(g['shownScore'])
+        px = e.pixels(); flash.add(px5(px, e.bx + 11 + 40, 192 + 22)[2] >= 30)    # the card's top border: gold, white for four frames at the end
+        if f in (8, 20, 35, 100): e.shot(f'{out}/rules_results_{tag}_{f}.png')
+    assert all(b >= a for a, b in zip(series, series[1:])), f'{tag}: the tally went backwards: {series[:40]}'
+    assert series[3] == entry, f'{tag}: the count must wait for the diamonds (frame 18): {series[:22]}'
+    assert series[-1] == g['score'] == entry + total, f'{tag}: the tally did not arrive: {series[-1]} want {g["score"]}'
+    start = next(i for i, v in enumerate(series) if v > entry); end = next(i for i, v in enumerate(series) if v == g['score'])
+    assert 10 <= end - start <= 80, f'{tag}: the tally took {end - start} frames'
+    assert True in flash and False in flash, f'{tag}: the card border should flash white when the tally ends'
+    card_text_inside(tag, px, 22, 'results card')            # the last frame of the loop: card settled, tally done
+    # a tap before the tally ends advances and snaps the HUD to the real score
+    g = e.state(); assert g['state'] == ST_PASSED
+    e.tap(e.bx + 100, 100); g = e.state()
+    assert g['state'] == ST_PLAY and g['shelf'] == 2 and g['shownScore'] == g['score'], f'{tag}: after the tap: state {g["state"]} shown {g["shownScore"]} score {g["score"]}'
+    # and one that lands mid-count
+    e.set_heat(0); e.set_turn(0); e.set_burn(0, 99)
+    pass_by_peeling(); e.run(31)                          # a tap only counts after frame 30, and a shelf-2 tally runs to about frame 50
+    g = e.state(); assert g['shownScore'] < g['score'], f'{tag}: still counting at frame ~32: {g["shownScore"]} / {g["score"]}'
+    e.tap(e.bx + 100, 100, settle=4); g = e.state()
+    assert g['state'] == ST_PLAY and g['shownScore'] == g['score'], f'{tag}: a mid-count tap must land on the real score: {g["shownScore"]} / {g["score"]}'
+    assert e.fps() == 120, f'{tag}: results fps'
+
+@scenario('results card (right hand): the score counts up behind the bonus rows, diamonds light one by one, a tap snaps it')
+def _():
+    set_hand(False); e.start_classic()
+    check_results('right')
+
+@scenario('results card (left hand): the same, mirrored')
+def _():
+    set_hand(True); e.start_classic()
+    check_results('left')
+
+def check_fail(tag):
+    calm(); e.set_lives(3)
+    e.chain(long_word_path('lymphogranulomatoses')); e.press('A', settle=60)
+    e.set_heat(0); e.set_turn(0); e.set_burn(0, 99); e.set_score(1234567)
+    g = force_fail()                                     # OUT OF WORDS, 60 frames in
+    assert g['state'] == ST_FAIL and g['lives'] == 2, f'{tag}: fail: state {g["state"]} lives {g["lives"]}'
+    e.run(80); e.shot(f'{out}/rules_fail_{tag}.png'); px = e.pixels()
+    card_text_inside(tag, px, 22, 'classic fail card')
+    assert count_color(px, e.bx + 14, 192 + 22 + 100, e.bx + 150, 192 + 22 + 125, ACCENT1_C, 2) > 80, f'{tag}: no RETRY FROM line in accent'
+    # a tap before 45 frames does nothing; after it retries on the same shelf
+    # (force_fail already waited 60 + 80 frames)
+    e.tap(e.bx + 100, 100); g = e.state()
+    assert g['state'] == ST_PLAY and g['lives'] == 2 and g['shelf'] == 1, f'{tag}: retry: state {g["state"]} lives {g["lives"]}'
+    # the run over: last bookmark, FINAL and RUN OVER, a tap goes to the title
+    e.set_lives(1); e.set_heat(0); e.set_turn(0); e.set_burn(0, 99)
+    force_fail(); e.run(60); e.shot(f'{out}/rules_fail_over_{tag}.png'); px = e.pixels()
+    card_text_inside(tag, px, 22, 'run-over card')
+    assert count_color(px, e.bx + 14, 192 + 22 + 105, e.bx + 150, 192 + 22 + 125, FIRE2_C, 2) > 30, f'{tag}: no RUN OVER in fire colours'
+    e.tap(e.bx + 100, 100); e.run(20)
+    assert e.state()['state'] == ST_TITLE, f'{tag}: the run-over tap did not reach the title'
+    e.start_classic()
+
+@scenario('fail card (right hand): reason, the pass revealed, stats with a 20-letter best word, bookmarks, RUN OVER; nothing past the border')
+def _():
+    set_hand(False); e.start_classic()
+    check_fail('right')
+
+@scenario('fail card (left hand): the same, mirrored')
+def _():
+    set_hand(True); e.start_classic()
+    check_fail('left')
+
+def check_title(tag):
+    if e.state()['state'] == ST_OPTIONS: e.press('B', settle=30)     # set_hand's BACK tap can miss when the hand just flipped
+    assert e.state()['state'] == ST_TITLE, f'{tag}: not on the title'
+    e.run(200)
+    e.shot(f'{out}/rules_title_{tag}.png')
+    black = (1, 1, 2)
+    rain = 0; band_bad = []
+    for k in range(40):
+        e.run(13); px = e.pixels()
+        # the band is solid black around the logo gems: rows 31..37 and 64..72 hold nothing, whatever rains behind it
+        for y in list(range(31, 37)) + list(range(65, 72)):
+            for x in range(e.bx + 10, e.bx + 165):
+                if px5(px, x, 192 + y) != black: band_bad.append((x, y))
+        # rain: lit pixels in the strip above the band and in the side gutters
+        for y in range(3, 29):
+            for x in range(e.bx + 4, e.bx + 170):
+                if sum(px[x, 192 + y]) > 200: rain += 1
+    assert not band_bad, f'{tag}: the gem rain or something else crosses the band: {len(band_bad)} px, first {band_bad[:3]}'
+    assert rain > 30, f'{tag}: no gem rain above the band ({rain} lit px in 40 samples)'
+    px = e.pixels()
+    assert count_color(px, e.bx + 8, 192 + 30, e.bx + 165, 192 + 31, (16, 11, 2), 1) > 100 and count_color(px, e.bx + 8, 192 + 73, e.bx + 165, 192 + 74, (16, 11, 2), 1) > 100, f'{tag}: the gold rules at y 30 and 73 are missing'
+    # the hit rects did not move
+    e.tap(e.bx + 52, 147); e.run(150); assert e.state()['state'] == ST_PLAY, f'{tag}: CLASSIC no longer starts'
+
+@scenario('title (right hand): logo band with gold rules, gem rain behind it, buttons where they were')
+def _():
+    set_hand(False); check_title('right')
+
+@scenario('title (left hand): the same, mirrored')
+def _():
+    set_hand(True); check_title('left')
 
 print('RULES OK' if not fails else f'RULES FAILED: {fails}')
 sys.exit(fails)

@@ -643,6 +643,27 @@ static bool ledgerHas(const Game *g, const char *w)
     return false;
 }
 
+// ---- the results tally: the HUD score chases the final one, and the card's bonus rows count up with it
+
+// The next value of the counting score: a sixth of the way there, never less than 10 a frame, never past the target.
+int boardTallyNext(int shown, int target)
+{
+    int step = (target - shown) / 6;
+    if (step < 10) step = 10;
+    shown += step;
+    return shown > target ? target : shown;
+}
+
+// Split what has been counted so far (`tally` points above the score the shelf ended on) over the three bonus
+// rows in order: the shelf bonus fills first, then the speed bonus, then the peel bonus.
+void boardTallySplit(int tally, int shelfBonus, int speedBonus, int peelBonus, int out[3])
+{
+    if (tally < 0) tally = 0;
+    out[0] = tally < shelfBonus ? tally : shelfBonus; tally -= out[0];
+    out[1] = tally < speedBonus ? tally : speedBonus; tally -= out[1];
+    out[2] = tally < peelBonus ? tally : peelBonus;
+}
+
 // The length multiplier of a word: x1 up to four letters, x2 for five and six, x3 for seven and
 // eight, x4 beyond.
 int boardLenMult(int len)

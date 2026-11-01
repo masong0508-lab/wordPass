@@ -342,6 +342,33 @@ int main(int argc, char **argv)
         g.turn = 24; CHECK("turn 25 is overtime: a free word previews heat", boardTurnHeat(&g, 0) == 1);
     }
 
+    // ---- the results tally
+    {
+        bool never = true, ends = true;
+        int frames[3] = { 0, 0, 0 };
+        static const int GAP[3] = { 3000, 30000, 3000000 };
+        for (int k = 0; k < 3; k++) {
+            int shown = 1000, target = 1000 + GAP[k], prev = shown;
+            while (shown < target && frames[k] < 400) {
+                shown = boardTallyNext(shown, target); frames[k]++;
+                if (shown <= prev || shown > target) never = false;
+                prev = shown;
+            }
+            if (shown != target) ends = false;
+        }
+        CHECK("the tally count always rises, never passes the target and arrives", never && ends);
+        CHECK("a 3000-point shelf tallies in about half a second, a 30000-point one in under a second", frames[0] >= 20 && frames[0] <= 45 && frames[1] <= 60 && frames[2] <= 100);
+        CHECK("the tally moves a sixth of the gap, at least 10 a frame, and stops at the target", boardTallyNext(100, 105) == 105 && boardTallyNext(100, 130) == 110 && boardTallyNext(100, 700) == 200);
+        int o[3];
+        boardTallySplit(0, 1000, 500, 400, o);   CHECK("tally 0: every row is 0", o[0] == 0 && o[1] == 0 && o[2] == 0);
+        boardTallySplit(600, 1000, 500, 400, o); CHECK("a partial tally fills the shelf bonus first", o[0] == 600 && o[1] == 0 && o[2] == 0);
+        boardTallySplit(1300, 1000, 500, 400, o); CHECK("then the speed bonus", o[0] == 1000 && o[1] == 300 && o[2] == 0);
+        boardTallySplit(1800, 1000, 500, 400, o); CHECK("then the peel bonus", o[0] == 1000 && o[1] == 500 && o[2] == 300);
+        boardTallySplit(99999, 1000, 500, 400, o); CHECK("a finished tally shows every bonus in full", o[0] == 1000 && o[1] == 500 && o[2] == 400);
+        boardTallySplit(-5, 1000, 0, 0, o);       CHECK("a negative tally clamps to 0 and a zero bonus stays 0", o[0] == 0 && o[1] == 0 && o[2] == 0);
+        boardTallySplit(1000, 1000, 0, 400, o);   CHECK("an empty speed bonus is skipped", o[0] == 1000 && o[1] == 0 && o[2] == 0);
+    }
+
     // ---- per-segment refill: the gems under a hole come back
     boardOf('e');
     set(0, 4, CELL_HOLE, 0); set(0, 5, CELL_EMPTY, 0); set(0, 6, CELL_EMPTY, 0);

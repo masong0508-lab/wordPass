@@ -49,7 +49,9 @@ to `DebugView`, add its `PIN(...)`, bump the size assert, add it to `OFF`, and r
 chainLen, peels, lockdown, bestWordScore, dailySeed, passLen, lastWordTier, rareWords,
 library, heatThreshold, burnEvery, burnTimer, optRow, pulseEvery, lockTier, overtime,
 chainScore, speedBonus, peelBonus, passBonusKind, ledgerN, newBest, lives, passTheme,
-twist, calloutLife, pressBits`; `callout` is the text of the board callout (`calloutLife` frames left;
+twist, calloutLife, pressBits, shownScore, pauseRow, pauseArm`; `shownScore` is the score the HUD shows
+(it counts up during the results tally), `pauseRow` the highlighted pause row and `pauseArm` the frames left of a
+RESTART/QUIT confirmation; `callout` is the text of the board callout (`calloutLife` frames left;
 `pressBits` bit 0 SUBMIT, 1 CLEAR, 2 PEEK, 3 pause pressed, 4 the SUBMIT flash); `chainScore` is `boardChainScore(g)` every frame, the exact gain the current chain
 would submit for; `passTheme` indexes `wp.PASS_THEMES`, `twist` is 0 none, 1 INK SPILL,
 2 DAMP, 3 BURIED),
@@ -79,8 +81,9 @@ and a turn's heat crossing `heatThreshold` lights the topmost gem of a random co
 so a scenario that must stay flame-free keeps `set_heat(0)` fresh. `set_turn(0)` keeps
 shelf overtime (turn 24, 16 in Lockdown) out of a long scenario. `burn_cells(g)`,
 `lowest_fire_row(g)` and `heat_for(n)` read the fire state the way board.c computes it.
-`test_rules.py` has `fresh_shelf()` (pause + SELECT restarts the shelf on a clean random
-board; a restart costs a bookmark, so it pokes `lives` back to 3 first), `to_title()`,
+`test_rules.py` has `fresh_shelf()` (the pause menu's RESTART SHELF on a clean random
+board; a restart costs a bookmark, so it pokes `lives` back to 3 first), `pause_do(name)` (START, the d-pad to the
+row, A twice for RESTART and QUIT), `to_title()` (the pause menu's QUIT),
 `clear_shelf()` (peels the pass in order with the fire held off and taps through the
 results card: the way to reach a given shelf) and `play_turn(pick)` with the `shortest`
 and `longest_fire_aware` strategies. `letter_mix(g)` counts vowels and J/Q/X/Z on a board.
@@ -118,3 +121,7 @@ B steps the chain back one gem (hold it 20 frames to clear all) and Y clears, so
 ## Panel and HUD
 
 The panel scenarios (`panel HUD`, both hands) read the screenshot rather than the mirror: `count_color(px, x0, y0, x1, y1, rgb)` counts pixels near a 5-bit colour in a rectangle, and `lit_outside_panel(px)` lists lit pixels in the margins around the 76 px panel (x 176..251 right-handed, 4..79 left-handed), so a string that grows past the panel edge fails the test. They poke the worst cases (a six-digit score, a nine-letter pass, turn 150, a 20-letter chain, burnEvery 99) and take the screenshots to read. `HUD top row` checks the mode label, that the nine-letter plaque and a 20-letter chain stay left of the fire meter (x 222..) and inside the plaque border, and the `+value` under the big word. The `board callouts` scenarios cover the word tags, `NOT A WORD` with the red rims, `PASS LETTER!` and `SCORCHED` in both hands. Buttons are pressed with `e.tap(..., settle=0)` and read through `pressBits`; leave a few frames between two taps, or the game never sees the stylus lift.
+
+## Overlays
+
+`pause menu` (both hands) drives the menu with the d-pad and with taps (`pause_row_y(i)`), reads `pauseRow` and `pauseArm`, and covers START and B resuming, SELECT doing nothing, the 90-frame confirmation expiring, a moved highlight disarming it, RESTART costing a bookmark, the refusal on the last one, and the chain being dropped when the menu opens. `results card` stops on the frame the last peel passes the shelf (`pass_by_peeling`), reads `shownScore` every frame (it starts at the score before the bonuses, waits for frame 18, never goes backwards, arrives in 10..80 frames and snaps on a tap, including a tap mid-count), and watches the card's top border pixel for the white flash. `fail card` and `results card` poke a 20-letter best word (`long_word_path`) (and, on the fail card, a seven-digit score) and assert that no text touches the two columns inside the card border. `title` checks that the logo band is solid black around the gems while the rain falls above and beside it. The screenshots land in the output folder for reading, one set per hand.

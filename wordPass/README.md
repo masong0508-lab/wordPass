@@ -79,7 +79,7 @@ numbers.
   menu (the score so far stands). Every later start that day is **PRACTICE**:
   the same board, announced as PRACTICE RUN, and nothing from it is recorded
   (not the score, the streak, or the lifetime stats). The title button reads
-  PRACTICE with your score. The pause menu's restart is off in Daily.
+  PRACTICE with your score. The pause menu has no RESTART row in Daily.
 - **Modifier of the day.** The date picks one, and the title button names it:
   STANDARD (as before), EMBER (the meter holds 8 and the fire moves every
   turn), DEEP (the pass is buried in the bottom three rows) or LONG (a
@@ -192,7 +192,7 @@ three. Daily Pass has no bookmarks: one attempt.
 | D-pad | move the hex cursor (see below) |
 | Hold L or R | peek mode (touch a gem to arm it, lift to peel it; slide away to cancel) |
 | X / PEEK button | latch peek on for one peel (press again to cancel); with the cursor shown, A then peels the gem under it |
-| START / the II button on the panel | pause (then START resume, SELECT restart shelf for one bookmark, B quit to title) |
+| START / the II button on the panel | pause menu: RESUME, RESTART SHELF (costs a bookmark) and QUIT TO TITLE. Up and down move the highlight, A or a tap on the lit row picks it (a tap on another row lights it first); RESTART and QUIT ask for a second pick within 90 frames. START or B resumes |
 | Y (title) | options |
 | X (title) | THE LEDGER |
 | SELECT (title) | Daily Pass |
@@ -230,14 +230,21 @@ stars and pops into the plaque on the top screen, burning gems pulse with
 flame tongues and shed sparks, callouts pop in at double size, shelves fade
 in, and a failed run flashes and shakes the screen. The gold frames carry a
 travelling shimmer and the submit gem breathes while a valid word is chained.
+The title is a gold-ruled band of logo gems over a slow rain of falling gems in
+the theme's colours; the pause menu is a card with the highlighted row boxed.
 The title screen's top half cycles three illustrated tip cards, a first-shelf
 nudge appears if you haven't peeked after three words, rejected words shake
 red, the chain rope turns the shelf accent once the word is valid, and a red
 glow creeps up from the floor as fire gets low. Columns fall under gravity and
 squash when they land, each shelf has its own
-accent colour, and clearing a shelf slides up a results card with the pass,
-your best word, words spelled (and how many were unique), peels used, turns,
-and the shelf, speed and perfect/clean pass bonuses. Finding a pass letter
+accent colour, and clearing a shelf slides up a results card: the pass lights
+up diamond by diamond, then the score on the panel counts up to its new value
+while the shelf, speed and perfect/clean pass bonuses fill in with it (a tap
+skips to the end), and the card shows your best word, words spelled (and how
+many were unique), peels used and turns, with a blinking NEW BEST when the run
+beat a record. A failed shelf gets the same card in red: why it failed, the
+pass revealed letter by letter (the ones you found stay lit), the same stats,
+what the retry costs, and how many bookmarks are left. Finding a pass letter
 pops its reward over the gem, a word through a diamond calls out PASS LINK,
 a repeat says AGAIN, and the top screen keeps a fading ledger of the last
 five words.

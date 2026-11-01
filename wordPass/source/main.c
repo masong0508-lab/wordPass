@@ -130,6 +130,16 @@ static void cycleOption(int row, int dir)
     gfxApplySettings();
 }
 
+// The pause menu's rows: Daily has no RESTART (its one attempt cannot be retried)
+int pauseRows(const Game *g, int ids[PAUSE_ROWS_MAX])
+{
+    int n = 0;
+    ids[n++] = PAUSE_RESUME;
+    if (g->mode != MODE_DAILY) ids[n++] = PAUSE_RESTART;
+    ids[n++] = PAUSE_QUIT;
+    return n;
+}
+
 static void quitToTitle(void)
 {
     // walking away from a scored Daily forfeits it: the attempt is spent, so the score so far stands
@@ -217,16 +227,49 @@ static void submitChain(void)
     }
 }
 
+// Pause: the chain is dropped so the shelf comes back at rest, peek lets go, the menu starts on RESUME
+static void enterPause(void)
+{
+    gfxPress(PRESS_PAUSE);
+    boardClearChain(&G);
+    G.armed = 0; G.peekLatch = 0; G.peekHeld = 0; musicPeek(false);
+    G.pauseRow = 0; G.pauseArm = 0;
+    G.state = ST_PAUSE;
+}
+
+// Activate a pause row. RESTART (a bookmark) and QUIT (the run) must be activated twice within 90 frames.
+static void pauseActivate(int id)
+{
+    bool armed = G.pauseArm > 0 && G.pauseArmId == id;
+    switch (id) {
+        case PAUSE_RESUME:
+            G.state = ST_PLAY;
+            break;
+        case PAUSE_RESTART:
+            if (G.mode == MODE_CLASSIC && G.lives <= 1) { setMsg("LAST BOOKMARK", 60); G.pauseArm = 0; break; }   // the last one cannot be spent
+            if (!armed) { G.pauseArm = 90; G.pauseArmId = id; break; }
+            G.pauseArm = 0;
+            if (G.mode == MODE_CLASSIC) G.lives--;
+            G.score = G.shelfStartScore; startShelf(); G.state = ST_PLAY;
+            break;
+        case PAUSE_QUIT:
+            if (!armed) { G.pauseArm = 90; G.pauseArmId = id; break; }
+            G.pauseArm = 0;
+            quitToTitle();
+            break;
+    }
+}
+
 static void handlePlay(u32 down, u32 held, touchPosition *t)
 {
     if (down & KEY_X) { G.peekLatch = !G.peekLatch; gfxPress(PRESS_PEEK); }
     if ((down & KEY_TOUCH) && gfxInPeekButton(t->px, t->py)) { G.peekLatch = !G.peekLatch; gfxPress(PRESS_PEEK); }
-    if ((down & KEY_TOUCH) && gfxInPauseButton(t->px, t->py)) { gfxPress(PRESS_PAUSE); G.armed = 0; G.state = ST_PAUSE; return; }
+    if ((down & KEY_TOUCH) && gfxInPauseButton(t->px, t->py)) { enterPause(); return; }
     bool peekNow = (held & (KEY_L | KEY_R)) != 0 || G.peekLatch;
     if (peekNow != G.peekHeld) { G.peekHeld = peekNow; musicPeek(peekNow); }
     if (!peekNow) G.armed = 0;
 
-    if (down & KEY_START) { gfxPress(PRESS_PAUSE); G.armed = 0; G.state = ST_PAUSE; return; }   // a held chain survives the pause
+    if (down & KEY_START) { enterPause(); return; }
     // B steps the chain back one gem, held for 20 frames it clears it; Y clears at once
     static int bHeld;
     if (held & KEY_B) { if (++bHeld == 20) boardClearChain(&G); } else bHeld = 0;
@@ -423,17 +466,22 @@ int main(void)
                     G.state = ST_PLAY;
                 }
                 break;
-            case ST_PAUSE:
-                if (down & KEY_START) G.state = ST_PLAY;
-                else if (down & KEY_SELECT) {
-                    if (G.mode == MODE_DAILY) { setMsg("NO RESTART IN DAILY", 60); break; }   // the one attempt cannot be retried
-                    // a restart costs a bookmark in Classic and is refused on the last one
-                    if (G.mode == MODE_CLASSIC && G.lives <= 1) { setMsg("LAST BOOKMARK", 60); break; }
-                    if (G.mode == MODE_CLASSIC) G.lives--;
-                    G.score = G.shelfStartScore; startShelf(); G.state = ST_PLAY;
+            case ST_PAUSE: {
+                int ids[PAUSE_ROWS_MAX], n = pauseRows(&G, ids);
+                if (G.pauseArm > 0) G.pauseArm--;
+                if (down & (KEY_START | KEY_B)) { G.state = ST_PLAY; break; }
+                if (G.pauseRow >= n) G.pauseRow = n - 1;
+                bool activate = (down & KEY_A) != 0;
+                if (down & KEY_UP)   { G.pauseRow = (G.pauseRow + n - 1) % n; G.pauseArm = 0; }
+                if (down & KEY_DOWN) { G.pauseRow = (G.pauseRow + 1) % n; G.pauseArm = 0; }
+                int tapRow = (down & KEY_TOUCH) ? gfxPauseRowAt(t.px, t.py, n) : -1;
+                if (tapRow >= 0) {      // a tap on the highlighted row activates it; on another row it only highlights it
+                    if (tapRow == G.pauseRow) activate = true;
+                    else { G.pauseRow = tapRow; G.pauseArm = 0; }
                 }
-                else if (down & KEY_B) quitToTitle();
+                if (activate) pauseActivate(ids[G.pauseRow]);
                 break;
+            }
         }
         if (G.msgTimer > 0 && --G.msgTimer == 0) {
             G.msg[0] = 0;
