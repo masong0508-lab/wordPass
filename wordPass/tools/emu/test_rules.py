@@ -6,7 +6,8 @@ exit status is the number of failures. Screenshots land in outdir (default /tmp)
 import sys, os, traceback
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from wp import Emu, COLS, ROWS, EMPTY, TILE, BURN, HOLE, SECRET, ST_TITLE, ST_PLAY, ST_PASSED, ST_FAIL, ST_PAUSE, ST_OPTIONS, \
-    FAIL_FIRE, FAIL_SCORCH, FAIL_WORDS, Keys, keymask, load_words, POKE_SPELL, ST_STATS, ST_GUIDE, POKE_GUIDENAV
+    FAIL_FIRE, FAIL_SCORCH, FAIL_WORDS, Keys, keymask, load_words, POKE_SPELL, ST_STATS, ST_GUIDE, POKE_GUIDENAV, \
+    LANG_CODES, LANG_NAMES, REPO
 
 rom = sys.argv[1]; out = sys.argv[2] if len(sys.argv) > 2 else '/tmp'
 e = Emu(rom)
@@ -14,8 +15,8 @@ e.run(10)                                 # a first frame, so the DBG mirror is 
 e.set_tutor(1)                             # no guided first shelf: its prompts own the message line (the tutorial scenario switches it on)
 fails = 0
 C = 3   # the column every board scenario pokes
-def opt_row_y(i): return 34 + 15 * i + 7        # a touch inside row i of the options list (fixed x: it never mirrors)
-OPT_BACK_Y = 166
+def opt_row_y(i): return 32 + 13 * i + 6        # a touch inside row i of the options list (fixed x: it never mirrors; nine rows 13 px apart from y 32)
+OPT_BACK_Y = 161
 
 ONLY = [k for k in os.environ.get('WP_ONLY', '').split('|') if k]   # development filter: run scenarios whose name has one of these
 
@@ -800,7 +801,7 @@ def _():
     assert e.state()['state'] == ST_TITLE, 'the pause menu did not quit to the title'
     e.tap(86, 170); e.run(10)
     g = e.state(); assert g['state'] == ST_OPTIONS and g['optRow'] == 0, f'options: {g["state"]} {g["optRow"]}'
-    e.tap(130, opt_row_y(3)); e.run(10)           # rows are 15 px apart from y 34: HAND is row 3 (the right half steps forward)
+    e.tap(130, opt_row_y(3)); e.run(10)           # rows are 13 px apart from y 32: HAND is row 3 (the right half steps forward)
     g = e.state(); assert g['optRow'] == 3, f'optRow {g["optRow"]}'
     assert g['settings']['hand'] == 1, 'HAND did not flip'
     e.set_hand(True)
@@ -1515,7 +1516,7 @@ def check_options(tag):
     e.tap(86, OPT_BACK_Y); e.run(30)
     assert e.state()['state'] == ST_TITLE, f'{tag}: BACK did not leave'
 
-OPT_ROWS_N = 8
+OPT_ROWS_N = 9
 
 @scenario('options (right hand): a fixed list, left/right halves, chevron flash, the sample board and help inside the plaque')
 def _():
@@ -1951,6 +1952,208 @@ def _():
     assert len(set(xs)) >= 3, f'the prompt should glide through several positions: {xs}'
     assert settled[1] <= 242, f'the settled prompt touches the border: {settled}'
     e.shot(f'{out}/rules_prompt_slide.png')
+
+# ---- ten languages (item 21) ----------------------------------------------------------------------
+import struct as _struct
+LANG_DIR = os.path.join(REPO, 'data', 'lang')
+def read_pools(code):
+    """data/lang/<code>/pools.bin (WPP1): (theme names, words[theme][length] as lists)."""
+    b = open(os.path.join(LANG_DIR, code, 'pools.bin'), 'rb').read()
+    assert b[:4] == b'WPP1'; n = _struct.unpack_from('<I', b, 4)[0]
+    names, counts = [], []
+    for t in range(n):
+        o = 8 + 20 * t; names.append(b[o:o + 8].split(b'\0')[0].decode()); counts.append(_struct.unpack_from('<6H', b, o + 8))
+    pos = 8 + 20 * n; words = []
+    for t in range(n):
+        per = {}
+        for k in range(6):
+            ln = 4 + k; per[ln] = [b[pos + i * ln:pos + (i + 1) * ln].decode() for i in range(counts[t][k])]; pos += counts[t][k] * ln
+        words.append(per)
+    return names, words
+def read_letters(code):
+    """data/lang/<code>/letters.bin (WPL1): (tile weights, letter values, qu flag, vowel mask)."""
+    b = open(os.path.join(LANG_DIR, code, 'letters.bin'), 'rb').read()
+    assert b[:4] == b'WPL1' and len(b) == 68
+    return list(b[16:42]), list(b[42:68]), b[4] & 1, _struct.unpack_from('<I', b, 12)[0]
+LANG_WORDS = {'es': 'casa', 'fr': 'chat', 'de': 'haus', 'it': 'casa', 'pt': 'gato', 'nl': 'huis', 'sv': 'hus', 'pl': 'dom', 'da': 'hus', 'fi': 'talo'}
+LOAD_MS = {}
+
+def lang_title(idx):
+    """To the title in language idx (loading happens on the title)."""
+    to_title(); e.set_language(idx)
+    g = e.state(); assert g['state'] == ST_TITLE and g['language'] == idx, f'language {idx}: state {g["state"]} language {g["language"]}'
+    LOAD_MS[LANG_CODES[idx]] = g['loadMs']
+    assert g['loadMs'] < 2000, f'{LANG_CODES[idx]} took {g["loadMs"]} ms to load (limit 2000)'
+
+@scenario('languages: the NitroFS filesystem holds all ten, every language loads in under two seconds, the title shows its name')
+def _():
+    set_hand(False); to_title()
+    g = e.state(); assert g['langMask'] & 0x7FF == 0x7FF, f'languages on the ROM filesystem: {g["langMask"] & 0x7FF:011b}'
+    e.set_language(0); e.shot(f'{out}/rules_lang_title_en.png')
+    for i in range(1, 11):
+        lang_title(i); e.run(40)
+        assert e.fps() == 120, f'{LANG_CODES[i]}: title fps'
+        e.shot(f'{out}/rules_lang_title_{LANG_CODES[i]}.png')
+        px = e.pixels()      # the tag is lit inside its box (x 16..108, y 7..24)
+        lit = sum(1 for y in range(199, 216) for x in range(18, 106) if sum(px[x, y]) > 250)
+        assert lit > 30, f'{LANG_CODES[i]}: the language tag looks empty ({lit} lit px)'
+    print('   load ms:', ' '.join(f'{c}={LOAD_MS[c]}' for c in LANG_CODES[1:]))
+    lang_title(0); assert e.state()['language'] == 0
+    e.set_language(99); assert e.state()['language'] == 0, 'an unknown language must read as English'
+
+def lang_shelf(idx, tag='right'):
+    """Start a Classic shelf in language idx and check the pass and the tiles."""
+    code = LANG_CODES[idx]
+    lang_title(idx); e.start_classic(); e.set_heat(0); e.set_burn(0, 99)
+    g = e.state(); assert g['state'] == ST_PLAY and g['language'] == idx
+    names, words = read_pools(code); weights, values, qu, vowels = read_letters(code)
+    assert g['pass'] in words[g['passTheme']][g['passLen']], f'{code}: pass {g["pass"]!r} is not in theme {names[g["passTheme"]]} at length {g["passLen"]}'
+    tiles = {g['cell'][c][r][0] for c in range(COLS) for r in range(ROWS)}
+    bad = [chr(97 + l) for l in tiles if weights[l] == 0]
+    assert not bad, f'{code}: tiles use letters the language has no tile for: {bad}'
+    return g, names
+
+@scenario('languages: switch by poke, start a shelf, the pass is in that language\'s pool and the tiles use its letters (all ten)')
+def _():
+    set_hand(False)
+    for i in range(1, 11):
+        g, names = lang_shelf(i)
+        # the bag keeps dealing its letters: refill the whole board a few times through words, then look again
+        weights = read_letters(LANG_CODES[i])[0]
+        e.run(30); assert e.fps() == 120, f'{LANG_CODES[i]}: play fps'
+        # peek and results card later; here the plaque and HUD
+        e.shot(f'{out}/rules_lang_shelf_{LANG_CODES[i]}.png')
+    lang_title(0)
+
+@scenario('languages: a known word spelled through the real touch path scores and enters the ledger (all ten)')
+def _():
+    set_hand(False)
+    for i in range(1, 11):
+        code = LANG_CODES[i]; word = LANG_WORDS[code]
+        lang_shelf(i); e.set_heat(0); e.set_burn(0, 99); e.set_turn(0)
+        path = spell_cells(word, c=C, r0=1)
+        sc = e.state()['score']
+        e.chain(path); g = e.state()
+        assert g['chainLen'] == len(word) and g['chainScore'] > 0, f'{code}: {word} did not chain / has no value: {g["chainLen"]} {g["chainScore"]}'
+        want = g['chainScore']
+        e.tap(*e.center(*path[-1]), settle=40)                 # tap the tail gem: the submit
+        g = e.state()
+        assert g['lastWord'] == word and g['score'] == sc + want and g['ledgerN'] == 1, f'{code}: {word}: lastWord {g["lastWord"]!r} score {g["score"]} (+{g["score"] - sc}, wanted +{want}) ledger {g["ledgerN"]}'
+        # a made-up word is refused and costs nothing
+        bad = word[0] + 'zq' + word[-1] if code in ('es', 'fr', 'de', 'it', 'pt') else word[0] + 'zx' + word[-1]
+        path = spell_cells(bad, c=C + 1 if C < 6 else C - 1, r0=1); sc = e.state()['score']; e.chain(path); e.press('A', settle=20)
+        g = e.state(); assert g['score'] == sc and g['lastWord'] == word, f'{code}: {bad} should not score'
+    lang_title(0)
+
+@scenario('languages: the score of a word uses the language\'s own letter values (Spanish Z and Polish W against English)')
+def _():
+    set_hand(False)
+    lang_shelf(1); e.set_turn(0); e.set_heat(0); e.set_burn(0, 99)
+    weights, values, qu, vowels = read_letters('es')
+    path = spell_cells('casa', c=C, r0=0); e.chain(path)
+    got = e.state()['chainScore']
+    want = Emu.word_score([ord(ch) - 97 for ch in 'casa'])
+    # chainScore = letter values (Spanish table) x 1 x 10 for a 4-letter word
+    es_val = sum(values[ord(ch) - 97] for ch in 'casa') * 10
+    assert got == es_val, f'es casa preview {got}, the Spanish table says {es_val} (English would say {want})'
+    e.emu.input.touch_release(); e.run(5)
+    lang_title(0)
+
+@scenario('languages: the options row cycles through every language (right half forward, left back), SPELLING reads ENGLISH ONLY, BACK keeps it')
+def _():
+    set_hand(False); to_title(); e.set_language(0); open_options()
+    for _ in range(8): e.press('DOWN', settle=3)
+    assert e.state()['optRow'] == 8, f'optRow {e.state()["optRow"]}'
+    seq = []
+    for i in range(1, 11):
+        e.tap(130, opt_row_y(8), settle=10)
+        n = 0
+        while e.state()['language'] != i and n < 400: e.run(5); n += 5      # the load blocks for a moment
+        g = e.state(); assert g['language'] == i and g['state'] == ST_OPTIONS, f'row tap {i}: language {g["language"]} state {g["state"]}'
+        e.run(30); e.shot(f'{out}/rules_lang_options_{LANG_CODES[i]}.png')
+        px = e.pixels()
+        assert e.fps() == 120, f'{LANG_CODES[i]}: options fps'
+        # nothing of the value text reaches the row's chevrons: the row is label | < value > inside x 12..160
+        row_y = 192 + 32 + 13 * 8
+        over = [(x, y) for y in range(row_y, row_y + 13) for x in range(162, 170) if sum(px[x, y]) > 250]
+        assert not over, f'{LANG_CODES[i]}: the LANGUAGE row reaches past the list: {over[:3]}'
+        # SPELLING in another language: a note without chevrons, and a tap changes nothing
+        e.tap(130, opt_row_y(7), settle=10)
+        assert e.state()['spelling'] == 0, 'SPELLING must be ignored outside English'
+        if i in (1, 6): e.shot(f'{out}/rules_lang_spelling_{LANG_CODES[i]}.png')
+        assert e.state()['optRow'] == 7                         # a tap lights its row
+        e.press('DOWN', settle=3); assert e.state()['optRow'] == 8
+    e.tap(130, opt_row_y(8), settle=10)                                     # past Finnish: back to English
+    n = 0
+    while e.state()['language'] != 0 and n < 400: e.run(5); n += 5
+    assert e.state()['language'] == 0, 'the cycle should wrap to English'
+    e.tap(40, opt_row_y(8), settle=10)                                      # the left half steps back: Finnish
+    n = 0
+    while e.state()['language'] != 10 and n < 400: e.run(5); n += 5
+    assert e.state()['language'] == 10, f'left of ENGLISH should be SUOMI, got {e.state()["language"]}'
+    e.tap(130, opt_row_y(8), settle=10); n = 0
+    while e.state()['language'] != 0 and n < 400: e.run(5); n += 5
+    e.tap(130, opt_row_y(7), settle=10); assert e.state()['spelling'] == 1, 'SPELLING works again in English'
+    e.tap(40, opt_row_y(7), settle=10); assert e.state()['spelling'] == 0
+    e.tap(86, OPT_BACK_Y); e.run(30)
+    assert e.state()['state'] == ST_TITLE
+
+@scenario('languages: the title tag cycles the language, LIBRARY COMMON works per language, English comes back whole')
+def _():
+    set_hand(False); to_title(); e.set_language(0)
+    e.tap(40, 15, settle=10); n = 0
+    while e.state()['language'] != 1 and n < 400: e.run(5); n += 5
+    assert e.state()['language'] == 1 and e.state()['state'] == ST_TITLE, 'tapping the tag should load the next language'
+    e.tap(150, 15, settle=10); assert e.state()['state'] == ST_GUIDE, 'the GUIDE button beside the tag must still open the guide'
+    e.press('B', settle=20)
+    e.tap(40, 15, settle=10); n = 0
+    while e.state()['language'] != 2 and n < 400: e.run(5); n += 5
+    assert e.state()['language'] == 2
+    # a shelf in French, then English again: the same words and the same letter tables as before
+    lang_shelf(2)
+    g = e.state(); assert g['library'] == 0
+    lang_title(0)
+    start = calm()
+    e.set_heat(0); e.set_burn(0, 99)
+    p = spell_cells('bed'); pv, gain, g = spell(p)
+    assert gain == pv == Emu.word_score('bed') and g['lastWord'] == 'bed', f'English after the languages: {pv} {gain}'
+
+@scenario('languages: a shelf of each language, both hands, a nine-letter pass and long theme names stay inside the plaque and HUD')
+def _():
+    for left in (False, True):
+        set_hand(left)
+        for i in (2, 7, 8, 1):                         # RELIURE, BOKBAND, KSIAZKI: seven-letter theme names; ESPANOL
+            lang_shelf(i); e.set_heat(0); e.set_burn(0, 99)
+            e.set_pass(9, 0b101010101); e.set_score(999999); e.set_turn(150); e.run(20)
+            tag = 'left' if left else 'right'
+            e.shot(f'{out}/rules_lang_worst_{LANG_CODES[i]}_{tag}.png'); px = e.pixels()
+            bad = lit_outside_panel(px); assert not bad, f'{LANG_CODES[i]} {tag}: panel text reaches the margin: {bad[:3]}'
+            top = [(x, y) for y in range(0, 192) for x in list(range(0, 8)) + list(range(249, 256)) if sum(px[x, y]) > 250]
+            assert not top, f'{LANG_CODES[i]} {tag}: top screen text reaches the border: {top[:3]}'
+            assert e.fps() == 120, f'{LANG_CODES[i]} {tag}: fps'
+    set_hand(False); lang_title(0)
+
+@scenario('languages: the results card in every language (a perfect pass), screenshots, fps, then English again')
+def _():
+    set_hand(False)
+    for i in range(1, 11):
+        code = LANG_CODES[i]
+        lang_shelf(i); e.set_lives(3); e.set_turn(0)
+        path = spell_cells(LANG_WORDS[code], c=C, r0=2); e.chain(path); e.tap(*e.center(*path[-1]), settle=40)   # one word, so BEST WORD shows it
+        assert e.state()['lastWord'] == LANG_WORDS[code]
+        g = e.state()
+        for k in range(1, g['passLen'] + 1):
+            e.set_heat(0); e.set_turn(0); e.set_burn(0, 99)
+            g = e.state()
+            for c, r in e.burn_cells(g): e.set_cell(c, r, TILE, 'e')
+            c, r = e.secret_cells(g)[k]; e.peel(c, r)
+        g = e.state(); assert g['state'] == ST_PASSED, f'{code}: shelf not cleared: {g["state"]}'
+        e.run(120); e.shot(f'{out}/rules_lang_results_{code}.png')
+        assert e.fps() == 120, f'{code}: results fps'
+        px = e.pixels()
+        top = [(x, y) for y in range(192, 384) for x in list(range(0, 4)) + list(range(252, 256)) if sum(px[x, y]) > 360]
+        assert not top, f'{code}: the results card reaches the screen edge: {top[:3]}'
+    to_title(); lang_title(0)
 
 print('RULES OK' if not fails else f'RULES FAILED: {fails}')
 sys.exit(fails)

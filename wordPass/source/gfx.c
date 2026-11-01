@@ -762,18 +762,22 @@ bool gfxInTitleLedger(int x, int y)  { return x >= BX(12) && x < BX(160) && y >=
 // the GUIDE button sits in the free corner above the logo band (it ends at BX 162, y 6..24); its touch zone is a little roomier
 #define GUIDE_BTN_X 112
 #define GUIDE_BTN_W 50
+// the language tag is the GUIDE button's twin in the other top corner (BX 16..108)
+#define LANG_BTN_X 16
+#define LANG_BTN_W 92
+bool gfxInTitleLanguage(int x, int y) { return x >= BX(LANG_BTN_X - 4) && x < BX(LANG_BTN_X + LANG_BTN_W) && y >= 3 && y < 28; }
 bool gfxInTitleGuide(int x, int y)   { return x >= BX(GUIDE_BTN_X - 4) && x < BX(GUIDE_BTN_X + GUIDE_BTN_W + 4) && y >= 3 && y < 28; }
 
 // Options list rows on the touch screen. The list sits at a fixed x (never BX): flipping HAND must
 // not move it under the stylus. Each row has a left half (previous value) and a right half (next).
-#define OPT_Y0 34
-#define OPT_DY 15                       // eight rows end at y 154; BACK sits at 158..175 and the footer at 180, clear of the frame at 190
+#define OPT_Y0 32
+#define OPT_DY 13                       // nine rows end at y 149; BACK sits at 153..169 and the footer at 176, clear of the frame at 190
 static int nudgeDir, nudgeTimer;
 void gfxOptionNudge(int dir) { nudgeDir = dir; nudgeTimer = 6; }
 int gfxOptionRowAt(int x, int y)
 {
     if (x < 12 || x >= 160) return -1;
-    if (y >= 155 && y < 179) return OPT_ROWS * 2;      // BACK
+    if (y >= 150 && y < 173) return OPT_ROWS * 2;      // BACK
     int row = (y - OPT_Y0) / OPT_DY;
     if (y < OPT_Y0 || row < 0 || row >= OPT_ROWS) return -1;
     return row * 2 + (x >= 86);
@@ -1245,7 +1249,7 @@ static inline bool menuState(int st) { return st == ST_TITLE || st == ST_OPTIONS
 
 static void drawTipCard(int which);
 
-static const char *const OPT_NAMES[OPT_ROWS] = { "THEME", "FRAME", "ACCENT", "HAND", "FIRE", "MUSIC", "LIBRARY", "SPELLING" };
+static const char *const OPT_NAMES[OPT_ROWS] = { "THEME", "FRAME", "ACCENT", "HAND", "FIRE", "MUSIC", "LIBRARY", "SPELLING", "LANGUAGE" };
 static const char *const LIB_NAMES[LIB_COUNT] = { "FULL", "COMMON" };
 static const char *const SPELL_NAMES[SPELL_COUNT] = { "BOTH", "AMERICAN", "BRITISH" };
 static const char *const THEME_NAMES[THEME_COUNT] = { "JEWEL", "INK", "CANDY", "EMBER", "CLEAR" };
@@ -1291,12 +1295,14 @@ static void drawOptionsHelp(void)
 {
     static const char *const OPT_HELP[OPT_ROWS] = {
         "THEME CHANGES THE GEMS", "FRAME COLOURS THE LIBRARY", "ACCENT: AUTO FOLLOWS THE SHELF", "HAND MIRRORS THE BOARD",
-        "FIRE SETS HOW FAST THE SHELF BURNS", "MUSIC ON OR OFF", "COMMON REJECTS OBSCURE WORDS", "SPELLING: COLOR, COLOUR OR BOTH"
+        "FIRE SETS HOW FAST THE SHELF BURNS", "MUSIC ON OR OFF", "COMMON REJECTS OBSCURE WORDS", "SPELLING: COLOR, COLOUR OR BOTH", "LANGUAGE: WORDS AND PASS WORDS"
     };
     char h[40];
     const char *t = OPT_HELP[G.optRow];
     if (G.optRow == 2 && S.accent) { strcpy(h, "ACCENT: "); strcat(h, ACCENT_NAMES[S.accent]); t = h; }
+    if (G.optRow == 7 && langCur() != LANG_EN) t = "SPELLING: ENGLISH ONLY";
     drawTextCenter(128, 132, t, INK, 1);
+    if (G.optRow == 8) drawTextCenter(128, 141, "ACCENTS DROPPED, MENUS STAY ENGLISH", ACCENT, 1);
     if (G.optRow == 0 && S.theme == THEME_CLEAR) drawTextCenter(128, 141, "CLEAR: COLOUR-BLIND SAFE", ACCENT, 1);
 }
 
@@ -1629,7 +1635,7 @@ static void gdBoard(int t)
     gRipple(cxk[2], cyk[2], t - 37);
     // the word on the line below, and once it is cashed in what it paid
     {
-        int ink = letterValue('i' - 'a') + letterValue('n' - 'a') + letterValue('k' - 'a');
+        int ink = letterValueEn('i' - 'a') + letterValueEn('n' - 'a') + letterValueEn('k' - 'a');
         char sc[12]; sc[0] = '+'; fmtInt(sc + 1, boardWordPoints(ink, 3, false, 0, false) * ease16(t - 40, 6) / 16);
         int ww = n * 12 - 2, sw = textWidth(sc, 2), total = t >= 40 ? 3 * 12 - 2 + 14 + sw : ww;
         int wx = SCREEN_W / 2 - total / 2;
@@ -1646,7 +1652,7 @@ static void gdScoring(int t)
     static const u8 cc[3] = { 0, 1, 2 }, rr[3] = { 0, 0, 1 }, tl[3] = { 12, 18, 24 };
     const int ox = 84, oy = 44;
     int sum = 0, vals[3];
-    for (int i = 0; i < 3; i++) { vals[i] = letterValue(L[i]); sum += vals[i]; }
+    for (int i = 0; i < 3; i++) { vals[i] = letterValueEn(L[i]); sum += vals[i]; }
     int len = 4, mult = boardLenMult(len), total = boardWordPoints(sum, len, false, 0, false);
     int n = t >= tl[2] ? 3 : t >= tl[1] ? 2 : t >= tl[0] ? 1 : 0;
     for (int i = 1; i < n; i++) gRope(HX(ox, cc[i - 1]), HY(oy, cc[i - 1], rr[i - 1]), HX(ox, cc[i]), HY(oy, cc[i], rr[i]), false, 10);
@@ -1746,11 +1752,11 @@ static void gdPass(int t)
     int tp = t - ph * 21, shelf = SHELVES[ph];
     int theme = (shelf - 1) % (poolThemeCount() > 0 ? poolThemeCount() : 1), len = boardPassLenFor(shelf);
     char word[12];
-    poolWord(theme, len, 0, word);
+    poolWordEn(theme, len, 0, word);
     if (!word[0]) { strcpy(word, "password"); word[len] = 0; }
     int found = tp < 3 ? 0 : (tp - 3) / 2 + 1; if (found > len) found = len;
     rectOutline(24, 34, 208, 70, GOLD_DK); rectOutline(25, 35, 206, 68, GOLD);
-    char s[40]; strcpy(s, "PASS - "); strcat(s, poolName(theme));
+    char s[40]; strcpy(s, "PASS - "); strcat(s, poolNameEn(theme));
     int le = ease16(tp, 4), lx = SCREEN_W / 2 - textWidth(s, 1) / 2 + (16 - le);      // the plaque's name slides in from the right
     drawTextBox(lx, 42, s, lerp15(BLACK, DIM_TEXT, le), 1, 28, 228);
     int gap = len >= 9 ? 1 : 4, bw = PLAQUE_W, x0 = ((SCREEN_W - (len * bw + (len - 1) * gap)) / 2) & ~1, y0 = 58;
@@ -2271,6 +2277,13 @@ static void drawTitle(const Game *g)
         rectOutline(BX(GUIDE_BTN_X), 7, GUIDE_BTN_W, 17, cue ? lerp15(GOLD_DK, WHITE, pp) : GOLD_DK);
         drawTextCenter(BX(GUIDE_BTN_X + GUIDE_BTN_W / 2), 12, "? GUIDE", cue ? lerp15(ACCENT, WHITE, pp / 2) : INK, 1);
     }
+    {   // the language tag: tap for the next language (the name in gold once it is not English)
+        bool en = langCur() == LANG_EN;
+        fillRect(BX(LANG_BTN_X), 7, LANG_BTN_W, 17, BLACK);
+        rectOutline(BX(LANG_BTN_X), 7, LANG_BTN_W, 17, en ? GOLD_DK : GOLD);
+        drawTextCenter(BX(LANG_BTN_X + (LANG_BTN_W - 10) / 2), 12, langName(langCur()), en ? INK : GOLD_LT, 1);
+        drawChar(BX(LANG_BTN_X + LANG_BTN_W - 11), 12, '>', ACCENT, 1);
+    }
     fillRect(BX(16), 76, 140, 56, BLACK);
     rectOutline(BX(16), 76, 140, 56, GOLD);
     drawTextCenter(BX(86), 84, "CRACK THE PASS", ACCENT, 1);
@@ -2324,7 +2337,8 @@ static const char *optValue(int row)
         case 4: return FIRE_NAMES[S.fire];
         case 5: return S.music ? "ON" : "OFF";
         case 6: return LIB_NAMES[S.library];
-        default: return SPELL_NAMES[S.spelling];
+        case 7: return langCur() == LANG_EN ? SPELL_NAMES[S.spelling] : "ENGLISH ONLY";
+        default: return langName(langCur());
     }
 }
 
@@ -2348,15 +2362,15 @@ static void drawOptions(const Game *g)
         const char *val = optValue(i);
         u16 lc = on ? ((nudgeTimer > 0 && nudgeDir < 0) ? WHITE : ACCENT) : DIM_TEXT;
         u16 rc = on ? ((nudgeTimer > 0 && nudgeDir > 0) ? WHITE : ACCENT) : DIM_TEXT;
-        drawChar(76, y + 3, '<', lc, 1);
-        drawChar(149, y + 3, '>', rc, 1);
-        drawText(112 - textWidth(val, 1) / 2 + 3, y + 3, val, on ? WHITE : INK, 1);     // centred between the chevrons
+        bool fixed = i == 7 && langCur() != LANG_EN;       // SPELLING in another language is a note, not a choice: no chevrons
+        if (!fixed) { drawChar(76, y + 3, '<', lc, 1); drawChar(149, y + 3, '>', rc, 1); }
+        drawText(112 - textWidth(val, 1) / 2 + 3, y + 3, val, fixed ? DIM_TEXT : on ? WHITE : INK, 1);     // centred between the chevrons
     }
-    rectOutline(54, 158, 64, 18, DIM);
-    drawTextCenter(86, 164, "BACK", INK, 1);
-    if (!settingsPersistent()) drawTextCenter(86, 180, "NOT SAVED: NO CARD", DIM_TEXT, 1);
-    else if (settingsSaveFailed()) drawTextCenter(86, 180, "SAVE FAILED", FIRE2, 1);
-    else drawTextCenter(86, 180, "SAVED TO CARD", DIM_TEXT, 1);
+    rectOutline(54, 153, 64, 17, DIM);
+    drawTextCenter(86, 158, "BACK", INK, 1);
+    if (!settingsPersistent()) drawTextCenter(86, 176, "NOT SAVED: NO CARD", DIM_TEXT, 1);
+    else if (settingsSaveFailed()) drawTextCenter(86, 176, "SAVE FAILED", FIRE2, 1);
+    else drawTextCenter(86, 176, "SAVED TO CARD", DIM_TEXT, 1);
 }
 
 // THE LEDGER: lifetime stats from the saved records, on the touch screen like the options
@@ -2689,6 +2703,35 @@ static void stepTally(const Game *g)
                 spawn(P_STAR, BX(CARD_CX + (i - 6) * 10), 22 + 111, (i - 6) * 3, -(rand() % 10) - 6, 18 + (i & 3) * 3, GOLD_LT);
         }
     }
+}
+
+// The LOADING screen: both displays drawn whole and flipped at once, because the load that follows blocks for
+// a while (a language's three files come off the ROM filesystem). The next gfxFrame redraws the top screen.
+void gfxLoading(const char *name)
+{
+    const int savedX0 = boardX0;
+    boardX0 = 0;
+    for (int pass = 0; pass < 2; pass++) {
+        cur = pass ? vramSub : vramBack;
+        clipY0 = 0; clipY1 = SCREEN_H;
+        fillRect(0, 0, SCREEN_W, SCREEN_H, BLACK);
+        rectOutline(8, 8, 240, 176, GOLD_DK);
+        rectOutline(9, 9, 238, 174, GOLD);
+        drawTextCenter(128, 70, "LOADING", GOLD_LT, 2);
+        drawTextCenter(128, 94, name, INK, 1);
+        for (int i = 0; i < 5; i++) drawGemSized(128 - 62 + i * 26, 118, 24, 22, &THEMES[S.theme][i], false);
+    }
+    boardX0 = savedX0;
+    dimOn = false;
+    swiWaitForVBlank();
+    setBrightness(3, 0);
+    bgSetScroll(bgMain, 0, 0);
+    bgSetMapBase(bgMain, backBank ? 8 : 0);
+    bgUpdate();
+    { u16 *t = vramFront; vramFront = vramBack; vramBack = t; backBank ^= 1; }
+    if (REG_BLDCNT) { REG_DISPCNT &= ~(DISPLAY_WIN0_ON | DISPLAY_WIN1_ON); REG_BLDCNT = 0; }
+    lastTopKind = -1;                 // the title's top screen is relaid in full afterwards
+    bright = 0;
 }
 
 void gfxInit(void)

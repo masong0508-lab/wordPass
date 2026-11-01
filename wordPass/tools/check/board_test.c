@@ -917,6 +917,142 @@ int main(int argc, char **argv)
         CHECK("boardHintChain: a common word on touching cells on 30 first shelves", hok && found >= 25);
     }
 
+    // ---- languages (item 21): the runtime half. langload.c reads data/lang/<code>/ the way the ROM reads nitro:/lang/<code>/
+    {
+        // English stays byte for byte what it was: a hash of 2000 bag draws and of 60 whole first boards, taken from the
+        // build before the language work (same seeds, same dictionary)
+        {
+            boardSeed(12345); boardBagRotation(0); boardBagReset();
+            u32 h = 2166136261u;
+            for (int i = 0; i < 2000; i++) h = (h ^ (u32)boardRandomLetter()) * 16777619u;
+            CHECK("English letter bag is byte-identical to before languages (2000 draws)", h == 3620680221u);
+            h = 2166136261u;
+            for (int sh = 1; sh <= 60; sh++) {
+                memset(&g, 0, sizeof(g)); g.shelf = sh; g.mode = MODE_CLASSIC; srand(sh); boardNewShelf(&g);
+                for (int c = 0; c < COLS; c++) for (int r = 0; r < ROWS; r++) { h = (h ^ g.cell[c][r].letter) * 16777619u; h = (h ^ g.back[c][r]) * 16777619u; }
+                for (int i = 0; i < g.passLen; i++) h = (h ^ (u8)g.pass[i]) * 16777619u;
+            }
+            CHECK("English first boards and passes on shelves 1..60 are byte-identical to before", h == 2177031000u);
+        }
+        CHECK("English is the active language and its tables are the old ones", langCur() == LANG_EN && letterValue(16) == 10 && letterValue(0) == 1 && langWeight(4) == 12 && langQuTile() && langIsVowel(20) && !langIsVowel(24));
+        CHECK("nothing is loadable before langInit (no filesystem): English stays", !langAvailable(LANG_ES) && !langLoad(LANG_ES) && langCur() == LANG_EN && boardWordOk("book", 4));
+        langInit();
+        bool allAvail = langAvailable(LANG_EN);
+        for (int i = 1; i < LANG_COUNT; i++) allAvail = allAvail && langAvailable(i);
+        CHECK("all ten languages are found on the filesystem", allAvail && !langAvailable(LANG_COUNT) && !langAvailable(-1));
+
+        static const char *const KNOWN[LANG_COUNT] = { "",
+            "casa perro mesa libro escuela ciudad mariposa", "maison chat table livre ecole ville papillon", "haus hund tisch buch schule stadt schmetterling",
+            "casa cane tavolo libro scuola farfalla finestra", "casa gato mesa livro escola cidade borboleta", "huis hond tafel boek school vlinder raam",
+            "hus hund bord bok skola arbeta fonster", "dom pies stol szkola miasto motyl okno", "hus hund bord bog skole sommerfugl vindue", "talo koira kissa kirja koulu perhonen ikkuna" };
+        static const char *const UNKNOWN[LANG_COUNT] = { "", "xqzt casaz perroo", "xqzt maisonz chatz", "xqzt hausz hundo", "xqzt casaz canez", "xqzt casaz gatoo",
+            "xqzt huisz hondo", "xqzt husz hundo", "xqzt domz piesz", "xqzt husz hundo", "xqzt talox koirax" };
+        static const char *const NAME0[LANG_COUNT] = { "BINDERY", "LIBROS", "RELIURE", "BUCHER", "LIBRI", "LIVROS", "BOEKEN", "BOKBAND", "KSIAZKI", "BOGER", "KIRJAT" };
+        char list[256];
+        for (int li = 1; li < LANG_COUNT; li++) {
+            char nm[96];
+            snprintf(nm, sizeof(nm), "language %s", langCode(li));
+            bool loaded = langLoad(li);
+            CHECK(strcat(strcpy(list, nm), " loads and becomes the active language"), loaded && langCur() == li);
+            if (!loaded) continue;
+            // tables: weights sum to 100, values 1..10 on tiles, rare letters are tiles, a vowel tile exists, the Qu flag follows the data
+            const LangTables *T = langTables();
+            int sum = 0, tiles = 0, vowelTiles = 0; bool vals = true;
+            for (int l = 0; l < 26; l++) {
+                sum += T->weight[l];
+                if (T->weight[l]) { tiles++; if (T->value[l] < 1 || T->value[l] > 10 || letterValue(l) != T->value[l]) vals = false; if (langIsVowel(l)) vowelTiles++; }
+            }
+            bool rareOk = true;
+            for (int k = 0; k < 4; k++) if (langRare(k) != 255 && !T->weight[langRare(k)]) rareOk = false;
+            CHECK(strcat(strcpy(list, nm), " letter tables: weights sum 100, values 1..10, a vowel tile, rare letters have tiles"), sum == 100 && vals && vowelTiles >= 3 && rareOk && tiles >= 20);
+            CHECK(strcat(strcpy(list, nm), " Qu flag matches whether the language has a Q tile"), langQuTile() == (T->weight['q' - 'a'] > 0) && langQuTile() == (li <= LANG_PT));
+            // words: known accepted, junk rejected, LIBRARY works through the tier bit
+            bool known = true, junk = true;
+            strcpy(list, KNOWN[li]);
+            for (char *tk = strtok(list, " "); tk; tk = strtok(NULL, " ")) if (!boardWordOk(tk, (int)strlen(tk))) { known = false; printf("   %s: %s not accepted\n", langCode(li), tk); }
+            strcpy(list, UNKNOWN[li]);
+            for (char *tk = strtok(list, " "); tk; tk = strtok(NULL, " ")) if (boardWordOk(tk, (int)strlen(tk))) { junk = false; printf("   %s: %s accepted\n", langCode(li), tk); }
+            CHECK(strcat(strcpy(list, nm), " accepts known words and rejects non-words"), known && junk);
+            S.library = LIB_COMMON;
+            int commonSeen = 0, rareSeen = 0, rareRejected = 0;
+            for (int len = POOL_MIN_LEN; len <= POOL_MAX_LEN; len++)
+                for (int i = 0; i < poolCount(8, len) && i < 400; i++) {
+                    char pw[12]; poolWord(8, len, i, pw);
+                    int t = boardWordTier(pw, len);
+                    if (t == 1) commonSeen += boardWordOk(pw, len) ? 1 : 0;
+                    if (t == 2) { rareSeen++; if (!boardWordOk(pw, len)) rareRejected++; }
+                }
+            S.library = LIB_FULL;
+            CHECK(strcat(strcpy(list, nm), " LIBRARY COMMON keeps common words and rejects rare ones through the tier bit"), commonSeen > 0 && rareRejected == rareSeen);
+            // pools: 40 themes, a name of 2..7 letters, every pool word in the dictionary and a-z, in the tile letters
+            bool pools = poolThemeCount() == 40 && strcmp(poolName(0), NAME0[li]) == 0, az = true, inDict = true, tileOnly = true;
+            for (int t = 0; t < poolThemeCount(); t++) {
+                int nl = (int)strlen(poolName(t));
+                if (nl < 2 || nl > 7) pools = false;
+                for (int len = POOL_MIN_LEN; len <= POOL_MAX_LEN; len++)
+                    for (int i = 0; i < poolCount(t, len); i++) {
+                        char pw[12]; poolWord(t, len, i, pw);
+                        for (int k = 0; k < len; k++) { if (pw[k] < 'a' || pw[k] > 'z') az = false; else if (!T->weight[pw[k] - 'a']) tileOnly = false; }
+                        if (dictLookup(pw, len) == 0) inDict = false;
+                    }
+            }
+            CHECK(strcat(strcpy(list, nm), " pools: 40 themes with names, every pass word a-z, a tile letter set, in the dictionary"), pools && az && inDict && tileOnly);
+            CHECK(strcat(strcpy(list, nm), " the English theme names are still reachable for the guide"), strcmp(poolNameEn(0), "BINDERY") == 0 && strcmp(poolNameEn(39), "LEXICON") == 0);
+            // the bag deals every tile letter of the language over a long run and nothing else; a cycle is 98..100 letters
+            boardSeed(777); boardBagRotation(0); boardBagReset();
+            int seen[26] = {0};
+            for (int i = 0; i < 6000; i++) seen[boardRandomLetter()]++;
+            bool every = true, only = true;
+            for (int l = 0; l < 26; l++) { if (T->weight[l] && !seen[l]) every = false; if (!T->weight[l] && seen[l]) only = false; }
+            bool vowelShare = true;
+            { int v = 0; for (int l = 0; l < 26; l++) if (langIsVowel(l)) v += seen[l]; vowelShare = v > 6000 * 25 / 100 && v < 6000 * 60 / 100; }
+            CHECK(strcat(strcpy(list, nm), " bag deals every tile letter and no other; the vowel share is sane"), every && only && vowelShare);
+            // whole shelves: the pass is from the language's pool and in its dictionary, the tiles use its letters, the vowel floor holds
+            bool shelvesOk = true;
+            for (int sh = 1; sh <= 40; sh++) {
+                memset(&g, 0, sizeof(g)); g.shelf = sh; g.mode = MODE_CLASSIC; srand(sh * 7); boardNewShelf(&g);
+                bool inPool = false;
+                for (int i = 0; i < poolCount(g.passTheme, g.passLen); i++) { char pw[12]; poolWord(g.passTheme, g.passLen, i, pw); if (!strcmp(pw, g.pass)) inPool = true; }
+                if (!inPool || dictLookup(g.pass, g.passLen) == 0) shelvesOk = false;
+                for (int c = 0; c < COLS; c++) for (int r = 0; r < ROWS; r++) if (!T->weight[g.cell[c][r].letter]) shelvesOk = false;
+            }
+            CHECK(strcat(strcpy(list, nm), " shelves 1..40: pass in the language's pool and dictionary, tiles from its alphabet"), shelvesOk);
+            // SPELLING is English only: BRITISH changes nothing here
+            S.spelling = SPELL_UK;
+            bool spellIgnored = boardWordOk(KNOWN[li], (int)(strchr(KNOWN[li], ' ') - KNOWN[li])) && boardWordSpelling("color", 5) == 0;
+            S.spelling = SPELL_BOTH;
+            CHECK(strcat(strcpy(list, nm), " ignores the SPELLING setting"), spellIgnored);
+            // a chain through the real rules: spell the first known word, it scores with the language's letter values
+            {
+                char sw[24]; size_t wl = strchr(KNOWN[li], ' ') - KNOWN[li]; memcpy(sw, KNOWN[li], wl); sw[wl] = 0;
+                boardOf('e');
+                for (int l = 0; l < 26; l++) if (T->weight[l]) { boardOf((char)('a' + l)); break; }
+                int want = 0;
+                for (size_t i = 0; i < wl; i++) { set(0, (int)i, CELL_TILE, sw[i]); want += letterValue(sw[i] - 'a'); }
+                for (size_t i = 0; i < wl; i++) boardTryAddToChain(&g, 0, (int)i);
+                char cw[WORD_BUF]; boardChainWord(&g, cw);
+                int gain = boardSubmit(&g);
+                CHECK(strcat(strcpy(list, nm), " a spelled word scores with the language's letter values"), strcmp(cw, sw) == 0 && gain == boardWordPoints(want, (int)wl, false, 0, false) && strcmp(g.ledger[0], sw) == 0);
+            }
+        }
+        // back to English: the bag, the boards and the tables are exactly the old ones again; the buffers were freed
+        CHECK("switching back to English restores it byte for byte", langLoad(LANG_EN) && langCur() == LANG_EN && letterValue(23) == 8 && boardWordOk("book", 4) && !boardWordOk("casaz", 5) && strcmp(poolName(0), "BINDERY") == 0);
+        {
+            boardSeed(12345); boardBagRotation(0); boardBagReset();
+            u32 h = 2166136261u;
+            for (int i = 0; i < 2000; i++) h = (h ^ (u32)boardRandomLetter()) * 16777619u;
+            CHECK("after ten language loads the English bag is still byte-identical", h == 3620680221u);
+        }
+        // letters.bin validation: junk is refused and English stays active
+        {
+            LangTables t; u8 bad[LANG_LETTERS_BYTES]; memset(bad, 0, sizeof(bad));
+            CHECK("a letters image without the magic is refused", !langParseLetters(bad, sizeof(bad), &t) && !langParseLetters(NULL, 0, &t));
+            memcpy(bad, "WPL1", 4);
+            CHECK("a letters image with no tiles or a short one is refused", !langParseLetters(bad, sizeof(bad), &t) && !langParseLetters(bad, 10, &t));
+            CHECK("langApply with a bad letters buffer leaves English active", !langApply(LANG_ES, dict_bin, pools_bin, bad, sizeof(bad)) && langCur() == LANG_EN);
+        }
+    }
+
     // ---- note table
     u16 hz[128];
     musicBuildNotes(hz);

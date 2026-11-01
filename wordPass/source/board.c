@@ -37,42 +37,34 @@ u32 boardRand(void)
 
 void boardSeed(u32 seed) { brng = seed ? seed : 0x9E3779B9u; }
 
-// Bookworm-style letter weights (Q stands for Qu); they sum to 102
-static const u8 LETTER_WEIGHT[26] = {
-    /*a*/9,/*b*/2,/*c*/3,/*d*/4,/*e*/12,/*f*/2,/*g*/3,/*h*/3,/*i*/9,/*j*/1,
-    /*k*/1,/*l*/4,/*m*/3,/*n*/6,/*o*/8,/*p*/2,/*q*/1,/*r*/6,/*s*/5,/*t*/6,
-    /*u*/4,/*v*/2,/*w*/2,/*x*/1,/*y*/2,/*z*/1
-};
-
-int letterValue(int l)
-{
-    static const u8 v[26] = {1,3,3,2,1,4,2,4,1,8,5,1,3,1,1,3,10,1,1,1,1,4,4,8,4,10};
-    return v[l];
-}
-
-static bool isVowel(int l) { return l == 0 || l == 4 || l == 8 || l == 14 || l == 20; }
-
-// ---- letter bag: 100 letters per cycle drawn without replacement, so a shelf's letter mix
-// tracks the weights instead of drifting. J, Q, X and Z share two slots per cycle in
-// rotation (rareRot picks the pair), so a bag never holds more than two rare letters.
+// ---- letter bag: a cycle of letters drawn without replacement, so a shelf's letter mix tracks the weights
+// instead of drifting. The four rare letters of the language (English: J, Q, X, Z) share two slots per cycle
+// in rotation (rareRot picks the pair), so a bag never holds more than two rare letters. The weights, values,
+// vowels, Qu flag and rare letters are the active language's (lang.c); English is the Bookworm-style table
+// (weights sum 102, so its bag is 100 letters; the other languages' are 98 to 100).
 #define BAG_N 100
 static u8 bag[BAG_N];
+static int bagN = BAG_N;
 static int bagPos = BAG_N;
 static int rareRot;
 
-static int rareIndex(int l) { return l == 9 ? 0 : l == 16 ? 1 : l == 23 ? 2 : l == 25 ? 3 : -1; }
+static int rareIndex(int l)
+{
+    for (int k = 0; k < 4; k++) if (langRare(k) == l) return k;
+    return -1;
+}
 
 static void refillBag(void)
 {
     int n = 0;
     for (int l = 0; l < 26; l++) {
-        int w = LETTER_WEIGHT[l], k = rareIndex(l);
+        int w = langWeight(l), k = rareIndex(l);
         if (k >= 0) w = (k == (rareRot & 3) || k == ((rareRot + 1) & 3)) ? 1 : 0;
         for (int i = 0; i < w && n < BAG_N; i++) bag[n++] = (u8)l;
     }
-    while (n < BAG_N) bag[n++] = 4;             // cannot happen with the weights above (102 - 4 + 2)
+    bagN = n;
     rareRot = (rareRot + 2) & 3;
-    for (int i = BAG_N - 1; i > 0; i--) {       // Fisher-Yates
+    for (int i = bagN - 1; i > 0; i--) {       // Fisher-Yates
         int j = (int)(boardRand() % (u32)(i + 1));
         u8 t = bag[i]; bag[i] = bag[j]; bag[j] = t;
     }
@@ -81,11 +73,12 @@ static void refillBag(void)
 
 static int randomLetter(void)
 {
-    if (bagPos >= BAG_N) refillBag();
+    if (bagPos >= bagN) refillBag();
     return bag[bagPos++];
 }
 
-void boardBagReset(void) { bagPos = BAG_N; }
+void boardBagReset(void) { bagN = BAG_N; bagPos = BAG_N; }
+void boardBagRotation(int r) { rareRot = r & 3; }
 int  boardRandomLetter(void) { return randomLetter(); }
 
 int boardNeighbors(int c, int r, int outC[6], int outR[6])
@@ -446,7 +439,7 @@ void boardChainWord(const Game *g, char *out)
     for (int i = 0; i < g->chainLen; i++) {
         int l = g->cell[g->chainC[i]][g->chainR[i]].letter;
         out[n++] = 'a' + l;
-        if (l == 'q' - 'a') out[n++] = 'u';
+        if (l == 'q' - 'a' && langQuTile()) out[n++] = 'u';
     }
     out[n] = 0;
 }
@@ -496,7 +489,7 @@ static int applyGravity(Game *g)
                 g->cell[c][rr].yv = 0;
                 g->cell[c][rr].squash = 0;
                 g->cell[c][rr].flash = 0;
-                if (isVowel(g->cell[c][rr].letter)) vowel = true;
+                if (langIsVowel(g->cell[c][rr].letter)) vowel = true;
                 if (rr > lowest) lowest = rr;
                 k++; spawned++; colSpawned++;
             }
@@ -506,8 +499,8 @@ static int applyGravity(Game *g)
         // a vowel in its lowest new gem, swapped with the next vowel in the bag so the
         // cycle's letter mix is unchanged (an empty bag tail leaves the column as it fell)
         if (colSpawned >= 3 && !vowel && lowest >= 0) {
-            for (int i = bagPos; i < BAG_N; i++) {
-                if (!isVowel(bag[i])) continue;
+            for (int i = bagPos; i < bagN; i++) {
+                if (!langIsVowel(bag[i])) continue;
                 u8 t = bag[i]; bag[i] = g->cell[c][lowest].letter; g->cell[c][lowest].letter = t;
                 break;
             }
@@ -654,7 +647,7 @@ static int wordAccepted(const char *w, int len)
     int t = dictLookup(w, len);
     if (!t) return 0;
     if (S.library == LIB_COMMON && t == 2) return 0;
-    if (S.spelling != SPELL_BOTH) {
+    if (S.spelling != SPELL_BOTH && langCur() == LANG_EN) {      // SPELLING is for English only
         int v = dictSpelling(w, len);
         if (v && v != S.spelling) return 0;
     }
@@ -665,7 +658,7 @@ static int wordAccepted(const char *w, int len)
 // other way round, 0 = the spelling is not the reason.
 int boardWordSpelling(const char *w, int len)
 {
-    if (S.spelling == SPELL_BOTH || !dictLookup(w, len)) return 0;
+    if (S.spelling == SPELL_BOTH || langCur() != LANG_EN || !dictLookup(w, len)) return 0;
     int v = dictSpelling(w, len);
     return (v && v != S.spelling) ? v : 0;
 }
@@ -874,7 +867,7 @@ static bool dfsWords(const Game *g, int c, int r, char *w, int n, bool used[COLS
 {
     int l = g->cell[c][r].letter;
     w[n++] = 'a' + l;
-    if (l == 'q' - 'a') w[n++] = 'u';
+    if (l == 'q' - 'a' && langQuTile()) w[n++] = 'u';
     if (n >= 3 && wordAccepted(w, n)) return true;
     if (n >= 5) return false;
     used[c][r] = true;
@@ -892,7 +885,7 @@ static bool hintDfs(const Game *g, int c, int r, char *w, int n, int maxLen, int
 {
     int l = g->cell[c][r].letter;
     w[n++] = 'a' + l;
-    if (l == 'q' - 'a') w[n++] = 'u';
+    if (l == 'q' - 'a' && langQuTile()) w[n++] = 'u';
     pc[depth] = (u8)c; pr[depth] = (u8)r;
     depth++;
     if (depth >= 3 && depth == maxLen && dictLookup(w, n) == 1 && wordAccepted(w, n)) return true;

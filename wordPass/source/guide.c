@@ -106,7 +106,7 @@ static int valueLines(char lines[][GUIDE_LINE_BUF], int max)
     lines[0][0] = 0;
     for (int v = 1; v <= 10; v++) {
         char grp[28]; int k = 0;
-        for (int l = 0; l < 26; l++) if (letterValue(l) == v) grp[k++] = (char)('A' + l);
+        for (int l = 0; l < 26; l++) if (letterValueEn(l) == v) grp[k++] = (char)('A' + l);
         grp[k] = 0;
         if (!k) continue;
         char tok[48]; tok[0] = 0;
@@ -128,7 +128,7 @@ static int valueLines(char lines[][GUIDE_LINE_BUF], int max)
 static int pageBoard(Page p)
 {
     int n = 0;
-    int ink = letterValue('i' - 'a') + letterValue('n' - 'a') + letterValue('k' - 'a');   // the example word: I, N, K
+    int ink = letterValueEn('i' - 'a') + letterValueEn('n' - 'a') + letterValueEn('k' - 'a');   // the example word: I, N, K
     L(GM_ACCENT "DRAG" GM_BASE " THE STYLUS ACROSS TOUCHING GEMS.");
     L("EACH ONE JOINS THE CHAIN, UP TO " GM_GOLD "%d" GM_BASE ".", MAX_CHAIN);
     L(GM_ACCENT "THREE" GM_BASE " OR MORE LETTERS SPELL A WORD.");
@@ -161,7 +161,7 @@ static int pageScoring(Page p)
     L("EACH " GM_ACCENT "DIAMOND" GM_BASE " ADDS HALF AGAIN (" GM_GOLD "%d" GM_BASE " MAX).", DIAMOND_CAP);
     L("THE SAME WORD TWICE A SHELF: " GM_FIRE "HALF" GM_BASE ".");
     GAP();
-    int qu = letterValue('q' - 'a'), iv = letterValue('i' - 'a'), zv = letterValue('z' - 'a');
+    int qu = letterValueEn('q' - 'a'), iv = letterValueEn('i' - 'a'), zv = letterValueEn('z' - 'a');
     L(GM_ACCENT "QU" GM_BASE " IS ONE GEM BUT TWO LETTERS LONG.");
     L("QU+I+Z: " GM_GOLD "%d+%d+%d" GM_BASE " = " GM_GOLD "%d" GM_BASE ", X" GM_GOLD "%d" GM_BASE " X" GM_GOLD "%d" GM_BASE " = " GM_GOLD "+%d" GM_BASE,
       qu, iv, zv, qu + iv + zv, boardLenMult(4), SCORE_UNIT, boardWordPoints(qu + iv + zv, 4, false, 0, false));
@@ -196,7 +196,7 @@ static int pagePass(Page p)
     L("EVERY SHELF HIDES A " GM_ACCENT "PASSWORD" GM_BASE " BEHIND");
     L("THE GEMS: ITS LETTERS LIE IN A TRAIL.");
     L("THE TOP SCREEN SHOWS SLOTS AND THEME:");
-    L(GM_GOLD "%s" GM_BASE ", " GM_GOLD "%s" GM_BASE ", " GM_GOLD "%s" GM_BASE "... " GM_GOLD "%d" GM_BASE " IN ALL.", poolName(0), poolName(8), poolName(17), poolThemeCount());
+    L(GM_GOLD "%s" GM_BASE ", " GM_GOLD "%s" GM_BASE ", " GM_GOLD "%s" GM_BASE "... " GM_GOLD "%d" GM_BASE " IN ALL.", poolNameEn(0), poolNameEn(8), poolNameEn(17), poolThemeCount());
     GAP();
     runList(runs, 1, 20, boardPassLenFor, "", NULL, "  ", NULL, ":");
     L(GM_ACCENT "LETTERS" GM_BASE " IN THE PASS, BY SHELF:");

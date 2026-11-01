@@ -50,7 +50,8 @@ typedef struct {
     s32 msgTimer;                           // 620: frames left of the message line (-1 = sticky)
     s32 guidePage, guideFrom;               // 624, 628: the in-game guide's page and the state it returns to
     s32 cue, cueAge, hintLen;               // 632, 636, 640: the guided shelf's in-world cue (CUE_*), its age in frames, the ghost drag's length
-} DebugView;                                // total 644
+    s32 language, loadMs, langMask;         // 644, 648, 652: S.language (LANG_*), ms the last language load took, bit i = language i is on the ROM filesystem, bit 31 = the raw card path is in use
+} DebugView;                                // total 656
 
 #define PIN(field, off) _Static_assert(offsetof(DebugView, field) == (off), "DebugView." #field " moved: update tools/emu/wp.py OFF")
 PIN(magic, 0); PIN(frame, 4); PIN(state, 8); PIN(mode, 12); PIN(shelf, 16); PIN(score, 20);
@@ -73,8 +74,9 @@ PIN(peek, 540); PIN(armed, 544); PIN(armC, 548); PIN(armR, 552);
 PIN(calloutLife, 568); PIN(pressBits, 572); PIN(callout, 576);
 PIN(shownScore, 596); PIN(pauseRow, 600); PIN(pauseArm, 604);
 PIN(tutorStep, 608); PIN(tutorDone, 612); PIN(tipIndex, 616); PIN(msgTimer, 620);
+PIN(language, 644); PIN(loadMs, 648); PIN(langMask, 652);
 PIN(guidePage, 624); PIN(guideFrom, 628); PIN(cue, 632); PIN(cueAge, 636); PIN(hintLen, 640);
-_Static_assert(sizeof(DebugView) == 644, "DebugView size changed: update tools/emu/wp.py");
+_Static_assert(sizeof(DebugView) == 656, "DebugView size changed: update tools/emu/wp.py");
 
 volatile DebugView DBG;
 
@@ -93,7 +95,8 @@ enum {
     POKE_DAILY,     // S.dailyPlayedDate = a0, S.dailyLastDate = a1, S.dailyStreak = a2 (records only; nothing is saved)
     POKE_PASS,      // the pass becomes a0 letters (1..9: "abcdefghi" truncated) with the letters in bitmask a1 found (layout checks; the back layer is left alone)
     POKE_TUTOR,     // S.tutorDone = a0; the guide restarts (a0 = 0) or is switched off (a0 = 1) for the next Classic shelf 1
-    POKE_GUIDENAV   // the guide's prev/next buttons count as unused again (they pulse until first used)
+    POKE_GUIDENAV,  // the guide's prev/next buttons count as unused again (they pulse until first used)
+    POKE_LANG       // a0 = LANG_*: load that language (title or options only; one that is not on the ROM filesystem is English)
 };
 
 static void applyPoke(Game *g)
@@ -127,6 +130,7 @@ static void applyPoke(Game *g)
             }
             break;
         case POKE_GUIDENAV: gfxGuideNavReset(); break;
+        case POKE_LANG:     gameSetLanguage(a0); break;
         case POKE_TUTOR:    S.tutorDone = a0 ? 1 : 0; g->tutorStep = a0 ? TUTOR_DONE : TUTOR_DRAG; break;
     }
     DBG.cmd = 0;
@@ -175,5 +179,7 @@ void debugSync(Game *g)
     DBG.calloutLife = gfxCalloutLife(); DBG.pressBits = gfxPressBits();
     strncpy((char *)DBG.callout, gfxCalloutText(), 19); DBG.callout[19] = 0;
     DBG.statWords = S.wordsSpelled; DBG.statGames = S.gamesPlayed; DBG.streak = S.dailyStreak;
+    DBG.language = langCur(); DBG.loadMs = langLoadMs();
+    { int m = 0; for (int i = 0; i < LANG_COUNT; i++) if (langAvailable(i)) m |= 1 << i; if (langFastPath()) m |= (int)0x80000000u; DBG.langMask = m; }
     DBG.dailyPlayed = S.dailyPlayedDate; DBG.dailyLast = S.dailyLastDate; DBG.dailyLastScore = S.dailyLastScore;
 }

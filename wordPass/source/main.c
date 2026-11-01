@@ -184,6 +184,28 @@ static void recordScore(void)
     if (best) { G.newBest = 1; settingsSave(); }
 }
 
+// Switch language (title and options only: a shelf in play keeps the letters it was dealt). An unavailable language
+// is English. The title's board is rebuilt so the pass and the debug mirror belong to the new language.
+void gameSetLanguage(int idx)
+{
+    if (G.state != ST_TITLE && G.state != ST_OPTIONS) return;
+    if (idx < 0 || idx >= LANG_COUNT || !langAvailable(idx)) idx = LANG_EN;
+    if (!langLoad(idx)) idx = LANG_EN;
+    S.language = (u8)langCur();
+    boardNewShelf(&G);
+}
+
+// the next available language in a direction, wrapping (English is always there)
+static void cycleLanguage(int dir)
+{
+    int idx = langCur();
+    for (int i = 0; i < LANG_COUNT; i++) {
+        idx = (idx + LANG_COUNT + dir) % LANG_COUNT;
+        if (langAvailable(idx)) break;
+    }
+    gameSetLanguage(idx);
+}
+
 static void cycleOption(int row, int dir)
 {
     switch (row) {
@@ -194,7 +216,8 @@ static void cycleOption(int row, int dir)
         case 4: S.fire = (S.fire + FIRE_COUNT + dir) % FIRE_COUNT; break;
         case 5: S.music = !S.music; break;
         case 6: S.library = (S.library + LIB_COUNT + dir) % LIB_COUNT; break;
-        case 7: S.spelling = (S.spelling + SPELL_COUNT + dir) % SPELL_COUNT; break;
+        case 7: if (langCur() == LANG_EN) S.spelling = (S.spelling + SPELL_COUNT + dir) % SPELL_COUNT; break;   // ENGLISH ONLY: other languages ignore it
+        case 8: cycleLanguage(dir); break;
     }
     gfxApplySettings();
 }
@@ -515,10 +538,16 @@ int main(void)
     gfxInit();
     dictInit();
     poolsInit();
+    langInit();                       // NitroFS; without it only English is available
     musicInit();
     memset(&G, 0, sizeof(G));
     G.state = ST_TITLE;
     G.shelf = 1;
+    if (S.language != LANG_EN) {     // the saved language, if its files are on this ROM; English otherwise
+        int want = S.language;
+        S.language = LANG_EN;
+        if (langAvailable(want) && langLoad(want)) S.language = (u8)langCur();
+    }
     boardNewShelf(&G);
     refreshClock();
     unsigned seedCounter = 0;
@@ -540,6 +569,7 @@ int main(void)
                     else if (gfxInTitleClassic(t.px, t.py)) newGame(MODE_CLASSIC);
                     else if (gfxInTitleLedger(t.px, t.py)) G.state = ST_STATS;
                     else if (gfxInTitleGuide(t.px, t.py)) openGuide(ST_TITLE);
+                    else if (gfxInTitleLanguage(t.px, t.py)) { cycleLanguage(1); settingsSave(); }
                 } else if (down & (KEY_START | KEY_A)) { srand(seedCounter); newGame(MODE_CLASSIC); }
                 else if (down & (KEY_LEFT | KEY_L)) gfxTipFlip(-1);
                 else if (down & (KEY_RIGHT | KEY_R)) gfxTipFlip(1);

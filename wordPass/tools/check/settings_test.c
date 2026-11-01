@@ -106,6 +106,19 @@ int main(void)
     n = settingsEncode(buf); settingsDefaults(); settingsDecode(buf, n);
     CHECK("a streak over 9999 clamps to 9999", S.dailyStreak == 9999 && S.longestLen == 5);
 
+    // ---- the language setting (item 21): saved and restored, an unknown one reads as English, old files are English
+    settingsDefaults();
+    CHECK("the default language is English", S.language == LANG_EN);
+    S.language = LANG_FI;
+    n = settingsEncode(buf); settingsDefaults(); ok = settingsDecode(buf, n);
+    CHECK("a saved language round-trips", ok && S.language == LANG_FI);
+    S.language = 200;
+    n = settingsEncode(buf); settingsDefaults(); ok = settingsDecode(buf, n);
+    CHECK("an unknown language in a file with a good CRC falls back to English", ok && S.language == LANG_EN);
+    S.language = LANG_COUNT;
+    n = settingsEncode(buf); settingsDefaults(); ok = settingsDecode(buf, n);
+    CHECK("the first language past the last falls back to English", ok && S.language == LANG_EN);
+
     // ---- WPS1 migration: options at 4..11, records at 12..27, everything newer starts at zero
     unsigned char old[40];
     size_t on = legacyFile(old, 28, 1);

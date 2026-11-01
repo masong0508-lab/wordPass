@@ -40,6 +40,10 @@ void dictInit(void)
     tableInit(&variants, variants_bin, "WPV1");
 }
 
+// Point the validation table at another WPD3 image (a language loaded from the filesystem); the
+// spelling variants stay as dictInit left them (they only apply to English).
+void dictSet(const u8 *p) { tableInit(&dict, p, "WPD3"); }
+
 // 5 bits per letter, big-endian, left aligned in rec bytes, tier bit clear. A letter at bit
 // offset b lands in the 16-bit window starting at byte b / 8 (5 + 7 bits never overflow it).
 static void packWord(const char *w, int len, u8 *out, int rec)

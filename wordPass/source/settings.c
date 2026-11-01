@@ -38,6 +38,7 @@ void settingsDefaults(void)
     S.music = 1;
     S.library = LIB_FULL;
     S.spelling = SPELL_BOTH;
+    S.language = LANG_EN;
 }
 
 // ---- validation
@@ -66,6 +67,7 @@ static void settingsValid(void)
     if (S.library >= LIB_COUNT) S.library = LIB_FULL;
     if (S.spelling >= SPELL_COUNT) S.spelling = SPELL_BOTH;
     if (S.tutorDone > 1) S.tutorDone = 1;
+    if (S.language >= LANG_COUNT) S.language = LANG_EN;     // availability (the files on the ROM) is checked at startup, not here
     memset(S.reserved, 0, sizeof(S.reserved));
     S.bestClassic = clampInt(S.bestClassic, 0, 999999999);
     S.bestClassicShelf = clampInt(S.bestClassicShelf, 0, 9999);

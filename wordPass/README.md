@@ -119,7 +119,8 @@ stylus.
 | Fire | Relaxed, Normal, Fast |
 | Music | On, Off |
 | Library | Full (every dictionary word) or Common (rejects obscure words with TOO OBSCURE) |
-| Spelling | Both (default), American only or British only. A word spelled one way only (color / colour, center / centre, traveled / travelled) is refused in the other setting with AMERICAN SPELLING or BRITISH SPELLING. Words spelled the same everywhere, and the -ize / -ise forms, always pass. |
+| Spelling | Both (default), American only or British only. A word spelled one way only (color / colour, center / centre, traveled / travelled) is refused in the other setting with AMERICAN SPELLING or BRITISH SPELLING. Words spelled the same everywhere, and the -ize / -ise forms, always pass. In every language but English the row reads ENGLISH ONLY and does nothing. |
+| Language | English (default), Espanol, Francais, Deutsch, Italiano, Portugues, Nederlands, Svenska, Polski, Dansk, Suomi: see *Languages* below. |
 
 Settings, records, the Daily state and the ledger are saved to `wordPass.cfg`
 on the card when a FAT filesystem is available (flashcarts with DLDI, DSi SD).
@@ -127,6 +128,40 @@ The file is written to a temporary name and renamed over the old one, carries a
 checksum (a damaged file falls back to the defaults) and still reads the older
 28-byte format. Without a card they last for the session and the options screen
 says so; if a write fails it says SAVE FAILED.
+
+### Languages
+
+The LANGUAGE option (the ninth row) and the language tag in the title's top left corner (tap it for the next
+language) switch the whole game to one of ten languages: **Spanish, French, German, Italian, Portuguese,
+Dutch, Swedish, Polish, Danish and Finnish**, besides English. The tiles come from that language's own
+letter frequencies (each language has its own tile weights, letter values, vowels and rare letters, and the
+Qu tile only where the language has one), the dictionary accepts that language's words, and every pass
+word comes from a translated library of the same 40 themes, whose names the plaque and the shelf intro show
+in that language. Library works in every language (Common keeps the 30,000 most frequent forms). The chosen
+language is saved with the other options; one that is not on the ROM falls back to English.
+
+The honest limits:
+
+- **Letters are A to Z.** The board has 26 tile types, so words are normalised by stripping accents (a-acute
+  is A, n-tilde is N, c-cedilla is C, umlauts and the ring lose their marks, o-slash is O, l-stroke is L,
+  sharp s is SS, the ae and oe ligatures are AE and OE) and words that become the same collapse into one. You
+  spell the stripped word. A letter a language hardly uses has no tile (no K or W in Spanish, no Q in Dutch
+  and the Nordic languages), and words that need it are not in the dictionary.
+- **The menus, the guide and the prompts stay English**; only the words, the pass words and the theme names
+  are translated. The guide's examples are English whatever the language.
+- **Daily boards are per language**: the Daily uses the active language's letter bag and pass pool, so a Daily
+  in Spanish is a different board from the English one (and the same for everyone playing Spanish that day).
+  Records (best scores, the streak) are shared across languages.
+- **Spelling is English only** (it is about US and UK spellings); the option reads ENGLISH ONLY elsewhere.
+- **The dictionaries are "every word a player is likely to type", not complete** (see `docs/LANGUAGES-DATA.md`:
+  rare inflections are missing, Finnish has the weakest list, Swedish and Danish the thinnest pass pools).
+- Switching language is only possible on the title and the options screen; a shelf keeps the letters it was dealt.
+
+Loading a language shows a short LOADING screen (about a quarter of a second in the emulator). English is
+compiled into the program and always works; the other ten live in the ROM's filesystem (NitroFS, folder
+`lang/<code>/`) and are read into heap memory when chosen, the previous language's buffers freed first. If the
+filesystem is not there (a loader that strips it) only English is offered. Words and pass words are credited
+in `tools/words/SOURCES.md`.
 
 ### Shelves
 
@@ -421,8 +456,9 @@ lists behind the blocklist).
 (`pools.bin`, the same 40 themes translated) and a tile table (`letters.bin`, weights, values, the Qu flag)
 for Spanish, French, German, Italian, Portuguese, Dutch, Swedish, Polish, Danish and Finnish, 15 MB in
 all, built from open Hunspell dictionaries, wordnets and subtitle frequencies by `tools/lang`. Words are
-normalised to A-Z (diacritics stripped, sharp s to ss). The game does not load them yet: they are meant for
-the ROM filesystem. `docs/LANGUAGES-DATA.md` has the pipeline, the limits (Finnish has the weakest list,
+normalised to A-Z (diacritics stripped, sharp s to ss). The Makefile copies them into `nitrofiles/lang`,
+which becomes the ROM's filesystem (the copy is not committed; `make clean` removes it), and the game reads
+them from there (see *Languages* above). `docs/LANGUAGES-DATA.md` has the pipeline, the limits (Finnish has the weakest list,
 Swedish and Danish the thinnest pools) and the exact file formats; `make check` verifies them.
 
 ### Dictionary
@@ -467,6 +503,8 @@ list (hermitdave, CC-BY-SA 4.0) or in
 source/main.c    state machine, input
 source/board.c   hex grid, chaining, scoring, gravity, fire, peeling
 source/dict.c    packed dictionary lookup
+source/lang.c    the active language's letter tables (weights, values, vowels, Qu, rare letters)
+source/langload.c  reads a language from the ROM filesystem (NitroFS, with a fast raw card path), LOADING
 source/gfx.c     software renderer for both screens
 source/music.c   PSG sequencer and adaptive stems
 source/font.c    5x7 bitmap font

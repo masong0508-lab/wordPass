@@ -6,3 +6,4 @@ build/
 !wordPass.nds
 
 __pycache__/
+nitrofiles/

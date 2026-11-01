@@ -17,3 +17,6 @@ int  soundPlayPSG(DutyCycle cycle, u16 freq, u8 volume, u8 pan) { (void)cycle; (
 int  soundPlayNoise(u16 freq, u8 volume, u8 pan) { (void)freq; (void)volume; (void)pan; return nextSoundId++; }
 void soundSetFreq(int soundId, u16 freq) { (void)soundId; (void)freq; }
 void soundSetVolume(int soundId, u8 volume) { (void)soundId; (void)volume; }
+
+// the LOADING screen (gfx.c) and the title's language switch (main.c)
+void gfxLoading(const char *name) { (void)name; }

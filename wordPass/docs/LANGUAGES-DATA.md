@@ -199,8 +199,10 @@ built-in sizes), a `#sha256 en <dict> <pools> <variants>` line that pins the Eng
 The native names (ESPANOL, FRANCAIS, DEUTSCH, ITALIANO, PORTUGUES, NEDERLANDS, SVENSKA, POLSKI, DANSK,
 SUOMI) are the labels for the options row; at most 10 letters, A-Z only.
 
-What the integration still has to do (not done here): NitroFS in the Makefile (`NITRO := nitrofiles`) with
-`data/lang` copied in; `nitroFSInit` at startup with English as the fallback; a LANGUAGE setting with
-validation; loading into heap buffers with the previous language's freed; the runtime letter tables (weights,
-values, vowel mask, Qu flag, rare rotation) behind `letterValue`, `LETTER_WEIGHT`, `isVowel`, the Qu rule, the
-repeat ledger and the results card; and the debug mirror field with a poke command.
+The integration is done (item 21, runtime): the Makefile copies `data/lang` into `nitrofiles/lang` for the ROM
+filesystem and links `-lfilesystem`; `source/langload.c` reads a language into heap buffers (the previous one freed
+first) behind a LOADING screen, with a fast raw card path where NitroFS in card mode is slow (see TESTING.md);
+`source/lang.c` holds the active language's tile weights, letter values, vowel mask, Qu flag and rare letters behind
+`letterValue`, the bag, the vowel floor and the Qu rule; `Settings.language` is saved with validation; the LANGUAGE
+options row and the title tag switch it; the debug mirror carries `language`, `loadMs` and `langMask` and a poke
+loads a language for the tests. The in-game guide stays English.

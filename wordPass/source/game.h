@@ -251,7 +251,8 @@ typedef struct {
     u32 magic;
     u16 version, crc;       // crc16 over bytes 8..end
     u8  theme, frame, accent, hand, fire, music, library, spelling, tutorDone;
-    u8  reserved[3];
+    u8  language;           // LANG_*: 0 English; an unknown one reads as English
+    u8  reserved[2];
     int bestClassic;        // best Classic score
     int bestClassicShelf;   // highest shelf cleared
     int bestDaily;          // best Daily score
@@ -281,7 +282,7 @@ int  settingsNextStreak(int lastDate, int streak, int today);   // the streak af
 int  settingsLiveStreak(int today);               // the streak still alive on `today` (0 once a day was missed)
 void settingsDebugClock(int ymd);                 // test channel: pretend the clock reads ymd (0 = the real clock)
 
-#define OPT_ROWS 8
+#define OPT_ROWS 9
 void gfxApplySettings(void);          // rebuild caches after a settings change
 int  gfxOptionRowAt(int px, int py);  // -1 none, row * 2 + (the right half of the row) for the rows, OPT_ROWS * 2 = back; the list never mirrors
 void gfxOptionNudge(int dir);         // the chevron on that side (-1 left, +1 right) of the lit row flashes white for six frames
@@ -289,6 +290,7 @@ void gfxTipFlip(int dir);             // the title's tip card: -1 previous, +1 n
 int  gfxTipIndex(void);               // debug: which tip card shows
 bool gfxInTitleOptions(int px, int py);
 bool gfxInTitleLedger(int px, int py);   // the BEST line under the title buttons: opens THE LEDGER
+bool gfxInTitleLanguage(int px, int py); // the language tag in the title's other top corner: next language
 bool gfxInTitleGuide(int px, int py);    // the GUIDE button in the title's top corner
 enum { GH_NONE = -1, GH_BACK = 0, GH_PREV, GH_NEXT, GH_DOT };
 void gfxGuideNavReset(void);             // test channel: the prev/next buttons pulse again
@@ -306,6 +308,7 @@ int  boardDailyMod(int seed);                // DAILYMOD_* for a date
 const char *boardDailyModName(int mod);      // "STANDARD", "EMBER", "DEEP", "LONG"
 const char *boardPassTheme(const Game *g);   // "BINDERY", "INK" ... for the plaque label and the intro
 const char *boardTwistName(int twist);       // "INK SPILL", "DAMP", "BURIED" ("" for none)
+void boardBagRotation(int r);       // which pair of the four rare letters the next cycle deals (tests; boardNewShelf picks it)
 void boardBagReset(void);            // next randomLetter() refills the bag (tests; boardNewShelf does it)
 int  boardRandomLetter(void);        // one draw from the shuffled letter bag (exposed for tools/check)
 void boardDebugFireStep(Game *g);    // test channel: one fire advance plus gravity, no turn
@@ -335,15 +338,19 @@ int  boardLowestFireRow(const Game *g);
 bool boardFireAbove(const Game *g, int c, int r);
 void boardChainWord(const Game *g, char *out);
 bool boardPassComplete(const Game *g);
-int  letterValue(int letter);
+int  letterValue(int letter);        // of the active language
 
 // dict.c
 void dictInit(void);
+void dictSet(const u8 *p);                    // activate another WPD3 image (a loaded language)
 
 // pools.c: themed pass-word library (data/pools.bin)
 void poolsInit(void);
 int  poolThemeCount(void);
 const char *poolName(int theme);                              // "BINDERY"
+void poolWordEn(int theme, int len, int idx, char *out);      // the same, English
+const char *poolNameEn(int theme);                            // the English name, whatever the language (the guide)
+bool poolsSet(const u8 *p);                                   // activate a WPP1 image (NULL = the compiled-in English)
 int  poolCount(int theme, int len);                           // words of that length in the theme
 void poolWord(int theme, int len, int idx, char *out);        // out holds len + 1 bytes
 int  dictLookup(const char *word, int len);   // 0 none, 1 common, 2 rare
@@ -377,6 +384,38 @@ void gfxShake(int frames);
 void gfxInvalidWord(void);
 bool gfxInTitleDaily(int px, int py);
 bool gfxInTitleClassic(int px, int py);
+
+// ---- languages (item 21): lang.c holds the active language's letter tables, langload.c reads a language from the
+// ROM filesystem (NitroFS: nitro:/lang/<code>/{dict,pools,letters}.bin; English is compiled in).
+enum { LANG_EN = 0, LANG_ES, LANG_FR, LANG_DE, LANG_IT, LANG_PT, LANG_NL, LANG_SV, LANG_PL, LANG_DA, LANG_FI, LANG_COUNT };
+#define LANG_LETTERS_BYTES 68
+typedef struct {
+    u8 weight[26];        // tiles of the letter in a bag (0 = the language has no such tile)
+    u8 value[26];         // letter value 1..10
+    u8 rare[4];           // the four rarest letters, which take two bag slots a cycle in rotation (255 = none)
+    u32 vowels;           // bit i = letter i is a vowel (the vowel floor)
+    u8 qu;                // the Q tile is Qu
+} LangTables;
+const char *langCode(int idx);                // "en" "es" ...
+const char *langName(int idx);                // "ENGLISH" "ESPANOL" ...: the label of the options row (A-Z, at most ten letters)
+int  langCur(void);                           // the active language
+const LangTables *langTables(void);
+bool langParseLetters(const u8 *b, size_t n, LangTables *out);
+bool langApply(int idx, const u8 *dict, const u8 *pools, const u8 *letters, size_t lettersBytes);
+void langInitEnglish(void);
+int  letterValueEn(int letter);               // the English value table: the in-game guide always quotes English
+int  langWeight(int letter);
+bool langIsVowel(int letter);
+bool langQuTile(void);
+int  langRare(int k);                         // k = 0..3
+// langload.c
+void langInit(void);                          // mount the filesystem and find out which languages are on it
+bool langAvailable(int idx);
+bool langLoad(int idx);                       // load and activate (free the previous one first); false = could not, English is active
+bool langFastPath(void);                      // reads go straight from the card (see langload.c) rather than through NitroFS
+int  langLoadMs(void);                        // milliseconds the last langLoad took (0 for English)
+void gfxLoading(const char *name);            // gfx.c: the LOADING screen on both displays (one frame, flips)
+void gameSetLanguage(int idx);                // main.c: from the title or the options only; loads, saves, rebuilds the title board
 
 // music.c
 void musicInit(void);

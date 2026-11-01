@@ -33,7 +33,7 @@ DATA     := data
 GRAPHICS :=
 AUDIO    :=
 ICON     :=
-NITRO    :=
+NITRO    := nitrofiles
 
 ARCH := -march=armv5te -mtune=arm946e-s
 
@@ -43,7 +43,7 @@ CXXFLAGS := $(CFLAGS) -fno-rtti -fno-exceptions
 ASFLAGS  := -g $(ARCH)
 LDFLAGS   = -specs=ds_arm9.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
-LIBS := -lfat -lnds9
+LIBS := -lfilesystem -lfat -lnds9
 
 LIBDIRS := $(LIBNDS) $(PORTLIBS)
 
@@ -74,8 +74,15 @@ endif
 
 .PHONY: $(BUILD) clean dict pools variants check
 
+# The ROM filesystem (NitroFS): the ten languages, lang/<code>/{dict,pools,letters}.bin, copied from data/lang so the
+# source of truth stays in data/ (the copy is not committed). English is compiled in and not in it.
+ifneq ($(strip $(NITRO)),)
+export NITRO_FILES := $(CURDIR)/$(NITRO)
+endif
+
 $(BUILD):
 	@mkdir -p $@
+	@if [ -n "$(strip $(NITRO))" ]; then mkdir -p $(NITRO)/lang && cp -ru data/lang/. $(NITRO)/lang/ && rm -f $(NITRO)/lang/manifest.txt; fi
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
 # Regenerate the dictionary from a word list, marking COMMON words as the common tier:
@@ -97,7 +104,7 @@ variants:
 # Native rule tests: board.c, dict.c, pools.c, music.c, guide.c and font.c under gcc with the stubs in tools/check/stub,
 # after settings.c on its own (stub fat.h, a scratch file for the card). The last line is CHECK OK.
 #   make check
-CHECK_SRC := tools/check/board_test.c tools/check/stubs.c source/board.c source/dict.c source/pools.c source/music.c source/guide.c source/font.c
+CHECK_SRC := tools/check/board_test.c tools/check/stubs.c source/board.c source/dict.c source/pools.c source/lang.c source/langload.c source/music.c source/guide.c source/font.c
 LANG_SRC  := tools/check/lang_test.c tools/check/stubs.c source/dict.c source/pools.c
 check:
 	@mkdir -p $(BUILD)
@@ -111,11 +118,11 @@ check:
 
 clean:
 	@echo clean ...
-	@rm -fr $(BUILD) $(TARGET).elf $(TARGET).nds
+	@rm -fr $(BUILD) $(NITRO) $(TARGET).elf $(TARGET).nds
 
 else
 
-$(OUTPUT).nds: $(OUTPUT).elf $(GAME_ICON)
+$(OUTPUT).nds: $(OUTPUT).elf $(GAME_ICON) $(wildcard $(NITRO_FILES)/lang/*/*.bin)
 $(OUTPUT).elf: $(OFILES)
 $(OFILES_SOURCES) : $(HFILES)
 

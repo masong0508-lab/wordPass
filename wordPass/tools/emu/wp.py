@@ -58,8 +58,9 @@ OFF = {
     'shownScore': 596, 'pauseRow': 600, 'pauseArm': 604,
     'tutorStep': 608, 'tutorDone': 612, 'tipIndex': 616, 'msgTimer': 620,
     'guidePage': 624, 'guideFrom': 628, 'cue': 632, 'cueAge': 636, 'hintLen': 640,
+    'language': 644, 'loadMs': 648, 'langMask': 652,
 }
-DBG_SIZE = 644
+DBG_SIZE = 656
 I32_FIELDS = ['state', 'mode', 'shelf', 'score', 'fail', 'turn', 'heat', 'chainLen', 'peels', 'lockdown',
               'bestWordScore', 'dailySeed', 'passLen', 'lastWordTier', 'rareWords', 'library',
               'heatThreshold', 'burnEvery', 'burnTimer', 'optRow', 'pulseEvery', 'lockTier', 'overtime',
@@ -67,14 +68,18 @@ I32_FIELDS = ['state', 'mode', 'shelf', 'score', 'fail', 'turn', 'heat', 'chainL
               'lives', 'passTheme', 'twist', 'spelling', 'practice', 'dailyMod', 'clockOk', 'statWords', 'statGames',
               'streak', 'dailyPlayed', 'dailyLast', 'dailyLastScore', 'peek', 'armed', 'armC', 'armR', 'curC', 'curR', 'curOn',
               'calloutLife', 'pressBits', 'shownScore', 'pauseRow', 'pauseArm',
-              'tutorStep', 'tutorDone', 'tipIndex', 'msgTimer', 'guidePage', 'guideFrom', 'cue', 'cueAge', 'hintLen']
+              'tutorStep', 'tutorDone', 'tipIndex', 'msgTimer', 'guidePage', 'guideFrom', 'cue', 'cueAge', 'hintLen',
+              'language', 'loadMs', 'langMask']
 PASS_THEMES = ['BINDERY', 'INK', 'VERSE', 'TALES', 'ATLAS', 'ARCHIVE', 'LAMP', 'STUDY']
 TWIST_NONE, TWIST_INK, TWIST_DAMP, TWIST_BURIED = range(4)
 VOWELS = {0, 4, 8, 14, 20}; RARE = {9, 16, 23, 25}   # a e i o u; j q x z
 # letter values (board.c letterValue), Q stands for Qu
 LETTER_VALUE = [1,3,3,2,1,4,2,4,1,8,5,1,3,1,1,3,10,1,1,1,1,4,4,8,4,10]
 # poke commands (debug.c applyPoke)
-POKE_CELL, POKE_BACK, POKE_HEAT, POKE_BURN, POKE_FIRESTEP, POKE_TURN, POKE_LIVES, POKE_SCORE, POKE_SPELL, POKE_CLOCK, POKE_DAILY, POKE_PASS, POKE_TUTOR, POKE_GUIDENAV = range(1, 15)
+POKE_CELL, POKE_BACK, POKE_HEAT, POKE_BURN, POKE_FIRESTEP, POKE_TURN, POKE_LIVES, POKE_SCORE, POKE_SPELL, POKE_CLOCK, POKE_DAILY, POKE_PASS, POKE_TUTOR, POKE_GUIDENAV, POKE_LANG = range(1, 16)
+# the ten languages (source/game.h LANG_*; index 0 is English) and the label of each on the options row and the title tag
+LANG_CODES = ['en', 'es', 'fr', 'de', 'it', 'pt', 'nl', 'sv', 'pl', 'da', 'fi']
+LANG_NAMES = ['ENGLISH', 'ESPANOL', 'FRANCAIS', 'DEUTSCH', 'ITALIANO', 'PORTUGUES', 'NEDERLANDS', 'SVENSKA', 'POLSKI', 'DANSK', 'SUOMI']
 
 def symbol(elf, name):
     """Address of a symbol via arm-none-eabi-nm inside the toolchain container."""
@@ -198,6 +203,19 @@ class Emu:
         """The guided first shelf: done=1 switches it off (tests that read the message line want that), done=0 lets the
         next Classic shelf 1 guide again. Takes effect for the game in progress at once."""
         self.poke(POKE_TUTOR, done)
+    def set_language(self, idx, frames=6):
+        """Load language `idx` (0 English, see LANG_CODES). Title or options only. The load blocks the ROM for as long as
+        the three files take to read, so this polls (up to 600 frames) until the poke is consumed, then runs `frames` more.
+        state()['language'] and state()['loadMs'] (milliseconds the ROM measured) describe the result."""
+        a = self.dbg
+        for off, v in ((OFF['a0'], idx), (OFF['a1'], 0), (OFF['a2'], 0), (OFF['a3'], 0), (OFF['cmd'], POKE_LANG)):
+            self.mem.write_long(a + off, v & 0xFFFFFFFF)
+        for _ in range(600):
+            self.run(1)
+            if struct.unpack_from('<I', self.raw(), OFF['cmd'])[0] == 0: break
+        else:
+            raise AssertionError('language poke not consumed')
+        self.run(frames)
     def set_lives(self, n):
         """Bookmarks left in the Classic run (3 at the start; a fail or a pause restart costs one)."""
         self.poke(POKE_LIVES, n)
