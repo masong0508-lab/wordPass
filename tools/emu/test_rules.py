@@ -2130,7 +2130,7 @@ def _():
         for i in range(1, 11):                         # every language (RELIURE, BOKBAND, KSIAZKI are seven-letter theme names)
             lang_shelf(i); e.set_heat(0); e.set_burn(0, 99)
             g = e.state(); tag = 'left' if left else 'right'
-            assert g['msg'].endswith('LETTER PASS') and len(g['msg']) <= 31, f'{LANG_CODES[i]}: shelf intro {g["msg"]!r}'
+            assert 0 < len(g['msg']) <= 39, f'{LANG_CODES[i]}: shelf intro {g["msg"]!r}'
             px = e.pixels()          # the shelf intro line on the top screen: nothing lit in the frame columns or past the plaque
             edge = [(x, y) for y in range(0, 192) for x in list(range(0, 8)) + list(range(249, 256)) if sum(px[x, y]) > 250]
             assert not edge, f'{LANG_CODES[i]} {tag}: intro line reaches the top frame: {edge[:3]}'

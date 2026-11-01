@@ -1044,11 +1044,12 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
         u16 ac = lerp15(ACCENT, WHITE, (frame & 7) * 2);
         rectOutline(x, y, TILE_W, TILE_H, ac);
         rectOutline(x + 2, y + 2, TILE_W - 4, TILE_H - 4, ac);
-        int tw = textWidth("PEEL", 1), ly = y - 9;
+        const char *peelTag = ui(UI_PEELTAG);
+        int tw = textWidth(peelTag, 1), ly = y - 9;
         if (ly < 3) ly = 3;
         int lx = x + TILE_W / 2 - tw / 2;
         fillRect(lx - 1, ly - 1, tw + 2, 9, BLACK);
-        drawText(lx, ly, "PEEL", WHITE, 1);
+        drawText(lx, ly, peelTag, WHITE, 1);
     }
     // chain links: gold rope that turns to the shelf accent once the word is valid
     bool chainValid = chainValidNow;
@@ -1157,15 +1158,15 @@ static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
             hline(x + 2, 50, 3, GOLD);
         }
     }
-    fmtInt(s, g->peels); panelRow(55, "PEELS", s, WHITE);
-    fmtInt(s, g->turn);  panelRow(64, "TURN", s, g->overtime ? FIRE1 : WHITE);
+    fmtInt(s, g->peels); panelRow(55, ui(UI_PEELS), s, WHITE);
+    fmtInt(s, g->turn);  panelRow(64, ui(UI_TURN), s, g->overtime ? FIRE1 : WHITE);
 
     char w[WORD_BUF]; strcpy(w, chainWordNow);
     for (char *p = w; *p; p++) *p -= 32;
     bool valid = chainValidNow, peek = g->peekHeld != 0;
     if (strlen(w) > 12) { memmove(w + 1, w + strlen(w) - 11, 12); w[0] = '.'; }   // the last 11 letters fit the panel
     if (w[0]) drawText(PANEL_X, 74, w, valid ? GOLD_LT : WHITE, 1);
-    else if (!peek) drawText(PANEL_X, 74, S.hand == HAND_LEFT ? "HOLD R: PEEK" : "HOLD L: PEEK", DIM_TEXT, 1);   // the shoulder under the idle hand
+    else if (!peek) { char hp[24]; uiFmt(hp, sizeof hp, UI_P_HOLDPEEK, S.hand == HAND_LEFT ? "R" : "L"); drawText(PANEL_X, 74, hp, DIM_TEXT, 1); }   // the shoulder under the idle hand
     if (g->chainLen >= 3 && !peek) {
         if (valid) {   // what the word is worth, and its length multiplier
             s[0] = '+'; fmtInt(s + 1, chainScoreNow);
@@ -1178,13 +1179,13 @@ static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
     // heat: OVERTIME replaces the label past the shelf's turn budget, and a valid chain previews its cost
     int hw = HEAT_W * g->heat / (g->heatThreshold ? g->heatThreshold : 1);
     if (hw > HEAT_W) hw = HEAT_W;
-    const char *hl = g->overtime ? "OVERTIME" : "HEAT";
+    const char *hl = ui(g->overtime ? UI_P_OVERTIME : UI_P_HEAT);
     drawText(PANEL_X, 94, hl, g->overtime ? ((frame & 16) ? FIRE1 : lerp15(BLACK, FIRE1, 8)) : DIM_TEXT, 1);
     bool preview = valid && !peek;
     if (preview) {
         int cost = boardTurnHeat(g, boardHeatFor((int)strlen(chainWordNow)));
-        char pv[12];
-        if (cost > 0) { pv[0] = '+'; fmtInt(pv + 1, cost); strcat(pv, " HEAT"); } else strcpy(pv, "NO HEAT");
+        char pv[24];
+        if (cost > 0) uiFmt(pv, sizeof pv, UI_P_HEATPLUS, cost); else strcpy(pv, ui(UI_P_NOHEAT));
         if (textWidth(hl, 1) + 5 + textWidth(pv, 1) > 76) { pv[0] = '+'; fmtInt(pv + 1, cost); }   // OVERTIME leaves room for the number only
         drawText(PANEL_X + 76 - textWidth(pv, 1), 94, pv, cost > 0 ? FIRE2 : ACCENT, 1);
     }
@@ -1193,7 +1194,7 @@ static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
         u16 *row = cur + 103 * SCREEN_W + PANEL_X + 1;
         for (int i = 0; i < hw; i++) { row[i] = heatTop[i]; row[SCREEN_W + i] = heatBody[i]; row[2 * SCREEN_W + i] = heatBody[i]; row[3 * SCREEN_W + i] = heatBody[i]; }
     }
-    if (hw > 50 && (frame & 8) && !preview && !g->overtime) drawText(PANEL_X + 30, 94, "!", FIRE2, 1);
+    if (hw > 50 && (frame & 8) && !preview && !g->overtime) drawText(PANEL_X + textWidth(hl, 1) + 6, 94, "!", FIRE2, 1);
 
     // fire countdown: one pip per turn between fire steps, filled for the turns left; the last one blinks NEXT
     if (fireLow >= 0) {
@@ -1201,10 +1202,12 @@ static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
         if (left < 1) left = 1;
         if (n > 6) n = 6;                                   // a poked burnEvery of 99 still fits the panel
         bool next = left == 1 && (frame & 8);
-        drawText(PANEL_X, 111, next ? "NEXT" : "FIRE", next ? FIRE1 : FIRE2, 1);
+        const char *fl = ui(next ? UI_NEXT : UI_FIRE);
+        int pip0 = textWidth(fl, 1) + 4 > 30 ? textWidth(fl, 1) + 4 : 30;       // the pips start right of the label
+        drawText(PANEL_X, 111, fl, next ? FIRE1 : FIRE2, 1);
         for (int i = 0; i < n; i++) {
-            if (i < left) fillRect(PANEL_X + 30 + i * 7, 112, 5, 5, FIRE1);
-            else rectOutline(PANEL_X + 30 + i * 7, 112, 5, 5, DIM_TEXT);
+            if (i < left) fillRect(PANEL_X + pip0 + i * 7, 112, 5, 5, FIRE1);
+            else rectOutline(PANEL_X + pip0 + i * 7, 112, 5, 5, DIM_TEXT);
         }
     }
 
@@ -1219,24 +1222,24 @@ static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
         hline(PANEL_X + 3 + in, SUBMIT_Y + 2 + in, 70 - in * 2, pr ? GOLD_DK : GOLD_LT);
         hline(PANEL_X + 2 + in, SUBMIT_Y + 21 - in, 72 - in * 2, pr ? GOLD_LT : GOLD_DK);
     }
-    drawTextCenter(PANEL_X + 38, SUBMIT_Y + 8 + (pr ? 1 : 0), "SUBMIT", (valid || submitFlash) ? BLACK : INK, 1);
+    drawTextCenter(PANEL_X + 38, SUBMIT_Y + 8 + (pr ? 1 : 0), ui(UI_P_SUBMIT), (valid || submitFlash) ? BLACK : INK, 1);
     if (pressClear > 0) {
         fillRect(PANEL_X, CLEAR_Y, 76, 16, lerp15(BLACK, INK, 3));
         rectOutline(PANEL_X + 2, CLEAR_Y + 2, 72, 12, INK);
     } else rectOutline(PANEL_X, CLEAR_Y, 76, 16, DIM);
-    drawTextCenter(PANEL_X + 38, CLEAR_Y + 4 + (pressClear > 0 ? 1 : 0), "CLEAR", pressClear > 0 ? WHITE : INK, 1);
+    drawTextCenter(PANEL_X + 38, CLEAR_Y + 4 + (pressClear > 0 ? 1 : 0), ui(UI_P_CLEAR), pressClear > 0 ? WHITE : INK, 1);
 
-    if (peek && fireLow >= 0) drawTextCenter(PANEL_X + 38, 166, "RED: SCORCH", FIRE1, 1);
+    if (peek && fireLow >= 0) drawTextCenter(PANEL_X + 38, 166, ui(UI_P_REDSCORCH), FIRE1, 1);
     if (peek) {      // PEEK button: filled while a shoulder is held or the latch is on
         fillRect(PANEL_X, 174, 76, 16, ACCENT);
-        drawTextCenter(PANEL_X + 38, 178, g->peekLatch ? "PEEK ON" : "PEEK", BLACK, 1);
+        drawTextCenter(PANEL_X + 38, 178, ui(g->peekLatch ? UI_P_PEEKON : UI_PEEK), BLACK, 1);
     } else if (pressPeek > 0) {
         fillRect(PANEL_X, 174, 76, 16, lerp15(BLACK, ACCENT, 5));
         rectOutline(PANEL_X + 2, 176, 72, 12, ACCENT);
-        drawTextCenter(PANEL_X + 38, 179, "PEEK", WHITE, 1);
+        drawTextCenter(PANEL_X + 38, 179, ui(UI_PEEK), WHITE, 1);
     } else {
         rectOutline(PANEL_X, 174, 76, 16, ACCENT);
-        drawTextCenter(PANEL_X + 38, 178, "PEEK", INK, 1);
+        drawTextCenter(PANEL_X + 38, 178, ui(UI_PEEK), INK, 1);
     }
 }
 
@@ -1249,13 +1252,13 @@ static inline bool menuState(int st) { return st == ST_TITLE || st == ST_OPTIONS
 
 static void drawTipCard(int which);
 
-static const char *const OPT_NAMES[OPT_ROWS] = { "THEME", "FRAME", "ACCENT", "HAND", "FIRE", "MUSIC", "LIBRARY", "SPELLING", "LANGUAGE" };
-static const char *const LIB_NAMES[LIB_COUNT] = { "FULL", "COMMON" };
-static const char *const SPELL_NAMES[SPELL_COUNT] = { "BOTH", "AMERICAN", "BRITISH" };
-static const char *const THEME_NAMES[THEME_COUNT] = { "JEWEL", "INK", "CANDY", "EMBER", "CLEAR" };
-static const char *const FRAME_NAMES[FRAME_COUNT] = { "GOLD", "SILVER", "ACCENT" };
-static const char *const ACCENT_NAMES[ACCENT_COUNT] = { "AUTO", "TEAL", "MAGENTA", "LIME", "ORANGE", "SKY", "VIOLET", "PINK", "MINT" };
-static const char *const FIRE_NAMES[FIRE_COUNT] = { "RELAXED", "NORMAL", "FAST" };
+static const short OPT_NAMES[OPT_ROWS] = { UI_O_THEME, UI_O_FRAME, UI_O_ACCENT, UI_O_HAND, UI_FIRE, UI_O_MUSIC, UI_O_LIBRARY, UI_O_SPELLING, UI_O_LANGUAGE };
+static const short LIB_NAMES[LIB_COUNT] = { UI_V_FULL, UI_V_COMMON };
+static const short SPELL_NAMES[SPELL_COUNT] = { UI_V_BOTH, UI_V_AMERICAN, UI_V_BRITISH };
+static const short THEME_NAMES[THEME_COUNT] = { UI_V_JEWEL, UI_V_INK, UI_V_CANDY, UI_V_EMBER, UI_V_CLEAR };
+static const short FRAME_NAMES[FRAME_COUNT] = { UI_V_GOLD, UI_V_SILVER, UI_V_ACCENT };
+static const short ACCENT_NAMES[ACCENT_COUNT] = { UI_V_AUTO, UI_V_TEAL, UI_V_MAGENTA, UI_V_LIME, UI_V_ORANGE, UI_V_SKY, UI_V_VIOLET, UI_V_PINK, UI_V_MINT };
+static const short FIRE_NAMES[FIRE_COUNT] = { UI_V_RELAXED, UI_V_NORMAL, UI_V_FAST };
 
 // The options screen's sample board (top screen): one gem of every palette, a diamond, the cell states
 // (a numbered hole, a burning gem, a chained one, an empty cell, a peeked ghost), all drawn by the very helpers
@@ -1293,17 +1296,16 @@ static void drawMiniBoard(void)
 // one line of help for the lit options row (two when CLEAR is picked), each short enough for the plaque
 static void drawOptionsHelp(void)
 {
-    static const char *const OPT_HELP[OPT_ROWS] = {
-        "THEME CHANGES THE GEMS", "FRAME COLOURS THE LIBRARY", "ACCENT: AUTO FOLLOWS THE SHELF", "HAND MIRRORS THE BOARD",
-        "FIRE SETS HOW FAST THE SHELF BURNS", "MUSIC ON OR OFF", "COMMON REJECTS OBSCURE WORDS", "SPELLING: COLOR, COLOUR OR BOTH", "LANGUAGE: WORDS AND PASS WORDS"
+    static const short OPT_HELP[OPT_ROWS] = {
+        UI_H_THEME, UI_H_FRAME, UI_H_ACCENT, UI_H_HAND, UI_H_FIRE, UI_H_MUSIC, UI_H_LIBRARY, UI_H_SPELL, UI_H_LANG
     };
-    char h[40];
-    const char *t = OPT_HELP[G.optRow];
-    if (G.optRow == 2 && S.accent) { strcpy(h, "ACCENT: "); strcat(h, ACCENT_NAMES[S.accent]); t = h; }
-    if (G.optRow == 7 && langCur() != LANG_EN) t = "SPELLING: ENGLISH ONLY";
+    char h[48];
+    const char *t = ui(OPT_HELP[G.optRow]);
+    if (G.optRow == 2 && S.accent) { uiFmt(h, sizeof h, UI_H_ACCENTNAME, ui(ACCENT_NAMES[S.accent])); t = h; }
+    if (G.optRow == 7 && langCur() != LANG_EN) t = ui(UI_H_SPELL_EN);
     drawTextCenter(128, 132, t, INK, 1);
-    if (G.optRow == 8) drawTextCenter(128, 141, "ACCENTS DROPPED, MENUS STAY ENGLISH", ACCENT, 1);
-    if (G.optRow == 0 && S.theme == THEME_CLEAR) drawTextCenter(128, 141, "CLEAR: COLOUR-BLIND SAFE", ACCENT, 1);
+    if (G.optRow == 8) drawTextCenter(128, 141, ui(UI_H_LANGNOTE), ACCENT, 1);
+    if (G.optRow == 0 && S.theme == THEME_CLEAR) drawTextCenter(128, 141, ui(UI_H_CLEAR), ACCENT, 1);
 }
 
 static void drawTopTitle(void)
@@ -1312,24 +1314,24 @@ static void drawTopTitle(void)
     rectOutline(9, 9, 238, 174, GOLD);
     drawLogo(16, 16, 2);
     if (G.state == ST_OPTIONS) {
-        drawTextCenter(128, 44, "MAKE IT YOURS", GOLD_LT, 1);
+        drawTextCenter(128, 44, ui(UI_O_MAKE), GOLD_LT, 1);
         drawMiniBoard();
         drawOptionsHelp();
-        char s[40];
-        if (S.bestClassic) { siprintf(s, "BEST CLASSIC %d  SHELF %d", S.bestClassic, S.bestClassicShelf); drawTextCenter(128, 150, s, DIM_TEXT, 1); }
-        if (S.bestDaily)   { siprintf(s, "BEST DAILY %d ON %d", S.bestDaily, S.bestDailyDate); drawTextCenter(128, 160, s, DIM_TEXT, 1); }
-        drawTextCenter(128, 172, "TAP LEFT OR RIGHT OF A ROW, OR D-PAD", DIM_TEXT, 1);
+        char s[48];
+        if (S.bestClassic) { uiFmt(s, sizeof s, UI_O_BESTLINE, S.bestClassic, S.bestClassicShelf); drawTextCenter(128, 150, s, DIM_TEXT, 1); }
+        if (S.bestDaily)   { uiFmt(s, sizeof s, UI_O_BESTDAILY, S.bestDaily, S.bestDailyDate); drawTextCenter(128, 160, s, DIM_TEXT, 1); }
+        drawTextCenter(128, 172, ui(UI_O_TAPHINT), DIM_TEXT, 1);
         return;
     }
     if (G.state == ST_STATS) {
-        drawTextCenter(128, 84, "YOUR CAREER ON THIS CARD", GOLD_LT, 1);
-        drawTextCenter(128, 100, "WORDS PEEKS AND DAILY STREAKS", INK, 1);
-        drawTextCenter(128, 120, "B OR X OR A TAP CLOSES IT", DIM_TEXT, 1);
+        drawTextCenter(128, 84, ui(UI_S_CAREER), GOLD_LT, 1);
+        drawTextCenter(128, 100, ui(UI_S_WORDSPEEKS), INK, 1);
+        drawTextCenter(128, 120, ui(UI_S_CLOSE), DIM_TEXT, 1);
         return;
     }
     drawTipCard(tipIndex);
     if (G.msg[0]) drawTextCenter(128, 158, G.msg, GOLD_LT, 1);   // e.g. SET THE DS CLOCK FOR DAILY
-    else if (!S.tutorDone) drawTextCenter(128, 158, "NEW HERE? TAP GUIDE", ACCENT, 1);   // until the first guided shelf is done
+    else if (!S.tutorDone) drawTextCenter(128, 158, ui(UI_T_NEWHERE), ACCENT, 1);   // until the first guided shelf is done
 }
 
 // accent dot grid over the whole top screen, restricted to the slice being drawn
@@ -1482,7 +1484,7 @@ static void drawGuide(const Game *g)
     drawTextShadow(SCREEN_W / 2 - textWidth(title, 2) / 2, 8, title, GOLD_LT, 2);
     int bx = guideBackX();
     rectOutline(bx, 6, GD_BACK_W, 15, DIM);
-    drawTextCenter(bx + GD_BACK_W / 2, 10, "BACK", INK, 1);
+    drawTextCenter(bx + GD_BACK_W / 2, 10, ui(UI_OP_BACK), INK, 1);
     char cnt[8]; fmtInt(cnt, page + 1); strcat(cnt, "/"); fmtInt(cnt + strlen(cnt), GUIDE_PAGES);
     drawText(S.hand == HAND_LEFT ? SCREEN_W - 8 - textWidth(cnt, 1) : 8, 10, cnt, DIM_TEXT, 1);   // the page counter takes the other corner
     hline(GD_TEXT_X, 25, SCREEN_W - 2 * GD_TEXT_X, GOLD_DK);
@@ -1642,7 +1644,7 @@ static void gdBoard(int t)
         for (int i = 0; i < n; i++) drawChar2Shadow(wx + i * 12, 106, PATCH[pc[i]][pr[i]], valid || t >= 40 ? GOLD_LT : WHITE, DIM2);
         if (t >= 40) drawTextShadow(wx + 3 * 12 - 2 + 14, 106, sc, GOLD_LT, 2);
     }
-    gCaption(t < 26 ? "DRAG ACROSS TOUCHING GEMS" : t < 40 ? "A GOOD WORD WEARS A GOLD RING: TAP IT" : "CASHED IN", t < 40 ? INK : ACCENT);
+    gCaption(ui(t < 26 ? UI_C_DRAG : t < 40 ? UI_G_RING : UI_G_CASHED), t < 40 ? INK : ACCENT);
 }
 
 // ---- 2 SCORING: Qu, I, Z drop in and each floats up its value, the sum meets the length multiplier, the total counts up
@@ -1673,7 +1675,7 @@ static void gdScoring(int t)
     int w = textWidth(a, 1) + (b[0] ? textWidth(b, 1) + 6 : 0);
     if (n) { drawText(SCREEN_W / 2 - w / 2, 100, a, WHITE, 1); if (b[0]) drawText(SCREEN_W / 2 - w / 2 + textWidth(a, 1) + 6, 100, b, lerp15(BLACK, GOLD_LT, ease16(t - 28, 3)), 1); }
     if (t >= 32) {       // the length badge opens from its middle
-        char m[24]; fmtInt(m, len); strcat(m, " LETTERS = X"); fmtInt(m + strlen(m), mult);
+        char m[32]; uiFmt(m, sizeof m, UI_G_BADGE, len, mult);
         int e = ease16(t - 32, 4), bw = 104 * e / 16;
         if (bw > 8) rectOutline(SCREEN_W / 2 - bw / 2, 112, bw, 14, ACCENT);
         if (e >= 14) drawTextCenter(SCREEN_W / 2, 116, m, ACCENT, 1);
@@ -1682,10 +1684,10 @@ static void gdScoring(int t)
         char s[12]; s[0] = '+'; fmtInt(s + 1, total * ease16(t - 38, 14) / 16);
         drawTextShadow(SCREEN_W / 2 - textWidth(s, 2) / 2, 134, s, GOLD_LT, 2);
     }
-    char cap[40];
-    if (t < 28) strcpy(cap, "EACH GEM HAS A VALUE");
-    else if (t < 38) strcpy(cap, "ADD THEM UP, THEN APPLY THE LENGTH");
-    else { strcpy(cap, "X "); fmtInt(cap + 2, SCORE_UNIT); strcat(cap, ": THE WORD IS WORTH +"); fmtInt(cap + strlen(cap), total); }
+    char cap[48];
+    if (t < 28) strcpy(cap, ui(UI_G_VALUE));
+    else if (t < 38) strcpy(cap, ui(UI_G_ADD));
+    else uiFmt(cap, sizeof cap, UI_G_WORTH, SCORE_UNIT, total);
     gCaption(cap, t < 38 ? INK : ACCENT);
 }
 
@@ -1734,13 +1736,13 @@ static void gdPeek(int t)
     int sx = (peek ? px0 + (x - px0) * e / 16 : 36) + 4, sy = (peek ? py0 + (y - py0) * e / 16 : 60) + 8;
     if (t >= 4) gPointer(sx, sy, peek && tp >= 5 && tp < 8);
     if (peek) gRipple(sx, sy, tp - 5);
-    if (!peek) gCaption("HOLD L OR R TO PEEK", INK);
+    if (!peek) gCaption(ui(UI_G_HOLDLR), INK);
     else if (seg < 2) {
         int nc[6], nr[6], m = boardNeighbors(rc[seg], rrw[seg], nc, nr), d = 0;
         for (int i = 0; i < m; i++) for (int h = 0; h < 2; h++) if (nc[i] == hidC[h] && nr[i] == hidR[h]) d++;
-        char cap[40]; strcpy(cap, "A "); fmtInt(cap + 2, d); strcat(cap, " HERE: "); strcat(cap, d == 1 ? "ONE PASS LETTER TOUCHES IT" : "TWO PASS LETTERS TOUCH IT");
+        char cap[48]; uiFmt(cap, sizeof cap, d == 1 ? UI_G_HERE1 : UI_G_HERE2, d);
         gCaption(cap, INK);
-    } else gCaption("RED RIM: PEELING IT SCORCHES THE PASS", FIRE2);
+    } else gCaption(ui(UI_G_REDRIM), FIRE2);
 }
 
 // ---- 4 THE PASS: the slots fill with diamonds one by one; the plaque cycles three themes, and the slot count,
@@ -1756,7 +1758,7 @@ static void gdPass(int t)
     if (!word[0]) { strcpy(word, "password"); word[len] = 0; }
     int found = tp < 3 ? 0 : (tp - 3) / 2 + 1; if (found > len) found = len;
     rectOutline(24, 34, 208, 70, GOLD_DK); rectOutline(25, 35, 206, 68, GOLD);
-    char s[40]; strcpy(s, "PASS - "); strcat(s, poolNameEn(theme));
+    char s[48]; uiFmt(s, sizeof s, UI_H_PASSPLAQUE, poolNameEn(theme));
     int le = ease16(tp, 4), lx = SCREEN_W / 2 - textWidth(s, 1) / 2 + (16 - le);      // the plaque's name slides in from the right
     drawTextBox(lx, 42, s, lerp15(BLACK, DIM_TEXT, le), 1, 28, 228);
     int gap = len >= 9 ? 1 : 4, bw = PLAQUE_W, x0 = ((SCREEN_W - (len * bw + (len - 1) * gap)) / 2) & ~1, y0 = 58;
@@ -1774,16 +1776,16 @@ static void gdPass(int t)
             if (i == found && tp >= 1) fillRect(x + 4 + ((tp * 4) % (bw - 10)), y0 + 22, 2, 1, GOLD_LT);   // a glint travels along the next blank
         }
     }
-    strcpy(s, "SHELF "); fmtInt(s + 6, shelf); strcat(s, ": "); fmtInt(s + strlen(s), len); strcat(s, " LETTERS");
+    uiFmt(s, sizeof s, UI_G_SHELFN, shelf, len);
     drawTextCenter(SCREEN_W / 2, 112, s, lerp15(BLACK, ACCENT, le), 1);
-    strcpy(s, "EACH LETTER PAYS +"); fmtInt(s + strlen(s), boardPassLetterReward(shelf));
+    uiFmt(s, sizeof s, UI_G_PAYS, boardPassLetterReward(shelf));
     if (found > 0) drawTextCenter(SCREEN_W / 2, 124, s, INK, 1);
     int up = ease16(tp - (3 + 2 * (len - 1)) - 1, 4);
     if (found >= len && up > 0) {
-        strcpy(s, "SHELF CLEARED! +"); fmtInt(s + strlen(s), boardShelfBonus(shelf) * up / 16);
+        uiFmt(s, sizeof s, UI_G_CLEARED, boardShelfBonus(shelf) * up / 16);
         drawTextCenter(SCREEN_W / 2, 140, s, (tp & 4) ? GOLD_LT : WHITE, 1);
     }
-    gCaption("FIND EVERY LETTER TO CLEAR THE SHELF", INK);
+    gCaption(ui(UI_G_FIND), INK);
 }
 
 // ---- 5 FIRE: short words fill the heat meter, the top gem of a column ignites, the flame slides a tile at a time (the board's
@@ -1810,8 +1812,8 @@ static void gdFire(int t)
     }
     if (lit) drawBurnCell(cx, cy + pos * TILE_H / 16, 0, COL[(pos / 16) & 3], t & 15, false, false);
     gDiamond(cx, cy + 4 * TILE_H, 'k' - 'a');
-    drawText(cx + TILE_W + 6, cy + 4 * TILE_H + 7, "< NEVER BURNS", ACCENT, 1);
-    drawText(112, 38, "HEAT", DIM_TEXT, 1);
+    drawText(cx + TILE_W + 6, cy + 4 * TILE_H + 7, ui(UI_G_NEVER), ACCENT, 1);
+    drawText(112, 38, ui(UI_P_HEAT), DIM_TEXT, 1);
     int hv = heat16 > sr.threshold * 16 ? sr.threshold * 16 : heat16;
     char s[16]; fmtInt(s, hv / 16); strcat(s, "/"); fmtInt(s + strlen(s), sr.threshold);
     drawText(236 - textWidth(s, 1), 38, s, lit ? DIM_TEXT : FIRE2, 1);
@@ -1825,8 +1827,8 @@ static void gdFire(int t)
         drawTextBox(112 + dx, 64 + 11 * i, WORDS[i], lerp15(BLACK, WHITE, e), 1, 112, 236);
         drawTextBox(112 + 30 + dx, 64 + 11 * i, hs, lerp15(BLACK, h ? FIRE2 : ACCENT, e), 1, 112, 236);
     }
-    if (lit && ((t / 5) & 1)) drawText(112, 114, "A FLAME!", FIRE1, 1);
-    gCaption(t < 36 ? "SHORT WORDS FILL THE HEAT METER" : t < 44 ? "A FULL METER LIGHTS A TOP GEM" : "IT FALLS UNTIL A DIAMOND STOPS IT", t < 36 ? INK : FIRE2);
+    if (lit && ((t / 5) & 1)) drawText(112, 114, ui(UI_G_FLAME), FIRE1, 1);
+    gCaption(ui(t < 36 ? UI_G_FIRE1 : t < 44 ? UI_G_FIRE2 : UI_G_FIRE3), t < 36 ? INK : FIRE2);
 }
 
 // ---- 6 SHELVES: bookmarks (one is lost, one won back), a twist banner sliding in, and the Lockdown tiers with their numbers
@@ -1850,21 +1852,21 @@ static void gdShelves(int t)
         }
         if (h < 16) rectOutline(bx, by, 10, 16, DIM);
     }
-    drawText(28, 54, "BOOKMARKS", ACCENT, 1);
-    if (t >= 16 && t < 44) drawText(28, 64, "A LOST SHELF: -1", lerp15(BLACK, FIRE2, ease16(t - 16, 4)), 1);
-    else if (t >= 44) drawText(28, 64, "LOCKDOWN CLEARED: +1", lerp15(BLACK, GOLD_LT, ease16(t - 44, 4)), 1);
+    drawText(28, 54, ui(UI_G_BOOKMARKS), ACCENT, 1);
+    if (t >= 16 && t < 44) drawText(28, 64, ui(UI_G_LOSTSHELF), lerp15(BLACK, FIRE2, ease16(t - 16, 4)), 1);
+    else if (t >= 44) drawText(28, 64, ui(UI_G_LDCLEARED), lerp15(BLACK, GOLD_LT, ease16(t - 44, 4)), 1);
     int i = t / 21; if (i > 2) i = 2;                           // the twist banner as it arrives
     int shelf = 4;
     for (int k = 0, s2 = 1; s2 <= 60 && k <= i; s2++) if (boardTwistShelf(s2)) { shelf = s2; k++; }
     int tp = t - 21 * i, e = ease16(tp, 4), dx = (16 - e) * 5;
-    char s[24]; strcpy(s, "SHELF "); fmtInt(s + 6, shelf); strcat(s, ":");
+    char s[32]; uiFmt(s, sizeof s, UI_G_SHELFC, shelf);
     rectOutline(140, 34, 96, 26, GOLD);
     drawTextBox(188 - textWidth(s, 1) / 2 + dx, 40, s, GOLD_LT, 1, 142, 234);
     drawTextBox(188 - textWidth(boardTwistName(TWIST_INK + i), 1) / 2 + dx, 50, boardTwistName(TWIST_INK + i), ACCENT, 1, 142, 234);
-    drawText(28, 84, "LOCKDOWN", DIM_TEXT, 1);
-    static const char *const H[4] = { "SHELF", "METER", "PULSE", "FIRES" };
+    drawText(28, 84, ui(UI_LD1), DIM_TEXT, 1);
+    static const short H[4] = { UI_G_H_SHELF, UI_G_H_METER, UI_G_H_PULSE, UI_G_H_FIRES };
     static const int HXS[4] = { 124, 157, 190, 223 };
-    for (int c = 0; c < 4; c++) drawTextCenter(HXS[c], 84, H[c], DIM_TEXT, 1);
+    for (int c = 0; c < 4; c++) drawTextCenter(HXS[c], 84, ui(H[c]), DIM_TEXT, 1);
     int hi = t / 16, from = (hi + 3) & 3, hp = ease16(t - 16 * hi, 4);       // the highlight slides from tier to tier
     int hy = (98 + 13 * from) + (13 * (hi - from)) * hp / 16;
     if (hi == 0) hy = 98 + 13 * 3 + (13 * (0 - 3)) * hp / 16;
@@ -1880,7 +1882,7 @@ static void gdShelves(int t)
         fmtInt(v, r.pulseEvery); drawTextCenter(HXS[2], y, v, on ? WHITE : INK, 1);
         fmtInt(v, r.tier >= LOCKDOWN_TWIN_FIRE_TIER ? 2 : 1); drawTextCenter(HXS[3], y, v, r.tier >= LOCKDOWN_TWIN_FIRE_TIER ? FIRE2 : (on ? WHITE : INK), 1);
     }
-    gCaption("EACH TIER BURNS HOTTER", INK);
+    gCaption(ui(UI_G_TIER), INK);
 }
 
 // ---- 7 MODES: a stylus taps the title's two buttons, the Daily's calendar tile shows its modifier (sliding between them), a streak fills
@@ -1889,12 +1891,12 @@ static void gdModes(const Game *g, int t)
     int cls = t >= 8 && t < 32, dly = t >= 34;                  // which button the stylus has pressed
     int press = (t >= 12 && t < 15) || (t >= 38 && t < 41);     // a button sinks for a moment
     roundRect(52, 34 + (cls && press ? 1 : 0), 64, 22, GOLD);
-    drawTextCenter(84, 41 + (cls && press ? 1 : 0), "CLASSIC", BLACK, 1);
+    drawTextCenter(84, 41 + (cls && press ? 1 : 0), ui(UI_T_CLASSIC), BLACK, 1);
     roundRect(140, 34 + (dly && press ? 1 : 0), 64, 22, DIM);
     rectOutline(140, 34 + (dly && press ? 1 : 0), 64, 22, GOLD_DK);
     int day = g->clockOk ? g->dailySeed % 100 : 12;
-    char s[24];
-    siprintf(s, "DAILY %02d%02d", g->clockOk ? g->dailySeed / 100 % 100 : 11, day);
+    char s[32];
+    uiFmt(s, sizeof s, UI_T_DAILYDATE, g->clockOk ? g->dailySeed / 100 % 100 : 11, day);
     drawTextCenter(172, 37 + (dly && press ? 1 : 0), s, GOLD_LT, 1);
     int mod = (t / 16) & 3, tp = t & 15, e = ease16(tp, 4);   // the modifier changes every 16 ticks and slides in
     drawTextCenter(172, 46 + (dly && press ? 1 : 0), boardDailyModName(mod), INK, 1);
@@ -1903,17 +1905,17 @@ static void gdModes(const Game *g, int t)
     // the calendar tile
     rectOutline(52, 70, 56, 56, GOLD);
     fillRect(53, 71, 54, 13, ACCENT);
-    drawTextCenter(80, 74, "DAILY", BLACK, 1);
+    drawTextCenter(80, 74, ui(UI_T_DAILY), BLACK, 1);
     fmtInt(s, day); if (day < 10) { s[1] = s[0]; s[0] = '0'; s[2] = 0; }
     drawTextCenter(80, 92, s, GOLD_LT, 3);
     drawTextBox(80 - textWidth(boardDailyModName(mod), 1) / 2 + (16 - e) * 2, 116, boardDailyModName(mod), ACCENT, 1, 54, 106);
     // what the modifier does, from the Daily rules
     ShelfRules r; boardDailyRules(mod, &r);
-    char l1[28], l2[28];
-    if (mod == DAILYMOD_EMBER) { strcpy(l1, "METER "); fmtInt(l1 + 6, r.threshold); strcpy(l2, r.burnEvery == 1 ? "FIRE EVERY TURN" : "FIRE SLOWER"); }
-    else if (mod == DAILYMOD_DEEP) { strcpy(l1, "PASS IN THE BOTTOM"); fmtInt(l2, ROWS - r.minRow); strcat(l2, " ROWS"); }
-    else if (mod == DAILYMOD_LONG) { strcpy(l1, "A "); fmtInt(l1 + 2, DAILY_LONG_LEN); strcat(l1, " LETTER PASS"); strcpy(l2, "(OR THE NEAREST)"); }
-    else { strcpy(l1, "NOTHING EXTRA:"); strcpy(l2, "THE PLAIN SHELF"); }
+    char l1[40], l2[40];
+    if (mod == DAILYMOD_EMBER) { uiFmt(l1, sizeof l1, UI_G_MOD_METER, r.threshold); strcpy(l2, ui(r.burnEvery == 1 ? UI_G_MOD_FIRE1 : UI_G_MOD_FIRE2)); }
+    else if (mod == DAILYMOD_DEEP) { strcpy(l1, ui(UI_G_MOD_DEEP1)); uiFmt(l2, sizeof l2, UI_G_MOD_DEEP2, ROWS - r.minRow); }
+    else if (mod == DAILYMOD_LONG) { uiFmt(l1, sizeof l1, UI_G_MOD_LONG1, DAILY_LONG_LEN); strcpy(l2, ui(UI_G_MOD_LONG2)); }
+    else { strcpy(l1, ui(UI_G_MOD_PLAIN1)); strcpy(l2, ui(UI_G_MOD_PLAIN2)); }
     int dx = (16 - e) * 3;
     drawTextBox(124 + dx, 74, boardDailyModName(mod), lerp15(BLACK, GOLD_LT, e), 2, 124, 236);
     drawTextBox(124 + dx, 94, l1, lerp15(BLACK, INK, e), 1, 124, 236);
@@ -1925,7 +1927,7 @@ static void gdModes(const Game *g, int t)
         if (i < streak) { fillRect(x, 138, 14, 10, ACCENT); if (i == streak - 1 && ((t - 6) & 7) < 2) rectOutline(x - 1, 137, 16, 12, WHITE); }
         else rectOutline(x, 138, 14, 10, DIM);
     }
-    if (streak >= 2) { strcpy(s, "STREAK "); fmtInt(s + 7, streak); drawTextCenter(SCREEN_W / 2, 152, s, GOLD_LT, 1); }
+    if (streak >= 2) { uiFmt(s, sizeof s, UI_T_STREAKL, streak); drawTextCenter(SCREEN_W / 2, 152, s, GOLD_LT, 1); }
     // the stylus: to CLASSIC, a tap, then to DAILY, a tap
     int sx, sy;
     if (t < 34) { int ee = ease16(t - 2, 8); sx = 150 + (84 - 150) * ee / 16; sy = 90 + (44 - 90) * ee / 16; }
@@ -1933,16 +1935,13 @@ static void gdModes(const Game *g, int t)
     if (t >= 2 && t < 52) gPointer(sx + 10, sy + 6, press);
     gRipple(94, 50, t - 12);
     gRipple(182, 50, t - 38);
-    gCaption("ONE SCORED DAILY A DAY, THEN PRACTICE", INK);
+    gCaption(ui(UI_G_ONEDAILY), INK);
 }
 
 // ---- 8 CONTROLS: the DS, each control pressed in turn (it sinks, a ripple opens) with what it does; the stylus draws a trail on the screen
 static void gdControls(int t)
 {
-    static const char *const CAP[8] = {
-        "STYLUS: DRAG TO CHAIN, TAP TO SUBMIT", "D-PAD: MOVE THE CURSOR", "A: CHAIN, OR SUBMIT ON THE TAIL",
-        "B: BACK ONE GEM, HOLD TO CLEAR", "X: LATCH PEEK, THEN A PEELS", "Y: CLEAR THE CHAIN", "HOLD L OR R: PEEK", "START: PAUSE"
-    };
+    static const short CAP[8] = { UI_G_C_STYLUS, UI_G_C_DPAD, UI_G_C_A, UI_G_C_B, UI_G_C_X, UI_G_C_Y, UI_G_C_LR, UI_G_C_START };
     int hi = (t / 8) & 7, tp = t & 7;
     u16 body = C(5,5,7), lit = lerp15(ACCENT, WHITE, tri16(t * 4, 32));
     fillRect(25, 32, 206, 124, body);          // one fill (roundRect paints the middle three times: too dear for a top-screen slice)
@@ -1959,7 +1958,7 @@ static void gdControls(int t)
     bool st = hi == 0;
     rectOutline(90, 56, 76, 57, st ? lit : ACCENT);
     fillRect(91, 57, 74, 55, BLACK);
-    if (!st) { drawTextCenter(128, 80, "TOUCH", DIM_TEXT, 1); drawTextCenter(128, 90, "SCREEN", DIM_TEXT, 1); }
+    if (!st) { drawTextCenter(128, 80, ui(UI_G_TOUCH), DIM_TEXT, 1); drawTextCenter(128, 90, ui(UI_G_SCREEN), DIM_TEXT, 1); }
     else {
         static const u8 TX[5] = { 100, 112, 124, 136, 148 }, TY[5] = { 98, 74, 96, 72, 94 };
         for (int k = 0; k < 4; k++) {               // the trail grows segment by segment, the pointer at its head
@@ -1996,7 +1995,7 @@ static void gdControls(int t)
     drawText(150, 126, "START", sp ? ACCENT : DIM_TEXT, 1);
     drawText(138, 138, "SELECT", DIM_TEXT, 1);
     if (sp) gRipple(202, 130, tp);
-    gCaption(CAP[hi], ACCENT);
+    gCaption(ui(CAP[hi]), ACCENT);
 }
 
 static void drawTopGuide(const Game *g)
@@ -2004,7 +2003,7 @@ static void drawTopGuide(const Game *g)
     drawTopDots();
     rectOutline(8, 8, 240, 176, GOLD_DK);
     rectOutline(9, 9, 238, 174, GOLD);
-    drawTextCenter(SCREEN_W / 2, 15, "HOW TO PLAY", GOLD_LT, 1);
+    drawTextCenter(SCREEN_W / 2, 15, ui(UI_PA_GUIDE), GOLD_LT, 1);
     hline(16, 25, 224, GOLD_DK);
     int t = gTick(), sf = frame;
     frame = t * 4;                              // the game's pulses (hole digits, flames, sparkles) now follow the loop, not the clock
@@ -2113,15 +2112,15 @@ static void drawTop(const Game *g)
     {   // the mode under the logo: CLASSIC, LOCKDOWN (tiers), DAILY <modifier> or PRACTICE <modifier>, then the twist for a moment
         const char *ml; u16 mc;
         if (g->mode == MODE_DAILY) {
-            strcpy(s, g->practice ? "PRACTICE " : "DAILY "); strcat(s, boardDailyModName(g->dailyMod));
+            uiFmt(s, sizeof s, g->practice ? UI_H_MODE_PRACTICE : UI_H_MODE_DAILY, boardDailyModName(g->dailyMod));
             ml = s; mc = g->practice ? DIM_TEXT : GOLD_LT;
         } else if (g->lockdown) { ml = boardLockdownName(g->lockTier); mc = FIRE1; }
-        else { ml = "CLASSIC"; mc = ACCENT; }
+        else { ml = ui(UI_T_CLASSIC); mc = ACCENT; }
         drawText(16, 36, ml, mc, 1);
         if (g->twist && shelfAge < 120) drawText(16 + (int)(strlen(ml) + 1) * 6, 36, boardTwistName(g->twist), GOLD_LT, 1);   // 131 px at most with LOCKDOWN III
     }
-    if (g->mode == MODE_DAILY) siprintf(s, "DAILY %02d%02d", g->dailySeed / 100 % 100, g->dailySeed % 100);   // MMDD
-    else { strcpy(s, "SHELF "); fmtInt(s + 6, g->shelf); }
+    if (g->mode == MODE_DAILY) uiFmt(s, sizeof s, UI_T_DAILYDATE, g->dailySeed / 100 % 100, g->dailySeed % 100);   // MMDD
+    else uiFmt(s, sizeof s, UI_H_SHELF, g->shelf);
     drawText(170, 18, s, INK, 1);
     drawText(170, 28, fmtInt(s, shownScore), GOLD, 1);
 
@@ -2129,7 +2128,7 @@ static void drawTop(const Game *g)
     int n = g->passLen, bw = PLAQUE_W, gap = n >= 9 ? 1 : 4;   // nine letters squeeze to one pixel between gems
     int x0 = ((SCREEN_W - (n * bw + (n - 1) * gap)) / 2) & ~1, y0 = 60;   // x even: word-aligned blits; the popped gem spans y 50..95, inside HUD slice 1
     if (x0 + n * bw + (n - 1) * gap > 220) x0 = (220 - (n * bw + (n - 1) * gap)) & ~1;   // a long pass slides left of the fire meter (x 222..)
-    strcpy(s, "PASS - "); strcpy(s + 7, boardPassTheme(g));
+    uiFmt(s, sizeof s, UI_H_PASSPLAQUE, boardPassTheme(g));
     drawTextCenter(SCREEN_W / 2, 50, s, DIM_TEXT, 1);
     for (int i = 0; i < n; i++) {
         int x = x0 + i * (bw + gap);
@@ -2197,8 +2196,11 @@ static void drawTop(const Game *g)
     // fire meter with a flame cap
     int low = fireLow;
     bool fireNext = low >= 0 && g->burnEvery - g->burnTimer <= 1;   // the fire steps on the next turn
-    if (fireNext && (frame & 8)) drawText(222, 46, "NEXT", FIRE2, 1);
-    else drawText(222, 46, "FIRE", DIM_TEXT, 1);
+    {   // the label sits at x 222 and slides left when a language needs more than 23 px, so it ends inside the frame
+        const char *fl = ui(fireNext && (frame & 8) ? UI_NEXT : UI_FIRE);
+        int fw = textWidth(fl, 1), fx = 222 + fw > 245 ? 245 - fw : 222;
+        drawText(fx, 46, fl, fireNext && (frame & 8) ? FIRE2 : DIM_TEXT, 1);
+    }
     rectOutline(226, 54, 8, ROWS * 10 + 2, DIM);   // rows 54..135: clear of the ledger line below
     for (int r = 0; r <= low; r++) fillRect(227, 55 + r * 10, 6, 9, lerp15(FIRE2, FIRE1, r * 2));
     if (low >= 0) { int fy = 55 + low * 10 + 9; px(229 + (frame & 1), fy - 12 - (frame & 3), FIRE2); px(230, fy - 11, FIRE2); }
@@ -2275,7 +2277,7 @@ static void drawTitle(const Game *g)
         int pp = (frame & 31) < 16 ? (frame & 15) : 15 - (frame & 15);
         fillRect(BX(GUIDE_BTN_X), 7, GUIDE_BTN_W, 17, cue ? lerp15(BLACK, ACCENT, pp / 3) : BLACK);
         rectOutline(BX(GUIDE_BTN_X), 7, GUIDE_BTN_W, 17, cue ? lerp15(GOLD_DK, WHITE, pp) : GOLD_DK);
-        drawTextCenter(BX(GUIDE_BTN_X + GUIDE_BTN_W / 2), 12, "? GUIDE", cue ? lerp15(ACCENT, WHITE, pp / 2) : INK, 1);
+        drawTextCenter(BX(GUIDE_BTN_X + GUIDE_BTN_W / 2), 12, ui(UI_T_GUIDE), cue ? lerp15(ACCENT, WHITE, pp / 2) : INK, 1);
     }
     {   // the language tag: tap for the next language (the name in gold once it is not English)
         bool en = langCur() == LANG_EN;
@@ -2286,58 +2288,59 @@ static void drawTitle(const Game *g)
     }
     fillRect(BX(16), 76, 140, 56, BLACK);
     rectOutline(BX(16), 76, 140, 56, GOLD);
-    drawTextCenter(BX(86), 84, "CRACK THE PASS", ACCENT, 1);
-    drawTextCenter(BX(86), 96, "DON'T BURN THE LIBRARY", INK, 1);
-    drawTextCenter(BX(86), 112, S.hand == HAND_LEFT ? "DRAG SPELLS. R PEEKS" : "DRAG SPELLS. L PEEKS", DIM_TEXT, 1);
+    drawTextCenter(BX(86), 84, ui(UI_T_CRACK), ACCENT, 1);
+    drawTextCenter(BX(86), 96, ui(UI_T_DONTBURN), INK, 1);
+    char dh[40]; uiFmt(dh, sizeof dh, UI_T_DRAGHINT, S.hand == HAND_LEFT ? "R" : "L");
+    drawTextCenter(BX(86), 112, dh, DIM_TEXT, 1);
     // mode buttons
     bool blink = frame & 32;
     roundRect(BX(20), TB_Y, 64, 22, blink ? GOLD : GOLD_DK);
-    drawTextCenter(BX(52), TB_Y + 7, "CLASSIC", BLACK, 1);
+    drawTextCenter(BX(52), TB_Y + 7, ui(UI_T_CLASSIC), BLACK, 1);
     // DAILY: two 1x lines inside the 22 px button (nothing reaches y 157, where OPTIONS starts)
     bool played = g->clockOk && S.dailyPlayedDate == g->dailySeed;
     roundRect(BX(88), TB_Y, 64, 22, g->clockOk ? DIM : BLACK);
     rectOutline(BX(88), TB_Y, 64, 22, g->clockOk ? GOLD_DK : DIM2);
-    char d1[16], d2[16];
+    char d1[24], d2[24];
     if (!g->clockOk) {
-        drawTextCenter(BX(120), TB_Y + 3, "DAILY", DIM_TEXT, 1);
-        drawTextCenter(BX(120), TB_Y + 12, "SET CLOCK", DIM_TEXT, 1);
+        drawTextCenter(BX(120), TB_Y + 3, ui(UI_T_DAILY), DIM_TEXT, 1);
+        drawTextCenter(BX(120), TB_Y + 12, ui(UI_T_SETCLOCK), DIM_TEXT, 1);
     } else if (played) {
-        drawTextCenter(BX(120), TB_Y + 3, "PRACTICE", ACCENT, 1);
-        siprintf(d2, "DONE %d", S.dailyLastScore);
+        drawTextCenter(BX(120), TB_Y + 3, ui(UI_T_PRACTICE), ACCENT, 1);
+        uiFmt(d2, sizeof d2, UI_T_DONE, S.dailyLastScore);
         if (textWidth(d2, 1) > 58) siprintf(d2, "%d", S.dailyLastScore);
         drawTextCenter(BX(120), TB_Y + 12, d2, INK, 1);
     } else {
-        siprintf(d1, "DAILY %02d%02d", g->dailySeed / 100 % 100, g->dailySeed % 100);
+        uiFmt(d1, sizeof d1, UI_T_DAILYDATE, g->dailySeed / 100 % 100, g->dailySeed % 100);
         drawTextCenter(BX(120), TB_Y + 3, d1, GOLD_LT, 1);
         drawTextCenter(BX(120), TB_Y + 12, boardDailyModName(g->dailyMod), INK, 1);
     }
     fillRect(BX(54), TB_Y + 26, 64, 20, BLACK);
     rectOutline(BX(54), TB_Y + 26, 64, 20, DIM);
-    drawTextCenter(BX(86), TB_Y + 32, "OPTIONS", INK, 1);
+    drawTextCenter(BX(86), TB_Y + 32, ui(UI_T_OPTIONS), INK, 1);
     // the BEST line is also the way into THE LEDGER (tap it, or press X)
     // Scores of six digits and up read as thousands (123K) so the two ends of the line never meet.
     char s[32], n[16];
     int streak = g->clockOk ? settingsLiveStreak(g->dailySeed) : 0;
-    if (S.bestClassic) { fmtScoreShort(n, S.bestClassic); strcpy(s, "BEST "); strcat(s, n); } else strcpy(s, "LEDGER");
+    if (S.bestClassic) { fmtScoreShort(n, S.bestClassic); uiFmt(s, sizeof s, UI_T_BESTL, n); } else strcpy(s, ui(UI_T_LEDGER));
     drawText(BX(20), 180, s, DIM_TEXT, 1);
     int leftEnd = BX(20) + textWidth(s, 1);
     char r[32]; u16 rc = DIM_TEXT; r[0] = 0;
-    if (streak >= 2) { siprintf(r, "STREAK %d", streak); rc = GOLD_LT; }
-    else if (S.bestDaily) { fmtScoreShort(n, S.bestDaily); strcpy(r, "DAILY "); strcat(r, n); }
+    if (streak >= 2) { uiFmt(r, sizeof r, UI_T_STREAKL, streak); rc = GOLD_LT; }
+    else if (S.bestDaily) { fmtScoreShort(n, S.bestDaily); uiFmt(r, sizeof r, UI_T_DAILYL, n); }
     if (r[0] && BX(152) - textWidth(r, 1) >= leftEnd + 6) drawText(BX(152) - textWidth(r, 1), 180, r, rc, 1);
 }
 
 static const char *optValue(int row)
 {
     switch (row) {
-        case 0: return THEME_NAMES[S.theme];
-        case 1: return FRAME_NAMES[S.frame];
-        case 2: return ACCENT_NAMES[S.accent];
-        case 3: return S.hand ? "LEFT" : "RIGHT";
-        case 4: return FIRE_NAMES[S.fire];
-        case 5: return S.music ? "ON" : "OFF";
-        case 6: return LIB_NAMES[S.library];
-        case 7: return langCur() == LANG_EN ? SPELL_NAMES[S.spelling] : "ENGLISH ONLY";
+        case 0: return ui(THEME_NAMES[S.theme]);
+        case 1: return ui(FRAME_NAMES[S.frame]);
+        case 2: return ui(ACCENT_NAMES[S.accent]);
+        case 3: return ui(S.hand ? UI_V_LEFT : UI_V_RIGHT);
+        case 4: return ui(FIRE_NAMES[S.fire]);
+        case 5: return ui(S.music ? UI_V_ON : UI_V_OFF);
+        case 6: return ui(LIB_NAMES[S.library]);
+        case 7: return ui(langCur() == LANG_EN ? SPELL_NAMES[S.spelling] : UI_V_ENONLY);
         default: return langName(langCur());
     }
 }
@@ -2352,13 +2355,13 @@ static void drawOptions(const Game *g)
     drawBoardDots();
     drawBoardFrame();
     boardX0 = savedX0;
-    drawTextShadow(86 - textWidth("OPTIONS", 2) / 2, 14, "OPTIONS", GOLD_LT, 2);
+    drawTextShadow(86 - textWidth(ui(UI_T_OPTIONS_H), 2) / 2, 14, ui(UI_T_OPTIONS_H), GOLD_LT, 2);
     int sel = g->optRow;
     for (int i = 0; i < OPT_ROWS; i++) {
         int y = OPT_Y0 + i * OPT_DY;
         bool on = i == sel;
         if (on) { fillRect(12, y, 148, OPT_DY - 1, lerp15(BLACK, ACCENT, 4)); rectOutline(12, y, 148, OPT_DY - 1, ACCENT); }
-        drawText(18, y + 3, OPT_NAMES[i], on ? WHITE : INK, 1);
+        drawText(18, y + 3, ui(OPT_NAMES[i]), on ? WHITE : INK, 1);
         const char *val = optValue(i);
         u16 lc = on ? ((nudgeTimer > 0 && nudgeDir < 0) ? WHITE : ACCENT) : DIM_TEXT;
         u16 rc = on ? ((nudgeTimer > 0 && nudgeDir > 0) ? WHITE : ACCENT) : DIM_TEXT;
@@ -2367,10 +2370,10 @@ static void drawOptions(const Game *g)
         drawText(112 - textWidth(val, 1) / 2 + 3, y + 3, val, fixed ? DIM_TEXT : on ? WHITE : INK, 1);     // centred between the chevrons
     }
     rectOutline(54, 153, 64, 17, DIM);
-    drawTextCenter(86, 158, "BACK", INK, 1);
-    if (!settingsPersistent()) drawTextCenter(86, 176, "NOT SAVED: NO CARD", DIM_TEXT, 1);
-    else if (settingsSaveFailed()) drawTextCenter(86, 176, "SAVE FAILED", FIRE2, 1);
-    else drawTextCenter(86, 176, "SAVED TO CARD", DIM_TEXT, 1);
+    drawTextCenter(86, 158, ui(UI_OP_BACK), INK, 1);
+    if (!settingsPersistent()) drawTextCenter(86, 176, ui(UI_OP_NOSAVE), DIM_TEXT, 1);
+    else if (settingsSaveFailed()) drawTextCenter(86, 176, ui(UI_OP_SAVEFAIL), FIRE2, 1);
+    else drawTextCenter(86, 176, ui(UI_OP_SAVED), DIM_TEXT, 1);
 }
 
 // THE LEDGER: lifetime stats from the saved records, on the touch screen like the options
@@ -2392,36 +2395,36 @@ static void drawStats(const Game *g)
     fillRect(0, 0, SCREEN_W, SCREEN_H, BLACK);
     drawBoardDots();
     drawBoardFrame();
-    drawTextShadow(BX(86) - textWidth("THE LEDGER", 2) / 2, 12, "THE LEDGER", GOLD_LT, 2);
+    drawTextShadow(BX(86) - textWidth(ui(UI_T_LEDGER_H), 2) / 2, 12, ui(UI_T_LEDGER_H), GOLD_LT, 2);
     char s[32], w[SETTINGS_WORD_BUF];
     int y = 32;
-    siprintf(s, "%d", S.gamesPlayed);     statRow(y, "GAMES", s, WHITE);          y += 10;
-    siprintf(s, "%d", S.shelvesCleared);  statRow(y, "SHELVES", s, WHITE);        y += 10;
-    siprintf(s, "%d", S.wordsSpelled);    statRow(y, "WORDS", s, WHITE);          y += 10;
-    siprintf(s, "%d", S.perfectPasses);   statRow(y, "PERFECT", s, GOLD_LT);      y += 10;
-    siprintf(s, "%d", S.rareWords);       statRow(y, "RARE WORDS", s, ACCENT);    y += 10;
-    siprintf(s, "%d%%", S.peelsHit * 100 / (S.peels > 0 ? S.peels : 1)); statRow(y, "PEEK ACCURACY", s, WHITE);   y += 10;
+    siprintf(s, "%d", S.gamesPlayed);     statRow(y, ui(UI_L_GAMES), s, WHITE);          y += 10;
+    siprintf(s, "%d", S.shelvesCleared);  statRow(y, ui(UI_L_SHELVES), s, WHITE);        y += 10;
+    siprintf(s, "%d", S.wordsSpelled);    statRow(y, ui(UI_R_WORDS), s, WHITE);          y += 10;
+    siprintf(s, "%d", S.perfectPasses);   statRow(y, ui(UI_L_PERFECT), s, GOLD_LT);      y += 10;
+    siprintf(s, "%d", S.rareWords);       statRow(y, ui(UI_L_RARE), s, ACCENT);    y += 10;
+    siprintf(s, "%d%%", S.peelsHit * 100 / (S.peels > 0 ? S.peels : 1)); statRow(y, ui(UI_L_PEEKACC), s, WHITE);   y += 10;
     int streak = g->clockOk ? settingsLiveStreak(g->dailySeed) : 0;
-    siprintf(s, "%d", streak);            statRow(y, "DAILY STREAK", s, streak >= 2 ? GOLD_LT : WHITE);   y += 10;
+    siprintf(s, "%d", streak);            statRow(y, ui(UI_L_STREAK), s, streak >= 2 ? GOLD_LT : WHITE);   y += 10;
     if (S.bestDaily) {
         siprintf(s, "%d  %02d-%02d", S.bestDaily, S.bestDailyDate / 100 % 100, S.bestDailyDate % 100);
         if (textWidth(s, 1) > 80) siprintf(s, "%d", S.bestDaily);
     } else strcpy(s, "-");
-    statRow(y, "DAILY BEST", s, WHITE);   y += 10;
+    statRow(y, ui(UI_L_DAILYBEST), s, WHITE);   y += 10;
     // the two word records are a label line and the word on its own line: a 20-letter word fits
     hline(BX(14), y + 1, 144, DIM);
     y += 6;
-    if (S.longestLen) siprintf(s, "%d LETTERS", S.longestLen); else strcpy(s, "-");
-    statRow(y, "LONGEST", s, WHITE);
+    if (S.longestLen) uiFmt(s, sizeof s, UI_L_LETTERS, S.longestLen); else strcpy(s, "-");
+    statRow(y, ui(UI_L_LONGEST), s, WHITE);
     upperCopy(w, S.longestLen ? S.longestWord : "-");
     drawTextCenter(BX(86), y + 9, w, S.longestLen ? GOLD_LT : DIM_TEXT, 1);
     y += 21;
     if (S.bestWordPts) siprintf(s, "+%d", S.bestWordPts); else strcpy(s, "-");
-    statRow(y, "BEST WORD", s, GOLD);
+    statRow(y, ui(UI_R_BESTWORD), s, GOLD);
     upperCopy(w, S.bestWordPts ? S.bestWordTxt : "-");
     drawTextCenter(BX(86), y + 9, w, S.bestWordPts ? GOLD_LT : DIM_TEXT, 1);
     rectOutline(BX(54), 162, 64, 20, DIM);
-    drawTextCenter(BX(86), 168, "BACK", INK, 1);
+    drawTextCenter(BX(86), 168, ui(UI_OP_BACK), INK, 1);
 }
 
 // Title top screen: three tip cards that cycle. This draws on the TOP screen, which has
@@ -2432,7 +2435,7 @@ static void drawTipCard(int which)
     const GemPal *th = THEMES[S.theme];
     int cx = 128, y = 52;
     if (which == 0) {
-        drawTextCenter(cx, y, "SPELL", GOLD_LT, 1);
+        drawTextCenter(cx, y, ui(UI_C_SPELL), GOLD_LT, 1);
         static const char L[3] = { 'I', 'N', 'K' };
         const GemPal *P3[3] = { &th[TH_RUBY], &th[TH_SAPPHIRE], &th[TH_AMBER] };
         int gx = cx - 40;
@@ -2446,11 +2449,11 @@ static void drawTipCard(int which)
             int x1 = gx + i * 28 + TILE_W / 2, y1 = y + 14 + ((i & 1) ? 10 : 0) + TILE_H / 2;
             for (int t = 0; t <= 8; t++) fillRect(x0 + (x1 - x0) * t / 8 - 1, y0 + (y1 - y0) * t / 8 - 1, 2, 2, GOLD_LT);
         }
-        drawTextCenter(cx, y + 56, "DRAG ACROSS TOUCHING GEMS", INK, 1);
-        drawTextCenter(cx, y + 66, "THREE LETTERS OR MORE, THEN SUBMIT", INK, 1);
-        drawTextCenter(cx, y + 80, "LONG WORDS SCORE BIG, KEEP HEAT DOWN", DIM_TEXT, 1);
+        drawTextCenter(cx, y + 56, ui(UI_C_DRAG), INK, 1);
+        drawTextCenter(cx, y + 66, ui(UI_C_3LETTERS), INK, 1);
+        drawTextCenter(cx, y + 80, ui(UI_C_LONG), DIM_TEXT, 1);
     } else if (which == 1) {
-        drawTextCenter(cx, y, "PEEK", ACCENT, 1);
+        drawTextCenter(cx, y, ui(UI_PEEK), ACCENT, 1);
         int gx = cx - 40;
         for (int i = 0; i < 3; i++) {
             int x = gx + i * 28, gy = y + 14 + ((i & 1) ? 10 : 0);
@@ -2458,22 +2461,22 @@ static void drawTipCard(int which)
             else if (i == 1) { drawGemSized(x, gy, TILE_W, TILE_H, &GEM_DIAMOND, false); drawChar(x + 7, gy + 4, 'B', C(4,6,10), 2); }
             else { rectOutline(x + 1, gy + 1, TILE_W - 2, TILE_H - 2, DIM); drawChar(x + 10, gy + 8, 'X', DIM_TEXT, 1); }
         }
-        drawTextCenter(cx, y + 56, "HOLD L OR R, TAP A GEM YOU CAN SPARE", INK, 1);
-        drawTextCenter(cx, y + 66, "A NUMBER COUNTS HIDDEN PASS LETTERS", INK, 1);
-        drawTextCenter(cx, y + 76, "IN THE SIX CELLS AROUND IT", INK, 1);
-        drawTextCenter(cx, y + 94, "LET GO TO PEEL. EVERY PEEL IS A TURN", DIM_TEXT, 1);
+        drawTextCenter(cx, y + 56, ui(UI_C_HOLD), INK, 1);
+        drawTextCenter(cx, y + 66, ui(UI_C_NUM), INK, 1);
+        drawTextCenter(cx, y + 76, ui(UI_C_SIX), INK, 1);
+        drawTextCenter(cx, y + 94, ui(UI_C_LETGO), DIM_TEXT, 1);
     } else {
-        drawTextCenter(cx, y, "FIRE", FIRE2, 1);
+        drawTextCenter(cx, y, ui(UI_FIRE), FIRE2, 1);
         int gx = cx - 40;
         int fx = gx, fy = y + 14;   // the burning gem, drawn the way the board draws it (light plate, dark letter, tongues)
         drawBurnCell(fx, fy, 0, 'r' - 'a', (frame >> 1) & 15, false, false);
         rectOutline(fx + 1, fy + TILE_H + 1, TILE_W - 2, TILE_H - 2, DIM);
         drawGemSized(gx + 28, y + 24, TILE_W, TILE_H, &GEM_DIAMOND, false); drawChar(gx + 35, y + 28, 'O', C(4,6,10), 2);
         drawGemSized(gx + 56, y + 14, TILE_W, TILE_H, &th[TH_EMERALD], false); drawChar(gx + 63, y + 18, 'P', WHITE, 2);
-        drawTextCenter(cx, y + 62, "SHORT WORDS BUILD HEAT AND LIGHT A GEM", INK, 1);
-        drawTextCenter(cx, y + 72, "FIRE WAITS A TURN, THEN CREEPS DOWN.", INK, 1);
-        drawTextCenter(cx, y + 82, "HOLES ARE CHIMNEYS. DIAMONDS BLOCK IT", INK, 1);
-        drawTextCenter(cx, y + 96, "SPELL THROUGH A FLAME TO PUT IT OUT", DIM_TEXT, 1);
+        drawTextCenter(cx, y + 62, ui(UI_C_F1), INK, 1);
+        drawTextCenter(cx, y + 72, ui(UI_C_F2), INK, 1);
+        drawTextCenter(cx, y + 82, ui(UI_C_F3), INK, 1);
+        drawTextCenter(cx, y + 96, ui(UI_C_F4), DIM_TEXT, 1);
     }
     for (int i = 0; i < 3; i++) {
         if (i == which) fillRect(118 + i * 8, 170, 4, 4, GOLD_LT); else rectOutline(118 + i * 8, 170, 4, 4, DIM);
@@ -2539,7 +2542,7 @@ static void drawBestWord(const Game *g, int y)
     strcpy(lw, g->bestWord[0] ? g->bestWord : "-");
     for (char *p = lw; *p; p++) if (*p >= 'a') *p -= 32;
     if (g->bestWordScore) siprintf(s, "+%d", g->bestWordScore); else strcpy(s, "-");
-    drawStatRow(CARD_ROW_L, CARD_ROW_R, y, "BEST WORD", DIM_TEXT, s, g->bestWordScore ? GOLD : DIM_TEXT);
+    drawStatRow(CARD_ROW_L, CARD_ROW_R, y, ui(UI_R_BESTWORD), DIM_TEXT, s, g->bestWordScore ? GOLD : DIM_TEXT);
     if (g->bestWord[0]) drawTextCenter(BX(CARD_CX), y + 9, lw, WHITE, 1);
 }
 
@@ -2550,47 +2553,47 @@ static void drawResultsCard(const Game *g)
     overlayCard(BX(cx - cw / 2), cy, cw, ch);
     rectOutline(BX(cx - cw / 2), cy, cw, ch, cardFlash ? WHITE : GOLD_LT);
     rectOutline(BX(cx - cw / 2 + 2), cy + 2, cw - 4, ch - 4, cardFlash ? GOLD_LT : GOLD_DK);
-    char title[32], s[40];
-    if (g->mode == MODE_DAILY) strcpy(title, g->practice ? "PRACTICE DONE" : "DAILY PASS DONE");
+    char title[48], s[48];
+    if (g->mode == MODE_DAILY) strcpy(title, ui(g->practice ? UI_R_PRACTICEDONE : UI_R_PASSDONE_D));
     else if (g->twist) {
-        siprintf(title, "PASS ACCEPTED: %s", boardTwistName(g->twist));
-        if (textWidth(title, 1) > CARD_FIT) siprintf(title, "PASSED: %s", boardTwistName(g->twist));   // INK SPILL is too wide with the full title
-    } else strcpy(title, "PASS ACCEPTED");
+        uiFmt(title, sizeof title, UI_R_ACCEPTED_T, boardTwistName(g->twist));
+        if (textWidth(title, 1) > CARD_FIT) uiFmt(title, sizeof title, UI_R_PASSED_T, boardTwistName(g->twist));   // INK SPILL is too wide with the full title
+    } else strcpy(title, ui(UI_R_ACCEPTED));
     drawTextShadow(BX(cx - textWidth(title, 1) / 2), cy + 8, title, GOLD_LT, 1);
     drawPassDiamonds(g, cy + 20, false);
     hline(BX(lx), cy + 40, cw - 20, DIM);
     drawBestWord(g, cy + 45);
     siprintf(s, "%d", g->wordsThisShelf);
-    if (g->uniqueWords < g->wordsThisShelf) siprintf(s, "%d (%d UNIQUE)", g->wordsThisShelf, g->uniqueWords);
-    drawStatRow(lx, rx, cy + 63, "WORDS", DIM_TEXT, s, WHITE);
+    if (g->uniqueWords < g->wordsThisShelf) uiFmt(s, sizeof s, UI_R_UNIQUE, g->wordsThisShelf, g->uniqueWords);
+    drawStatRow(lx, rx, cy + 63, ui(UI_R_WORDS), DIM_TEXT, s, WHITE);
     siprintf(s, "%d", g->peels);
-    drawStatRow(lx, rx, cy + 72, "PEELS", DIM_TEXT, s, g->peels == g->passLen ? GOLD_LT : g->peels <= g->passLen + 2 ? ACCENT : WHITE);
+    drawStatRow(lx, rx, cy + 72, ui(UI_PEELS), DIM_TEXT, s, g->peels == g->passLen ? GOLD_LT : g->peels <= g->passLen + 2 ? ACCENT : WHITE);
     siprintf(s, "%d", g->turn);
-    drawStatRow(lx, rx, cy + 81, "TURNS", DIM_TEXT, s, WHITE);
+    drawStatRow(lx, rx, cy + 81, ui(UI_TURNS), DIM_TEXT, s, WHITE);
     hline(BX(lx), cy + 90, cw - 20, DIM);
     // the three bonus rows count up with the score on the panel: shelf first, then speed, then the peel bonus
     int shelfB = boardShelfBonus(g->shelf), shown[3];
     boardTallySplit(shownScore - (g->score - shelfB - g->speedBonus - g->peelBonus), shelfB, g->speedBonus, g->peelBonus, shown);
     siprintf(s, "+%d", shown[0]);
-    drawStatRow(lx, rx, cy + 93, "SHELF BONUS", DIM_TEXT, s, GOLD_LT);
+    drawStatRow(lx, rx, cy + 93, ui(UI_R_SHELFBONUS), DIM_TEXT, s, GOLD_LT);
     if (g->speedBonus) siprintf(s, "+%d", shown[1]); else strcpy(s, "-");
-    drawStatRow(lx, rx, cy + 102, "SPEED", DIM_TEXT, s, g->speedBonus ? GOLD_LT : DIM_TEXT);
+    drawStatRow(lx, rx, cy + 102, ui(UI_R_SPEED), DIM_TEXT, s, g->speedBonus ? GOLD_LT : DIM_TEXT);
     if (g->passBonusKind) {
         siprintf(s, "+%d", shown[2]);
         u16 bc = g->passBonusKind == 2 ? GOLD_LT : ACCENT;
-        drawStatRow(lx, rx, cy + 111, g->passBonusKind == 2 ? "PERFECT PASS" : "CLEAN PASS", bc, s, bc);
-    } else drawStatRow(lx, rx, cy + 111, "PEEL BONUS", DIM_TEXT, "-", DIM_TEXT);
+        drawStatRow(lx, rx, cy + 111, ui(g->passBonusKind == 2 ? UI_R_PERFECT : UI_R_CLEAN), bc, s, bc);
+    } else drawStatRow(lx, rx, cy + 111, ui(UI_R_PEELBONUS), DIM_TEXT, "-", DIM_TEXT);
     if (g->mode == MODE_DAILY) {
-        siprintf(s, "FINAL %d", shownScore);
+        uiFmt(s, sizeof s, UI_R_FINAL, shownScore);
         if (!g->practice && S.dailyStreak >= 2) {
-            char s2[48]; siprintf(s2, "%s  STREAK %d", s, S.dailyStreak);
+            char s2[48]; uiFmt(s2, sizeof s2, UI_R_FINALSTREAK, shownScore, S.dailyStreak);
             if (textWidth(s2, 1) <= CARD_FIT) strcpy(s, s2);          // a long score drops the streak: the title shows it
         }
         drawTextCenter(BX(cx), cy + 122, s, GOLD_LT, 1);
-    } else { siprintf(s, "SHELF %d OPEN", g->shelf + 1); drawTextCenter(BX(cx), cy + 122, s, ACCENT, 1); }
-    if (g->practice) drawTextCenter(BX(cx), cy + 132, "NOT SCORED", DIM_TEXT, 1);
-    else if (g->newBest && (frame & 16)) drawTextCenter(BX(cx), cy + 132, "NEW BEST", GOLD_LT, 1);
-    if (t > 30 && (frame & 32)) drawTextCenter(BX(cx), cy + 141, "TAP TO CONTINUE", INK, 1);
+    } else { uiFmt(s, sizeof s, UI_R_SHELFOPEN, g->shelf + 1); drawTextCenter(BX(cx), cy + 122, s, ACCENT, 1); }
+    if (g->practice) drawTextCenter(BX(cx), cy + 132, ui(UI_R_NOTSCORED), DIM_TEXT, 1);
+    else if (g->newBest && (frame & 16)) drawTextCenter(BX(cx), cy + 132, ui(UI_R_NEWBEST), GOLD_LT, 1);
+    if (t > 30 && (frame & 32)) drawTextCenter(BX(cx), cy + 141, ui(UI_R_TAPCONT), INK, 1);
 }
 
 static void drawFailCard(const Game *g)
@@ -2608,27 +2611,27 @@ static void drawFailCard(const Game *g)
     char s[40];
     hline(BX(lx), cy + 54, cw - 20, DIM);
     siprintf(s, "%d", g->wordsThisShelf);
-    drawStatRow(lx, rx, cy + 58, "WORDS", DIM_TEXT, s, WHITE);
+    drawStatRow(lx, rx, cy + 58, ui(UI_R_WORDS), DIM_TEXT, s, WHITE);
     drawBestWord(g, cy + 67);
     siprintf(s, "%d", g->peels);
-    drawStatRow(lx, rx, cy + 85, "PEELS", DIM_TEXT, s, WHITE);
+    drawStatRow(lx, rx, cy + 85, ui(UI_PEELS), DIM_TEXT, s, WHITE);
     siprintf(s, "%d", g->turn);
-    drawStatRow(lx, rx, cy + 94, "TURNS", DIM_TEXT, s, WHITE);
+    drawStatRow(lx, rx, cy + 94, ui(UI_TURNS), DIM_TEXT, s, WHITE);
     hline(BX(lx), cy + 103, cw - 20, DIM);
     bool runOver = g->mode == MODE_CLASSIC && g->lives <= 0;
     if (g->mode == MODE_CLASSIC && !runOver) {
-        siprintf(s, "RETRY FROM %d", g->shelfStartScore);
+        uiFmt(s, sizeof s, UI_R_RETRY, g->shelfStartScore);
         drawTextCenter(BX(cx), cy + 107, s, ACCENT, 1);
-        siprintf(s, "%d BOOKMARK%s LEFT", g->lives, g->lives == 1 ? "" : "S");
+        if (g->lives == 1) strcpy(s, ui(UI_R_BM1)); else uiFmt(s, sizeof s, UI_R_BMN, g->lives);
         drawTextCenter(BX(cx), cy + 117, s, INK, 1);
     } else {
-        siprintf(s, "FINAL %d", g->score);
+        uiFmt(s, sizeof s, UI_R_FINAL, g->score);
         drawTextCenter(BX(cx), cy + 107, s, GOLD_LT, 1);
-        if (runOver) drawTextCenter(BX(cx), cy + 117, "RUN OVER", FIRE2, 1);
-        else if (g->practice) drawTextCenter(BX(cx), cy + 117, "PRACTICE: NOT SCORED", DIM_TEXT, 1);
+        if (runOver) drawTextCenter(BX(cx), cy + 117, ui(UI_R_RUNOVER), FIRE2, 1);
+        else if (g->practice) drawTextCenter(BX(cx), cy + 117, ui(UI_R_PRACTICENS), DIM_TEXT, 1);
     }
-    if (g->newBest && (frame & 16)) drawTextCenter(BX(cx), cy + 132, "NEW BEST", GOLD_LT, 1);
-    if (t > 45 && (frame & 32)) drawTextCenter(BX(cx), cy + 141, (g->mode == MODE_CLASSIC && !runOver) ? "TAP TO RETRY" : "TAP FOR TITLE", WHITE, 1);
+    if (g->newBest && (frame & 16)) drawTextCenter(BX(cx), cy + 132, ui(UI_R_NEWBEST), GOLD_LT, 1);
+    if (t > 45 && (frame & 32)) drawTextCenter(BX(cx), cy + 141, ui((g->mode == MODE_CLASSIC && !runOver) ? UI_R_TAPRETRY : UI_R_TAPTITLE), WHITE, 1);
 }
 
 // The pause menu: a card with one 16 px row per entry (RESUME, RESTART SHELF, HOW TO PLAY, QUIT TO TITLE).
@@ -2648,16 +2651,16 @@ static void drawPauseCard(const Game *g)
     int ids[PAUSE_ROWS_MAX], n = pauseRows(g, ids), ch = 22 + 16 * n + 2;
     overlayCard(BX(PAUSE_X0), 66, PAUSE_W, ch);
     rectOutline(BX(PAUSE_X0), 66, PAUSE_W, ch, ACCENT);
-    drawTextCenter(BX(86), 74, "PAUSED", ACCENT, 1);
-    bool refused = g->msgTimer > 0 && !strcmp(g->msg, "LAST BOOKMARK");
+    drawTextCenter(BX(86), 74, ui(UI_PA_PAUSED), ACCENT, 1);
+    bool refused = g->msgTimer > 0 && !strcmp(g->msg, ui(UI_MS_LASTBOOK));
     for (int i = 0; i < n; i++) {
         int y = PAUSE_Y0 + 16 * i, id = ids[i];
         bool sel = i == g->pauseRow, armed = g->pauseArm > 0 && g->pauseArmId == id;
-        const char *label = id == PAUSE_RESUME ? "RESUME" : id == PAUSE_RESTART ? "RESTART SHELF" : id == PAUSE_GUIDE ? "HOW TO PLAY" : "QUIT TO TITLE";
+        const char *label = ui(id == PAUSE_RESUME ? UI_PA_RESUME : id == PAUSE_RESTART ? UI_PA_RESTART : id == PAUSE_GUIDE ? UI_PA_GUIDE : UI_PA_QUIT);
         u16 col = sel ? WHITE : INK;
         if (id == PAUSE_RESTART && g->mode == MODE_CLASSIC && g->lives <= 1) {      // the last bookmark cannot be spent
-            label = refused ? "LAST BOOKMARK" : "RESTART SHELF"; col = refused ? FIRE2 : DIM_TEXT;
-        } else if (armed) { label = id == PAUSE_QUIT ? "TAP AGAIN TO QUIT" : "TAP AGAIN: RESTART"; col = FIRE2; }
+            label = ui(refused ? UI_MS_LASTBOOK : UI_PA_RESTART); col = refused ? FIRE2 : DIM_TEXT;
+        } else if (armed) { label = ui(id == PAUSE_QUIT ? UI_PA_AGAINQ : UI_PA_AGAINR); col = FIRE2; }
         if (sel) { fillRect(BX(PAUSE_X0 + 2), y, PAUSE_W - 4, 15, lerp15(BLACK, ACCENT, 4)); rectOutline(BX(PAUSE_X0 + 2), y, PAUSE_W - 4, 15, ACCENT); }
         drawTextCenter(BX(86), y + 4, label, col, 1);
     }
@@ -2681,7 +2684,7 @@ static void drawLangPick(const Game *g)
     drawBoardDots();
     drawBoardFrame();
     boardX0 = savedX0;
-    drawTextShadow(86 - textWidth("LANGUAGE", 2) / 2, 7, "LANGUAGE", GOLD_LT, 2);
+    drawTextShadow(86 - textWidth(ui(UI_LP_TITLE), 2) / 2, 7, ui(UI_LP_TITLE), GOLD_LT, 2);
     for (int i = 0; i < LANG_COUNT; i++) {
         int y = PICK_Y0 + i * PICK_DY;
         bool on = i == g->langPick, ok = langAvailable(i);
@@ -2689,7 +2692,7 @@ static void drawLangPick(const Game *g)
         drawText(86 - textWidth(langName(i), 1) / 2, y + 3, langName(i), on ? WHITE : ok ? INK : DIM2, 1);
         if (i == langCur()) drawChar(18, y + 3, '*', GOLD_LT, 1);
     }
-    drawTextCenter(86, 172, "TAP ONE, OR D-PAD AND A", DIM_TEXT, 1);
+    drawTextCenter(86, 172, ui(UI_LP_HINT), DIM_TEXT, 1);
 }
 
 static void drawOverlay(const Game *g)
@@ -2747,7 +2750,7 @@ void gfxLoading(const char *name)
         fillRect(0, 0, SCREEN_W, SCREEN_H, BLACK);
         rectOutline(8, 8, 240, 176, GOLD_DK);
         rectOutline(9, 9, 238, 174, GOLD);
-        drawTextCenter(128, 70, "LOADING", GOLD_LT, 2);
+        drawTextCenter(128, 70, ui(UI_LOADING), GOLD_LT, 2);
         drawTextCenter(128, 94, name, INK, 1);
         for (int i = 0; i < 5; i++) drawGemSized(128 - 62 + i * 26, 118, 24, 22, &THEMES[S.theme][i], false);
     }

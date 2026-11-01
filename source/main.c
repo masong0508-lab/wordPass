@@ -37,11 +37,14 @@ static int foundCount(void)
     return n;
 }
 
+static const char *handKey(void) { return S.hand == HAND_LEFT ? "R" : "L"; }   // the shoulder under the idle hand
+
 static void tutorPrompt(void)
 {
     if (!tutorOn()) return;
-    if (G.tutorStep == TUTOR_DRAG) setMsg("DRAG 3 TOUCHING GEMS, TAP THE LAST", -1);
-    else if (G.tutorStep < TUTOR_REST) setMsg(S.hand == HAND_LEFT ? "HOLD R OR TAP PEEK, THEN TAP A GEM" : "HOLD L OR TAP PEEK, THEN TAP A GEM", -1);
+    char t[MSG_LEN];
+    if (G.tutorStep == TUTOR_DRAG) setMsg(ui(UI_TU_DRAG), -1);
+    else if (G.tutorStep < TUTOR_REST) { uiFmt(t, sizeof t, UI_TU_PEEK, handKey()); setMsg(t, -1); }
 }
 
 static void tutorFinish(void)
@@ -55,7 +58,7 @@ static void tutorAfterMsg(void)
 {
     if (!tutorOn()) return;
     if (G.tutorStep == TUTOR_REST) { tutorFinish(); return; }
-    if (G.tutorStep == TUTOR_FIND && foundCount() >= 1) { G.tutorStep = TUTOR_REST; setMsg("FIND THE REST. DIAMONDS NEVER BURN", 240); return; }
+    if (G.tutorStep == TUTOR_FIND && foundCount() >= 1) { G.tutorStep = TUTOR_REST; setMsg(ui(UI_TU_REST), 240); return; }
     tutorPrompt();
 }
 
@@ -71,17 +74,17 @@ static void tutorPeel(int res, int c, int r)   // a peel resolved: res as boardP
     if (!tutorOn() || G.tutorStep == TUTOR_DRAG) return;
     if (G.tutorStep == TUTOR_PEEK) {     // the first peel gets a message about what it found
         G.tutorStep = TUTOR_FIND;
-        if (res == 2) setMsg("A PASS LETTER! PEEL AROUND IT", 240);
+        if (res == 2) setMsg(ui(UI_TU_APASS), 240);
         else if (res == 1) {
             char t[MSG_LEN]; int n = boardBackNumber(&G, c, r);
-            if (n == 0) strcpy(t, "0: NO PASS LETTERS TOUCH THIS CELL");
-            else if (n == 1) strcpy(t, "1: A PASS LETTER TOUCHES THIS CELL");
-            else siprintf(t, "%d: PASS LETTERS TOUCH THIS CELL", n);
+            if (n == 0) strcpy(t, ui(UI_TU_N0));
+            else if (n == 1) strcpy(t, ui(UI_TU_N1));
+            else uiFmt(t, sizeof t, UI_TU_NN, n);
             setMsg(t, 240);
         }
     } else if (G.tutorStep == TUTOR_FIND && res == 2) {
         G.tutorStep = TUTOR_REST;
-        setMsg("FIND THE REST. DIAMONDS NEVER BURN", 240);
+        setMsg(ui(UI_TU_REST), 240);
     }
 }
 
@@ -99,12 +102,12 @@ static void startShelf(void)
     G.newBest = 0;
     gfxFadeIn();
     musicNewShelf(G.shelf, G.lockdown);
-    char s[32];
-    siprintf(s, "%s: FIND THE %d LETTER PASS", boardPassTheme(&G), G.passLen);   // 31 chars at most
+    char s[MSG_LEN];
+    uiFmt(s, sizeof s, UI_MS_FIND, boardPassTheme(&G), G.passLen);   // 31 chars at most in English
     pendingMsg[0] = 0;
     if (G.twist) {
-        char t[32];
-        siprintf(t, "SHELF %d: %s", G.shelf, boardTwistName(G.twist));
+        char t[MSG_LEN];
+        uiFmt(t, sizeof t, UI_MS_SHELFTWIST, G.shelf, boardTwistName(G.twist));
         setMsg(t, 150);
         queueMsg(s, 180);
     } else setMsg(s, 180);
@@ -127,7 +130,7 @@ static bool newGame(int mode)
     G.practice = false;
     if (mode == MODE_DAILY) {
         refreshClock();
-        if (!G.clockOk) { setMsg("SET THE DS CLOCK FOR DAILY", 120); return false; }
+        if (!G.clockOk) { setMsg(ui(UI_MS_CLOCK), 120); return false; }
         // one scored attempt a day: the second and later runs are practice (nothing recorded)
         G.practice = (S.dailyPlayedDate == G.dailySeed);
         if (!G.practice) { S.dailyPlayedDate = G.dailySeed; settingsSave(); }
@@ -145,9 +148,9 @@ static bool newGame(int mode)
     memset(G.recentPass, 0, sizeof(G.recentPass)); G.recentHead = 0;
     startShelf();
     if (mode == MODE_DAILY) {
-        char t[32];
-        if (G.practice) strcpy(t, "PRACTICE RUN: NOT SCORED");
-        else siprintf(t, "DAILY: %s", boardDailyModName(G.dailyMod));
+        char t[MSG_LEN];
+        if (G.practice) strcpy(t, ui(UI_MS_PRACTICE));
+        else uiFmt(t, sizeof t, UI_MS_DAILYMOD, boardDailyModName(G.dailyMod));
         queueMsg(G.msg, G.msgTimer);       // the shelf intro follows
         setMsg(t, 150);
     }
@@ -305,29 +308,29 @@ static void submitChain(void)
         gfxSubmitFlash();
         tutorWord();
         // callout, one per word, in priority order: the top-screen message and the word over the board
-        if (G.lastWordLen >= 8) { setMsg("SPECTACULAR!", 60); gfxCallout("SPECTACULAR!", CALLOUT_GOLD); }
+        if (G.lastWordLen >= 8) { setMsg(ui(UI_CO_SPECT), 60); gfxCallout(ui(UI_CO_SPECT), CALLOUT_GOLD); }
         else if (G.lastWordDiamonds >= 1) {
             // the "+N" popup sits on the middle gem: put PASS LINK on the diamond (or the
             // chain's first gem when the diamond is the middle one) so the two never stack
             int d = cn / 2;
             for (int i = 0; i < cn; i++) if (G.cell[cc[i]][cr[i]].state == CELL_SECRET) { d = i; break; }
             if (d == cn / 2) d = 0;
-            gfxPopup(cc[d], cr[d], "PASS LINK", 1);
-            setMsg("PASS LINK!", 60); gfxCallout("PASS LINK!", CALLOUT_ACCENT);
+            gfxPopup(cc[d], cr[d], ui(UI_POP_LINK), 1);
+            setMsg(ui(UI_CO_LINK), 60); gfxCallout(ui(UI_CO_LINK), CALLOUT_ACCENT);
         }
-        else if (G.lastWordLen >= 7) { setMsg("EXCELLENT!", 60); gfxCallout("EXCELLENT!", CALLOUT_GOLD); }
-        else if (G.lastWordLen >= 5) { setMsg("GOOD!", 60); gfxCallout("GOOD!", CALLOUT_GOLD); }
-        else if (G.lastWordRepeat) { setMsg("AGAIN", 45); gfxCallout("AGAIN", CALLOUT_ACCENT); }
-        else if (G.lastWordTier == 2) { setMsg("RARE WORD", 60); gfxCallout("RARE WORD", CALLOUT_GOLD); }
+        else if (G.lastWordLen >= 7) { setMsg(ui(UI_CO_EXCELLENT), 60); gfxCallout(ui(UI_CO_EXCELLENT), CALLOUT_GOLD); }
+        else if (G.lastWordLen >= 5) { setMsg(ui(UI_CO_GOOD), 60); gfxCallout(ui(UI_CO_GOOD), CALLOUT_GOLD); }
+        else if (G.lastWordRepeat) { setMsg(ui(UI_CO_AGAIN), 45); gfxCallout(ui(UI_CO_AGAIN), CALLOUT_ACCENT); }
+        else if (G.lastWordTier == 2) { setMsg(ui(UI_CO_RARE), 60); gfxCallout(ui(UI_CO_RARE), CALLOUT_GOLD); }
         burstNewFlames();
         if (G.fail) enterFail();
     } else if (G.chainLen >= 3) {
         char w[WORD_BUF]; boardChainWord(&G, w);
         int dialect = boardWordSpelling(w, strlen(w));
         bool obscure = S.library == LIB_COMMON && boardWordTier(w, strlen(w)) == 2;
-        setMsg(dialect == 2 ? "BRITISH SPELLING" : dialect == 1 ? "AMERICAN SPELLING" : obscure ? "TOO OBSCURE" : "NOT IN THE LIBRARY", 45);
+        setMsg(ui(dialect == 2 ? UI_MS_BRIT : dialect == 1 ? UI_MS_AMER : obscure ? UI_CO_OBSCURE : UI_MS_NOTLIB), 45);
         // the board callout stays short enough to pop at 2x (the top-screen message carries the full reason)
-        gfxCallout(dialect == 2 ? "UK SPELLING" : dialect == 1 ? "US SPELLING" : obscure ? "TOO OBSCURE" : "NOT A WORD", CALLOUT_FIRE);
+        gfxCallout(ui(dialect == 2 ? UI_CO_UK : dialect == 1 ? UI_CO_US : obscure ? UI_CO_OBSCURE : UI_CO_NOTWORD), CALLOUT_FIRE);
         gfxInvalidWord();
         musicSfx(SFX_INVALID, 0);
     }
@@ -352,7 +355,7 @@ static void pauseActivate(int id)
             G.state = ST_PLAY;
             break;
         case PAUSE_RESTART:
-            if (G.mode == MODE_CLASSIC && G.lives <= 1) { setMsg("LAST BOOKMARK", 60); G.pauseArm = 0; break; }   // the last one cannot be spent
+            if (G.mode == MODE_CLASSIC && G.lives <= 1) { setMsg(ui(UI_MS_LASTBOOK), 60); G.pauseArm = 0; break; }   // the last one cannot be spent
             if (!armed) { G.pauseArm = 90; G.pauseArmId = id; break; }
             G.pauseArm = 0;
             if (G.mode == MODE_CLASSIC) G.lives--;
@@ -461,10 +464,10 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
                 gfxPopup(c, r, ps, 1);
                 musicReveal(true);
                 if (boardPassComplete(&G)) {
-                    char s[32]; siprintf(s, "SHELF %d CLEARED", G.shelf); setMsg(s, 400);
-                } else { setMsg("PASS LETTER FOUND", 90); gfxCallout("PASS LETTER!", CALLOUT_ACCENT); }
+                    char s[MSG_LEN]; uiFmt(s, sizeof s, UI_MS_SHELFCLEARED, G.shelf); setMsg(s, 400);
+                } else { setMsg(ui(UI_MS_PASSFOUND), 90); gfxCallout(ui(UI_CO_PASSLETTER), CALLOUT_ACCENT); }
             } else if (res == 1) { musicSfx(SFX_PEEL, 0); musicReveal(false); }
-            else if (res == 3 || res == -1) { musicSfx(SFX_SCORCH, 0); setMsg("SCORCHED", 60); gfxCallout("SCORCHED", CALLOUT_FIRE); gfxBurst(c, r, BURST_SCORCH, letter); gfxShake(6); }
+            else if (res == 3 || res == -1) { musicSfx(SFX_SCORCH, 0); setMsg(ui(UI_CO_SCORCHED), 60); gfxCallout(ui(UI_CO_SCORCHED), CALLOUT_FIRE); gfxBurst(c, r, BURST_SCORCH, letter); gfxShake(6); }
             burstNewFlames();
             if (res >= 1 && !G.fail && !boardPassComplete(&G)) tutorPeel(res, c, r);   // after the gameplay messages, so the guide's line wins
             // the peel that completes the pass wins the shelf even if its turn ended badly
@@ -542,7 +545,7 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
     // first-shelf nudge: three words in and no peek yet (the guide says it better, so this is for players past it)
     if (G.shelf == 1 && G.mode == MODE_CLASSIC && S.tutorDone && !G.hintShown && G.peels == 0 && G.wordsThisShelf >= 3) {
         G.hintShown = 1;
-        setMsg(S.hand == HAND_LEFT ? "HOLD R OR X, TAP A GEM TO PEEL" : "HOLD L OR X, TAP A GEM TO PEEL", 300);
+        { char hm[MSG_LEN]; uiFmt(hm, sizeof hm, UI_TU_PEELHINT, handKey()); setMsg(hm, 300); }
     }
 }
 
