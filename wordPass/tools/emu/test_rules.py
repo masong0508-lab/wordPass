@@ -5,7 +5,7 @@ exit status is the number of failures. Screenshots land in outdir (default /tmp)
 """
 import sys, os, traceback
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from wp import Emu, COLS, ROWS, EMPTY, TILE, BURN, HOLE, SECRET, ST_TITLE, ST_PLAY, ST_PASSED, ST_FAIL, ST_OPTIONS, \
+from wp import Emu, COLS, ROWS, EMPTY, TILE, BURN, HOLE, SECRET, ST_TITLE, ST_PLAY, ST_PASSED, ST_FAIL, ST_PAUSE, ST_OPTIONS, \
     FAIL_FIRE, FAIL_SCORCH, FAIL_WORDS, Keys, keymask, load_words
 
 rom = sys.argv[1]; out = sys.argv[2] if len(sys.argv) > 2 else '/tmp'
@@ -24,11 +24,16 @@ def scenario(name):
     return deco
 
 def ensure_play():
-    """Back to a calm play state from wherever the last scenario left the game."""
-    g = e.state()
-    if g['state'] == ST_FAIL: e.run(60); e.tap(100, 100); e.run(150)
-    elif g['state'] == ST_PASSED: e.run(40); e.tap(100, 100); e.run(200)
-    elif g['state'] == ST_TITLE: e.start_classic()
+    """Back to a calm play state from wherever the last scenario left the game (a fail with no
+    bookmark left lands on the title, so this may take two steps)."""
+    for _ in range(3):
+        g = e.state()
+        if g['state'] == ST_PLAY: break
+        if g['state'] == ST_FAIL: e.run(60); e.tap(e.bx + 100, 100); e.run(150)
+        elif g['state'] == ST_PASSED: e.run(40); e.tap(e.bx + 100, 100); e.run(200)
+        elif g['state'] == ST_TITLE: e.start_classic()
+        elif g['state'] == ST_PAUSE: e.press('START', settle=30)
+        elif g['state'] == ST_OPTIONS: e.press('B', settle=30)
     g = e.state(); assert g['state'] == ST_PLAY, f'not in play: state {g["state"]}'
     e.press('B', settle=5)
     e.set_heat(0); e.set_burn(0, 99)          # no spontaneous ignition, no fire advance on submits
@@ -37,13 +42,40 @@ def ensure_play():
         for r in range(ROWS):
             if g['cell'][c][r][1] == BURN: e.set_cell(c, r, TILE, 'e')
 
+def to_title():
+    """Pause + B from play (or whatever state) back to the title screen."""
+    ensure_play()
+    e.press('START', settle=10); e.press('B', settle=30)
+    g = e.state(); assert g['state'] == ST_TITLE, f'pause + B did not quit: state {g["state"]}'
+
 def fresh_shelf():
     """Pause + SELECT: restart the shelf on a fresh random board (no holes, nothing revealed),
-    with the shelf's own fire settings."""
+    with the shelf's own fire settings. A restart costs a bookmark, so the run is topped up first."""
     ensure_play()
+    e.set_lives(3)
     e.press('START', settle=10); e.press('SELECT', settle=150)
     g = e.state(); assert g['state'] == ST_PLAY and g['turn'] == 0, f'restart: state {g["state"]} turn {g["turn"]}'
     return g
+
+def clear_shelf():
+    """Peel every pass letter in order (a perfect pass) with the fire held off, then tap through
+    the results card. Returns the state at the start of the next shelf."""
+    g = e.state(); assert g['state'] == ST_PLAY, f'clear_shelf: state {g["state"]}'
+    shelf, n = g['shelf'], g['passLen']
+    for i in range(1, n + 1):
+        e.set_heat(0); e.set_turn(0); e.set_burn(0, 99)
+        g = e.state()
+        for c, r in e.burn_cells(g): e.set_cell(c, r, TILE, 'e')
+        c, r = e.secret_cells(g)[i]
+        assert g['cell'][c][r][1] == TILE, f'shelf {shelf} secret {i} at {(c, r)} is {g["cell"][c][r]}'
+        e.peel(c, r)
+        g = e.state(); assert g['state'] in (ST_PLAY, ST_PASSED), f'shelf {shelf} peel {i}: state {g["state"]} fail {g["fail"]}'
+    assert g['state'] == ST_PASSED and g['found'] == [1] * n, f'shelf {shelf} not cleared: {g["state"]} {g["found"]}'
+    e.run(40); e.tap(e.bx + 100, 100); e.run(20)
+    g = e.state(); assert g['state'] == ST_PLAY and g['shelf'] == shelf + 1, f'after shelf {shelf}: state {g["state"]} shelf {g["shelf"]}'
+    return g
+
+def secret_rows(g): return [r for c in range(COLS) for r in range(ROWS) if g['back'][c][r]]
 
 def col(g, c): return [g['cell'][c][r][1] for r in range(ROWS)]
 
@@ -433,6 +465,128 @@ def _():
     assert g['score'] - score0 == want, f'pass paid {g["score"] - score0}, want {want}'
     e.run(40); e.shot(f'{out}/rules_perfect.png')
     fps = e.fps(); assert fps >= 118, f'results fps {fps}/120'
+
+# ---- content and progression (item 08) ---------------------------------------------------
+@scenario('eight CLASSIC taps at different title spots give at least two shelf-1 passes, all 4-letter BINDERY')
+def _():
+    passes = set()
+    for i in range(8):
+        to_title(); e.run(3 + 7 * i)
+        e.tap(e.bx + 24 + i * 8, 136 + i * 2); e.run(150)
+        g = e.state()
+        assert g['state'] == ST_PLAY and g['mode'] == 0, f'tap {i}: state {g["state"]} mode {g["mode"]}'
+        assert g['passTheme'] == 0 and g['passLen'] == 4 and g['lives'] == 3 and g['twist'] == 0, \
+            f'tap {i}: pass {g["pass"]!r} theme {g["passTheme"]} lives {g["lives"]} twist {g["twist"]}'
+        passes.add(g['pass'])
+    print('   shelf-1 passes:', sorted(passes))
+    assert len(passes) >= 2, f'eight starts gave one pass: {passes}'
+
+@scenario('30 Classic boards: at least 25% vowels and at most three of J/Q/X/Z')
+def _():
+    worst_v, worst_r = 1.0, 0
+    for i in range(30):
+        g = fresh_shelf()
+        v, rare, n = e.letter_mix(g)
+        assert v * 4 >= n, f'board {i}: {v} vowels of {n} ({g["pass"]})'
+        assert rare <= 3, f'board {i}: {rare} rare letters'
+        worst_v = min(worst_v, v / n); worst_r = max(worst_r, rare)
+    print(f'   worst vowel share {worst_v:.2f}, most rare letters {worst_r}')
+
+@scenario('two Daily starts: identical letters, back layer and pass; no twist')
+def _():
+    boards = []
+    for k in range(2):
+        to_title(); e.start_daily()
+        g = e.state(); assert g['state'] == ST_PLAY and g['mode'] == 1, f'daily {k}: state {g["state"]} mode {g["mode"]}'
+        boards.append(g)
+    a, b = boards
+    assert a['pass'] == b['pass'] and a['back'] == b['back'], f'pass {a["pass"]}/{b["pass"]}'
+    assert [[x[0] for x in col] for col in a['cell']] == [[x[0] for x in col] for col in b['cell']], 'letters differ'
+    assert a['twist'] == 0 and 5 <= a['passLen'] <= 7 and a['dailySeed'] == b['dailySeed'], f'twist {a["twist"]} len {a["passLen"]}'
+    print('   daily', a['dailySeed'], a['pass'], 'theme', a['passTheme'])
+
+@scenario('Daily refills are identical whatever the frame gap between words (run(5) vs run(90))')
+def _():
+    def daily_run(gap):
+        to_title(); e.start_daily()
+        log = []
+        for i in range(4):
+            e.run(gap)
+            g = e.state(); assert g['state'] == ST_PLAY, f'gap {gap} word {i}: state {g["state"]} fail {g["fail"]}'
+            ws = e.find_words(g); assert ws, 'no words'
+            word, path = ws[0]
+            e.chain(path); e.press('A', settle=50)
+            g = e.state(); assert g['lastWord'] == word, f'gap {gap}: {word} did not score ({g["lastWord"]!r})'
+            log.append((word, [[x for x in col] for col in g['cell']], g['heat'], e.burn_cells(g)))
+        return log
+    a, b = daily_run(5), daily_run(90)
+    for i, (wa, wb) in enumerate(zip(a, b)):
+        assert wa[0] == wb[0], f'word {i}: {wa[0]} vs {wb[0]}'
+        assert wa[1] == wb[1], f'refill after word {i} ({wa[0]}) differs'
+        assert wa[2:] == wb[2:], f'heat/fire after word {i} differ: {wa[2:]} vs {wb[2:]}'
+    print('   daily words:', [w for w, _, _, _ in a])
+
+@scenario('shelf 4 twist (message, holes or depth), then shelf 12: Lockdown tier 2 with the pass in rows 5..7')
+def _():
+    to_title(); e.start_classic()
+    g = e.state(); assert g['shelf'] == 1 and g['lives'] == 3
+    for _ in range(3): g = clear_shelf()
+    assert g['shelf'] == 4 and g['twist'] in (1, 2, 3) and g['turn'] == 0, f'shelf {g["shelf"]} twist {g["twist"]} turn {g["turn"]}'
+    name = {1: 'INK SPILL', 2: 'DAMP', 3: 'BURIED'}[g['twist']]
+    assert g['msg'] == f'SHELF 4: {name}', f'intro msg {g["msg"]!r}'
+    assert g['passTheme'] == 3, f'shelf 4 theme {g["passTheme"]}'
+    e.run(20); e.shot(f'{out}/rules_twist_shelf4.png')
+    holes = [(c, r) for c in range(COLS) for r in range(ROWS) if g['cell'][c][r][1] == HOLE]
+    if g['twist'] == 1:
+        assert len(holes) == 3 and all(g['back'][c][r] == 0 and 2 <= r <= 6 for c, r in holes), f'INK SPILL holes {holes}'
+        assert g['passLen'] == 5
+    elif g['twist'] == 3:
+        assert min(secret_rows(g)) >= 5 and g['passLen'] == 6, f'BURIED rows {secret_rows(g)} len {g["passLen"]}'
+        assert not holes
+    else:
+        assert g['burnEvery'] == 2 and g['heatThreshold'] == 5 and g['passLen'] == 5 and not holes, f'DAMP {g["burnEvery"]} {g["heatThreshold"]}'
+    e.run(140); g = e.state()
+    assert g['msg'] == f'TALES: FIND THE {g["passLen"]} LETTER PASS', f'queued intro {g["msg"]!r}'
+    print('   shelf 4:', name, g['pass'])
+    twists = {}
+    while g['shelf'] < 12:
+        g = clear_shelf()
+        if g['twist']: twists[g['shelf']] = g['twist']
+        else: assert g['shelf'] % 3 != 1, f'shelf {g["shelf"]} has no twist'
+    assert g['shelf'] == 12 and g['lockdown'] == 1 and g['lockTier'] == 2 and g['twist'] == 0, f'shelf 12: lock {g["lockdown"]} tier {g["lockTier"]} twist {g["twist"]}'
+    assert min(secret_rows(g)) >= 5, f'shelf 12 secret rows {secret_rows(g)}'
+    assert g['passTheme'] == 3 and g['passLen'] == 7, f'shelf 12 pass {g["pass"]!r}'
+    assert g['lives'] == 3, f'lives {g["lives"]} after a clean climb'
+    print('   twists on the way:', twists, 'shelf 12 pass', g['pass'])
+    e.run(30); e.shot(f'{out}/rules_shelf12.png')
+    fps = e.fps(); assert fps == 120, f'shelf 12 fps {fps}/120'
+
+@scenario('bookmarks: a pause restart costs one and is refused on the last; three fails read 2, 1, 0 then the title')
+def _():
+    to_title(); e.start_classic()
+    assert e.state()['lives'] == 3
+    for want in (2, 1):
+        e.press('START', settle=10); e.press('SELECT', settle=150)
+        g = e.state(); assert g['state'] == ST_PLAY and g['lives'] == want and g['turn'] == 0, f'restart: state {g["state"]} lives {g["lives"]}'
+    e.press('START', settle=10); e.press('SELECT', settle=20)
+    g = e.state(); assert g['state'] == ST_PAUSE and g['lives'] == 1 and g['msg'] == 'LAST BOOKMARK', f'refusal: state {g["state"]} lives {g["lives"]} msg {g["msg"]!r}'
+    e.shot(f'{out}/rules_last_bookmark.png')
+    e.press('START', settle=30); assert e.state()['state'] == ST_PLAY
+    to_title(); e.start_classic()
+    for want in (2, 1, 0):
+        g = e.state(); assert g['state'] == ST_PLAY and g['shelf'] == 1 and g['lives'] == want + 1
+        for c in range(COLS):
+            for r in range(ROWS): e.set_cell(c, r, TILE, 'x')
+        g = e.state()
+        plain = [(c, r) for c in range(COLS) for r in range(ROWS) if not g['back'][c][r]]
+        e.peel(*plain[len(plain) // 2]); g = e.state()
+        assert g['state'] == ST_FAIL and g['fail'] == FAIL_WORDS and g['lives'] == want, f'fail: state {g["state"]} lives {g["lives"]}'
+        e.run(60)
+        if want == 1: e.shot(f'{out}/rules_fail_bookmarks.png')
+        e.tap(e.bx + 100, 100); e.run(150)
+        g = e.state()
+        if want: assert g['state'] == ST_PLAY and g['lives'] == want, f'retry {want}: state {g["state"]} lives {g["lives"]}'
+        else: assert g['state'] == ST_TITLE, f'third fail tap: state {g["state"]}'
 
 # ---- options and the left-hand title --------------------------------------------------
 @scenario('options HAND row: optRow 3, hand flips; left-hand title keeps the top screen inside its frame')

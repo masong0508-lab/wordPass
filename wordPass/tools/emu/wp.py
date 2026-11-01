@@ -48,12 +48,17 @@ OFF = {
     'optRow': 428, 'chainC': 432, 'chainR': 442,
     'pulseEvery': 452, 'lockTier': 456, 'overtime': 460,
     'chainScore': 464, 'speedBonus': 468, 'peelBonus': 472, 'passBonusKind': 476, 'ledgerN': 480, 'newBest': 484,
+    'lives': 488, 'passTheme': 492, 'twist': 496,
 }
-DBG_SIZE = 488
+DBG_SIZE = 500
 I32_FIELDS = ['state', 'mode', 'shelf', 'score', 'fail', 'turn', 'heat', 'chainLen', 'peels', 'lockdown',
               'bestWordScore', 'dailySeed', 'passLen', 'lastWordTier', 'rareWords', 'library',
               'heatThreshold', 'burnEvery', 'burnTimer', 'optRow', 'pulseEvery', 'lockTier', 'overtime',
-              'chainScore', 'speedBonus', 'peelBonus', 'passBonusKind', 'ledgerN', 'newBest']
+              'chainScore', 'speedBonus', 'peelBonus', 'passBonusKind', 'ledgerN', 'newBest',
+              'lives', 'passTheme', 'twist']
+PASS_THEMES = ['BINDERY', 'INK', 'VERSE', 'TALES', 'ATLAS', 'ARCHIVE', 'LAMP', 'STUDY']
+TWIST_NONE, TWIST_INK, TWIST_DAMP, TWIST_BURIED = range(4)
+VOWELS = {0, 4, 8, 14, 20}; RARE = {9, 16, 23, 25}   # a e i o u; j q x z
 # letter values (board.c letterValue), Q stands for Qu
 LETTER_VALUE = [1,3,3,2,1,4,2,4,1,8,5,1,3,1,1,3,10,1,1,1,1,4,4,8,4,10]
 # poke commands (debug.c applyPoke)
@@ -166,6 +171,9 @@ class Emu:
         self.poke(POKE_TURN, n)
     def set_score(self, n):
         self.poke(POKE_SCORE, n)
+    def set_lives(self, n):
+        """Bookmarks left in the Classic run (3 at the start; a fail or a pause restart costs one)."""
+        self.poke(POKE_LIVES, n)
     @staticmethod
     def word_score(letters, burn=False, diamonds=0, repeat=False):
         """What boardSubmit awards: `letters` is the chain's letter indices (or a lowercase word;
@@ -236,6 +244,10 @@ class Emu:
         if release: self.emu.input.touch_release(); self.run(3)
     def peel(self, c, r):
         self.hold('L', True); self.tap(*self.center(c, r), settle=6); self.hold('L', False); self.run(30)
+    def letter_mix(self, g):
+        """(vowels, rare) counts over the board's gems (TILE and BURN cells)."""
+        ls = [g['cell'][c][r][0] for c in range(COLS) for r in range(ROWS) if g['cell'][c][r][1] in (TILE, BURN)]
+        return sum(l in VOWELS for l in ls), sum(l in RARE for l in ls), len(ls)
     def secret_cells(self, g):
         return {g['back'][c][r]: (c, r) for c in range(COLS) for r in range(ROWS) if g['back'][c][r]}
     def start_classic(self):

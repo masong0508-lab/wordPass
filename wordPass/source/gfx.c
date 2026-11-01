@@ -956,7 +956,11 @@ static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
     strcpy(s, "SHELF "); fmtInt(s + 6, g->shelf);
     drawText(PANEL_X, 42, s, INK, 1);
     if (g->mode == MODE_DAILY) drawText(PANEL_X, 52, "DAILY", GOLD_LT, 1);
-    else drawText(PANEL_X, 52, g->lockdown ? "LOCKDOWN" : "CLASSIC", g->lockdown ? FIRE1 : ACCENT, 1);
+    else if (!g->lockdown) drawText(PANEL_X, 52, "CLASSIC", ACCENT, 1);
+    else {
+        static const char *const TIER[4] = { "LOCKDOWN", "LOCKDOWN II", "LOCKDOWN III", "LOCKDOWN IV" };
+        drawText(PANEL_X, 52, TIER[g->lockTier & 3], FIRE1, 1);   // 71 px at most: inside the 76 px panel
+    }
 
     char w[24]; strcpy(w, chainWordNow);
     for (char *p = w; *p; p++) *p -= 32;
@@ -1064,7 +1068,8 @@ static void drawTop(const Game *g)
     // the pass: gem-cut blanks that pop when found
     int n = g->passLen, bw = PLAQUE_W, gap = 4;
     int x0 = ((SCREEN_W - (n * bw + (n - 1) * gap)) / 2) & ~1, y0 = 60;   // x even: word-aligned blits; the popped gem spans y 50..95, inside HUD slice 1
-    drawTextCenter(SCREEN_W / 2, 50, "PASS", DIM, 1);
+    strcpy(s, "PASS - "); strcpy(s + 7, boardPassTheme(g));
+    drawTextCenter(SCREEN_W / 2, 50, s, DIM, 1);
     for (int i = 0; i < n; i++) {
         int x = x0 + i * (bw + gap);
         if (g->found[i]) {
@@ -1097,8 +1102,19 @@ static void drawTop(const Game *g)
         drawTextCenter(SCREEN_W / 2, 118, s, GOLD, 1);
     }
 
+    // bookmarks: three small books, filled while you still hold them (Classic only)
+    if (g->mode == MODE_CLASSIC)
+        for (int i = 0; i < 3; i++) {
+            int bx = 214 + i * 8, by = 38;
+            if (i < g->lives) {
+                fillRect(bx, by, 5, 8, GOLD);
+                fillRect(bx + 1, by, 1, 8, GOLD_DK);     // spine
+                px(bx + 3, by + 1, GOLD_LT);             // page highlight
+            } else rectOutline(bx, by, 5, 8, DIM);
+        }
+
     // fire meter with a flame cap
-    drawText(222, 44, "FIRE", DIM, 1);
+    drawText(222, 46, "FIRE", DIM, 1);
     rectOutline(226, 54, 8, ROWS * 10 + 2, DIM);   // rows 54..135: clear of the ledger line below
     int low = boardLowestFireRow(g);
     for (int r = 0; r <= low; r++) fillRect(227, 55 + r * 10, 6, 9, lerp15(FIRE2, FIRE1, r * 2));
@@ -1125,11 +1141,12 @@ static void drawTop(const Game *g)
         }
     }
 
-    // shelf map
+    // shelf map: twenty boxes, wrapping to the next page of twenty past shelf 20
+    int mapBase = ((g->shelf - 1) / 20) * 20;
     for (int i = 0; i < 20; i++) {
-        int x = 18 + i * 11, y = 150;
-        if (i + 1 < g->shelf) fillRect(x, y, 8, 8, ACCENT);
-        else if (i + 1 == g->shelf) rectOutline(x, y, 8, 8, (frame & 16) ? WHITE : ACCENT);
+        int x = 18 + i * 11, y = 150, sh = mapBase + i + 1;
+        if (sh < g->shelf) fillRect(x, y, 8, 8, ACCENT);
+        else if (sh == g->shelf) rectOutline(x, y, 8, 8, (frame & 16) ? WHITE : ACCENT);
         else rectOutline(x, y, 8, 8, DIM);
     }
 
@@ -1297,7 +1314,11 @@ static void drawOverlay(const Game *g)
         overlayCard(BX(cx - cw / 2), cy, cw, ch);
         rectOutline(BX(cx - cw / 2), cy, cw, ch, GOLD_LT);
         rectOutline(BX(cx - cw / 2 + 2), cy + 2, cw - 4, ch - 4, GOLD_DK);
-        drawTextShadow(BX(cx - textWidth("PASS ACCEPTED", 1) / 2), cy + 8, g->mode == MODE_DAILY ? "DAILY PASS DONE" : "PASS ACCEPTED", GOLD_LT, 1);
+        char title[32];
+        if (g->mode == MODE_DAILY) strcpy(title, "DAILY PASS DONE");
+        else if (g->twist) siprintf(title, "PASS ACCEPTED: %s", boardTwistName(g->twist));   // 24 chars at most: 143 px
+        else strcpy(title, "PASS ACCEPTED");
+        drawTextShadow(BX(cx - textWidth(title, 1) / 2), cy + 8, title, GOLD_LT, 1);
         // the pass itself as small diamonds
         int n = g->passLen, bw = 14, gap = 2, x0 = cx - (n * bw + (n - 1) * gap) / 2;
         for (int i = 0; i < n; i++) {
@@ -1344,13 +1365,19 @@ static void drawOverlay(const Game *g)
         else { siprintf(s, "SHELF %d OPEN", g->shelf + 1); drawTextCenter(BX(cx), cy + 120, s, ACCENT, 1); }
         if (t > 30 && (frame & 32)) drawTextCenter(BX(cx), cy + 130, "TAP TO CONTINUE", INK, 1);
     } else if (g->state == ST_FAIL) {
-        overlayCard(BX(16), 66, 140, 60);
-        rectOutline(BX(16), 66, 140, 60, (frame & 8) ? FIRE1 : FIRE2);
+        overlayCard(BX(6), 66, 162, 60);
+        rectOutline(BX(6), 66, 162, 60, (frame & 8) ? FIRE1 : FIRE2);
         const char *t = g->fail == FAIL_FIRE ? "LIBRARY LOST" : g->fail == FAIL_SCORCH ? "PASS DESTROYED" : "OUT OF WORDS";
         drawTextShadow(BX(86 - textWidth(t, 1) / 2), 76, t, FIRE2, 1);
         const char *why = g->fail == FAIL_FIRE ? "FIRE REACHED THE FLOOR" : g->fail == FAIL_SCORCH ? "A PASS LETTER BURNED" : "NO WORDS LEFT TO SPELL";
         drawTextCenter(BX(86), 90, why, INK, 1);
-        if (frame & 32) drawTextCenter(BX(86), 110, g->mode == MODE_DAILY ? "TAP FOR TITLE" : "TAP TO RETRY SHELF", WHITE, 1);
+        if (frame & 32) {
+            char s[32];
+            if (g->mode == MODE_DAILY) strcpy(s, "TAP FOR TITLE");
+            else if (g->lives <= 0) strcpy(s, "RUN OVER - TAP FOR TITLE");
+            else siprintf(s, "TAP TO RETRY (%d BOOKMARK%s)", g->lives, g->lives == 1 ? "" : "S");   // 26 chars: 155 px inside the 162 px card
+            drawTextCenter(BX(86), 110, s, WHITE, 1);
+        }
     } else if (g->state == ST_PAUSE) {
         overlayCard(BX(26), 66, 120, 64);
         rectOutline(BX(26), 66, 120, 64, ACCENT);

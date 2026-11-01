@@ -281,8 +281,8 @@ int main(int argc, char **argv)
     memset(&g, 0, sizeof(g)); g.mode = MODE_CLASSIC;
     g.shelf = 1; boardNewShelf(&g);
     bool s1 = g.heatThreshold == 10 && g.burnEvery == 2 && !g.lockdown && g.lockTier == 0;
-    g.shelf = 4; boardNewShelf(&g);
-    bool s4 = g.heatThreshold == 7 && g.burnEvery == 1 && !g.lockdown;
+    g.shelf = 4; boardNewShelf(&g);   // shelf 4 is a twist shelf: DAMP slows the fire and lowers the meter
+    bool s4 = (g.twist == TWIST_DAMP ? (g.heatThreshold == 5 && g.burnEvery == 2) : (g.heatThreshold == 7 && g.burnEvery == 1)) && !g.lockdown;
     g.shelf = 6; boardNewShelf(&g);
     bool s6 = g.heatThreshold == 5 && g.lockdown && g.lockTier == 0 && g.pulseEvery == 6;
     g.shelf = 12; boardNewShelf(&g);
@@ -298,6 +298,162 @@ int main(int argc, char **argv)
     bool relaxed = g.heatThreshold == 8 && g.burnEvery == 2;
     S.fire = FIRE_NORMAL;
     CHECK("FAST and RELAXED adjust the thresholds", fast && relaxed);
+
+    // ---- letter bag (item 08): 100 letters a cycle, two of J/Q/X/Z, the rest by weight
+    {
+        static const u8 W[26] = {9,2,3,4,12,2,3,3,9,1,1,4,3,6,8,2,1,6,5,6,4,2,2,1,2,1};
+        int count[26] = {0}, rare1 = 0, rare2 = 0, bad = 0;
+        boardSeed(7); boardBagReset();
+        int seq1[100], seq2[100];
+        for (int i = 0; i < 100; i++) { seq1[i] = boardRandomLetter(); count[seq1[i]]++; }
+        for (int l = 0; l < 26; l++) {
+            bool rare = l == 9 || l == 16 || l == 23 || l == 25;
+            if (rare) rare1 += count[l];
+            else if (count[l] != W[l]) bad++;
+        }
+        int count2[26] = {0};
+        for (int i = 0; i < 100; i++) { seq2[i] = boardRandomLetter(); count2[seq2[i]]++; }
+        for (int l = 0; l < 26; l++) if (l == 9 || l == 16 || l == 23 || l == 25) rare2 += count2[l];
+        bool rotated = true;   // the second cycle holds the other pair
+        for (int l = 0; l < 26; l++) if ((l == 9 || l == 16 || l == 23 || l == 25) && count[l] && count2[l]) rotated = false;
+        CHECK("bag: 100 letters per cycle by weight with exactly two of J/Q/X/Z, the pair rotating", rare1 == 2 && rare2 == 2 && bad == 0 && rotated);
+        boardSeed(7); boardBagReset();
+        bool same = true;
+        for (int i = 0; i < 100; i++) if (boardRandomLetter() != seq1[i]) same = false;
+        for (int i = 0; i < 100; i++) if (boardRandomLetter() != seq2[i]) same = false;
+        CHECK("boardSeed(k) twice gives identical letter sequences", same);
+        // boardRand itself is a deterministic xorshift
+        boardSeed(12345); u32 a = boardRand(), b = boardRand();
+        boardSeed(12345);
+        CHECK("boardRand repeats after boardSeed", boardRand() == a && boardRand() == b && a != b);
+    }
+
+    // ---- vowel floor: a four-tile refill of consonants gets a vowel in its lowest new gem
+    {
+        int seed = 0; bool found = false;
+        for (seed = 1; seed < 5000 && !found; seed++) {
+            boardSeed(seed); boardBagReset();
+            bool allCons = true;
+            for (int i = 0; i < 4; i++) { int l = boardRandomLetter(); if (l == 0 || l == 4 || l == 8 || l == 14 || l == 20) allCons = false; }
+            if (allCons) found = true;
+        }
+        seed--;
+        CHECK("found a seed whose first four draws are consonants", found);
+        boardOf('e');
+        for (int r = 0; r < 4; r++) set(0, r, CELL_EMPTY, 0);
+        boardSeed(seed); boardBagReset();
+        boardDebugFireStep(&g);   // no flames: just the gravity refill of column 0
+        int l3 = g.cell[0][3].letter;
+        bool lowVowel = l3 == 0 || l3 == 4 || l3 == 8 || l3 == 14 || l3 == 20;
+        int vowelsAbove = 0;
+        for (int r = 0; r < 3; r++) { int l = g.cell[0][r].letter; if (l == 0 || l == 4 || l == 8 || l == 14 || l == 20) vowelsAbove++; }
+        CHECK("vowel floor: the lowest of four consonant refills becomes a vowel", st(0, 3) == CELL_TILE && lowVowel && vowelsAbove == 0);
+        // the swap keeps the cycle's composition: the remaining 96 draws plus the 4 on the board hold 42 vowels
+        int vowels = lowVowel ? 1 : 0;
+        for (int i = 0; i < 96; i++) { int l = boardRandomLetter(); if (l == 0 || l == 4 || l == 8 || l == 14 || l == 20) vowels++; }
+        CHECK("vowel floor swap preserves the bag's composition (42 vowels a cycle)", vowels == 42);
+    }
+
+    // ---- pass pools: shelf 2 draws a 4-letter INK word whatever the recent ring holds
+    {
+        bool ok4 = true, theme1 = true;
+        for (int variant = 0; variant < 6; variant++) {
+            memset(&g, 0, sizeof(g)); g.mode = MODE_CLASSIC; g.shelf = 2;
+            for (int i = 0; i < 8; i++) {
+                if (variant == 1) g.recentPass[i] = 1 * 16 + i + 1;            // INK 0..7: font blot etch rune among them
+                if (variant == 2) g.recentPass[i] = 1 * 16 + 3 + (i & 3) + 1;  // exactly the four 4-letter INK words
+                if (variant == 3) g.recentPass[i] = 1 * 16 + 3 + 1;            // font eight times
+                if (variant == 4) g.recentPass[i] = (i & 7) * 16 + 1;          // one word of every pool
+                if (variant == 5) g.recentPass[i] = (u8)(i * 37 + 5);          // garbage
+            }
+            for (int k = 0; k < 20; k++) {
+                boardNewShelf(&g);
+                if (g.passLen != 4) ok4 = false;
+                if (g.passTheme != 1) theme1 = false;
+            }
+        }
+        CHECK("shelf 2 pass has 4 letters and theme INK for every recentPass state", ok4 && theme1);
+        memset(&g, 0, sizeof(g)); g.mode = MODE_CLASSIC; g.shelf = 1; boardNewShelf(&g);
+        CHECK("shelf 1 pass: 4 letters from BINDERY", g.passLen == 4 && g.passTheme == 0 && strcmp(boardPassTheme(&g), "BINDERY") == 0 && g.twist == TWIST_NONE);
+        bool distinct = false; char firstPass[12]; strcpy(firstPass, g.pass);
+        for (int k = 0; k < 2; k++) { boardNewShelf(&g); if (strcmp(g.pass, firstPass)) distinct = true; }
+        CHECK("three shelf-1 picks in a row rotate through the pool", distinct);
+        bool lens = true;
+        int want[] = {0, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 7, 8, 8};
+        for (int sh = 1; sh <= 14; sh++) {
+            memset(&g, 0, sizeof(g)); g.mode = MODE_CLASSIC; g.shelf = sh; boardNewShelf(&g);
+            int extra = g.twist == TWIST_BURIED ? 1 : 0;
+            // the nearest length present in the pool stands in: ATLAS (shelf 5, 13) has no 6, LAMP (shelf 7) has 6/7, STUDY has 8
+            int target = want[sh] + extra, got = g.passLen;
+            bool near = got == target || (got == target - 1) || (got == target + 1) || (got == target + 2);
+            if (!near || g.passTheme != (sh - 1) % 8) { lens = false; printf("   shelf %d: %s (%d, want %d)\n", sh, g.pass, got, target); }
+        }
+        CHECK("pass length climbs with the shelf (4,4,5,5,5,6,6,6,7,7,7,7,8,8) within the pool's nearest length", lens);
+    }
+
+    // ---- Daily: the same date gives the same board, pass and refills; no twist
+    {
+        Game a, b;
+        memset(&a, 0, sizeof(a)); a.mode = MODE_DAILY; a.dailySeed = 20260314; a.shelf = 1; boardNewShelf(&a);
+        memset(&b, 0, sizeof(b)); b.mode = MODE_DAILY; b.dailySeed = 20260314; b.shelf = 1; boardNewShelf(&b);
+        bool same = strcmp(a.pass, b.pass) == 0 && memcmp(a.back, b.back, sizeof(a.back)) == 0;
+        for (int c = 0; c < COLS; c++) for (int r = 0; r < ROWS; r++) if (a.cell[c][r].letter != b.cell[c][r].letter) same = false;
+        CHECK("Daily: identical board, back layer and pass for the same date", same && a.twist == TWIST_NONE && (a.passLen == 5 || a.passLen == 6 || a.passLen == 7));
+        memset(&b, 0, sizeof(b)); b.mode = MODE_DAILY; b.dailySeed = 20260315; b.shelf = 1; boardNewShelf(&b);
+        bool differ = false;
+        for (int c = 0; c < COLS; c++) for (int r = 0; r < ROWS; r++) if (a.cell[c][r].letter != b.cell[c][r].letter) differ = true;
+        CHECK("Daily: the next day is a different board", differ);
+    }
+
+    // ---- twists: shelves 4, 7, 10 ... (Classic only); INK SPILL holes, BURIED depth, DAMP fire
+    {
+        int seen[4] = {0}, bad = 0, inkBad = 0, buriedBad = 0, dampBad = 0;
+        for (int k = 0; k < 60; k++) {
+            memset(&g, 0, sizeof(g)); g.mode = MODE_CLASSIC; g.shelf = 4 + 3 * (k % 4); boardNewShelf(&g);
+            if (g.twist < 1 || g.twist > 3) { bad++; continue; }
+            seen[g.twist]++;
+            if (g.twist == TWIST_INK) {
+                int holes = 0, holeBack = 0, holeRow = 0;
+                for (int c = 0; c < COLS; c++) for (int r = 0; r < ROWS; r++) if (st(c, r) == CELL_HOLE) {
+                    holes++; if (g.back[c][r]) holeBack++; if (r < 2 || r > 6) holeRow++; if (g.scorched[c][r]) holeBack++;
+                }
+                if (holes != 3 || holeBack || holeRow || !boardHasWords(&g)) inkBad++;
+            } else if (countState(CELL_HOLE)) bad++;
+            if (g.twist == TWIST_BURIED) {
+                int minR = ROWS;
+                for (int c = 0; c < COLS; c++) for (int r = 0; r < ROWS; r++) if (g.back[c][r] && r < minR) minR = r;
+                int target = g.shelf <= 5 ? 5 : g.shelf <= 8 ? 6 : g.shelf <= 12 ? 7 : 8;
+                if (minR < 5 || g.passLen < target) buriedBad++;
+            }
+            if (g.twist == TWIST_DAMP) {
+                Game plain; memset(&plain, 0, sizeof(plain)); plain.mode = MODE_CLASSIC; plain.shelf = g.shelf + 1; boardNewShelf(&plain);
+                int baseEvery = g.shelf <= 3 ? 2 : 1;
+                int baseThr = g.shelf <= 2 ? 10 : g.shelf <= 5 ? 7 : 5 - g.lockTier / 2; if (baseThr < 3) baseThr = 3;
+                int wantThr = baseThr - 2; if (wantThr < 3) wantThr = 3;
+                if (g.burnEvery != baseEvery + 1 || g.heatThreshold != wantThr) dampBad++;
+            }
+        }
+        CHECK("twist shelves roll one of the three twists", bad == 0 && seen[1] && seen[2] && seen[3]);
+        CHECK("INK SPILL: exactly three unscorched holes in rows 2..6 over empty back cells, words left", inkBad == 0);
+        CHECK("BURIED: every pass letter in rows 5..7 and the pass one letter longer", buriedBad == 0);
+        CHECK("DAMP: fire every extra turn, meter two shorter (min 3)", dampBad == 0);
+        memset(&g, 0, sizeof(g)); g.mode = MODE_CLASSIC;
+        bool none = true;
+        for (int sh = 1; sh <= 12; sh++) { g.shelf = sh; boardNewShelf(&g); if ((sh < 4 || sh % 3 != 1) && g.twist) none = false; }
+        CHECK("no twist on shelves 1-3 or off the 3n+1 beat", none);
+        int repeats = 0; g.lastTwist = 0;
+        for (int k = 0; k < 40; k++) { g.shelf = 7; int prev = g.lastTwist; boardNewShelf(&g); if (g.twist == prev) repeats++; }
+        CHECK("a repeated twist is rerolled once (fewer than a third repeat)", repeats < 14);
+        g.mode = MODE_DAILY; g.dailySeed = 20260101; g.shelf = 4; boardNewShelf(&g);
+        CHECK("Daily never twists", g.twist == TWIST_NONE && countState(CELL_HOLE) == 0);
+        // the pass never sits above minRow: shelf 12 buries it in rows 5..7
+        g.mode = MODE_CLASSIC; bool deep = true;
+        for (int k = 0; k < 20; k++) {
+            g.shelf = 12; boardNewShelf(&g);
+            for (int c = 0; c < COLS; c++) for (int r = 0; r < 5; r++) if (g.back[c][r]) deep = false;
+        }
+        CHECK("shelf 12: every pass letter in rows 5..7", deep);
+    }
 
     // ---- note table
     u16 hz[128];

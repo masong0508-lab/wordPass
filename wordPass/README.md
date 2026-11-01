@@ -60,7 +60,8 @@ numbers.
 
 ### Modes
 
-- **Classic**: climb the shelves. Fire pressure and pass depth rise as you go.
+- **Classic**: climb the shelves. Fire pressure and pass depth rise as you go,
+  with a twist every third shelf from shelf 4 and three bookmarks per run.
 - **Daily Pass**: one fixed shelf for everyone, seeded from the DS clock date.
   Same board, same pass, one attempt per run. Pick it from the title screen or
   press SELECT there.
@@ -87,13 +88,46 @@ screen says so.
 
 ### Shelves
 
-Each shelf has its own pass (BOOK, PAGE, LAMP, SPELL, SHELF, QUILL ...).
-Shelves 1–3 are **Classic**: fire moves every other turn, the pass sits high
-and the heat meter holds 10. Shelves 3–5 tighten it to 7. From shelf 6 on it
+Every shelf draws its pass from a themed pool that matches the shelf's accent
+colour, and the plaque on the top screen names it (PASS - BINDERY). The eight
+pools cycle as you climb: **Bindery** (book, page, spine, jacket ...), **Ink**
+(nib, font, quill, scribe, parchment ...), **Verse** (poem, rhyme, sonnet,
+epigram ...), **Tales** (myth, fable, novel, chapter, epilogue ...), **Atlas**
+(map, globe, compass, gazetteer ...), **Archive** (codex, ledger, lexicon,
+glossary ...), **Lamp** (wick, candle, lantern, sconce ...) and **Study**
+(desk, shelf, lectern, footnote, bookmark ...). The pass gets longer with the
+shelf: four letters on shelves 1-2, five on 3-5, six on 6-8, seven on 9-12 and
+eight from shelf 13 (a pool without that length lends its nearest), and the
+last eight passes of the run are not repeated while the pool has a choice.
+The letters themselves come from a shuffled bag of 100 drawn without
+replacement, so a shelf never starves of vowels or drowns in them, J, Q, X and
+Z appear at most twice a bag, and a column that refills with nothing but
+consonants gets a vowel at the bottom. Daily boards use a separate random
+stream from the sparks and shakes, so two players on the same date see the
+same board, the same refills and the same fire.
+
+Shelves 1-3 are **Classic**: fire moves every other turn, the pass sits high
+and the heat meter holds 10. Shelves 3-5 tighten it to 7. From shelf 6 on it
 is **Lockdown**: fire every turn, a heat pulse every six turns, the pass
 buried low, and the music drops into a minor key. Lockdown climbs in tiers
-every three shelves: the pulse comes faster, the meter shrinks, and from tier
-two (shelf 12) every ignition lights two columns at once.
+every three shelves (the panel reads LOCKDOWN, LOCKDOWN II, III, IV): the
+pulse comes faster, the meter shrinks, and from tier two (shelf 12) every
+ignition lights two columns at once.
+
+From shelf 4, every third shelf (4, 7, 10 ...) has a **twist**, announced as
+you arrive and never the same one twice running:
+
+| Twist | Effect |
+| --- | --- |
+| INK SPILL | three cells are already holes when the shelf opens |
+| DAMP | the fire creeps one turn slower but the meter is two shorter |
+| BURIED | the pass is one letter longer and lies entirely in the bottom three rows |
+
+A Classic run starts with three **bookmarks**, shown as small books on the
+top screen. A failed shelf costs one and you retry the shelf; with none left
+the run is over. Restarting a shelf from the pause menu also costs one (it is
+refused on your last), and clearing a Lockdown shelf earns one back, up to
+three. Daily Pass has no bookmarks: one attempt.
 
 ## Controls
 
@@ -103,7 +137,7 @@ two (shelf 12) every ignition lights two columns at once.
 | A / SUBMIT button | submit word |
 | B / CLEAR button | clear chain |
 | Hold L or R | peek mode (tap a gem to peel it) |
-| START | pause (then START resume, SELECT restart shelf, B quit to title) |
+| START | pause (then START resume, SELECT restart shelf for one bookmark, B quit to title) |
 | Y (title) | options |
 
 ![wordPass](screenshot.png) ![fire](screenshot-fire.png) ![results](screenshot-results.png)

@@ -113,7 +113,17 @@ typedef struct {
     int  lastWordBurn;        // the last word went through a flame
     int  speedBonus, peelBonus, passBonusKind;   // results card: kind 0 none, 1 CLEAN, 2 PERFECT
     int  newBest;             // recordScore changed a saved record (cleared by startShelf)
+    // ---- progression (item 08)
+    int  lives;               // bookmarks left in a Classic run (3 at the start; Daily ignores them)
+    int  passTheme;           // pool the current pass came from, 0..NPASS_THEMES-1
+    u8   recentPass[8];       // ring of the last passes as theme * 16 + index + 1 (0 = empty)
+    int  recentHead;
+    int  twist;               // TWIST_* on this shelf (Classic, shelf >= 4 && shelf % 3 == 1)
+    int  lastTwist;           // the previous twist, so two in a row are rerolled once
 } Game;
+
+enum { TWIST_NONE = 0, TWIST_INK, TWIST_DAMP, TWIST_BURIED };
+#define NPASS_THEMES 8        // pass pools, one per shelf accent
 
 enum { MODE_CLASSIC = 0, MODE_DAILY };
 
@@ -149,6 +159,12 @@ extern Game G;
 
 // board.c
 void boardNewShelf(Game *g);
+u32  boardRand(void);                // xorshift32 for every board decision (never for cosmetics)
+void boardSeed(u32 seed);
+const char *boardPassTheme(const Game *g);   // "BINDERY", "INK" ... for the plaque label and the intro
+const char *boardTwistName(int twist);       // "INK SPILL", "DAMP", "BURIED" ("" for none)
+void boardBagReset(void);            // next randomLetter() refills the bag (tests; boardNewShelf does it)
+int  boardRandomLetter(void);        // one draw from the shuffled letter bag (exposed for tools/check)
 void boardDebugFireStep(Game *g);    // test channel: one fire advance plus gravity, no turn
 bool boardTryAddToChain(Game *g, int c, int r);
 void boardClearChain(Game *g);

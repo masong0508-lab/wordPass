@@ -3,14 +3,44 @@
 #include <stdlib.h>
 #include <string.h>
 
-static const char *PASSES[] = {
-    "book", "page", "lamp", "spell", "shelf", "quill", "ink", "novel",
-    "verse", "story", "fable", "index", "script", "margin", "chapter",
-    "library", "binding", "folio", "glossary", "epilogue"
+// Pass pools: one themed pool per shelf accent (theme = (shelf - 1) % 8). Every word is
+// in ENABLE and at most 9 letters; each pool spans lengths 4..7 at least so every shelf's
+// target length (4, 5, 6, 7, 8 as the shelves climb) has a candidate or a close neighbour.
+static const char *const POOL_BINDERY[] = { "book", "page", "leaf", "spine", "cover", "folio", "jacket", "binding" };
+static const char *const POOL_INK[]     = { "ink", "pen", "nib", "font", "blot", "etch", "rune", "quill", "scribe", "scroll", "vellum", "parchment" };
+static const char *const POOL_VERSE[]   = { "ode", "poem", "rhyme", "verse", "sonnet", "stanza", "ballad", "epigram" };
+static const char *const POOL_TALES[]   = { "myth", "saga", "fable", "story", "novel", "legend", "chapter", "epilogue" };
+static const char *const POOL_ATLAS[]   = { "map", "atlas", "globe", "chart", "compass", "meridian", "gazetteer" };
+static const char *const POOL_ARCHIVE[] = { "index", "codex", "ledger", "tome", "lexicon", "archive", "glossary", "almanac" };
+static const char *const POOL_LAMP[]    = { "lamp", "wick", "candle", "lantern", "sconce", "ember" };
+static const char *const POOL_STUDY[]   = { "desk", "shelf", "alcove", "lectern", "library", "footnote", "bookmark" };
+#define POOL(p) { p, (int)(sizeof(p) / sizeof(p[0])) }
+static const struct { const char *const *words; int n; } POOLS[NPASS_THEMES] = {
+    POOL(POOL_BINDERY), POOL(POOL_INK), POOL(POOL_VERSE), POOL(POOL_TALES),
+    POOL(POOL_ATLAS), POOL(POOL_ARCHIVE), POOL(POOL_LAMP), POOL(POOL_STUDY)
 };
-#define NPASSES (int)(sizeof(PASSES) / sizeof(PASSES[0]))
+static const char *const POOL_NAMES[NPASS_THEMES] = { "BINDERY", "INK", "VERSE", "TALES", "ATLAS", "ARCHIVE", "LAMP", "STUDY" };
+static const char *const TWIST_NAMES[4] = { "", "INK SPILL", "DAMP", "BURIED" };
 
-// Bookworm-style letter weights (Q stands for Qu)
+const char *boardPassTheme(const Game *g) { return POOL_NAMES[g->passTheme % NPASS_THEMES]; }
+const char *boardTwistName(int twist) { return TWIST_NAMES[(twist >= 0 && twist < 4) ? twist : 0]; }
+
+// ---- board RNG: xorshift32, seeded per shelf (from the Daily date or libc rand()). Every
+// board decision draws from it and nothing cosmetic does, so a Daily board, its refills and
+// its fire are identical for everyone whatever the frame timing of sparks and shakes.
+static u32 brng = 0x9E3779B9u;
+
+u32 boardRand(void)
+{
+    u32 x = brng;
+    x ^= x << 13; x ^= x >> 17; x ^= x << 5;
+    brng = x;
+    return x;
+}
+
+void boardSeed(u32 seed) { brng = seed ? seed : 0x9E3779B9u; }
+
+// Bookworm-style letter weights (Q stands for Qu); they sum to 102
 static const u8 LETTER_WEIGHT[26] = {
     /*a*/9,/*b*/2,/*c*/3,/*d*/4,/*e*/12,/*f*/2,/*g*/3,/*h*/3,/*i*/9,/*j*/1,
     /*k*/1,/*l*/4,/*m*/3,/*n*/6,/*o*/8,/*p*/2,/*q*/1,/*r*/6,/*s*/5,/*t*/6,
@@ -23,17 +53,43 @@ int letterValue(int l)
     return v[l];
 }
 
+static bool isVowel(int l) { return l == 0 || l == 4 || l == 8 || l == 14 || l == 20; }
+
+// ---- letter bag: 100 letters per cycle drawn without replacement, so a shelf's letter mix
+// tracks the weights instead of drifting. J, Q, X and Z share two slots per cycle in
+// rotation (rareRot picks the pair), so a bag never holds more than two rare letters.
+#define BAG_N 100
+static u8 bag[BAG_N];
+static int bagPos = BAG_N;
+static int rareRot;
+
+static int rareIndex(int l) { return l == 9 ? 0 : l == 16 ? 1 : l == 23 ? 2 : l == 25 ? 3 : -1; }
+
+static void refillBag(void)
+{
+    int n = 0;
+    for (int l = 0; l < 26; l++) {
+        int w = LETTER_WEIGHT[l], k = rareIndex(l);
+        if (k >= 0) w = (k == (rareRot & 3) || k == ((rareRot + 1) & 3)) ? 1 : 0;
+        for (int i = 0; i < w && n < BAG_N; i++) bag[n++] = (u8)l;
+    }
+    while (n < BAG_N) bag[n++] = 4;             // cannot happen with the weights above (102 - 4 + 2)
+    rareRot = (rareRot + 2) & 3;
+    for (int i = BAG_N - 1; i > 0; i--) {       // Fisher-Yates
+        int j = (int)(boardRand() % (u32)(i + 1));
+        u8 t = bag[i]; bag[i] = bag[j]; bag[j] = t;
+    }
+    bagPos = 0;
+}
+
 static int randomLetter(void)
 {
-    int total = 0;
-    for (int i = 0; i < 26; i++) total += LETTER_WEIGHT[i];
-    int r = rand() % total;
-    for (int i = 0; i < 26; i++) {
-        r -= LETTER_WEIGHT[i];
-        if (r < 0) return i;
-    }
-    return 4;
+    if (bagPos >= BAG_N) refillBag();
+    return bag[bagPos++];
 }
+
+void boardBagReset(void) { bagPos = BAG_N; }
+int  boardRandomLetter(void) { return randomLetter(); }
 
 int boardNeighbors(int c, int r, int outC[6], int outR[6])
 {
@@ -71,52 +127,132 @@ int boardBackNumber(const Game *g, int c, int r)
     return k;
 }
 
-// Bury the pass: a random walk that starts at or below minRow and is biased to stay there.
+// Bury the pass: a random walk that starts at or below minRow and never climbs above it,
+// so the whole pass sits in rows minRow..ROWS-1 (the fallback for a stuck walk keeps to
+// the same rows).
 static void placeSecrets(Game *g, int minRow)
 {
     memset(g->back, 0, sizeof(g->back));
     int placed = 0, guard = 0;
-    int c = rand() % COLS, r = minRow + rand() % (ROWS - minRow);
+    int c = boardRand() % COLS, r = minRow + boardRand() % (ROWS - minRow);
     while (placed < g->passLen && guard++ < 2000) {
         if (!g->back[c][r]) {
             g->back[c][r] = placed + 1;
             placed++;
         }
-        // random walk to a neighbour, biased to stay low
         int nc[6], nr[6], n = boardNeighbors(c, r, nc, nr);
-        int pick = rand() % n;
-        if (nr[pick] < minRow - 1 && (rand() & 3)) continue;
+        int pick = boardRand() % n;
+        if (nr[pick] < minRow) continue;
         c = nc[pick]; r = nr[pick];
     }
-    // fallback for pathological walks
     for (int i = placed; i < g->passLen; i++) {
         for (int t = 0; t < 500; t++) {
-            int cc = rand() % COLS, rr = rand() % ROWS;
+            int cc = boardRand() % COLS, rr = minRow + boardRand() % (ROWS - minRow);
             if (!g->back[cc][rr]) { g->back[cc][rr] = i + 1; break; }
         }
     }
 }
 
+// Pick the shelf's pass from its theme pool. Classic: the target length climbs with the
+// shelf (4, 5, 6, 7, 8), the pool's nearest length stands in when a pool lacks it (the
+// longer neighbour on ties), and the last eight passes are avoided while that leaves a
+// choice. Daily: theme and length come from a hash of the date, no RNG draws.
+static int passTargetLen(int shelf)
+{
+    return shelf <= 2 ? 4 : shelf <= 5 ? 5 : shelf <= 8 ? 6 : shelf <= 12 ? 7 : 8;
+}
+
+static int nearestPoolLen(int theme, int want)
+{
+    int best = -1;
+    for (int i = 0; i < POOLS[theme].n; i++) {
+        int len = strlen(POOLS[theme].words[i]);
+        if (len == want) return want;
+        int d = len > want ? len - want : want - len, bd = best > want ? best - want : want - best;
+        if (best < 0 || d < bd || (d == bd && len > best)) best = len;
+    }
+    return best;
+}
+
+static bool recentHas(const Game *g, int theme, int idx)
+{
+    u8 key = (u8)(theme * 16 + idx + 1);
+    for (int i = 0; i < 8; i++) if (g->recentPass[i] == key) return true;
+    return false;
+}
+
+static void pickPass(Game *g, int extraLen)
+{
+    int theme, idx, len;
+    int cand[16], nc = 0;
+    if (g->mode == MODE_DAILY) {
+        u32 hash = (u32)((u32)g->dailySeed * 2654435761u) >> 8;
+        theme = hash % NPASS_THEMES;
+        len = nearestPoolLen(theme, (hash & 8) ? 6 : 5);
+        for (int i = 0; i < POOLS[theme].n; i++) if ((int)strlen(POOLS[theme].words[i]) == len) cand[nc++] = i;
+        idx = cand[hash % nc];
+    } else {
+        theme = (g->shelf - 1) % NPASS_THEMES;
+        len = nearestPoolLen(theme, passTargetLen(g->shelf) + extraLen);
+        for (int i = 0; i < POOLS[theme].n; i++)
+            if ((int)strlen(POOLS[theme].words[i]) == len && !recentHas(g, theme, i)) cand[nc++] = i;
+        if (!nc)   // every word of this length was used lately: length wins over variety
+            for (int i = 0; i < POOLS[theme].n; i++) if ((int)strlen(POOLS[theme].words[i]) == len) cand[nc++] = i;
+        idx = cand[boardRand() % nc];
+        g->recentPass[g->recentHead & 7] = (u8)(theme * 16 + idx + 1);
+        g->recentHead = (g->recentHead + 1) & 7;
+    }
+    g->passTheme = theme;
+    strcpy(g->pass, POOLS[theme].words[idx]);
+    g->passLen = strlen(g->pass);
+}
+
+// INK SPILL: three holes in rows 2..6 over empty back cells, as if peeled before you came.
+static void spillInk(Game *g)
+{
+    for (int k = 0, guard = 0; k < 3 && guard < 200; guard++) {
+        int c = boardRand() % COLS, r = 2 + boardRand() % 5;
+        if (g->back[c][r] || g->cell[c][r].state == CELL_HOLE) continue;
+        g->cell[c][r].state = CELL_HOLE;
+        g->cell[c][r].yoff = 0; g->cell[c][r].yv = 0;
+        k++;
+    }
+}
+
 void boardNewShelf(Game *g)
 {
-    int idx = (g->mode == MODE_DAILY) ? (g->dailySeed * 7 + 3) % NPASSES : (g->shelf - 1) % NPASSES;
-    strcpy(g->pass, PASSES[idx]);
-    g->passLen = strlen(g->pass);
+    boardSeed(g->mode == MODE_DAILY ? (u32)g->dailySeed : (u32)rand());
+    // twists: Classic shelves 4, 7, 10 ... get one of three, never the same one twice running
+    g->twist = TWIST_NONE;
+    if (g->mode == MODE_CLASSIC && g->shelf >= 4 && g->shelf % 3 == 1) {
+        g->twist = 1 + boardRand() % 3;
+        if (g->twist == g->lastTwist) g->twist = 1 + boardRand() % 3;
+        g->lastTwist = g->twist;
+    }
+    pickPass(g, g->twist == TWIST_BURIED ? 1 : 0);
     memset(g->found, 0, sizeof(g->found));
     memset(g->scorched, 0, sizeof(g->scorched));
-    for (int c = 0; c < COLS; c++)
-        for (int r = 0; r < ROWS; r++) {
-            g->cell[c][r].letter = randomLetter();
-            g->cell[c][r].state = CELL_TILE;
-            g->cell[c][r].yoff = (-(ROWS - r) * TILE_H - 20 - (rand() % 30) - c * 6) * 16;
-            g->cell[c][r].yv = 0;
-            g->cell[c][r].squash = 0;
-            g->cell[c][r].flash = 0;
-        }
     // deeper shelves bury the pass lower in the board
     int minRow = (g->shelf <= 2) ? 1 : (g->shelf <= 5) ? 3 : (g->shelf <= 11) ? 4 : 5;
     if (g->mode == MODE_DAILY) minRow = 3;
-    placeSecrets(g, minRow);
+    if (g->twist == TWIST_BURIED) minRow = 5;
+    rareRot = boardRand() & 3;
+    for (int attempt = 0; attempt < 10; attempt++) {
+        boardBagReset();
+        for (int c = 0; c < COLS; c++)
+            for (int r = 0; r < ROWS; r++) {
+                g->cell[c][r].letter = randomLetter();
+                g->cell[c][r].state = CELL_TILE;
+                g->cell[c][r].yoff = (-(ROWS - r) * TILE_H - 20 - (int)(boardRand() % 30) - c * 6) * 16;
+                g->cell[c][r].yv = 0;
+                g->cell[c][r].squash = 0;
+                g->cell[c][r].flash = 0;
+            }
+        placeSecrets(g, minRow);
+        if (g->twist != TWIST_INK) break;
+        spillInk(g);
+        if (boardHasWords(g)) break;      // the spill left a word: keep this board
+    }
     g->chainLen = 0;
     g->turn = 0;
     g->heat = 0;
@@ -159,6 +295,11 @@ void boardNewShelf(Game *g)
         g->burnEvery = 1;
         g->heatThreshold -= 2;
         if (g->heatThreshold < 4) g->heatThreshold = 4;
+    }
+    if (g->twist == TWIST_DAMP) {   // a damp shelf: the fire creeps slower but catches sooner
+        g->burnEvery += 1;
+        g->heatThreshold -= 2;
+        if (g->heatThreshold < 3) g->heatThreshold = 3;
     }
 }
 
@@ -233,7 +374,8 @@ static int applyGravity(Game *g)
             w--;
         }
         // refill every segment: after compaction the empties sit at each segment's top
-        int segStart = 0;
+        int segStart = 0, colSpawned = 0, lowest = -1;
+        bool vowel = false;
         for (int r = 0; r <= ROWS; r++) {
             if (r < ROWS && !gravityFloor(g->cell[c][r].state)) continue;
             int k = 0;
@@ -245,9 +387,21 @@ static int applyGravity(Game *g)
                 g->cell[c][rr].yv = 0;
                 g->cell[c][rr].squash = 0;
                 g->cell[c][rr].flash = 0;
-                k++; spawned++;
+                if (isVowel(g->cell[c][rr].letter)) vowel = true;
+                if (rr > lowest) lowest = rr;
+                k++; spawned++; colSpawned++;
             }
             segStart = r + 1;
+        }
+        // vowel floor: a column refilled with three or more consonants and nothing else gets
+        // a vowel in its lowest new gem, swapped with the next vowel in the bag so the
+        // cycle's letter mix is unchanged (an empty bag tail leaves the column as it fell)
+        if (colSpawned >= 3 && !vowel && lowest >= 0) {
+            for (int i = bagPos; i < BAG_N; i++) {
+                if (!isVowel(bag[i])) continue;
+                u8 t = bag[i]; bag[i] = g->cell[c][lowest].letter; g->cell[c][lowest].letter = t;
+                break;
+            }
         }
     }
     return spawned;
@@ -257,7 +411,7 @@ static int applyGravity(Game *g)
 // trying every column from a random start. Returns false when no gem is left to light.
 static bool igniteColumn(Game *g, int avoid)
 {
-    int start = rand() % COLS;
+    int start = boardRand() % COLS;
     for (int k = 0; k < COLS; k++) {
         int c = (start + k) % COLS;
         if (c == avoid) continue;

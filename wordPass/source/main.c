@@ -14,6 +14,16 @@ static void setMsg(const char *m, int frames)
     G.msgTimer = frames;
 }
 
+// a message queued behind the current one: shown when msgTimer runs out
+static char pendingMsg[32];
+static int pendingFrames;
+
+static void queueMsg(const char *m, int frames)
+{
+    strncpy(pendingMsg, m, 31); pendingMsg[31] = 0;
+    pendingFrames = frames;
+}
+
 static void startShelf(void)
 {
     boardNewShelf(&G);
@@ -21,8 +31,14 @@ static void startShelf(void)
     gfxFadeIn();
     musicNewShelf(G.shelf, G.lockdown);
     char s[32];
-    siprintf(s, "FIND THE %d LETTER PASS", G.passLen);
-    setMsg(s, 180);
+    siprintf(s, "%s: FIND THE %d LETTER PASS", boardPassTheme(&G), G.passLen);   // 31 chars at most
+    pendingMsg[0] = 0;
+    if (G.twist) {
+        char t[32];
+        siprintf(t, "SHELF %d: %s", G.shelf, boardTwistName(G.twist));
+        setMsg(t, 150);
+        queueMsg(s, 180);
+    } else setMsg(s, 180);
 }
 
 static int todaySeed(void)
@@ -39,6 +55,9 @@ static void newGame(int mode)
     G.shelf = 1;
     G.score = 0;
     G.hintShown = 0;
+    G.lives = 3;
+    G.twist = 0; G.lastTwist = 0;
+    memset(G.recentPass, 0, sizeof(G.recentPass)); G.recentHead = 0;
     if (mode == MODE_DAILY) { G.dailySeed = todaySeed(); srand(G.dailySeed); }
     startShelf();
     G.state = ST_PLAY;
@@ -75,8 +94,10 @@ static void quitToTitle(void)
     G.mode = MODE_CLASSIC;
     G.shelf = 1;
     G.score = 0;
+    G.twist = 0;
     boardNewShelf(&G);
     G.state = ST_TITLE;
+    G.msg[0] = 0; G.msgTimer = 0; pendingMsg[0] = 0;
     gfxFadeIn();
     musicNewShelf(1, false);
 }
@@ -85,6 +106,7 @@ static void enterFail(void)
 {
     G.state = ST_FAIL;
     boardClearChain(&G);
+    if (G.mode == MODE_CLASSIC && G.lives > 0) G.lives--;   // a failed shelf costs a bookmark
     recordScore();
     gfxShake(14);
     gfxFlash();
@@ -184,6 +206,7 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
                 else if (G.peels <= G.passLen + 2) { G.passBonusKind = 1; G.peelBonus = 150 * G.shelf; }
                 else { G.passBonusKind = 0; G.peelBonus = 0; }
                 G.score += shelfBonus + G.speedBonus + G.peelBonus;
+                if (G.lockdown && G.mode == MODE_CLASSIC && G.lives < 3) G.lives++;   // a Lockdown shelf earns a bookmark back
                 if (G.passBonusKind == 2)                // a perfect pass: every diamond sparkles
                     for (int dc = 0; dc < COLS; dc++)
                         for (int dr = 0; dr < ROWS; dr++)
@@ -266,7 +289,7 @@ int main(void)
             case ST_FAIL:
                 G.stateTimer++;
                 if (G.stateTimer > 45 && (down & (KEY_TOUCH | KEY_START | KEY_A))) {
-                    if (G.mode == MODE_DAILY) { quitToTitle(); break; }
+                    if (G.mode == MODE_DAILY || G.lives <= 0) { quitToTitle(); break; }   // no bookmark left: the run is over
                     G.score = G.shelfStartScore;
                     startShelf();
                     G.state = ST_PLAY;
@@ -274,11 +297,19 @@ int main(void)
                 break;
             case ST_PAUSE:
                 if (down & KEY_START) G.state = ST_PLAY;
-                else if (down & KEY_SELECT) { G.score = G.shelfStartScore; if (G.mode == MODE_DAILY) srand(G.dailySeed); startShelf(); G.state = ST_PLAY; }
+                else if (down & KEY_SELECT) {
+                    // a restart costs a bookmark in Classic and is refused on the last one
+                    if (G.mode == MODE_CLASSIC && G.lives <= 1) { setMsg("LAST BOOKMARK", 60); break; }
+                    if (G.mode == MODE_CLASSIC) G.lives--;
+                    G.score = G.shelfStartScore; startShelf(); G.state = ST_PLAY;
+                }
                 else if (down & KEY_B) quitToTitle();
                 break;
         }
-        if (G.msgTimer > 0 && --G.msgTimer == 0) G.msg[0] = 0;
+        if (G.msgTimer > 0 && --G.msgTimer == 0) {
+            G.msg[0] = 0;
+            if (pendingMsg[0]) { setMsg(pendingMsg, pendingFrames); pendingMsg[0] = 0; }
+        }
         boardAnimate(&G);
         musicTick(&G);
         debugSync(&G);

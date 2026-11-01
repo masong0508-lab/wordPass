@@ -18,7 +18,9 @@ A clean build must print `built ... wordPass.nds` and no warnings.
 `tools/check/board_test.c` loads `data/dict.bin` and exercises the rules directly: fire
 over holes and secrets, gravity with a hole, Qu+I+Z, chain backtracking, peeling (scorch,
 reveal, OUT OF WORDS on an all-x board), dictionary tiers (`zax` rare, `book` common) and
-the note table (`musicBuildNotes`: C4 = 262, A4 = 440). `tools/check/stub/nds.h` stands in
+the note table (`musicBuildNotes`: C4 = 262, A4 = 440), the letter bag (100 a cycle, two
+of J/Q/X/Z, the vowel floor, seed determinism), the pass pools (shelf 2 is a 4-letter INK
+word for every `recentPass` state, lengths by shelf), Daily determinism and the twists. `tools/check/stub/nds.h` stands in
 for libnds (types, `ARGB16`, empty placement attributes, the PSG calls) and
 `tools/check/stubs.c` defines `S`, `dict_bin` and the sound stubs. When board.c or music.c
 starts calling a new gfx*/music*/sound* symbol, add it to stubs.c or the link will say so.
@@ -45,8 +47,10 @@ to `DebugView`, add its `PIN(...)`, bump the size assert, add it to `OFF`, and r
 `state()`. `state()` returns the scalars (`state, mode, shelf, score, fail, turn, heat,
 chainLen, peels, lockdown, bestWordScore, dailySeed, passLen, lastWordTier, rareWords,
 library, heatThreshold, burnEvery, burnTimer, optRow, pulseEvery, lockTier, overtime,
-chainScore, speedBonus, peelBonus, passBonusKind, ledgerN, newBest`; `chainScore` is
-`boardChainScore(g)` every frame, the exact gain the current chain would submit for),
+chainScore, speedBonus, peelBonus, passBonusKind, ledgerN, newBest, lives, passTheme,
+twist`; `chainScore` is `boardChainScore(g)` every frame, the exact gain the current chain
+would submit for; `passTheme` indexes `wp.PASS_THEMES`, `twist` is 0 none, 1 INK SPILL,
+2 DAMP, 3 BURIED),
 `pass`, `found`, `cell[c][r] =
 (letter, state)`, `back`, `scorched`, `msg`, `lastWord`, `bestWord`, `settings`
 (theme/hand/fire/music) and `chain` as a list of `(c, r)`.
@@ -58,7 +62,7 @@ a2, a3)` does the writes and runs two frames, and asserts the command was consum
 Helpers: `set_cell(c, r, state, letter)` (state EMPTY/TILE/BURN/HOLE/SECRET = 0..4,
 letter `'a'..'z'` or 0..25; motion and flash cleared), `set_back(c, r, v)` (0 or pass
 index + 1), `set_heat(h)`, `set_burn(timer, every)`, `fire_step()` (one fire advance plus
-gravity, no turn: `boardDebugFireStep`), `set_turn(n)`, `set_score(n)` (command 8). Command 7 (lives) is reserved.
+gravity, no turn: `boardDebugFireStep`), `set_turn(n)`, `set_score(n)` (command 8), `set_lives(n)` (command 7: bookmarks).
 Pokes bypass the game's own invariants, so set up whole columns explicitly.
 
 Recipes: `set_burn(0, 99)` keeps the fire still across submits, `set_burn(0, 1)` makes it
@@ -71,7 +75,14 @@ so a scenario that must stay flame-free keeps `set_heat(0)` fresh. `set_turn(0)`
 shelf overtime (turn 24, 16 in Lockdown) out of a long scenario. `burn_cells(g)`,
 `lowest_fire_row(g)` and `heat_for(n)` read the fire state the way board.c computes it.
 `test_rules.py` has `fresh_shelf()` (pause + SELECT restarts the shelf on a clean random
-board) and `play_turn(pick)` with the `shortest` and `longest_fire_aware` strategies.
+board; a restart costs a bookmark, so it pokes `lives` back to 3 first), `to_title()`,
+`clear_shelf()` (peels the pass in order with the fire held off and taps through the
+results card: the way to reach a given shelf) and `play_turn(pick)` with the `shortest`
+and `longest_fire_aware` strategies. `letter_mix(g)` counts vowels and J/Q/X/Z on a board.
+Board randomness is board.c's own xorshift (`boardRand`, seeded per shelf from the Daily
+date or libc `rand()`); gfx keeps libc `rand()` for sparks and shakes, so a Daily board and
+its refills are identical between runs whatever the frame timing. `make check` exercises
+the letter bag directly through `boardSeed`, `boardBagReset` and `boardRandomLetter`.
 `Emu.word_score(word, burn, diamonds, repeat)` and `Emu.pass_bonus(shelf, turn, peels,
 passLen)` are Python ports of the scoring curve (board.c `chainScoreDetail`, main.c pass
 completion) for exact score assertions.

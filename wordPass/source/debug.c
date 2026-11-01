@@ -36,7 +36,8 @@ typedef struct {
     s32 pulseEvery, lockTier, overtime;     // 452, 456, 460
     s32 chainScore;                         // 464: boardChainScore(g), the live preview
     s32 speedBonus, peelBonus, passBonusKind, ledgerN, newBest;   // 468, 472, 476, 480, 484
-} DebugView;                                // total 488
+    s32 lives, passTheme, twist;            // 488, 492, 496 (lockTier is at 456)
+} DebugView;                                // total 500
 
 #define PIN(field, off) _Static_assert(offsetof(DebugView, field) == (off), "DebugView." #field " moved: update tools/emu/wp.py OFF")
 PIN(magic, 0); PIN(frame, 4); PIN(state, 8); PIN(mode, 12); PIN(shelf, 16); PIN(score, 20);
@@ -51,7 +52,8 @@ PIN(scorched, 368); PIN(theme, 424); PIN(hand, 425); PIN(fire, 426); PIN(music, 
 PIN(optRow, 428); PIN(chainC, 432); PIN(chainR, 442);
 PIN(pulseEvery, 452); PIN(lockTier, 456); PIN(overtime, 460);
 PIN(chainScore, 464); PIN(speedBonus, 468); PIN(peelBonus, 472); PIN(passBonusKind, 476); PIN(ledgerN, 480); PIN(newBest, 484);
-_Static_assert(sizeof(DebugView) == 488, "DebugView size changed: update tools/emu/wp.py");
+PIN(lives, 488); PIN(passTheme, 492); PIN(twist, 496);
+_Static_assert(sizeof(DebugView) == 500, "DebugView size changed: update tools/emu/wp.py");
 
 volatile DebugView DBG;
 
@@ -63,7 +65,7 @@ enum {
     POKE_BURN,      // burnTimer = a0, burnEvery = a1
     POKE_FIRESTEP,  // one fire advance plus gravity
     POKE_TURN,      // turn = a0
-    POKE_LIVES,     // reserved: lives = a0 (item 08)
+    POKE_LIVES,     // lives = a0 (bookmarks)
     POKE_SCORE      // score = a0 (panel layout checks)
 };
 
@@ -86,7 +88,7 @@ static void applyPoke(Game *g)
         case POKE_BURN:     g->burnTimer = a0; g->burnEvery = a1 > 0 ? a1 : 1; break;
         case POKE_FIRESTEP: boardDebugFireStep(g); break;
         case POKE_TURN:     g->turn = a0; break;
-        case POKE_LIVES:    break;   // no lives field yet
+        case POKE_LIVES:    g->lives = a0; break;
         case POKE_SCORE:    g->score = a0; break;
     }
     DBG.cmd = 0;
@@ -123,4 +125,5 @@ void debugSync(Game *g)
     DBG.chainScore = boardChainScore(g);
     DBG.speedBonus = g->speedBonus; DBG.peelBonus = g->peelBonus; DBG.passBonusKind = g->passBonusKind;
     DBG.ledgerN = g->ledgerN; DBG.newBest = g->newBest;
+    DBG.lives = g->lives; DBG.passTheme = g->passTheme; DBG.twist = g->twist;
 }

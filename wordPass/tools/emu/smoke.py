@@ -11,6 +11,8 @@ e.run(150); e.shot(f'{out}/smoke_title.png')
 fps = e.fps(); assert fps >= 118, f'title fps too low: {fps}/120 (expect 120)'
 e.tap(52, 147); e.run(150)
 g = e.state(); assert g['state'] == 1, f'not in play after CLASSIC tap: {g["state"]}'
+assert g['passLen'] == 4 and g['passTheme'] == 0 and g['lives'] == 3, f'shelf 1: pass {g["pass"]!r} theme {g["passTheme"]} lives {g["lives"]}'
+v, rare, n = e.letter_mix(g); assert v * 4 >= n and rare <= 3, f'shelf 1 letter mix: {v} vowels, {rare} rare of {n}'
 fps = e.fps(); assert fps >= 110, f'play fps too low: {fps}/120 (expect 120)'
 # pause dims the board strip in hardware; resuming must switch the effect back off
 lit = e.strip_brightness()
@@ -69,6 +71,7 @@ e.shot(f'{out}/smoke_passed.png')
 fps = e.fps(); assert fps >= 118, f'results fps too low: {fps}/120 (expect 120)'
 e.tap(100, 100); e.run(200)
 g = e.state(); assert g['shelf'] == 2 and g['state'] == 1, f'did not advance to shelf 2: {g["shelf"]} {g["state"]}'
+assert g['passLen'] == 4 and g['passTheme'] == 1, f'shelf 2: pass {g["pass"]!r} theme {g["passTheme"]}'
 # burn it down with short words
 for t in range(60):
     g = e.state()
@@ -77,6 +80,7 @@ for t in range(60):
     if not ws: break
     e.chain(ws[0][1]); e.press('A')
 g = e.state(); assert g['state'] == 3, f'expected a fail state, got {g["state"]}'
+assert g['lives'] == 2, f'a fail should cost a bookmark: lives {g["lives"]}'
 e.shot(f'{out}/smoke_fail.png')
 fps = e.fps(); assert fps >= 118, f'fail-screen fps too low: {fps}/120 (expect 120)'
 print('SMOKE OK: fail reason', g['fail'], 'turns', g['turn'])
