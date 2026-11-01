@@ -29,6 +29,7 @@ flame
 coal
 breeze
 flood
+swamp
 shade
 moonlight
 sunlight

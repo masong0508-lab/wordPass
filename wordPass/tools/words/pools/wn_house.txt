@@ -6,6 +6,7 @@ bottle
 chair
 desk
 settle
+pocket
 bike
 bedroom
 lower
@@ -26,6 +27,7 @@ furniture
 locker
 throne
 bucket
+sack
 suitcase
 wagon
 drawer
@@ -38,6 +40,7 @@ envelope
 lobby
 carriage
 bicycle
+auto
 spoon
 stall
 sofa

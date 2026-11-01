@@ -9,6 +9,8 @@ poison
 refuse
 dust
 solution
+trash
+sand
 crush
 steel
 fuel
@@ -21,6 +23,7 @@ powder
 coke
 soda
 packing
+leather
 steam
 lighter
 cotton
@@ -49,6 +52,7 @@ extract
 sponge
 hydrogen
 lime
+beaver
 atom
 mixture
 chalk
@@ -63,11 +67,13 @@ uranium
 vitamin
 gunpowder
 fiber
+alligator
 mace
 slime
 thinner
 ivory
 builder
+timber
 fraction
 platinum
 rubble

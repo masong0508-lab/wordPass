@@ -70,11 +70,13 @@ maple
 mandarin
 bennet
 vine
+clover
 stump
 orchid
 pollen
 myrtle
 twig
+burr
 snowball
 linden
 fuzz

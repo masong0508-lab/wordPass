@@ -12,6 +12,7 @@ director
 begin
 hero
 sergeant
+prince
 cook
 commander
 princess
@@ -49,6 +50,7 @@ waiter
 cowboy
 employee
 editor
+bunny
 baron
 superman
 candidate

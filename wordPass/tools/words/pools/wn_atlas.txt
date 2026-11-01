@@ -1,6 +1,7 @@
 place
 hell
 city
+town
 earth
 state
 rock
@@ -11,11 +12,14 @@ park
 agent
 scene
 seat
+position
 field
 island
 reach
 river
+moon
 spot
+hole
 track
 beach
 corner
@@ -47,10 +51,12 @@ district
 trail
 cave
 centre
+jungle
 chip
 spit
 cliff
 territory
+strip
 heavens
 flies
 shore
@@ -78,6 +84,7 @@ resort
 pond
 homeland
 cape
+swamp
 landscape
 heights
 grain
@@ -146,6 +153,7 @@ fragment
 ledge
 crest
 cavity
+prairie
 rift
 bedside
 brook
@@ -175,6 +183,7 @@ equator
 hillside
 tract
 borough
+dune
 piazza
 suburb
 burrow

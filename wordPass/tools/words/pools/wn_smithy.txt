@@ -15,6 +15,7 @@ bomb
 billy
 knife
 spoke
+bullet
 sword
 clock
 bones
@@ -38,6 +39,7 @@ brad
 doorbell
 hammer
 drill
+pole
 rifle
 radar
 pump
@@ -93,6 +95,7 @@ flute
 warmer
 broom
 machinery
+strap
 kris
 doorstep
 keyboard
@@ -120,6 +123,7 @@ knuckles
 override
 dart
 zipper
+wand
 dickie
 scalpel
 clamp
@@ -157,6 +161,7 @@ propeller
 pedestal
 rein
 perch
+diaphragm
 scourge
 shim
 crutch

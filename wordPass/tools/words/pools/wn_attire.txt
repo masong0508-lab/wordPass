@@ -4,6 +4,7 @@ stole
 pants
 shirt
 coat
+jacket
 stays
 mask
 jean
@@ -29,6 +30,7 @@ jewel
 veil
 blouse
 jewellery
+diaper
 drawers
 apron
 trunks

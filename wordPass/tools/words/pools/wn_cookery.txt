@@ -9,14 +9,17 @@ milk
 meat
 feed
 sugar
+cheese
 eggs
 bread
 meal
 pizza
+chocolate
 soup
 candy
 toast
 rice
+juice
 alcohol
 apple
 sandwich
@@ -29,6 +32,7 @@ serving
 supper
 diet
 dressing
+lemon
 steak
 pork
 dessert
@@ -52,9 +56,11 @@ pasta
 marge
 tomato
 tuck
+jelly
 baba
 spaghetti
 chili
+curry
 coconut
 sushi
 sherry
@@ -66,6 +72,7 @@ syrup
 martini
 cabbage
 pickle
+gravy
 vintage
 yogurt
 muffin
@@ -89,6 +96,7 @@ latte
 cracker
 grape
 stuffing
+pancake
 brew
 melon
 leftovers
@@ -96,6 +104,7 @@ vinegar
 salsa
 goody
 cuisine
+fudge
 greens
 pear
 luncheon
@@ -103,6 +112,7 @@ ration
 oatmeal
 beverage
 mutton
+waffle
 walnut
 barley
 slop

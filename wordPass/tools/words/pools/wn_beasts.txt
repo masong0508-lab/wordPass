@@ -2,18 +2,22 @@ horse
 fish
 queen
 bear
+bird
 humans
+monkey
 wolf
 snake
 bull
 tail
 duck
+chick
 molly
 wing
 sheep
 rabbit
 virus
 turkey
+beef
 mouse
 shark
 elephant
@@ -32,6 +36,7 @@ worm
 butterfly
 pony
 buffalo
+cricket
 crab
 hawk
 crow
@@ -42,6 +47,7 @@ feather
 swine
 raven
 mule
+camel
 squirrel
 parrot
 steed
@@ -56,6 +62,7 @@ gorilla
 brent
 penguin
 toad
+moose
 kitten
 panda
 insect
