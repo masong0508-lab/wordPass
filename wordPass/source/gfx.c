@@ -6,11 +6,14 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-static u16 *vramMain, *vramSub;
+// The touch screen is rendered straight into VRAM: bank A and bank B each hold a
+// 256x256x16 bitmap, and the main BG flips between them at vblank.
+static u16 *vramSub;
 static int bgMain;
-static u16 bufMain[SCREEN_W * SCREEN_H];
-static u16 bufSub[SCREEN_W * SCREEN_H];
-static u16 *cur;
+static u16 *vramFront = (u16 *)0x06000000, *vramBack = (u16 *)0x06020000;
+static int backBank = 1;                      // which bank vramBack points at
+static u16 ALIGN(4) bufSub[SCREEN_W * SCREEN_H];
+static u16 *cur;                              // current render target (VRAM or bufSub)
 static int frame;
 // Build with -DWP_PROFILE to expose per-stage render timings in dbgT[]
 #ifdef WP_PROFILE
@@ -93,7 +96,7 @@ static inline void px(int x, int y, u16 col)
     if ((unsigned)x < SCREEN_W && (unsigned)y < SCREEN_H) cur[y * SCREEN_W + x] = col;
 }
 
-static void fillRect(int x, int y, int w, int h, u16 col)
+static ITCM_CODE __attribute__((noinline)) void fillRect(int x, int y, int w, int h, u16 col)
 {
     if (x < 0) { w += x; x = 0; }
     if (y < 0) { h += y; y = 0; }
@@ -221,7 +224,7 @@ static void drawGemSized(int x, int y, int w, int h, const GemPal *p, bool lit)
 
 // ---- gem sprite cache: each palette rendered once, then blitted with word copies
 #define NGEMPAL 7
-static DTCM_BSS u16 gemCache[NGEMPAL][TILE_H][TILE_W];   // 7.4 KB in zero-wait DTCM
+static DTCM_BSS ALIGN(4) u16 gemCache[NGEMPAL][TILE_H][TILE_W];   // 7.4 KB in zero-wait DTCM
 static bool gemCacheReady;
 static const GemPal *GEM_PALS[NGEMPAL];
 
@@ -260,7 +263,7 @@ static void buildGemCache(void)
 }
 
 // blit a cached gem; colour 0 is transparent (the rounded corners)
-static void blitGem(int x, int y, int pal)
+static ITCM_CODE __attribute__((noinline)) void blitGem(int x, int y, int pal)
 {
     if (y < 0 || y + TILE_H > SCREEN_H || x < 0 || x + TILE_W > SCREEN_W) {
         drawGemSized(x, y, TILE_W, TILE_H, GEM_PALS[pal], false);   // clipped: slow path
@@ -272,8 +275,8 @@ static void blitGem(int x, int y, int pal)
         if (j == 0 || j == TILE_H - 1 || j == 1 || j == TILE_H - 2) {
             for (int k = 0; k < TILE_W; k++) if (src[k]) dst[k] = src[k];
         } else if (((uintptr_t)dst & 2) == 0) {
-            const u32 *s32 = (const u32 *)src; u32 *d32 = (u32 *)dst;
-            for (int k = 0; k < TILE_W / 2; k++) d32[k] = s32[k];
+            const u32 *src32 = (const u32 *)src; u32 *d32 = (u32 *)dst;
+            for (int k = 0; k < TILE_W / 2; k++) d32[k] = src32[k];
         } else {
             for (int k = 0; k < TILE_W; k++) dst[k] = src[k];
         }
@@ -281,7 +284,7 @@ static void blitGem(int x, int y, int pal)
 }
 
 // 2x glyph with a one-pixel drop shadow, written directly (no per-rect clipping)
-static void drawChar2Shadow(int x, int y, char ch, u16 col, u16 shadow)
+static ITCM_CODE __attribute__((noinline)) void drawChar2Shadow(int x, int y, char ch, u16 col, u16 shadow)
 {
     if (x < 1 || y < 1 || x + 11 >= SCREEN_W || y + 15 >= SCREEN_H) { drawChar(x + 1, y + 1, ch, shadow, 2); drawChar(x, y, ch, col, 2); return; }
     const u8 *gl = font5x7[fontIndex(ch)];
@@ -311,7 +314,7 @@ static void drawGemOutline(int x, int y)
 enum { P_SHARD = 0, P_SPARK, P_STAR };
 typedef struct { s16 x, y, vx, vy; u8 life, maxLife, kind; u16 col; } Particle;   // 1/8 px units
 #define MAXP 112
-static Particle P[MAXP];
+static DTCM_BSS Particle P[MAXP];
 
 static void spawn(int kind, int x, int y, int vx, int vy, int life, u16 col)
 {
@@ -334,7 +337,7 @@ static void stepParticles(void)
     }
 }
 
-static void drawParticles(void)
+static ITCM_CODE __attribute__((noinline)) void drawParticles(void)
 {
     for (int i = 0; i < MAXP; i++) {
         Particle *q = &P[i];
@@ -353,7 +356,7 @@ static void drawParticles(void)
 // ---------------------------------------------------------------- popups
 
 typedef struct { s16 x, y; u8 life; char txt[12]; u16 col; } Popup;
-static Popup pops[6];
+static DTCM_BSS Popup pops[6];
 
 static void stepPopups(void)
 {
@@ -370,6 +373,9 @@ static void drawPopups(void)
 
 // ---------------------------------------------------------------- layout
 
+// The framed board strip is BOARD_W pixels wide: x 0..173 right-handed, 82..255 left-handed.
+// Every frame repaints the strip edge to edge, since VRAM holds whatever was there last.
+#define BOARD_W 174
 static int gridX = GRID_X, panelX = 176, boardX0 = 0;   // boardX0: left edge of the framed board area
 #define BX(x) ((x) + boardX0)
 
@@ -401,7 +407,7 @@ bool gfxInClear(int x, int y)  { return x >= PANEL_X && x < PANEL_X + 76 && y >=
 
 void gfxApplySettings(void)
 {
-    if (S.hand == HAND_LEFT) { boardX0 = SCREEN_W - 173; gridX = boardX0 + GRID_X; panelX = 4; }
+    if (S.hand == HAND_LEFT) { boardX0 = SCREEN_W - BOARD_W; gridX = boardX0 + GRID_X; panelX = 4; }   // gridX 86: even, so gem blits stay word aligned
     else { boardX0 = 0; gridX = GRID_X; panelX = 176; }
     buildGemCache();
 }
@@ -489,11 +495,11 @@ static void drawLetter(int x, int y, int letter, u16 col, u16 shadow)
 static bool inChain(const Game *g, int c, int r);
 
 // Clears the board area, except under gems that will be fully overdrawn.
-static void drawBackdrop(const Game *g)
+static ITCM_CODE __attribute__((noinline)) void drawBackdrop(const Game *g)
 {
     // margins around the grid
     fillRect(boardX0, 0, GRID_X, SCREEN_H, BLACK);
-    fillRect(gridX + COLS * TILE_W, 0, 173 - GRID_X - COLS * TILE_W, SCREEN_H, BLACK);
+    fillRect(gridX + COLS * TILE_W, 0, BOARD_W - GRID_X - COLS * TILE_W, SCREEN_H, BLACK);
     for (int c = 0; c < COLS; c++) {
         int x = gridX + c * TILE_W, top = GRID_Y + ((c & 1) ? ODD_SHIFT : 0);
         fillRect(x, 0, TILE_W, top, BLACK);
@@ -522,7 +528,7 @@ static void drawBackdrop(const Game *g)
     }
 }
 
-static void drawBoard(const Game *g)
+static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
 {
     bool peek = g->peekHeld;
     for (int c = 0; c < COLS; c++) {
@@ -567,9 +573,9 @@ static void drawBoard(const Game *g)
                 case CELL_BURN: {
                     int ph = (frame + c * 7 + r * 3) & 15;
                     int pulse = ph < 8 ? ph : 15 - ph;
-                    GemPal fp = GEM_FIRE;
-                    fp.mid = lerp15(C(31,4,0), C(31,14,0), pulse * 2);
-                    drawGemSized(x, yd + sq, TILE_W, TILE_H - sq, &fp, lit);
+                    GemPal firePal = GEM_FIRE;
+                    firePal.mid = lerp15(C(31,4,0), C(31,14,0), pulse * 2);
+                    drawGemSized(x, yd + sq, TILE_W, TILE_H - sq, &firePal, lit);
                     drawLetter(x, yd + sq / 2, cl->letter, WHITE, C(14,2,0));
                     // pulsing red rim and flame tongues licking over the top edge
                     rectOutline(x, yd, TILE_W, TILE_H, lerp15(C(20,2,0), FIRE2, pulse * 2));
@@ -641,11 +647,11 @@ static void drawDanger(const Game *g)
     }
 }
 
-static void drawPanel(const Game *g)
+static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
 {
     // gold frame around the grid, with a shimmer running along the top edge
-    rectOutline(BX(0), 0, 173, SCREEN_H, GOLD_DK);
-    rectOutline(BX(1), 1, 171, SCREEN_H - 2, GOLD);
+    rectOutline(BX(0), 0, BOARD_W, SCREEN_H, GOLD_DK);
+    rectOutline(BX(1), 1, BOARD_W - 2, SCREEN_H - 2, GOLD);
     int sh = (frame * 2) % 240 - 20;
     for (int i = 0; i < 14; i++) { px(BX(1 + sh + i), 1, GOLD_LT); px(BX(1 + sh + i), 0, GOLD); }
 
@@ -810,7 +816,7 @@ static void drawTop(const Game *g)
 static void drawTitle(const Game *g)
 {
     (void)g;
-    dimRect(boardX0, 0, 173, SCREEN_H);
+    dimRect(boardX0, 0, BOARD_W, SCREEN_H);
     // the logo as a row of gems
     static const char *letters = "wordPASS";
     const GemPal *pals[8] = { GEM_RUBY, GEM_SAPPHIRE, GEM_EMERALD, GEM_AMBER, GEM_AMETHYST, GEM_RUBY, GEM_SAPPHIRE, GEM_EMERALD };
@@ -853,9 +859,9 @@ static const char *const FIRE_NAMES[FIRE_COUNT] = { "RELAXED", "NORMAL", "FAST" 
 
 static void drawOptions(const Game *g)
 {
-    fillRect(boardX0, 0, 173, SCREEN_H, BLACK);
-    rectOutline(BX(0), 0, 173, SCREEN_H, GOLD_DK);
-    rectOutline(BX(1), 1, 171, SCREEN_H - 2, GOLD);
+    fillRect(boardX0, 0, BOARD_W, SCREEN_H, BLACK);
+    rectOutline(BX(0), 0, BOARD_W, SCREEN_H, GOLD_DK);
+    rectOutline(BX(1), 1, BOARD_W - 2, SCREEN_H - 2, GOLD);
     drawTextShadow(BX(86) - textWidth("OPTIONS", 2) / 2, 14, "OPTIONS", GOLD_LT, 2);
     int sel = g->stateTimer;
     for (int i = 0; i < OPT_ROWS; i++) {
@@ -919,8 +925,8 @@ static void drawTipCard(int which)
     } else {
         drawTextCenter(BX(cx), y, "FIRE", FIRE2, 1);
         int gx = cx - 40;
-        GemPal fp = GEM_FIRE; fp.mid = (frame & 8) ? C(31,8,0) : C(31,14,0);
-        drawGemSized(BX(gx), y + 14, TILE_W, TILE_H, &fp, false); drawChar(BX(gx + 7), y + 18, 'R', WHITE, 2);
+        GemPal firePal = GEM_FIRE; firePal.mid = (frame & 8) ? C(31,8,0) : C(31,14,0);
+        drawGemSized(BX(gx), y + 14, TILE_W, TILE_H, &firePal, false); drawChar(BX(gx + 7), y + 18, 'R', WHITE, 2);
         rectOutline(BX(gx + 1), y + 14 + TILE_H + 1, TILE_W - 2, TILE_H - 2, DIM);
         for (int j = 0; j < 3; j++) px(gx + 6 + j * 6, y + 12 - ((frame >> 2) + j) % 3, FIRE2);
         drawGemSized(BX(gx + 28), y + 24, TILE_W, TILE_H, &GEM_DIAMOND, false); drawChar(BX(gx + 35), y + 28, 'O', C(4,6,10), 2);
@@ -940,7 +946,7 @@ static void drawOverlay(const Game *g)
     if (g->state == ST_PLAY) return;
     if (g->state == ST_TITLE) { drawTitle(g); return; }
     if (g->state == ST_OPTIONS) { drawOptions(g); return; }
-    dimRect(boardX0, 0, 173, SCREEN_H);
+    dimRect(boardX0, 0, BOARD_W, SCREEN_H);
     if (g->state == ST_PASSED) {
         // results card slides up from the bottom and settles
         int t = g->stateTimer;
@@ -1002,14 +1008,15 @@ void gfxInit(void)
 {
     videoSetMode(MODE_5_2D);
     videoSetModeSub(MODE_5_2D);
-    vramSetBankA(VRAM_A_MAIN_BG);
+    vramSetBankA(VRAM_A_MAIN_BG_0x06000000);   // front/back bitmap pair for the touch screen
+    vramSetBankB(VRAM_B_MAIN_BG_0x06020000);
     vramSetBankC(VRAM_C_SUB_BG);
     bgMain = bgInit(3, BgType_Bmp16, BgSize_B16_256x256, 0, 0);
     int bgs = bgInitSub(3, BgType_Bmp16, BgSize_B16_256x256, 0, 0);
-    vramMain = bgGetGfxPtr(bgMain);
     vramSub = bgGetGfxPtr(bgs);
     lcdMainOnBottom();
     bright = -16;
+    cur = vramBack;            // scratch renders (gem cache) need a valid target
     gfxApplySettings();
 }
 
@@ -1041,7 +1048,7 @@ void gfxFrame(const Game *g)
     if (invalidTimer) invalidTimer--;
 
     PROF_START();
-    cur = bufMain;
+    cur = vramBack;            // draw the touch screen straight into the hidden VRAM bank
     drawBackdrop(g);  PROF(0);
     drawBoard(g);     PROF(1);
     drawParticles();
@@ -1068,9 +1075,9 @@ void gfxFrame(const Game *g)
     PROF_START();
     setBrightness(3, bright);
     bgSetScroll(bgMain, sx, sy);
+    bgSetMapBase(bgMain, backBank ? 8 : 0);   // bitmap base in 16 KB units: bank B sits at +128 KB
     bgUpdate();
-    DC_FlushRange(bufMain, sizeof(bufMain));
-    dmaCopy(bufMain, vramMain, sizeof(bufMain));
+    { u16 *t = vramFront; vramFront = vramBack; vramBack = t; backBank ^= 1; }
     if (copySub) { DC_FlushRange(bufSub, sizeof(bufSub)); dmaCopy(bufSub, vramSub, sizeof(bufSub)); }
     PROF_SET(6);
 }

@@ -44,8 +44,12 @@ class Emu:
         self.emu.input.keypad_update(0); self.emu.input.touch_release(); self.emu.volume_set(0)
         self.mem = self.emu.memory
         self.dbg = dbg_addr or symbol(elf or rom.replace('.nds', '.elf'), 'DBG')
-        self.bx = 83 if left_hand else 0          # left-hand layout shifts the board right
+        self.bx = 82 if left_hand else 0          # left-hand layout shifts the board right
         self.words = None
+    def set_hand(self, left):
+        """Switch the coordinate mapping only (the ROM's own HAND option must already match).
+        DeSmuME has no FAT, so a reboot comes back right-handed; flip hands inside one boot."""
+        self.bx = 82 if left else 0
     # ---- time and input
     def run(self, n):
         for _ in range(n): self.emu.cycle()

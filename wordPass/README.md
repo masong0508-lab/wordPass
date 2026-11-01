@@ -117,11 +117,16 @@ can be mixed by game state.
 
 ## Performance
 
-Both screens are software rendered into RAM and DMA'd to VRAM each frame, so
-the budget is memory bandwidth. The board stays at 60 fps by caching gem
-sprites in DTCM, skipping the backdrop under gems that are fully redrawn,
-clipping-free 2x glyph blits, 32-bit fills, and spreading the top-screen HUD
-over four frames (drawn on one, copied on another). Build with
+Both screens are software rendered. The touch screen is drawn straight into
+VRAM: banks A and B each hold a full 16-bit bitmap and the main background
+flips between them at vblank, so there is no per-frame copy of the board at
+all. The top screen HUD still renders to RAM and is DMA'd across, spread over
+four frames (drawn on one, copied on another). The board stays at 60 fps in
+both hand layouts by keeping the hot blitters (fills, gem blits, glyphs,
+particles, backdrop, board, panel) in ITCM and the gem sprite cache, particles
+and popups in DTCM, skipping the backdrop under gems that are fully redrawn,
+clipping-free 2x glyph blits, and word-aligned 32-bit fills (the left-hand
+layout starts the grid on an even x for the same reason). Build with
 `-DWP_PROFILE` to expose per-stage timings in `dbgT[]`.
 
 ## Building

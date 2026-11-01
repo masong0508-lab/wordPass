@@ -18,6 +18,9 @@
 #define SCREEN_W 256
 #define SCREEN_H 192
 
+// gem sprites are blitted with 32-bit copies, so a gem row must be a whole number of words
+_Static_assert((TILE_W * 2) % 4 == 0, "gem rows must be word multiples");
+
 // Cell states on the front layer
 enum {
     CELL_EMPTY = 0,   // nothing here (lower segments below a hole never refill)
