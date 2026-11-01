@@ -16,6 +16,7 @@ typedef struct {
     char msg[32];
     char lastWord[16];
     char bestWord[16];
+    s32 lastWordTier, rareWords, library;   // offsets 324, 328, 332
 } DebugView;
 
 volatile DebugView DBG;
@@ -39,4 +40,5 @@ void debugSync(const Game *g)
     memcpy((void *)DBG.msg, g->msg, 32);
     memcpy((void *)DBG.lastWord, g->lastWord, 16);
     memcpy((void *)DBG.bestWord, g->bestWord, 16);
+    DBG.lastWordTier = g->lastWordTier; DBG.rareWords = g->rareWords; DBG.library = S.library;
 }

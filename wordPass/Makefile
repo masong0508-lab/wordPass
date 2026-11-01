@@ -66,9 +66,13 @@ $(BUILD):
 	@mkdir -p $@
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
-# Regenerate the dictionary from a word list: make dict WORDS=path/to/list.txt
+# Regenerate the dictionary from a word list, marking COMMON words as the common tier:
+#   make dict WORDS=tools/enable1.txt COMMON=tools/common_words.txt
+WORDS  ?= tools/enable1.txt
+COMMON ?= tools/common_words.txt
 dict:
-	python3 tools/gen_dict.py $(WORDS) data/dict.bin
+	python3 tools/gen_dict.py $(WORDS) data/dict.bin $(COMMON)
+	python3 tools/gen_dict.py --verify data/dict.bin $(WORDS) $(COMMON)
 
 clean:
 	@echo clean ...

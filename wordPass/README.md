@@ -50,6 +50,7 @@ d-pad.
 | Hand | Right or Left: mirrors the grid and panel for left-handed stylus play |
 | Fire | Relaxed, Normal, Fast |
 | Music | On, Off |
+| Library | Full (every ENABLE word) or Common (rejects obscure words with TOO OBSCURE) |
 
 Settings, best Classic score and shelf, and best Daily result are saved to
 `wordPass.cfg` on the card when a FAT filesystem is available (flashcarts
@@ -167,13 +168,30 @@ ROMs built with it do not boot in DeSmuME; use melonDS or real hardware.
 
 ### Dictionary
 
-`data/dict.bin` is generated from the public-domain ENABLE list
-(words of 3–10 letters, 125k entries, 5 bits per letter, binary searched on
-device). Rebuild it from any word list with one word per line:
+`data/dict.bin` is generated from the public-domain ENABLE list (words of
+3–10 letters, 125k entries) in the `WPD2` format: a 4-byte magic, eight
+`u32` counts for lengths 3..10, then one sorted group of fixed-width records
+per length. Letters are packed 5 bits each, big-endian and left aligned, so
+`memcmp()` order is alphabetical; the record width follows the length (4 bytes
+for 3–6 letters, 5 for 7, 6 for 8, 7 for 9–10, 717 KB in all) and bit 0 of
+the last byte is the **tier**: 0 common, 1 rare. The device binary-searches
+the group for the word's length (one 32-bit compare per step for 3–6 letter
+words) and returns the tier, which drives the RARE WORD callout and the
+Library option. Rebuild it from any word list with one word per line, plus an
+optional list of the words to mark common:
 
 ```bash
-make dict WORDS=path/to/wordlist.txt
+make dict WORDS=tools/enable1.txt COMMON=tools/common_words.txt
 ```
+
+`make dict` runs `gen_dict.py --verify` afterwards, which re-reads the binary
+with a Python port of the device lookup and checks every input word (with its
+tier) and 20 random non-words per length. `tools/common_words.txt` is the
+ENABLE words that appear in the top 30,000 of the
+[FrequencyWords](https://github.com/hermitdave/FrequencyWords) 2018 English
+list (hermitdave, CC-BY-SA 4.0) or in
+[google-10000-english](https://github.com/first20hours/google-10000-english)
+(first20hours).
 
 ## Layout
 
@@ -185,10 +203,12 @@ source/gfx.c     software renderer for both screens
 source/music.c   PSG sequencer and adaptive stems
 source/font.c    5x7 bitmap font
 source/settings.c options, records, FAT save
-tools/gen_dict.py
+tools/gen_dict.py  WPD2 dictionary builder and --verify round trip
+tools/common_words.txt
 data/dict.bin
 ```
 
 ## License
 
-MIT. Word list: ENABLE, public domain.
+MIT. Word list: ENABLE, public domain. Common-word tier derived from
+hermitdave/FrequencyWords (CC-BY-SA 4.0) and first20hours/google-10000-english.

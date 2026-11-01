@@ -684,8 +684,8 @@ bool gfxInTitleDaily(int x, int y)   { return x >= BX(88) && x < BX(152) && y >=
 bool gfxInTitleOptions(int x, int y) { return x >= BX(54) && x < BX(118) && y >= TB_Y + 26 && y < TB_Y + 46; }
 
 // options list rows on the touch screen
-#define OPT_Y0 38
-#define OPT_DY 15
+#define OPT_Y0 36
+#define OPT_DY 14
 int gfxOptionRowAt(int x, int y)
 {
     if (x < BX(12) || x >= BX(160)) return -1;
@@ -997,6 +997,7 @@ static void drawTopTitle(void)
         drawTextCenter(128, 88, "FRAME AND ACCENT CHANGE THE LIBRARY", INK, 1);
         drawTextCenter(128, 98, "HAND MIRRORS THE BOARD FOR LEFTIES", INK, 1);
         drawTextCenter(128, 108, "FIRE SETS HOW FAST THE SHELF BURNS", INK, 1);
+        drawTextCenter(128, 120, "LIBRARY: COMMON REJECTS OBSCURE WORDS", INK, 1);
         drawTextCenter(128, 130, "TAP A ROW OR USE THE D-PAD", DIM, 1);
         char s[40];
         if (S.bestClassic) { siprintf(s, "BEST CLASSIC %d  SHELF %d", S.bestClassic, S.bestClassicShelf); drawTextCenter(128, 150, s, DIM, 1); }
@@ -1145,7 +1146,8 @@ static void drawTitle(const Game *g)
     if (S.bestDaily)   { siprintf(s, "DAILY %d", S.bestDaily); drawText(BX(152) - textWidth(s, 1), 180, s, DIM, 1); }
 }
 
-static const char *const OPT_NAMES[OPT_ROWS] = { "THEME", "FRAME", "ACCENT", "HAND", "FIRE", "MUSIC" };
+static const char *const OPT_NAMES[OPT_ROWS] = { "THEME", "FRAME", "ACCENT", "HAND", "FIRE", "MUSIC", "LIBRARY" };
+static const char *const LIB_NAMES[LIB_COUNT] = { "FULL", "COMMON" };
 static const char *const THEME_NAMES[THEME_COUNT] = { "JEWEL", "INK", "CANDY", "EMBER" };
 static const char *const FRAME_NAMES[FRAME_COUNT] = { "GOLD", "SILVER", "ACCENT" };
 static const char *const ACCENT_NAMES[9] = { "AUTO", "TEAL", "MAGENTA", "LIME", "ORANGE", "SKY", "VIOLET", "PINK", "MINT" };
@@ -1168,6 +1170,7 @@ static void drawOptions(const Game *g)
             case 3: val = S.hand ? "LEFT" : "RIGHT"; break;
             case 4: val = FIRE_NAMES[S.fire]; break;
             case 5: val = S.music ? "ON" : "OFF"; break;
+            case 6: val = LIB_NAMES[S.library]; break;
         }
         if (i == sel) { fillRect(BX(12), y - 2, 148, OPT_DY - 1, lerp15(BLACK, ACCENT, 4)); rectOutline(BX(12), y - 2, 148, OPT_DY - 1, ACCENT); }
         drawText(BX(18), y + 2, OPT_NAMES[i], i == sel ? WHITE : INK, 1);
@@ -1175,7 +1178,7 @@ static void drawOptions(const Game *g)
         drawText(BX(154) - textWidth(v, 1), y + 2, v, i == sel ? ACCENT : INK, 1);
     }
     // swatches: the five letter gems in the current theme
-    for (int i = 0; i < 5; i++) { blitGem(BX(16) + i * 28, 132, i); drawLetter(BX(16) + i * 28, 132, "AIRTS"[i] - 'A', WHITE, GEM_PALS[i]->dark); }
+    for (int i = 0; i < 5; i++) { blitGem(BX(16) + i * 28, 138, i); drawLetter(BX(16) + i * 28, 138, "AIRTS"[i] - 'A', WHITE, GEM_PALS[i]->dark); }
     rectOutline(BX(54), 160, 64, 20, DIM);
     drawTextCenter(BX(86), 166, "BACK", INK, 1);
     drawTextCenter(BX(86), 182, settingsPersistent() ? "SAVED TO CARD" : "NOT SAVED: NO CARD", DIM, 1);
@@ -1332,7 +1335,7 @@ void gfxFrame(const Game *g)
     dangerSetup(g);
     chainMask = 0;
     for (int i = 0; i < g->chainLen; i++) chainMask |= (u64)1 << (g->chainC[i] * ROWS + g->chainR[i]);
-    chainValidNow = g->chainLen >= 3 && dictLookup(chainWordNow, strlen(chainWordNow));
+    chainValidNow = g->chainLen >= 3 && boardWordOk(chainWordNow, strlen(chainWordNow));
     // per-letter pop timers for the pass plaque
     for (int i = 0; i < g->passLen; i++) {
         if (g->found[i] && !prevFound[i]) letterPop[i] = 24;

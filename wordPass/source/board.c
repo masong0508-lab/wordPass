@@ -130,6 +130,8 @@ void boardNewShelf(Game *g)
     g->bestWord[0] = 0;
     g->bestWordScore = 0;
     g->peels = 0;
+    g->lastWordTier = 0;
+    g->rareWords = 0;
     if (g->mode == MODE_DAILY) {
         // one fixed shelf for everyone today: medium pressure, pass buried mid-board
         g->lockdown = false;
@@ -302,13 +304,26 @@ static void endTurn(Game *g, int wordLen)
     if (g->fail == FAIL_NONE && !boardHasWords(g)) g->fail = FAIL_WORDS;
 }
 
+// A word counts if the dictionary knows it and the LIBRARY setting allows its tier.
+static int wordAccepted(const char *w, int len)
+{
+    int t = dictLookup(w, len);
+    if (!t) return 0;
+    if (S.library == LIB_COMMON && t == 2) return 0;
+    return t;
+}
+
+bool boardWordOk(const char *w, int len) { return wordAccepted(w, len) != 0; }
+int  boardWordTier(const char *w, int len) { return dictLookup(w, len); }
+
 int boardSubmit(Game *g)
 {
     if (g->chainLen < 3) return 0;
     char w[24];
     boardChainWord(g, w);
     int len = strlen(w);
-    if (!dictLookup(w, len)) return 0;
+    int tier = wordAccepted(w, len);
+    if (!tier) return 0;
 
     int base = 0;
     bool usedBurn = false;
@@ -330,6 +345,8 @@ int boardSubmit(Game *g)
     strncpy(g->lastWord, w, 15); g->lastWord[15] = 0;
     g->lastWordLen = len;
     g->lastWordScore = gained;
+    g->lastWordTier = tier;
+    if (tier == 2) g->rareWords++;
     if (gained > g->bestWordScore) { g->bestWordScore = gained; strcpy(g->bestWord, g->lastWord); }
     g->score += gained;
     g->wordsThisShelf++;
@@ -413,7 +430,7 @@ static bool dfsWords(const Game *g, int c, int r, char *w, int n, bool used[COLS
     int l = g->cell[c][r].letter;
     w[n++] = 'a' + l;
     if (l == 'q' - 'a') w[n++] = 'u';
-    if (n >= 3 && dictLookup(w, n)) return true;
+    if (n >= 3 && wordAccepted(w, n)) return true;
     if (n >= 4) return false;
     used[c][r] = true;
     int nc[6], nr[6], k = boardNeighbors(c, r, nc, nr);

@@ -62,8 +62,11 @@ class Emu:
     def hold(self, key, on=True):
         k = keymask(getattr(Keys, 'KEY_' + key)); (self.emu.input.keypad_add_key if on else self.emu.input.keypad_rm_key)(k); self.run(4)
     # ---- state
+    @staticmethod
+    def i32(raw, off):
+        return struct.unpack_from('<i', raw, off)[0]
     def state(self):
-        a = self.dbg; raw = bytes(self.mem.unsigned[a:a + 400])
+        a = self.dbg; raw = bytes(self.mem.unsigned[a:a + 640])
         magic, frame = struct.unpack_from('<II', raw, 0)
         assert magic == 0x44424731, 'DBG magic mismatch: wrong address or ROM not running'
         ints = struct.unpack_from('<13i', raw, 8)
@@ -77,7 +80,8 @@ class Emu:
         g['back'] = [[B[c*ROWS+r] for r in range(ROWS)] for c in range(COLS)]
         g['msg'] = raw[o:o+32].split(b'\0')[0].decode(); o += 32
         g['lastWord'] = raw[o:o+16].split(b'\0')[0].decode(); o += 16
-        g['bestWord'] = raw[o:o+16].split(b'\0')[0].decode()
+        g['bestWord'] = raw[o:o+16].split(b'\0')[0].decode(); o += 16
+        g['lastWordTier'] = self.i32(raw, o); g['rareWords'] = self.i32(raw, o + 4); g['library'] = self.i32(raw, o + 8)
         return g
     def fps(self, frames=120):
         a = self.state()['frame']; self.run(frames); return self.state()['frame'] - a

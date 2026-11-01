@@ -20,6 +20,7 @@ void settingsDefaults(void)
     S.hand = HAND_RIGHT;
     S.fire = FIRE_NORMAL;
     S.music = 1;
+    S.library = LIB_FULL;
 }
 
 void settingsInit(void)

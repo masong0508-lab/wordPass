@@ -66,6 +66,7 @@ static void cycleOption(int row, int dir)
         case 3: S.hand = !S.hand; break;
         case 4: S.fire = (S.fire + FIRE_COUNT + dir) % FIRE_COUNT; break;
         case 5: S.music = !S.music; break;
+        case 6: S.library = (S.library + LIB_COUNT + dir) % LIB_COUNT; break;
     }
     gfxApplySettings();
 }
@@ -152,9 +153,12 @@ submit:;
             char s[32];
             const char *tag = G.lastWordLen >= 8 ? "SPECTACULAR" : G.lastWordLen >= 7 ? "EXCELLENT" : G.lastWordLen >= 5 ? "GOOD" : "";
             if (tag[0]) { siprintf(s, "%s!", tag); setMsg(s, 60); }
+            else if (G.lastWordTier == 2) setMsg("RARE WORD", 60);
             if (G.fail) enterFail();
         } else if (G.chainLen >= 3) {
-            setMsg("NOT IN THE LIBRARY", 45);
+            char w[24]; boardChainWord(&G, w);
+            bool obscure = S.library == LIB_COMMON && boardWordTier(w, strlen(w)) == 2;
+            setMsg(obscure ? "TOO OBSCURE" : "NOT IN THE LIBRARY", 45);
             gfxInvalidWord();
         }
     }

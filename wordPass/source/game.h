@@ -91,6 +91,8 @@ typedef struct {
     int  mode;                // MODE_CLASSIC or MODE_DAILY
     int  dailySeed;           // YYYYMMDD
     int  hintShown;
+    int  lastWordTier;        // 0 none, 1 common, 2 rare (last accepted word)
+    int  rareWords;           // rare words spelled this shelf
 } Game;
 
 enum { MODE_CLASSIC = 0, MODE_DAILY };
@@ -100,10 +102,11 @@ enum { THEME_JEWEL = 0, THEME_INK, THEME_CANDY, THEME_EMBER, THEME_COUNT };
 enum { FRAME_GOLD = 0, FRAME_SILVER, FRAME_ACCENT, FRAME_COUNT };
 enum { HAND_RIGHT = 0, HAND_LEFT };
 enum { FIRE_RELAXED = 0, FIRE_NORMAL, FIRE_FAST, FIRE_COUNT };
+enum { LIB_FULL = 0, LIB_COMMON, LIB_COUNT };   // dictionary: every ENABLE word, or common words only
 
 typedef struct {
     u32 magic;
-    u8  theme, frame, accent, hand, fire, music, pad0, pad1;
+    u8  theme, frame, accent, hand, fire, music, library, pad1;
     int bestClassic;        // best Classic score
     int bestClassicShelf;   // highest shelf cleared
     int bestDaily;          // best Daily score
@@ -117,7 +120,7 @@ bool settingsSave(void);
 bool settingsPersistent(void);
 
 #define ST_OPTIONS 5
-#define OPT_ROWS 6
+#define OPT_ROWS 7
 void gfxApplySettings(void);          // rebuild caches after a settings change
 int  gfxOptionRowAt(int px, int py);  // -1 none, 0..OPT_ROWS-1 rows, OPT_ROWS = back
 bool gfxInTitleOptions(int px, int py);
@@ -135,6 +138,8 @@ bool boardIsChainable(const Game *g, int c, int r);
 int  boardNeighbors(int c, int r, int outC[6], int outR[6]);
 int  boardBackNumber(const Game *g, int c, int r);
 bool boardHasWords(const Game *g);
+bool boardWordOk(const char *w, int len);     // accepted under the current LIBRARY setting
+int  boardWordTier(const char *w, int len);   // raw dictionary tier: 0 none, 1 common, 2 rare
 int  boardLowestFireRow(const Game *g);
 bool boardFireAbove(const Game *g, int c, int r);
 void boardChainWord(const Game *g, char *out);
@@ -143,7 +148,7 @@ int  letterValue(int letter);
 
 // dict.c
 void dictInit(void);
-bool dictLookup(const char *word, int len);
+int  dictLookup(const char *word, int len);   // 0 none, 1 common, 2 rare
 
 // gfx.c
 void gfxInit(void);
