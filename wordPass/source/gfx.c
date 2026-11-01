@@ -62,6 +62,8 @@ typedef struct { char txt[20]; u8 life, kind; } Callout;
 static Callout callout;
 static int shownScore;          // the score on the HUD: it is g->score except while the results tally counts up
 static int tallyPrev = -1, cardFlash;   // the state last frame; frames of white card border left
+static int tipIndex, tipTimer;  // the title's tip card and the frames it has been up
+static bool rainAlive;          // the title's gem rain may have particles in flight
 
 #define C(r,g,b) ARGB16(1,(r),(g),(b))
 #define BLACK      C(1,1,2)
@@ -101,7 +103,12 @@ static const GemPal THEMES[THEME_COUNT][5] = {
     { // EMBER: warm library
       { C(10,1,1),  C(22,4,3),   C(31,14,8)  }, { C(10,6,1),  C(21,13,3),  C(31,24,12) },
       { C(12,10,1), C(24,20,4),  C(31,30,16) }, { C(8,2,6),   C(17,5,12),  C(28,14,22) },
-      { C(6,8,1),   C(13,16,3),  C(24,28,10) } }
+      { C(6,8,1),   C(13,16,3),  C(24,28,10) } },
+    { // CLEAR: colour-blind safe. Five groups that differ in lightness as well as hue (yellow, blue, magenta,
+      // teal, grey), none of them leaning on a red/green split. Burning gems read by their light plate and dark letter.
+      { C(18,15,0), C(31,26,4),  C(31,31,18) }, { C(0,3,14),  C(0,8,30),   C(14,20,31) },
+      { C(14,3,16), C(28,12,30), C(31,22,31) }, { C(0,10,8),  C(0,22,18),  C(14,31,26) },
+      { C(3,4,5),   C(9,10,12),  C(18,19,22) } }
 };
 static const GemPal GEM_DIAMOND  = { C(16,18,21),C(27,28,30), C(31,31,31) };
 static const GemPal GEM_FIRE     = { C(12,0,0),  C(31,6,0),   C(31,22,4) };
@@ -735,16 +742,19 @@ bool gfxInTitleDaily(int x, int y)   { return x >= BX(88) && x < BX(152) && y >=
 bool gfxInTitleOptions(int x, int y) { return x >= BX(54) && x < BX(118) && y >= TB_Y + 26 && y < TB_Y + 46; }
 bool gfxInTitleLedger(int x, int y)  { return x >= BX(12) && x < BX(160) && y >= TB_Y + 46 && y < SCREEN_H - 1; }   // the BEST line, just under OPTIONS
 
-// options list rows on the touch screen
-#define OPT_Y0 36
-#define OPT_DY 12
+// Options list rows on the touch screen. The list sits at a fixed x (never BX): flipping HAND must
+// not move it under the stylus. Each row has a left half (previous value) and a right half (next).
+#define OPT_Y0 34
+#define OPT_DY 15                       // eight rows end at y 154; BACK sits at 158..175 and the footer at 180, clear of the frame at 190
+static int nudgeDir, nudgeTimer;
+void gfxOptionNudge(int dir) { nudgeDir = dir; nudgeTimer = 6; }
 int gfxOptionRowAt(int x, int y)
 {
-    if (x < BX(12) || x >= BX(160)) return -1;
-    if (y >= 160 && y < 180) return OPT_ROWS;          // BACK
+    if (x < 12 || x >= 160) return -1;
+    if (y >= 155 && y < 179) return OPT_ROWS * 2;      // BACK
     int row = (y - OPT_Y0) / OPT_DY;
     if (y < OPT_Y0 || row < 0 || row >= OPT_ROWS) return -1;
-    return row;
+    return row * 2 + (x >= 86);
 }
 
 // ---------------------------------------------------------------- board
@@ -856,6 +866,55 @@ static ITCM_CODE __attribute__((noinline)) void drawBackdrop(const Game *g)
     drawBoardDots();
 }
 
+// ---- single-cell renderers shared by the board and the options screen's sample board, so the sample is the real thing
+
+// a peeled cell: the back-layer number in its colour (scorched cells get a burnt rim)
+static void drawHoleCell(int x, int y, int n, bool scorched, bool chimney)
+{
+    rectOutline(x + 1, y + 1, TILE_W - 2, TILE_H - 2, scorched ? C(12,4,0) : ACCENT);
+    rectOutline(x + 3, y + 3, TILE_W - 6, TILE_H - 6, DIM2);
+    u16 dcol = n == 0 ? C(10,10,12) : n == 1 ? ACCENT : n == 2 ? GOLD_LT : n == 3 ? FIRE2 : WHITE;
+    if (n && !(frame & 16)) dcol = lerp15(dcol, WHITE, 8);
+    drawChar2Shadow(x + 7, y + 4, '0' + n, dcol, BLACK);
+    if (chimney) rectOutline(x, y, TILE_W, TILE_H, FIRE1);
+}
+
+// A burning gem. Fire is told apart by light, not hue: a light plate under a dark letter, a bright bar
+// across the top and tongues that rise over the edge (a flame reads the same without any colour).
+static void drawBurnCell(int x, int yd, int sq, int letter, int ph, bool lit, bool peek)
+{
+    int pulse = ph < 8 ? ph : 15 - ph;
+    GemPal firePal = GEM_FIRE;
+    firePal.mid = lerp15(C(31,4,0), C(31,14,0), pulse * 2);
+    drawGemSized(x, yd + sq, TILE_W, TILE_H - sq, &firePal, lit);
+    int py = yd + sq / 2;
+    if (letter == 'q' - 'a') fillRect(x + 1, py + 3, 19, 16, firePal.light);
+    else fillRect(x + 5, py + 3, 14, 16, firePal.light);
+    drawLetter(x, py, letter, C(10,0,0), lerp15(firePal.light, BLACK, 8));
+    fillRect(x + 3, yd + 1, TILE_W - 6, 2, FIRE2);
+    // pulsing red rim and flame tongues licking over the top edge
+    rectOutline(x, yd, TILE_W, TILE_H, lerp15(C(20,2,0), FIRE2, pulse * 2));
+    for (int i = 0; i < 3; i++) {
+        int fx = x + 5 + i * 7 + ((ph + i * 5) & 3), fh = 5 + ((ph + i * 3) & 3);
+        for (int j = 0; j < fh; j++) px(fx, yd - j, j == fh - 1 ? FIRE2 : lerp15(FIRE1, FIRE2, j * 3));
+        px(fx + 1, yd - 1, FIRE1);
+    }
+    if (peek && (frame & 16)) drawChar(x + 17, yd + 3, '!', FIRE2, 1);
+}
+
+// a gem seen through peek: an outline with its letter in the group colour (a red double rim when a peel would scorch)
+static void drawGhostCell(int x, int yd, int letter, bool risk)
+{
+    const GemPal *pp = GEM_PALS[palOf[letter]];
+    if (risk) {
+        int ph = frame & 15, pu = ph < 8 ? ph : 15 - ph;
+        rectOutline(x + 1, yd + 1, TILE_W - 2, TILE_H - 2, lerp15(C(12,3,0), FIRE1, pu * 2));
+        rectOutline(x + 2, yd + 2, TILE_W - 4, TILE_H - 4, C(12,3,0));
+        if (frame & 16) drawChar(x + 17, yd + 3, '!', FIRE2, 1);
+    } else rectOutline(x + 1, yd + 1, TILE_W - 2, TILE_H - 2, lerp15(pp->mid, BLACK, 8));
+    drawLetter(x, yd, letter, lerp15(pp->light, BLACK, 6), BLACK);
+}
+
 static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
 {
     bool peek = g->peekHeld;
@@ -887,17 +946,9 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
                 case CELL_EMPTY:
                     if (peek) drawGemOutline(x, y);
                     break;
-                case CELL_HOLE: {
-                    bool sc = g->scorched[c][r];
-                    rectOutline(x + 1, y + 1, TILE_W - 2, TILE_H - 2, sc ? C(12,4,0) : ACCENT);
-                    rectOutline(x + 3, y + 3, TILE_W - 6, TILE_H - 6, DIM2);
-                    int n = boardBackNumber(g, c, r);
-                    u16 dcol = n == 0 ? C(10,10,12) : n == 1 ? ACCENT : n == 2 ? GOLD_LT : n == 3 ? FIRE2 : WHITE;
-                    if (n && !(frame & 16)) dcol = lerp15(dcol, WHITE, 8);
-                    drawChar2Shadow(x + 7, y + 4, '0' + n, dcol, BLACK);
-                    if (chimney) rectOutline(x, y, TILE_W, TILE_H, FIRE1);
+                case CELL_HOLE:
+                    drawHoleCell(x, y, boardBackNumber(g, c, r), g->scorched[c][r], chimney);
                     break;
-                }
                 case CELL_SECRET: {
                     if (!sq && !lit && !cl->flash && yd + 1 >= clipY0 && yd + 1 + COMP_ROWS <= clipY1) {
                         blitComposite(diamondLetter[cl->letter], x, yd + 1);   // gem and letter in one move
@@ -913,19 +964,7 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
                 }
                 case CELL_BURN: {
                     int ph = (frame + c * 7 + r * 3) & 15;
-                    int pulse = ph < 8 ? ph : 15 - ph;
-                    GemPal firePal = GEM_FIRE;
-                    firePal.mid = lerp15(C(31,4,0), C(31,14,0), pulse * 2);
-                    drawGemSized(x, yd + sq, TILE_W, TILE_H - sq, &firePal, lit);
-                    drawLetter(x, yd + sq / 2, cl->letter, WHITE, C(14,2,0));
-                    // pulsing red rim and flame tongues licking over the top edge
-                    rectOutline(x, yd, TILE_W, TILE_H, lerp15(C(20,2,0), FIRE2, pulse * 2));
-                    for (int i = 0; i < 3; i++) {
-                        int fx = x + 5 + i * 7 + ((ph + i * 5) & 3), fh = 3 + ((ph + i * 3) & 3);
-                        for (int j = 0; j < fh; j++) px(fx, yd - j, j == fh - 1 ? FIRE2 : lerp15(FIRE1, FIRE2, j * 4));
-                        px(fx + 1, yd - 1, FIRE1);
-                    }
-                    if (peek && (frame & 16)) drawChar(x + 17, yd + 3, '!', FIRE2, 1);
+                    drawBurnCell(x, yd, sq, cl->letter, ph, lit, peek);
                     // glow bleeding below
                     if (r < ROWS - 1) {
                         int gy = yd + TILE_H;
@@ -936,15 +975,7 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
                 }
                 default:
                     if (peek) {
-                        const GemPal *pp = GEM_PALS[palOf[cl->letter]];
-                        bool risk = r > 0 && g->cell[c][r - 1].state == CELL_BURN;   // a peel here scorches
-                        if (risk) {
-                            int ph = frame & 15, pu = ph < 8 ? ph : 15 - ph;
-                            rectOutline(x + 1, yd + 1, TILE_W - 2, TILE_H - 2, lerp15(C(12,3,0), FIRE1, pu * 2));
-                            rectOutline(x + 2, yd + 2, TILE_W - 4, TILE_H - 4, C(12,3,0));
-                            if (frame & 16) drawChar(x + 17, yd + 3, '!', FIRE2, 1);
-                        } else rectOutline(x + 1, yd + 1, TILE_W - 2, TILE_H - 2, lerp15(pp->mid, BLACK, 8));
-                        drawLetter(x, yd, cl->letter, lerp15(pp->light, BLACK, 6), BLACK);
+                        drawGhostCell(x, yd, cl->letter, r > 0 && g->cell[c][r - 1].state == CELL_BURN);   // a peel under a flame scorches
                     } else if (!sq && !lit && !cl->flash && yd + 1 >= clipY0 && yd + 1 + COMP_ROWS <= clipY1) {
                         blitComposite(gemLetter[cl->letter], x, yd + 1);   // the common case: one 48-byte move per row
                     } else {
@@ -1108,7 +1139,7 @@ static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
     bool valid = chainValidNow, peek = g->peekHeld != 0;
     if (strlen(w) > 12) { memmove(w + 1, w + strlen(w) - 11, 12); w[0] = '.'; }   // the last 11 letters fit the panel
     if (w[0]) drawText(PANEL_X, 74, w, valid ? GOLD_LT : WHITE, 1);
-    else if (!peek) drawText(PANEL_X, 74, "L OR R: PEEK", DIM_TEXT, 1);
+    else if (!peek) drawText(PANEL_X, 74, S.hand == HAND_LEFT ? "HOLD R: PEEK" : "HOLD L: PEEK", DIM_TEXT, 1);   // the shoulder under the idle hand
     if (g->chainLen >= 3 && !peek) {
         if (valid) {   // what the word is worth, and its length multiplier
             s[0] = '+'; fmtInt(s + 1, chainScoreNow);
@@ -1192,23 +1223,74 @@ static inline bool menuState(int st) { return st == ST_TITLE || st == ST_OPTIONS
 
 static void drawTipCard(int which);
 
+static const char *const OPT_NAMES[OPT_ROWS] = { "THEME", "FRAME", "ACCENT", "HAND", "FIRE", "MUSIC", "LIBRARY", "SPELLING" };
+static const char *const LIB_NAMES[LIB_COUNT] = { "FULL", "COMMON" };
+static const char *const SPELL_NAMES[SPELL_COUNT] = { "BOTH", "AMERICAN", "BRITISH" };
+static const char *const THEME_NAMES[THEME_COUNT] = { "JEWEL", "INK", "CANDY", "EMBER", "CLEAR" };
+static const char *const FRAME_NAMES[FRAME_COUNT] = { "GOLD", "SILVER", "ACCENT" };
+static const char *const ACCENT_NAMES[ACCENT_COUNT] = { "AUTO", "TEAL", "MAGENTA", "LIME", "ORANGE", "SKY", "VIOLET", "PINK", "MINT" };
+static const char *const FIRE_NAMES[FIRE_COUNT] = { "RELAXED", "NORMAL", "FAST" };
+
+// The options screen's sample board (top screen): one gem of every palette, a diamond, the cell states
+// (a numbered hole, a burning gem, a chained one, an empty cell, a peeked ghost), all drawn by the very helpers
+// the real board uses so a change of theme, accent or frame shows exactly what play will look like.
+static void drawMiniBoard(void)
+{
+    const int bx = 56, by = 70, bw = 6 * TILE_W, bh = 2 * TILE_H + ODD_SHIFT;
+    fillRect(bx - 2, by - 2, bw + 4, bh + 4, BLACK);
+    rectOutline(bx - 2, by - 2, bw + 4, bh + 4, GOLD_DK);
+    rectOutline(bx - 1, by - 1, bw + 2, bh + 2, GOLD);
+    u16 dot = lerp15(BLACK, ACCENT, 3);
+    for (int y = by + 6; y < by + bh; y += 8)
+        if (y >= clipY0 && y < clipY1) for (int x = bx + 6; x < bx + bw; x += 8) px(x, y, dot);
+    for (int c = 0; c < 6; c++) {
+        int x = bx + c * TILE_W, y0 = by + ((c & 1) ? ODD_SHIFT : 0), y1 = y0 + TILE_H;
+        if (c < 5) { blitGem(x, y0, c); drawLetter(x, y0, "AIRTS"[c] - 'A', C(31,31,29), GEM_PALS[c]->dark); }
+        else { blitGem(x, y0, 5); drawLetter(x, y0, 'B' - 'A', C(4,6,10), C(20,22,26)); }
+        switch (c) {
+            case 0: drawHoleCell(x, y1, 2, false, false); break;
+            case 1: drawBurnCell(x, y1, 0, 'r' - 'a', 6, false, false); break;
+            case 2: {   // a chained gem, lifted two pixels, white rims
+                int pal = palOf['e' - 'a'];
+                blitGem(x, y1 - 2, pal);
+                rectOutline(x, y1 - 2, TILE_W, TILE_H, WHITE); rectOutline(x + 1, y1 - 1, TILE_W - 2, TILE_H - 2, lerp15(WHITE, GEM_PALS[pal]->light, 8));
+                drawLetter(x, y1 - 2, 'e' - 'a', WHITE, GEM_PALS[pal]->dark);
+                break;
+            }
+            case 3: drawGemOutline(x, y1); break;
+            case 4: drawHoleCell(x, y1, 0, false, false); break;
+            default: drawGhostCell(x, y1, 'k' - 'a', false); break;
+        }
+    }
+}
+
+// one line of help for the lit options row (two when CLEAR is picked), each short enough for the plaque
+static void drawOptionsHelp(void)
+{
+    static const char *const OPT_HELP[OPT_ROWS] = {
+        "THEME CHANGES THE GEMS", "FRAME COLOURS THE LIBRARY", "ACCENT: AUTO FOLLOWS THE SHELF", "HAND MIRRORS THE BOARD",
+        "FIRE SETS HOW FAST THE SHELF BURNS", "MUSIC ON OR OFF", "COMMON REJECTS OBSCURE WORDS", "SPELLING: COLOR, COLOUR OR BOTH"
+    };
+    char h[40];
+    const char *t = OPT_HELP[G.optRow];
+    if (G.optRow == 2 && S.accent) { strcpy(h, "ACCENT: "); strcat(h, ACCENT_NAMES[S.accent]); t = h; }
+    drawTextCenter(128, 132, t, INK, 1);
+    if (G.optRow == 0 && S.theme == THEME_CLEAR) drawTextCenter(128, 141, "CLEAR: COLOUR-BLIND SAFE", ACCENT, 1);
+}
+
 static void drawTopTitle(void)
 {
     rectOutline(8, 8, 240, 176, GOLD_DK);
     rectOutline(9, 9, 238, 174, GOLD);
     drawLogo(16, 16, 2);
     if (G.state == ST_OPTIONS) {
-        drawTextCenter(128, 60, "MAKE IT YOURS", GOLD_LT, 1);
-        drawTextCenter(128, 78, "THEME CHANGES THE GEMS", INK, 1);
-        drawTextCenter(128, 88, "FRAME AND ACCENT CHANGE THE LIBRARY", INK, 1);
-        drawTextCenter(128, 98, "HAND MIRRORS THE BOARD FOR LEFTIES", INK, 1);
-        drawTextCenter(128, 108, "FIRE SETS HOW FAST THE SHELF BURNS", INK, 1);
-        drawTextCenter(128, 118, "LIBRARY: COMMON REJECTS OBSCURE WORDS", INK, 1);
-        drawTextCenter(128, 128, "SPELLING: COLOR OR COLOUR, OR BOTH", INK, 1);
-        drawTextCenter(128, 140, "TAP A ROW OR USE THE D-PAD", DIM_TEXT, 1);
+        drawTextCenter(128, 44, "MAKE IT YOURS", GOLD_LT, 1);
+        drawMiniBoard();
+        drawOptionsHelp();
         char s[40];
-        if (S.bestClassic) { siprintf(s, "BEST CLASSIC %d  SHELF %d", S.bestClassic, S.bestClassicShelf); drawTextCenter(128, 156, s, DIM_TEXT, 1); }
-        if (S.bestDaily)   { siprintf(s, "BEST DAILY %d ON %d", S.bestDaily, S.bestDailyDate); drawTextCenter(128, 166, s, DIM_TEXT, 1); }
+        if (S.bestClassic) { siprintf(s, "BEST CLASSIC %d  SHELF %d", S.bestClassic, S.bestClassicShelf); drawTextCenter(128, 150, s, DIM_TEXT, 1); }
+        if (S.bestDaily)   { siprintf(s, "BEST DAILY %d ON %d", S.bestDaily, S.bestDailyDate); drawTextCenter(128, 160, s, DIM_TEXT, 1); }
+        drawTextCenter(128, 172, "TAP LEFT OR RIGHT OF A ROW, OR D-PAD", DIM_TEXT, 1);
         return;
     }
     if (G.state == ST_STATS) {
@@ -1217,7 +1299,7 @@ static void drawTopTitle(void)
         drawTextCenter(128, 120, "B OR X OR A TAP CLOSES IT", DIM_TEXT, 1);
         return;
     }
-    drawTipCard((frame / 150) % 3);
+    drawTipCard(tipIndex);
     if (G.msg[0]) drawTextCenter(128, 158, G.msg, GOLD_LT, 1);   // e.g. SET THE DS CLOCK FOR DAILY
 }
 
@@ -1384,7 +1466,7 @@ static void drawTop(const Game *g)
     // message: pops in at double size, then settles
     if (g->msg[0]) {
         int sc = (g->msgTimer > 46 && textWidth(g->msg, 2) <= 230) ? 2 : 1;
-        drawTextShadow(SCREEN_W / 2 - textWidth(g->msg, sc) / 2, sc == 2 ? 162 : 166, g->msg, g->msgTimer > 0 ? GOLD_LT : INK, sc);
+        drawTextShadow(SCREEN_W / 2 - textWidth(g->msg, sc) / 2, sc == 2 ? 162 : 166, g->msg, g->msgTimer != 0 ? GOLD_LT : INK, sc);   // msgTimer -1 is a sticky prompt
     }
 }
 
@@ -1416,7 +1498,7 @@ static void drawTitle(const Game *g)
     rectOutline(BX(16), 76, 140, 56, GOLD);
     drawTextCenter(BX(86), 84, "CRACK THE PASS", ACCENT, 1);
     drawTextCenter(BX(86), 96, "DON'T BURN THE LIBRARY", INK, 1);
-    drawTextCenter(BX(86), 112, "DRAG SPELLS. L PEEKS", DIM_TEXT, 1);
+    drawTextCenter(BX(86), 112, S.hand == HAND_LEFT ? "DRAG SPELLS. R PEEKS" : "DRAG SPELLS. L PEEKS", DIM_TEXT, 1);
     // mode buttons
     bool blink = frame & 32;
     roundRect(BX(20), TB_Y, 64, 22, blink ? GOLD : GOLD_DK);
@@ -1455,46 +1537,49 @@ static void drawTitle(const Game *g)
     if (r[0] && BX(152) - textWidth(r, 1) >= leftEnd + 6) drawText(BX(152) - textWidth(r, 1), 180, r, rc, 1);
 }
 
-static const char *const OPT_NAMES[OPT_ROWS] = { "THEME", "FRAME", "ACCENT", "HAND", "FIRE", "MUSIC", "LIBRARY", "SPELLING" };
-static const char *const LIB_NAMES[LIB_COUNT] = { "FULL", "COMMON" };
-static const char *const SPELL_NAMES[SPELL_COUNT] = { "BOTH", "AMERICAN", "BRITISH" };
-static const char *const THEME_NAMES[THEME_COUNT] = { "JEWEL", "INK", "CANDY", "EMBER" };
-static const char *const FRAME_NAMES[FRAME_COUNT] = { "GOLD", "SILVER", "ACCENT" };
-static const char *const ACCENT_NAMES[ACCENT_COUNT] = { "AUTO", "TEAL", "MAGENTA", "LIME", "ORANGE", "SKY", "VIOLET", "PINK", "MINT" };
-static const char *const FIRE_NAMES[FIRE_COUNT] = { "RELAXED", "NORMAL", "FAST" };
+static const char *optValue(int row)
+{
+    switch (row) {
+        case 0: return THEME_NAMES[S.theme];
+        case 1: return FRAME_NAMES[S.frame];
+        case 2: return ACCENT_NAMES[S.accent];
+        case 3: return S.hand ? "LEFT" : "RIGHT";
+        case 4: return FIRE_NAMES[S.fire];
+        case 5: return S.music ? "ON" : "OFF";
+        case 6: return LIB_NAMES[S.library];
+        default: return SPELL_NAMES[S.spelling];
+    }
+}
 
+// the options list: label on the left, "< VALUE >" on the right with the chevrons at fixed columns
+// (the left half of the row steps back, the right half forwards)
 static void drawOptions(const Game *g)
 {
+    int savedX0 = boardX0;
+    boardX0 = 0;                       // the frame and the dot grid stay put too, whatever HAND says
     fillRect(0, 0, SCREEN_W, SCREEN_H, BLACK);
     drawBoardDots();
     drawBoardFrame();
-    drawTextShadow(BX(86) - textWidth("OPTIONS", 2) / 2, 14, "OPTIONS", GOLD_LT, 2);
+    boardX0 = savedX0;
+    drawTextShadow(86 - textWidth("OPTIONS", 2) / 2, 14, "OPTIONS", GOLD_LT, 2);
     int sel = g->optRow;
     for (int i = 0; i < OPT_ROWS; i++) {
         int y = OPT_Y0 + i * OPT_DY;
-        const char *val = "";
-        switch (i) {
-            case 0: val = THEME_NAMES[S.theme]; break;
-            case 1: val = FRAME_NAMES[S.frame]; break;
-            case 2: val = ACCENT_NAMES[S.accent]; break;
-            case 3: val = S.hand ? "LEFT" : "RIGHT"; break;
-            case 4: val = FIRE_NAMES[S.fire]; break;
-            case 5: val = S.music ? "ON" : "OFF"; break;
-            case 6: val = LIB_NAMES[S.library]; break;
-            case 7: val = SPELL_NAMES[S.spelling]; break;
-        }
-        if (i == sel) { fillRect(BX(12), y - 2, 148, OPT_DY - 1, lerp15(BLACK, ACCENT, 4)); rectOutline(BX(12), y - 2, 148, OPT_DY - 1, ACCENT); }
-        drawText(BX(18), y + 2, OPT_NAMES[i], i == sel ? WHITE : INK, 1);
-        char v[16]; siprintf(v, "< %s >", val);
-        drawText(BX(154) - textWidth(v, 1), y + 2, v, i == sel ? ACCENT : INK, 1);
+        bool on = i == sel;
+        if (on) { fillRect(12, y, 148, OPT_DY - 1, lerp15(BLACK, ACCENT, 4)); rectOutline(12, y, 148, OPT_DY - 1, ACCENT); }
+        drawText(18, y + 3, OPT_NAMES[i], on ? WHITE : INK, 1);
+        const char *val = optValue(i);
+        u16 lc = on ? ((nudgeTimer > 0 && nudgeDir < 0) ? WHITE : ACCENT) : DIM_TEXT;
+        u16 rc = on ? ((nudgeTimer > 0 && nudgeDir > 0) ? WHITE : ACCENT) : DIM_TEXT;
+        drawChar(76, y + 3, '<', lc, 1);
+        drawChar(149, y + 3, '>', rc, 1);
+        drawText(112 - textWidth(val, 1) / 2 + 3, y + 3, val, on ? WHITE : INK, 1);     // centred between the chevrons
     }
-    // swatches: the five letter gems in the current theme
-    for (int i = 0; i < 5; i++) { blitGem(BX(16) + i * 28, 136, i); drawLetter(BX(16) + i * 28, 136, "AIRTS"[i] - 'A', WHITE, GEM_PALS[i]->dark); }
-    rectOutline(BX(54), 160, 64, 20, DIM);
-    drawTextCenter(BX(86), 166, "BACK", INK, 1);
-    if (!settingsPersistent()) drawTextCenter(BX(86), 182, "NOT SAVED: NO CARD", DIM_TEXT, 1);
-    else if (settingsSaveFailed()) drawTextCenter(BX(86), 182, "SAVE FAILED", FIRE2, 1);
-    else drawTextCenter(BX(86), 182, "SAVED TO CARD", DIM_TEXT, 1);
+    rectOutline(54, 158, 64, 18, DIM);
+    drawTextCenter(86, 164, "BACK", INK, 1);
+    if (!settingsPersistent()) drawTextCenter(86, 180, "NOT SAVED: NO CARD", DIM_TEXT, 1);
+    else if (settingsSaveFailed()) drawTextCenter(86, 180, "SAVE FAILED", FIRE2, 1);
+    else drawTextCenter(86, 180, "SAVED TO CARD", DIM_TEXT, 1);
 }
 
 // THE LEDGER: lifetime stats from the saved records, on the touch screen like the options
@@ -1572,7 +1657,7 @@ static void drawTipCard(int which)
         }
         drawTextCenter(cx, y + 56, "DRAG ACROSS TOUCHING GEMS", INK, 1);
         drawTextCenter(cx, y + 66, "THREE LETTERS OR MORE, THEN SUBMIT", INK, 1);
-        drawTextCenter(cx, y + 80, "LONG WORDS SCORE BIG AND KEEP HEAT DOWN", DIM_TEXT, 1);
+        drawTextCenter(cx, y + 80, "LONG WORDS SCORE BIG, KEEP HEAT DOWN", DIM_TEXT, 1);
     } else if (which == 1) {
         drawTextCenter(cx, y, "PEEK", ACCENT, 1);
         int gx = cx - 40;
@@ -1582,18 +1667,16 @@ static void drawTipCard(int which)
             else if (i == 1) { drawGemSized(x, gy, TILE_W, TILE_H, &GEM_DIAMOND, false); drawChar(x + 7, gy + 4, 'B', C(4,6,10), 2); }
             else { rectOutline(x + 1, gy + 1, TILE_W - 2, TILE_H - 2, DIM); drawChar(x + 10, gy + 8, 'X', DIM_TEXT, 1); }
         }
-        drawTextCenter(cx, y + 56, "HOLD L OR X, TAP A GEM, LET GO TO PEEL", INK, 1);
+        drawTextCenter(cx, y + 56, "HOLD L OR R, TAP A GEM YOU CAN SPARE", INK, 1);
         drawTextCenter(cx, y + 66, "A NUMBER COUNTS HIDDEN PASS LETTERS", INK, 1);
         drawTextCenter(cx, y + 76, "IN THE SIX CELLS AROUND IT", INK, 1);
-        drawTextCenter(cx, y + 94, "EVERY PEEL IS A TURN", DIM_TEXT, 1);
+        drawTextCenter(cx, y + 94, "LET GO TO PEEL. EVERY PEEL IS A TURN", DIM_TEXT, 1);
     } else {
         drawTextCenter(cx, y, "FIRE", FIRE2, 1);
         int gx = cx - 40;
-        GemPal firePal = GEM_FIRE; firePal.mid = (frame & 8) ? C(31,8,0) : C(31,14,0);
-        int fx = gx, fy = y + 14;   // the burning gem; the tongues above share its base
-        drawGemSized(fx, fy, TILE_W, TILE_H, &firePal, false); drawChar(fx + 7, fy + 4, 'R', WHITE, 2);
+        int fx = gx, fy = y + 14;   // the burning gem, drawn the way the board draws it (light plate, dark letter, tongues)
+        drawBurnCell(fx, fy, 0, 'r' - 'a', (frame >> 1) & 15, false, false);
         rectOutline(fx + 1, fy + TILE_H + 1, TILE_W - 2, TILE_H - 2, DIM);
-        for (int j = 0; j < 3; j++) px(fx + 6 + j * 6, fy - 2 - ((frame >> 2) + j) % 3, FIRE2);
         drawGemSized(gx + 28, y + 24, TILE_W, TILE_H, &GEM_DIAMOND, false); drawChar(gx + 35, y + 28, 'O', C(4,6,10), 2);
         drawGemSized(gx + 56, y + 14, TILE_W, TILE_H, &th[TH_EMERALD], false); drawChar(gx + 63, y + 18, 'P', WHITE, 2);
         drawTextCenter(cx, y + 62, "SHORT WORDS BUILD HEAT AND LIGHT A GEM", INK, 1);
@@ -1803,6 +1886,8 @@ static void drawOverlay(const Game *g)
 // ---------------------------------------------------------------- frame
 
 int gfxShownScore(void) { return shownScore; }
+void gfxTipFlip(int dir) { tipIndex = (tipIndex + 3 + dir) % 3; tipTimer = 0; }
+int gfxTipIndex(void) { return tipIndex; }
 
 // The results tally. Outside the results card the HUD shows the score itself. On the card it starts from
 // the score before the bonuses, waits for the diamonds to start lighting (frame 18), then chases the final
@@ -1875,13 +1960,20 @@ void gfxFrame(const Game *g)
                     int x, y; cellOrigin(c, r, &x, &y);
                     spawn(P_SPARK, x + 3 + rand() % (TILE_W - 6), y + 1, (rand() % 5) - 2, -(rand() % 8) - 4, 10 + rand() % 8, (rand() & 1) ? FIRE2 : FIRE1);
                 }
-    if (g->state == ST_TITLE && (frame % 6) == 0)      // gem rain behind the title band
+    if (g->state == ST_TITLE && (frame % 6) == 0) {    // gem rain behind the title band
         spawn(P_RAIN, BX(10 + rand() % 153), 0, 0, 10, 100, THEMES[S.theme][rand() % 5].light);
+        rainAlive = true;
+    } else if (rainAlive && g->state != ST_TITLE) {    // it stops with the title: nothing falls over the options or the board
+        for (int i = 0; i < MAXP; i++) if (P[i].kind == P_RAIN) P[i].life = 0;
+        rainAlive = false;
+    }
     stepTally(g);
     stepParticles();
     stepPopups();
     if (invalidTimer) invalidTimer--;
     if (nopeTimer) nopeTimer--;
+    if (nudgeTimer) nudgeTimer--;
+    if (g->state == ST_TITLE && ++tipTimer >= 420) { tipTimer = 0; tipIndex = (tipIndex + 1) % 3; }
     if (pressSubmit) pressSubmit--;
     if (pressClear) pressClear--;
     if (pressPeek) pressPeek--;

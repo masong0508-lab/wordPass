@@ -11,8 +11,11 @@ from wp import Emu, COLS, ROWS, EMPTY, TILE, BURN, HOLE, SECRET, ST_TITLE, ST_PL
 rom = sys.argv[1]; out = sys.argv[2] if len(sys.argv) > 2 else '/tmp'
 e = Emu(rom)
 e.run(10)                                 # a first frame, so the DBG mirror is valid even when WP_ONLY skips the early scenarios
+e.set_tutor(1)                             # no guided first shelf: its prompts own the message line (the tutorial scenario switches it on)
 fails = 0
 C = 3   # the column every board scenario pokes
+def opt_row_y(i): return 34 + 15 * i + 7        # a touch inside row i of the options list (fixed x: it never mirrors)
+OPT_BACK_Y = 166
 
 ONLY = [k for k in os.environ.get('WP_ONLY', '').split('|') if k]   # development filter: run scenarios whose name has one of these
 
@@ -795,11 +798,11 @@ def _():
     assert e.state()['state'] == ST_TITLE, 'the pause menu did not quit to the title'
     e.tap(86, 170); e.run(10)
     g = e.state(); assert g['state'] == ST_OPTIONS and g['optRow'] == 0, f'options: {g["state"]} {g["optRow"]}'
-    e.tap(86, 78); e.run(10)                      # rows are 12 px apart from y 36: HAND is row 3
+    e.tap(130, opt_row_y(3)); e.run(10)           # rows are 15 px apart from y 34: HAND is row 3 (the right half steps forward)
     g = e.state(); assert g['optRow'] == 3, f'optRow {g["optRow"]}'
     assert g['settings']['hand'] == 1, 'HAND did not flip'
     e.set_hand(True)
-    e.tap(e.bx + 86, 170); e.run(30)              # BACK, now mirrored
+    e.tap(86, OPT_BACK_Y); e.run(30)              # BACK: the options list never mirrors, so it is where it was
     g = e.state(); assert g['state'] == ST_TITLE and g['optRow'] == 3, f'back: {g["state"]} {g["optRow"]}'
     e.shot(f'{out}/rules_lefthand_title.png')
     px = e.pixels()
@@ -817,12 +820,16 @@ def _():
     g = e.state(); assert g['state'] == ST_OPTIONS and g['spelling'] == 0, f'options: {g["state"]} spelling {g["spelling"]}'
     seen = []
     for i in range(3):
-        e.tap(e.bx + 86, 126); e.run(10)                 # SPELLING is row 7, y 120..132
+        e.tap(130, opt_row_y(7)); e.run(10)              # SPELLING is row 7; the right half steps forward
         g = e.state(); assert g['optRow'] == 7, f'optRow {g["optRow"]}'
         seen.append(g['spelling'])
         e.shot(f'{out}/rules_options_spelling_{g["spelling"]}.png')
     assert seen == [1, 2, 0], f'spelling cycle {seen}'
-    e.tap(e.bx + 86, 170); e.run(30)
+    e.tap(40, opt_row_y(7)); e.run(10)                    # the left half steps back: BOTH -> BRITISH
+    assert e.state()['spelling'] == 2, 'the left half of the row should step back'
+    e.tap(40, opt_row_y(7)); e.run(10); assert e.state()['spelling'] == 1
+    e.tap(40, opt_row_y(7)); e.run(10); assert e.state()['spelling'] == 0
+    e.tap(86, OPT_BACK_Y); e.run(30)
     assert e.state()['state'] == ST_TITLE, 'BACK did not leave the options'
 
 @scenario('poke channel sets SPELLING (the rejection rules themselves are in make check)')
@@ -866,8 +873,8 @@ def set_hand(left):
     to_title()
     if bool(e.state()['settings']['hand']) != left:
         e.tap(e.bx + 86, 170); e.run(10)              # OPTIONS
-        e.tap(e.bx + 86, 78); e.run(10)               # HAND row (row 3)
-        e.tap(e.bx + 86, 170); e.run(20)              # BACK
+        e.tap(130, opt_row_y(3)); e.run(10)           # HAND row (row 3)
+        e.tap(86, OPT_BACK_Y); e.run(20)              # BACK (the options list is fixed: the hand does not move it)
         assert bool(e.state()['settings']['hand']) == left, 'HAND did not flip'
     e.set_hand(left)
 
@@ -1416,6 +1423,7 @@ def check_title(tag):
     assert rain > 30, f'{tag}: no gem rain above the band ({rain} lit px in 40 samples)'
     px = e.pixels()
     assert count_color(px, e.bx + 8, 192 + 30, e.bx + 165, 192 + 31, (16, 11, 2), 1) > 100 and count_color(px, e.bx + 8, 192 + 73, e.bx + 165, 192 + 74, (16, 11, 2), 1) > 100, f'{tag}: the gold rules at y 30 and 73 are missing'
+    assert e.fps() == 120, f'{tag}: title fps with the gem rain'
     # the hit rects did not move
     e.tap(e.bx + 52, 147); e.run(150); assert e.state()['state'] == ST_PLAY, f'{tag}: CLASSIC no longer starts'
 
@@ -1426,6 +1434,234 @@ def _():
 @scenario('title (left hand): the same, mirrored')
 def _():
     set_hand(True); check_title('left')
+
+# ---- options, onboarding and accessibility (item 14) ---------------------------------------
+def open_options():
+    """From the title (whatever the hand): the options screen, optRow 0."""
+    e.tap(e.bx + 86, 170); e.run(10)
+    g = e.state(); assert g['state'] == ST_OPTIONS, f'OPTIONS did not open: {g["state"]}'
+
+def region_diff(a, b, x0, y0, x1, y1):
+    return [(x, y) for y in range(y0, y1) for x in range(x0, x1) if a[x, y] != b[x, y]]
+
+def check_options(tag):
+    to_title(); open_options()
+    # the list is fixed: flipping HAND mirrors the title and the board, never the options (the row you just tapped stays under the stylus)
+    e.tap(130, opt_row_y(3)); e.run(12)
+    g = e.state(); hand0 = g['settings']['hand']; assert g['optRow'] == 3
+    e.set_hand(bool(hand0)); e.shot(f'{out}/rules_options_hand{hand0}_{tag}.png'); a = e.pixels()
+    e.tap(130, opt_row_y(3)); e.run(12)
+    g = e.state(); assert g['settings']['hand'] == 1 - hand0, f'{tag}: HAND did not flip back'
+    e.set_hand(bool(1 - hand0)); e.shot(f'{out}/rules_options_hand{1 - hand0}_{tag}.png'); b = e.pixels()
+    moved = region_diff(a, b, 0, 196, 73, 384)            # labels, highlight, frame: x 0..73 (the value column differs by its text)
+    assert not moved, f'{tag}: the options list moved when HAND flipped: {len(moved)} px differ, first {moved[:3]}'
+    lit = [(x, y) for y in range(192, 384) for x in range(174, 256) if sum(a[x, y]) > 90 or sum(b[x, y]) > 90]
+    assert not lit, f'{tag}: something is drawn right of the options strip: {lit[:3]}'
+    # left half steps back, right half steps forward, whatever the hand; THEME wraps onto CLEAR
+    e.tap(40, opt_row_y(0)); e.run(8)
+    g = e.state(); assert g['settings']['theme'] == 4 and g['optRow'] == 0, f'{tag}: left half of THEME: {g["settings"]}'
+    e.tap(130, opt_row_y(0)); e.run(8); assert e.state()['settings']['theme'] == 0, f'{tag}: right half of THEME'
+    # the chevron on the tapped side flashes white for six frames, then settles to the accent colour
+    y = opt_row_y(1) - 4
+    def flash(side_x, other_x, tap_x):
+        """Tap row 1 on the given side and watch its chevrons for the next ten frames: the tapped side flashes white, the other never does."""
+        e.tap(tap_x, opt_row_y(1), hold=2, settle=0)
+        seen = other = 0
+        for _ in range(10):
+            px = e.pixels()
+            if count_color(px, side_x, 192 + y, side_x + 7, 192 + y + 9, (31, 31, 31), 1) >= 4: seen += 1
+            if count_color(px, other_x, 192 + y, other_x + 7, 192 + y + 9, (31, 31, 31), 1) >= 4: other += 1
+            e.run(1)
+        e.run(8); px = e.pixels()
+        assert count_color(px, side_x, 192 + y, side_x + 7, 192 + y + 9, (31, 31, 31), 1) == 0, f'{tag}: the chevron flash never ended'
+        return seen, other
+    seen, other = flash(148, 75, 130)
+    assert 2 <= seen <= 7 and other == 0, f'{tag}: the right chevron should flash white for about six frames (right {seen} left {other})'
+    seen, other = flash(75, 148, 40)
+    assert 2 <= seen <= 7 and other == 0, f'{tag}: the left chevron should flash white on a left tap (left {seen} right {other})'
+    # d-pad: UP and DOWN move the row, LEFT and RIGHT step the value, A steps forward
+    e.press('DOWN', settle=4); assert e.state()['optRow'] == 2
+    e.press('RIGHT', settle=4); assert e.state()['settings']['theme'] == 0 and e.state()['optRow'] == 2
+    for i in range(OPT_ROWS_N):
+        while e.state()['optRow'] != i: e.press('DOWN', settle=4)
+        e.run(8); px = e.pixels()
+        over = [(x, y) for y in range(128, 150) for x in list(range(0, 8)) + list(range(249, 256)) if sum(px[x, y]) > 250]   # the accent dot grid is dimmer than any text
+        assert not over, f'{tag}: help text for row {i} reaches the plaque border: {over[:3]}'
+        if i == 0:
+            e.shot(f'{out}/rules_options_row0_{tag}.png')
+        if i in (2, 7): e.shot(f'{out}/rules_options_row{i}_{tag}.png')
+    while e.state()['optRow'] != 2: e.press('DOWN', settle=4)
+    e.press('LEFT', settle=4); assert e.state()['settings'] is not None and e.state()['optRow'] == 2
+    e.press('DOWN', settle=4); e.press('DOWN', settle=4)
+    # the sample board: a ruby gem, the numbered hole, the burning gem's light plate, the lit chain rim, the ghost
+    e.press('DOWN', settle=4); e.run(8); px = e.pixels()
+    bx0, by0 = 56, 70
+    ruby = px5(px, bx0 + 19, by0 + 12)
+    assert ruby[0] >= 14 and ruby[0] > 2 * max(ruby[1], 1) and ruby[2] < ruby[0], f'{tag}: the first sample gem should be a ruby, got {ruby}'
+    assert count_color(px, bx0, by0 + 22, bx0 + 24, by0 + 44, (6, 28, 24), 2) > 20, f'{tag}: the numbered hole (accent rim) is missing'
+    assert count_color(px, bx0 + 24, by0 + 22 + 11, bx0 + 48, by0 + 22 + 11 + 22, (31, 22, 4), 1) > 60, f'{tag}: the burning gem has no light plate'
+    assert count_color(px, bx0 + 48, by0 + 20, bx0 + 72, by0 + 22 + 22, (31, 31, 31), 1) > 40, f'{tag}: the chained gem has no white rim'
+    # CLEAR gets its own line of help, still inside the plaque
+    while e.state()['optRow'] != 0: e.press('DOWN', settle=4)
+    e.tap(40, opt_row_y(0)); e.run(8); assert e.state()['settings']['theme'] == 4
+    e.run(10); px = e.pixels(); e.shot(f'{out}/rules_options_clear_{tag}.png')
+    assert count_color(px, 40, 141, 216, 148, (6, 28, 24), 2) > 40, f'{tag}: no CLEAR: COLOUR-BLIND SAFE line'
+    over = [(x, y) for y in range(128, 150) for x in list(range(0, 8)) + list(range(249, 256)) if sum(px[x, y]) > 250]   # the accent dot grid is dimmer than any text
+    assert not over, f'{tag}: the CLEAR help reaches the border'
+    e.tap(130, opt_row_y(0)); e.run(8); assert e.state()['settings']['theme'] == 0
+    assert e.fps() == 120, f'{tag}: options fps (the sample board is drawn in the top slices)'
+    e.tap(86, OPT_BACK_Y); e.run(30)
+    assert e.state()['state'] == ST_TITLE, f'{tag}: BACK did not leave'
+
+OPT_ROWS_N = 8
+
+@scenario('options (right hand): a fixed list, left/right halves, chevron flash, the sample board and help inside the plaque')
+def _():
+    set_hand(False); check_options('right')
+
+@scenario('options (left hand): the same list, in the same place')
+def _():
+    set_hand(True); check_options('left')
+
+def set_theme(n):
+    """Pick a theme through the options screen (from the title or play)."""
+    to_title(); open_options()
+    while e.state()['settings']['theme'] != n: e.tap(130, opt_row_y(0)); e.run(6)
+    e.tap(86, OPT_BACK_Y); e.run(30)
+
+@scenario('CLEAR theme: yellow vowels, blue consonants, magenta rare letters; burning gems keep a light plate and a dark letter')
+def _():
+    set_hand(False); set_theme(4); e.start_classic()
+    calm()
+    for c in range(COLS):
+        for r in range(ROWS): e.set_cell(c, r, TILE, 'a')
+    e.set_cell(0, 0, TILE, 'r'); e.set_cell(0, 1, TILE, 'j'); e.set_cell(0, 2, TILE, 'b'); e.set_cell(0, 3, TILE, 'g')
+    e.set_cell(2, 5, BURN, 'm'); e.set_cell(4, 3, BURN, 'q'); e.run(10)
+    e.shot(f'{out}/rules_clear_play.png'); px = e.pixels()
+    def body(c, r):
+        x0, y0, x1, y1 = e.cell_rect(c, r); return px5(px, x0 + 5, y0 + 11)
+    v, cons, rare, soft, other = body(3, 3), body(0, 0), body(0, 1), body(0, 2), body(0, 3)
+    assert v[0] >= 20 and v[1] >= 16 and v[2] <= 12, f'CLEAR vowel should be yellow: {v}'
+    assert cons[2] >= 20 and cons[0] <= 6, f'CLEAR consonant should be blue: {cons}'
+    assert rare[0] >= 14 and rare[2] >= 14 and rare[1] <= 14, f'CLEAR rare letter should be magenta: {rare}'
+    assert soft[1] >= 8 and soft[0] <= 4 and soft[2] >= 6, f'CLEAR soft letter should be teal: {soft}'
+    assert max(other) <= 14 and abs(other[0] - other[2]) <= 4, f'CLEAR other letter should be grey: {other}'
+    # the fire cue: the plate behind a burning letter is the light colour, the glyph is dark, a FIRE2 bar caps the gem
+    for (c, r) in ((2, 5), (4, 3)):
+        x0, y0, x1, y1 = e.cell_rect(c, r)
+        assert count_color(px, x0 + 4, y0 + 3, x0 + 20, y0 + 20, (31, 22, 4), 1) > 90, f'burning ({c},{r}): no light plate'
+        assert count_color(px, x0 + 4, y0 + 3, x0 + 20, y0 + 20, (10, 0, 0), 1) > 15, f'burning ({c},{r}): no dark glyph'
+        assert count_color(px, x0 + 3, y0 + 1, x0 + 21, y0 + 3, (31, 24, 4), 1) > 20, f'burning ({c},{r}): no bar across the top'
+    set_theme(0)
+
+def msg_of(prefix): return e.state()['msg'].startswith(prefix)
+
+def check_tutor(tag):
+    """The guided first shelf on a fresh Classic game: sticky prompts, overridden by callouts, ended by the closing tip."""
+    left = e.bx == 82
+    peek = 'HOLD R OR TAP PEEK' if left else 'HOLD L OR TAP PEEK'
+    e.set_tutor(0); e.start_classic(); e.set_lives(3)
+    e.run(260)                                              # the shelf intro (180 frames) runs out, then the prompt stays
+    g = e.state(); assert g['tutorStep'] == 0 and g['msgTimer'] == -1 and g['msg'].startswith('DRAG 3 TOUCHING GEMS'), f'{tag}: step 0: {g["tutorStep"]} {g["msgTimer"]} {g["msg"]!r}'
+    e.run(300); assert msg_of('DRAG 3 TOUCHING GEMS') and e.state()['msgTimer'] == -1, f'{tag}: the prompt must be sticky'
+    e.shot(f'{out}/rules_tutor_0_{tag}.png')
+    e.set_heat(0); e.set_burn(0, 99); e.set_turn(0)
+    path = spell_cells('bed'); e.chain(path); e.press('A', settle=10)
+    g = e.state(); assert g['tutorStep'] == 1 and g['msg'].startswith(peek) and g['msgTimer'] == -1, f'{tag}: after the first word: step {g["tutorStep"]} {g["msg"]!r}'
+    e.shot(f'{out}/rules_tutor_1_{tag}.png')
+    # a callout takes the line for its moment, then the prompt returns
+    e.set_heat(0); path = spell_cells('bread'); e.chain(path); e.press('A', settle=4)
+    g = e.state(); assert g['msg'] == 'GOOD!' and g['msgTimer'] > 0, f'{tag}: the callout should override the prompt: {g["msg"]!r}'
+    e.run(80); g = e.state(); assert g['msg'].startswith(peek) and g['msgTimer'] == -1, f'{tag}: the prompt did not come back: {g["msg"]!r} {g["msgTimer"]}'
+    # the first peel: a hole says what its number means (zero the back layer, give (C, 3) exactly one pass-letter neighbour)
+    e.set_heat(0); e.set_burn(0, 99)
+    for c in range(COLS):
+        for r in range(ROWS): e.set_back(c, r, 0)
+    nc, nr = e.neighbors(C, 3)[0]; e.set_back(nc, nr, 1)
+    target = (C, 3); e.set_cell(C, 3, TILE, 'e'); e.run(5)
+    e.peel(*target); g = e.state()
+    assert g['peels'] == 1 and g['tutorStep'] == 2 and g['msgTimer'] > 0 and g['msg'].startswith('1: A PASS LETTER TOUCHES'), f'{tag}: hole message: step {g["tutorStep"]} {g["msg"]!r}'
+    e.shot(f'{out}/rules_tutor_hole_{tag}.png')
+    e.run(250); g = e.state(); assert g['tutorStep'] == 2 and g['msg'].startswith(peek) and g['msgTimer'] == -1, f'{tag}: after the hole message: {g["msg"]!r}'
+    # the first pass letter found: the closing tip, which ends the guide when it runs out
+    e.set_back(C, 6, 1); e.set_cell(C, 6, TILE, 'e'); e.set_heat(0); e.set_burn(0, 99); e.run(5)
+    e.peel(C, 6); g = e.state()
+    assert g['found'][0] == 1 and g['tutorStep'] == 3 and g['msg'].startswith('FIND THE REST.'), f'{tag}: closing tip: step {g["tutorStep"]} found {g["found"]} {g["msg"]!r}'
+    assert g['tutorDone'] == 0, f'{tag}: the guide must not be marked done before the tip has run'
+    e.shot(f'{out}/rules_tutor_rest_{tag}.png')
+    e.run(250); g = e.state()
+    assert g['tutorStep'] == 4 and g['tutorDone'] == 1 and g['msg'] == '' and g['msgTimer'] == 0, f'{tag}: the guide should end: step {g["tutorStep"]} done {g["tutorDone"]} {g["msg"]!r}'
+    # once done, a new game has no prompts, and the old nudge is back as a fallback
+    to_title(); e.start_classic(); e.run(260)
+    g = e.state(); assert g['tutorStep'] == 4 and g['msg'] == '', f'{tag}: a finished guide must stay off: {g["tutorStep"]} {g["msg"]!r}'
+
+@scenario('guided first shelf (right hand): drag, peek, the first hole, the first pass letter, then off for good')
+def _():
+    set_hand(False); check_tutor('right')
+
+@scenario('guided first shelf (left hand): the same, with HOLD R in the prompts')
+def _():
+    set_hand(True); check_tutor('left')
+
+@scenario('guided first shelf: a first peel that finds a pass letter, and a shelf cleared mid-guide ends it')
+def _():
+    set_hand(False)
+    e.set_tutor(0); e.start_classic(); e.set_lives(3); e.run(260); e.set_heat(0); e.set_burn(0, 99); e.set_turn(0)
+    path = spell_cells('bed'); e.chain(path); e.press('A', settle=10); assert e.state()['tutorStep'] == 1
+    g = e.state(); c, r = e.secret_cells(g)[1]
+    for cc, rr in e.burn_cells(g): e.set_cell(cc, rr, TILE, 'e')
+    e.peel(c, r); g = e.state()
+    assert g['found'][0] == 1 and g['msg'] == 'A PASS LETTER! PEEL AROUND IT' and g['tutorStep'] == 2, f'secret first: step {g["tutorStep"]} {g["msg"]!r}'
+    e.run(250); g = e.state()
+    assert g['tutorStep'] == 3 and g['msg'].startswith('FIND THE REST.'), f'after the first-peel message the closing tip follows: {g["tutorStep"]} {g["msg"]!r}'
+    # clear the shelf before the tip has run out: the guide is done anyway
+    for i in range(2, g['passLen'] + 1):
+        e.set_heat(0); e.set_turn(0); e.set_burn(0, 99)
+        g = e.state()
+        for cc, rr in e.burn_cells(g): e.set_cell(cc, rr, TILE, 'e')
+        c, r = e.secret_cells(g)[i]; e.peel(c, r)
+    g = e.state(); assert g['state'] == ST_PASSED and g['tutorDone'] == 1 and g['tutorStep'] == 4, f'cleared: {g["state"]} done {g["tutorDone"]} step {g["tutorStep"]}'
+    assert g['msgTimer'] != -1, 'no sticky prompt may survive into the results card'
+    e.run(40); e.tap(e.bx + 100, 100); e.run(20)
+    e.set_tutor(1)
+
+@scenario('title tip cards: LEFT/RIGHT and L/R flip them, the dots follow, they turn by themselves every 420 frames')
+def _():
+    set_hand(False); to_title(); e.run(10)
+    i0 = e.state()['tipIndex']
+    e.press('RIGHT', settle=8); assert e.state()['tipIndex'] == (i0 + 1) % 3, 'RIGHT should show the next card'
+    e.press('LEFT', settle=8); e.press('LEFT', settle=8); assert e.state()['tipIndex'] == (i0 + 2) % 3, 'LEFT twice wraps backwards'
+    e.press('R', settle=8); e.press('L', settle=8); e.press('L', settle=8); assert e.state()['tipIndex'] == (i0 + 1) % 3, 'L and R flip as well'
+    shots = []
+    for k in range(3):
+        i = e.state()['tipIndex']; e.run(12); e.shot(f'{out}/rules_tip_{i}.png'); px = e.pixels()
+        for j in range(3):                                 # the dot of the card on show is a filled gold square, the others outlines
+            lit = sum(1 for yy in (171, 172) for xx in (118 + j * 8 + 1, 118 + j * 8 + 2) if sum(px[xx, yy]) > 300)   # the frame colour varies: judge by brightness
+            assert (lit >= 4) == (j == i), f'tip card {i}: dot {j} lit {lit}'
+        over = [(x, y) for y in range(40, 168) for x in list(range(0, 11)) + list(range(246, 256)) if sum(px[x, y]) > 300 and not (x in (8, 9, 246, 247))]
+        assert not over, f'tip card {i}: text reaches the plaque border, first {over[:3]}'
+        e.press('RIGHT', settle=8)
+    j = e.state()['tipIndex']
+    e.run(430); assert e.state()['tipIndex'] == (j + 1) % 3, f'the card should turn by itself after about 420 frames: {j} -> {e.state()["tipIndex"]}'
+    e.press('RIGHT', settle=8); k = e.state()['tipIndex']; e.run(300); e.press('RIGHT', settle=8)
+    assert e.state()['tipIndex'] == (k + 1) % 3, 'a flip restarts the 420 frame timer'
+
+@scenario('side-aware hints: HOLD L on the right-handed panel and title, HOLD R when left-handed')
+def _():
+    for left in (False, True):
+        set_hand(left); e.start_classic(); calm(); e.run(8)
+        X = panel_x(); px = e.pixels()
+        # the sixth glyph of "HOLD ?: PEEK" is L or R at panel x + 30: R has a pixel on the right of its second row, L has none
+        lit = sum(px[X + 34, 192 + 74 + 1]) > 100
+        assert lit == left, f'{"left" if left else "right"}-handed panel hint: glyph at the third column lit={lit}'
+        assert count_color(px, X, 192 + 74, X + 24, 192 + 81, (13, 13, 16), 2) > 20, 'the hint text is missing'
+        e.shot(f'{out}/rules_hint_{"left" if left else "right"}.png')
+        to_title(); e.run(20); e.shot(f'{out}/rules_title_hint_{"left" if left else "right"}.png')
+        px = e.pixels()
+        # "DRAG SPELLS. L PEEKS": the L or R is the 14th character, at x BX(86 - 59 + 78); R has a pixel in the right column of its second row, L none
+        lit = sum(px[e.bx + 109, 192 + 112 + 1]) > 100
+        assert lit == left, f'title tagline for the {"left" if left else "right"} hand: lit={lit}'
+    set_hand(False)
 
 print('RULES OK' if not fails else f'RULES FAILED: {fails}')
 sys.exit(fails)

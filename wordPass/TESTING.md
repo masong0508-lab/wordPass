@@ -37,7 +37,7 @@ fixed-layout `DBG` mirror of game state from the ROM, so it keeps working when `
 Write ad-hoc probes with `from wp import Emu` (see the docstring). Screenshots are
 256x384 PNGs: top screen above, touch screen below. Read them with the image viewer to
 check visuals. Coordinates: CLASSIC button (52,147), DAILY (120,147), OPTIONS (86,170),
-options rows at y = 36 + 14*row (HAND is row 3, tap (86,84)), BACK (86,170), cell centres
+options rows at y = 34 + 15*row, a touch inside a row at +7 (the right half, x >= 86, steps a value forward and the left half back; HAND is row 3: tap (130, 86)), BACK (86, 166); the options list is never mirrored, so these do not change with the hand, cell centres
 via `e.center(c, r)`, cell rectangles on the screenshot via `e.cell_rect(c, r)`.
 
 ### The DBG mirror and its offset table
@@ -51,7 +51,7 @@ library, heatThreshold, burnEvery, burnTimer, optRow, pulseEvery, lockTier, over
 chainScore, speedBonus, peelBonus, passBonusKind, ledgerN, newBest, lives, passTheme,
 twist, calloutLife, pressBits, shownScore, pauseRow, pauseArm`; `shownScore` is the score the HUD shows
 (it counts up during the results tally), `pauseRow` the highlighted pause row and `pauseArm` the frames left of a
-RESTART/QUIT confirmation; `callout` is the text of the board callout (`calloutLife` frames left;
+RESTART/QUIT confirmation; `tutorStep` (0 drag, 1 peek, 2 find, 3 closing tip, 4 off), `tutorDone` (S.tutorDone), `tipIndex` (the title's tip card) and `msgTimer` (frames left of the message line, -1 sticky); `msg` mirrors the first 31 characters of the message line; `callout` is the text of the board callout (`calloutLife` frames left;
 `pressBits` bit 0 SUBMIT, 1 CLEAR, 2 PEEK, 3 pause pressed, 4 the SUBMIT flash); `chainScore` is `boardChainScore(g)` every frame, the exact gain the current chain
 would submit for; `passTheme` indexes `wp.PASS_THEMES`, `twist` is 0 none, 1 INK SPILL,
 2 DAMP, 3 BURIED),
@@ -69,7 +69,7 @@ letter `'a'..'z'` or 0..25; motion and flash cleared), `set_back(c, r, v)` (0 or
 index + 1), `set_heat(h)`, `set_burn(timer, every)`, `fire_step()` (one fire advance plus
 gravity, no turn: `boardDebugFireStep`), `set_turn(n)`, `set_score(n)` (command 8), `set_lives(n)` (command 7: bookmarks), `set_pass(n, found)`
 (command 12, layout checks only: the pass becomes the first n letters of the alphabet, 1..9, with the bitmask `found`
-shown as found; the back layer is left alone, so do not peel afterwards).
+shown as found; the back layer is left alone, so do not peel afterwards), `set_tutor(done)` (command 13: 1 switches the guided first shelf off, 0 lets the next Classic shelf 1 guide; `test_rules.py` switches it off at the start so the prompts do not own the message line).
 Pokes bypass the game's own invariants, so set up whole columns explicitly.
 
 Recipes: `set_burn(0, 99)` keeps the fire still across submits, `set_burn(0, 1)` makes it
@@ -125,3 +125,7 @@ The panel scenarios (`panel HUD`, both hands) read the screenshot rather than th
 ## Overlays
 
 `pause menu` (both hands) drives the menu with the d-pad and with taps (`pause_row_y(i)`), reads `pauseRow` and `pauseArm`, and covers START and B resuming, SELECT doing nothing, the 90-frame confirmation expiring, a moved highlight disarming it, RESTART costing a bookmark, the refusal on the last one, and the chain being dropped when the menu opens. `results card` stops on the frame the last peel passes the shelf (`pass_by_peeling`), reads `shownScore` every frame (it starts at the score before the bonuses, waits for frame 18, never goes backwards, arrives in 10..80 frames and snaps on a tap, including a tap mid-count), and watches the card's top border pixel for the white flash. `fail card` and `results card` poke a 20-letter best word (`long_word_path`) (and, on the fail card, a seven-digit score) and assert that no text touches the two columns inside the card border. `title` checks that the logo band is solid black around the gems while the rain falls above and beside it. The screenshots land in the output folder for reading, one set per hand.
+
+## Options, onboarding and accessibility
+
+`options` (both hands) pokes nothing: it taps the real screen. It flips HAND from the options and compares the pixels of the list before and after (the labels, the highlight and the frame must not move), taps the left and right half of rows (THEME wraps onto CLEAR), watches the chevron flash on the tapped side for about six frames (the screenshot lags the game by a frame or two, so it polls ten frames rather than reading one), walks every row with the d-pad and asserts that the help line keeps clear of the plaque border, checks colours inside the sample board (a ruby, the accent-rimmed hole, the burning gem's light plate, the chained gem's white rim) and that CLEAR adds its own second line. `CLEAR theme` picks the theme through the options and samples a gem of each group on the board (yellow, blue, magenta, teal, grey) and the plate, glyph and bar of two burning gems (a letter and a Qu). `guided first shelf` follows the prompts through `msg` and `msgTimer` (sticky = -1): drag, the first word, a callout that takes the line and gives it back, the first hole's number message (a pass letter is poked beside the cell so its number is 1), the closing tip, and `tutorDone` going to 1 only when the tip has run; a second scenario starts with a peel that finds a pass letter and clears the shelf mid-tip. `title tip cards` presses LEFT, RIGHT, L and R, reads `tipIndex`, checks the dots and that no card text touches the plaque border, and waits out the 420 frame timer. `side-aware hints` tells HOLD L from HOLD R by one pixel of the glyph, on the panel and on the title card. `make check` covers the CLEAR theme in the settings file.

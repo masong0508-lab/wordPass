@@ -46,7 +46,9 @@ typedef struct {
     s32 calloutLife, pressBits;             // 568, 572: frames left of the board callout; panel buttons pressed (gfxPressBits)
     char callout[20];                       // 576..595: the callout's text
     s32 shownScore, pauseRow, pauseArm;     // 596, 600, 604: the HUD score (counts up in the results tally), the pause menu's row, frames left of its confirm
-} DebugView;                                // total 608
+    s32 tutorStep, tutorDone, tipIndex;     // 608, 612, 616: the guided first shelf (TUTOR_*), S.tutorDone, the title's tip card
+    s32 msgTimer;                           // 620: frames left of the message line (-1 = sticky)
+} DebugView;                                // total 624
 
 #define PIN(field, off) _Static_assert(offsetof(DebugView, field) == (off), "DebugView." #field " moved: update tools/emu/wp.py OFF")
 PIN(magic, 0); PIN(frame, 4); PIN(state, 8); PIN(mode, 12); PIN(shelf, 16); PIN(score, 20);
@@ -68,7 +70,8 @@ PIN(curC, 556); PIN(curR, 560); PIN(curOn, 564);
 PIN(peek, 540); PIN(armed, 544); PIN(armC, 548); PIN(armR, 552);
 PIN(calloutLife, 568); PIN(pressBits, 572); PIN(callout, 576);
 PIN(shownScore, 596); PIN(pauseRow, 600); PIN(pauseArm, 604);
-_Static_assert(sizeof(DebugView) == 608, "DebugView size changed: update tools/emu/wp.py");
+PIN(tutorStep, 608); PIN(tutorDone, 612); PIN(tipIndex, 616); PIN(msgTimer, 620);
+_Static_assert(sizeof(DebugView) == 624, "DebugView size changed: update tools/emu/wp.py");
 
 volatile DebugView DBG;
 
@@ -85,7 +88,8 @@ enum {
     POKE_SPELL,     // S.spelling = a0 (0 both, 1 American, 2 British)
     POKE_CLOCK,     // the DS clock reads YYYYMMDD a0 (0 = the real clock)
     POKE_DAILY,     // S.dailyPlayedDate = a0, S.dailyLastDate = a1, S.dailyStreak = a2 (records only; nothing is saved)
-    POKE_PASS       // the pass becomes a0 letters (1..9: "abcdefghi" truncated) with the letters in bitmask a1 found (layout checks; the back layer is left alone)
+    POKE_PASS,      // the pass becomes a0 letters (1..9: "abcdefghi" truncated) with the letters in bitmask a1 found (layout checks; the back layer is left alone)
+    POKE_TUTOR      // S.tutorDone = a0; the guide restarts (a0 = 0) or is switched off (a0 = 1) for the next Classic shelf 1
 };
 
 static void applyPoke(Game *g)
@@ -118,6 +122,7 @@ static void applyPoke(Game *g)
                 for (int i = 0; i < 12; i++) { g->pass[i] = i < a0 ? (char)('a' + i) : 0; g->found[i] = (i < a0 && ((a1 >> i) & 1)) ? 1 : 0; }
             }
             break;
+        case POKE_TUTOR:    S.tutorDone = a0 ? 1 : 0; g->tutorStep = a0 ? TUTOR_DONE : TUTOR_DRAG; break;
     }
     DBG.cmd = 0;
 }
@@ -140,7 +145,7 @@ void debugSync(Game *g)
             DBG.back[c * ROWS + r] = g->back[c][r];
             DBG.scorched[c * ROWS + r] = g->scorched[c][r];
         }
-    memcpy((void *)DBG.msg, g->msg, 32);
+    memcpy((void *)DBG.msg, g->msg, 32); DBG.msg[31] = 0;   // the first 31 characters of the message line
     memcpy((void *)DBG.lastWord, g->lastWord, 15); DBG.lastWord[15] = 0;   // 15 letters at most are mirrored
     memcpy((void *)DBG.bestWord, g->bestWord, 15); DBG.bestWord[15] = 0;
     DBG.lastWordTier = g->lastWordTier; DBG.rareWords = g->rareWords; DBG.library = S.library; DBG.spelling = S.spelling;
@@ -157,6 +162,8 @@ void debugSync(Game *g)
     DBG.practice = g->practice; DBG.dailyMod = g->dailyMod; DBG.clockOk = g->clockOk;
     DBG.peek = g->peekHeld; DBG.armed = g->armed; DBG.armC = g->armC; DBG.armR = g->armR;
     DBG.curC = g->curC; DBG.curR = g->curR; DBG.curOn = g->curOn;
+    DBG.msgTimer = g->msgTimer;
+    DBG.tutorStep = g->tutorStep; DBG.tutorDone = S.tutorDone; DBG.tipIndex = gfxTipIndex();
     DBG.shownScore = gfxShownScore(); DBG.pauseRow = g->pauseRow; DBG.pauseArm = g->pauseArm;
     DBG.calloutLife = gfxCalloutLife(); DBG.pressBits = gfxPressBits();
     strncpy((char *)DBG.callout, gfxCalloutText(), 19); DBG.callout[19] = 0;

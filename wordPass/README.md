@@ -102,12 +102,17 @@ scored attempt ends. B, X or any tap closes it.
 
 ### Options
 
-From the title (OPTIONS button or Y). Tap a row to cycle it, or use the
-d-pad.
+From the title (OPTIONS button or Y). Tap the left half of a row to step its
+value back and the right half to step it forward, or use the d-pad (up and
+down pick a row, left and right change it, A steps forward); the chevrons on
+the row flash when they act. The top screen shows a sample board in the
+current theme, accent and frame and a line about the lit row. The list always
+sits in the same place, so flipping Hand never moves a row from under your
+stylus.
 
 | Setting | Values |
 | --- | --- |
-| Theme | Jewel, Ink (slate gems with a tinted edge), Candy (pastels), Ember (warm) |
+| Theme | Jewel, Ink (slate gems with a tinted edge), Candy (pastels), Ember (warm), Clear (colour-blind safe: yellow, blue, magenta, teal and grey, which differ in lightness as well as hue) |
 | Frame | Gold, Silver, Accent |
 | Accent | Auto (changes per shelf) or one of eight fixed colours |
 | Hand | Right or Left: mirrors the grid and panel for left-handed stylus play |
@@ -193,6 +198,7 @@ three. Daily Pass has no bookmarks: one attempt.
 | Hold L or R | peek mode (touch a gem to arm it, lift to peel it; slide away to cancel) |
 | X / PEEK button | latch peek on for one peel (press again to cancel); with the cursor shown, A then peels the gem under it |
 | START / the II button on the panel | pause menu: RESUME, RESTART SHELF (costs a bookmark) and QUIT TO TITLE. Up and down move the highlight, A or a tap on the lit row picks it (a tap on another row lights it first); RESTART and QUIT ask for a second pick within 90 frames. START or B resumes |
+| LEFT / RIGHT or L / R (title) | flip the tip cards on the top screen |
 | Y (title) | options |
 | X (title) | THE LEDGER |
 | SELECT (title) | Daily Pass |
@@ -232,9 +238,10 @@ in, and a failed run flashes and shakes the screen. The gold frames carry a
 travelling shimmer and the submit gem breathes while a valid word is chained.
 The title is a gold-ruled band of logo gems over a slow rain of falling gems in
 the theme's colours; the pause menu is a card with the highlighted row boxed.
-The title screen's top half cycles three illustrated tip cards, a first-shelf
-nudge appears if you haven't peeked after three words, rejected words shake
-red, the chain rope turns the shelf accent once the word is valid, and a red
+The title screen's top half turns three illustrated tip cards every seven
+seconds (LEFT and RIGHT, or L and R, flip them; the dots show which), the
+first Classic shelf is guided (see below), and a nudge appears if you haven't
+peeked after three words once you know the ropes, rejected words shake red, the chain rope turns the shelf accent once the word is valid, and a red
 glow creeps up from the floor as fire gets low. Columns fall under gravity and
 squash when they land, each shelf has its own
 accent colour, and clearing a shelf slides up a results card: the pass lights
@@ -248,6 +255,18 @@ what the retry costs, and how many bookmarks are left. Finding a pass letter
 pops its reward over the gem, a word through a diamond calls out PASS LINK,
 a repeat says AGAIN, and the top screen keeps a fading ledger of the last
 five words.
+
+Fire reads without colour: a burning gem carries a light plate under a dark
+letter and a bright bar across its top, in every theme, so it stands out from
+a plain gem however the palette is tuned (the Clear theme is built for it).
+
+The first Classic shelf is guided until you have done each thing once: sticky
+prompts on the top screen ask you to drag a word, then to peek, say what the
+first hole's number means, and call out the first pass letter you find; a
+callout takes the line for its moment and the prompt comes back. The guide ends
+for good once the closing tip has run or the shelf is cleared (the card
+remembers). Hints name the shoulder under your idle hand: HOLD L when you play
+right-handed, HOLD R when left-handed.
 
 The panel keeps the books for you. Under the score the pass is a row of
 small slots that fill with diamonds as you find its letters, then PEELS and

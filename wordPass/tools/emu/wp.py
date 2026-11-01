@@ -55,22 +55,24 @@ OFF = {
     'curC': 556, 'curR': 560, 'curOn': 564,
     'calloutLife': 568, 'pressBits': 572, 'callout': 576,
     'shownScore': 596, 'pauseRow': 600, 'pauseArm': 604,
+    'tutorStep': 608, 'tutorDone': 612, 'tipIndex': 616, 'msgTimer': 620,
 }
-DBG_SIZE = 608
+DBG_SIZE = 624
 I32_FIELDS = ['state', 'mode', 'shelf', 'score', 'fail', 'turn', 'heat', 'chainLen', 'peels', 'lockdown',
               'bestWordScore', 'dailySeed', 'passLen', 'lastWordTier', 'rareWords', 'library',
               'heatThreshold', 'burnEvery', 'burnTimer', 'optRow', 'pulseEvery', 'lockTier', 'overtime',
               'chainScore', 'speedBonus', 'peelBonus', 'passBonusKind', 'ledgerN', 'newBest',
               'lives', 'passTheme', 'twist', 'spelling', 'practice', 'dailyMod', 'clockOk', 'statWords', 'statGames',
               'streak', 'dailyPlayed', 'dailyLast', 'dailyLastScore', 'peek', 'armed', 'armC', 'armR', 'curC', 'curR', 'curOn',
-              'calloutLife', 'pressBits', 'shownScore', 'pauseRow', 'pauseArm']
+              'calloutLife', 'pressBits', 'shownScore', 'pauseRow', 'pauseArm',
+              'tutorStep', 'tutorDone', 'tipIndex', 'msgTimer']
 PASS_THEMES = ['BINDERY', 'INK', 'VERSE', 'TALES', 'ATLAS', 'ARCHIVE', 'LAMP', 'STUDY']
 TWIST_NONE, TWIST_INK, TWIST_DAMP, TWIST_BURIED = range(4)
 VOWELS = {0, 4, 8, 14, 20}; RARE = {9, 16, 23, 25}   # a e i o u; j q x z
 # letter values (board.c letterValue), Q stands for Qu
 LETTER_VALUE = [1,3,3,2,1,4,2,4,1,8,5,1,3,1,1,3,10,1,1,1,1,4,4,8,4,10]
 # poke commands (debug.c applyPoke)
-POKE_CELL, POKE_BACK, POKE_HEAT, POKE_BURN, POKE_FIRESTEP, POKE_TURN, POKE_LIVES, POKE_SCORE, POKE_SPELL, POKE_CLOCK, POKE_DAILY, POKE_PASS = range(1, 13)
+POKE_CELL, POKE_BACK, POKE_HEAT, POKE_BURN, POKE_FIRESTEP, POKE_TURN, POKE_LIVES, POKE_SCORE, POKE_SPELL, POKE_CLOCK, POKE_DAILY, POKE_PASS, POKE_TUTOR = range(1, 14)
 
 def symbol(elf, name):
     """Address of a symbol via arm-none-eabi-nm inside the toolchain container."""
@@ -190,6 +192,10 @@ class Emu:
         """Layout checks: the pass becomes the first n letters of the alphabet (1..9), `found` is a bitmask of the
         letters shown as found. The back layer is left alone, so do not peel after this."""
         self.poke(POKE_PASS, n, found)
+    def set_tutor(self, done):
+        """The guided first shelf: done=1 switches it off (tests that read the message line want that), done=0 lets the
+        next Classic shelf 1 guide again. Takes effect for the game in progress at once."""
+        self.poke(POKE_TUTOR, done)
     def set_lives(self, n):
         """Bookmarks left in the Classic run (3 at the start; a fail or a pause restart costs one)."""
         self.poke(POKE_LIVES, n)

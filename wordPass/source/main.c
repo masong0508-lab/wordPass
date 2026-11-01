@@ -8,20 +8,87 @@
 
 Game G;
 
-static void setMsg(const char *m, int frames)
+static void setMsg(const char *m, int frames)      // frames -1: sticky, shown until something replaces it
 {
-    strncpy(G.msg, m, 31); G.msg[31] = 0;
+    strncpy(G.msg, m, MSG_LEN - 1); G.msg[MSG_LEN - 1] = 0;
     G.msgTimer = frames;
 }
 
 // a message queued behind the current one: shown when msgTimer runs out
-static char pendingMsg[32];
+static char pendingMsg[MSG_LEN];
 static int pendingFrames;
 
 static void queueMsg(const char *m, int frames)
 {
-    strncpy(pendingMsg, m, 31); pendingMsg[31] = 0;
+    strncpy(pendingMsg, m, MSG_LEN - 1); pendingMsg[MSG_LEN - 1] = 0;
     pendingFrames = frames;
+}
+
+// ---- the guided first shelf: sticky prompts on the top screen while Classic shelf 1 is new to the player.
+// TUTOR_DRAG: drag a word. TUTOR_PEEK: peek. TUTOR_FIND: (after the first peel) find a pass letter.
+// TUTOR_REST: the closing tip, whose end ends the guide. A gameplay message replaces a prompt for its
+// duration and the prompt comes back when it is over (tutorAfterMsg).
+static bool tutorOn(void) { return G.mode == MODE_CLASSIC && G.shelf == 1 && !S.tutorDone && G.tutorStep < TUTOR_DONE; }
+
+static int foundCount(void)
+{
+    int n = 0;
+    for (int i = 0; i < G.passLen; i++) n += G.found[i];
+    return n;
+}
+
+static void tutorPrompt(void)
+{
+    if (!tutorOn()) return;
+    if (G.tutorStep == TUTOR_DRAG) setMsg("DRAG 3 TOUCHING GEMS, TAP THE LAST", -1);
+    else if (G.tutorStep < TUTOR_REST) setMsg(S.hand == HAND_LEFT ? "HOLD R OR TAP PEEK, THEN TAP A GEM" : "HOLD L OR TAP PEEK, THEN TAP A GEM", -1);
+}
+
+static void tutorFinish(void)
+{
+    if (G.tutorStep < TUTOR_DONE && !S.tutorDone && G.mode == MODE_CLASSIC) { S.tutorDone = 1; settingsSave(); }
+    G.tutorStep = TUTOR_DONE;
+}
+
+// the message line just ran out: the guide's next prompt, or its end
+static void tutorAfterMsg(void)
+{
+    if (!tutorOn()) return;
+    if (G.tutorStep == TUTOR_REST) { tutorFinish(); return; }
+    if (G.tutorStep == TUTOR_FIND && foundCount() >= 1) { G.tutorStep = TUTOR_REST; setMsg("FIND THE REST. DIAMONDS NEVER BURN", 240); return; }
+    tutorPrompt();
+}
+
+static void tutorWord(void)            // a word scored
+{
+    if (!tutorOn() || G.tutorStep != TUTOR_DRAG) return;
+    G.tutorStep = TUTOR_PEEK;
+    if (G.msgTimer < 0) tutorPrompt();   // swap the sticky prompt at once; a callout that is up keeps the line for its moment
+}
+
+static void tutorPeel(int res, int c, int r)   // a peel resolved: res as boardPeel returns it
+{
+    if (!tutorOn() || G.tutorStep == TUTOR_DRAG) return;
+    if (G.tutorStep == TUTOR_PEEK) {     // the first peel gets a message about what it found
+        G.tutorStep = TUTOR_FIND;
+        if (res == 2) setMsg("A PASS LETTER! PEEL AROUND IT", 240);
+        else if (res == 1) {
+            char t[MSG_LEN]; int n = boardBackNumber(&G, c, r);
+            if (n == 0) strcpy(t, "0: NO PASS LETTERS TOUCH THIS CELL");
+            else if (n == 1) strcpy(t, "1: A PASS LETTER TOUCHES THIS CELL");
+            else siprintf(t, "%d: PASS LETTERS TOUCH THIS CELL", n);
+            setMsg(t, 240);
+        }
+    } else if (G.tutorStep == TUTOR_FIND && res == 2) {
+        G.tutorStep = TUTOR_REST;
+        setMsg("FIND THE REST. DIAMONDS NEVER BURN", 240);
+    }
+}
+
+// a sticky prompt must not outlive the moment it was written for
+static void clearSticky(void)
+{
+    if (G.msgTimer < 0) { G.msg[0] = 0; G.msgTimer = 0; }
 }
 
 static void startShelf(void)
@@ -72,6 +139,7 @@ static bool newGame(int mode)
     G.hintShown = 0;
     G.curC = 3; G.curR = 3; G.curOn = 0;
     G.lives = 3;
+    G.tutorStep = (mode == MODE_CLASSIC && !S.tutorDone) ? TUTOR_DRAG : TUTOR_DONE;
     G.twist = 0; G.lastTwist = 0;
     memset(G.recentPass, 0, sizeof(G.recentPass)); G.recentHead = 0;
     startShelf();
@@ -161,6 +229,7 @@ static void quitToTitle(void)
 
 static void enterFail(void)
 {
+    clearSticky();
     G.state = ST_FAIL;
     boardClearChain(&G);
     if (G.mode == MODE_CLASSIC) {
@@ -199,6 +268,7 @@ static void submitChain(void)
         gfxPopup(cc[cn / 2], cr[cn / 2], ps, 1);
         musicWord(G.lastWordLen, gained);
         gfxSubmitFlash();
+        tutorWord();
         // callout, one per word, in priority order: the top-screen message and the word over the board
         if (G.lastWordLen >= 8) { setMsg("SPECTACULAR!", 60); gfxCallout("SPECTACULAR!", CALLOUT_GOLD); }
         else if (G.lastWordDiamonds >= 1) {
@@ -316,10 +386,13 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
             } else if (res == 1) musicReveal(false);
             else if (res == 3 || res == -1) { setMsg("SCORCHED", 60); gfxCallout("SCORCHED", CALLOUT_FIRE); gfxBurst(c, r, BURST_SCORCH, letter); gfxShake(6); }
             burstNewFlames();
+            if (res >= 1 && !G.fail && !boardPassComplete(&G)) tutorPeel(res, c, r);   // after the gameplay messages, so the guide's line wins
             // the peel that completes the pass wins the shelf even if its turn ended badly
             if (G.fail && !boardPassComplete(&G)) { enterFail(); return; }
             if (boardPassComplete(&G)) {
                 G.state = ST_PASSED; G.stateTimer = 0; G.fail = FAIL_NONE;
+                if (G.shelf == 1) tutorFinish();       // the first shelf is cleared: the guide has done its job
+                clearSticky();
                 boardClearChain(&G);
                 G.peekHeld = 0; G.armed = 0; G.peekLatch = 0; musicPeek(false);
                 // shelf bonus, a speed bonus for a quick pass, and a bonus for a tidy peel count
@@ -388,10 +461,10 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
             }
         } else { gfxPress(PRESS_SUBMIT); submitChain(); }
     }
-    // first-shelf nudge: three words in and no peek yet
-    if (G.shelf == 1 && G.mode == MODE_CLASSIC && !G.hintShown && G.peels == 0 && G.wordsThisShelf >= 3) {
+    // first-shelf nudge: three words in and no peek yet (the guide says it better, so this is for players past it)
+    if (G.shelf == 1 && G.mode == MODE_CLASSIC && S.tutorDone && !G.hintShown && G.peels == 0 && G.wordsThisShelf >= 3) {
         G.hintShown = 1;
-        setMsg("HOLD L OR X, TAP A GEM TO PEEL", 300);
+        setMsg(S.hand == HAND_LEFT ? "HOLD R OR X, TAP A GEM TO PEEL" : "HOLD L OR X, TAP A GEM TO PEEL", 300);
     }
 }
 
@@ -426,6 +499,8 @@ int main(void)
                     else if (gfxInTitleClassic(t.px, t.py)) newGame(MODE_CLASSIC);
                     else if (gfxInTitleLedger(t.px, t.py)) G.state = ST_STATS;
                 } else if (down & (KEY_START | KEY_A)) { srand(seedCounter); newGame(MODE_CLASSIC); }
+                else if (down & (KEY_LEFT | KEY_L)) gfxTipFlip(-1);
+                else if (down & (KEY_RIGHT | KEY_R)) gfxTipFlip(1);
                 else if (down & KEY_SELECT) newGame(MODE_DAILY);
                 else if (down & KEY_Y) { G.state = ST_OPTIONS; G.optRow = 0; }
                 else if (down & KEY_X) G.state = ST_STATS;
@@ -434,13 +509,14 @@ int main(void)
                 if (down & (KEY_B | KEY_X | KEY_A | KEY_START | KEY_TOUCH)) G.state = ST_TITLE;
                 break;
             case ST_OPTIONS: {
-                int row = (down & KEY_TOUCH) ? gfxOptionRowAt(t.px, t.py) : -1;
-                if (row == OPT_ROWS || (down & KEY_B)) { settingsSave(); G.state = ST_TITLE; break; }
-                if (row >= 0) { G.optRow = row; cycleOption(row, 1); }
+                // a touch gives row * 2 + (the right half): the left half steps a value back, the right half forwards
+                int hit = (down & KEY_TOUCH) ? gfxOptionRowAt(t.px, t.py) : -1;
+                if (hit == OPT_ROWS * 2 || (down & KEY_B)) { settingsSave(); G.state = ST_TITLE; break; }
+                if (hit >= 0) { int dir = (hit & 1) ? 1 : -1; G.optRow = hit >> 1; cycleOption(G.optRow, dir); gfxOptionNudge(dir); }
                 if (down & KEY_UP)    G.optRow = (G.optRow + OPT_ROWS - 1) % OPT_ROWS;
                 if (down & KEY_DOWN)  G.optRow = (G.optRow + 1) % OPT_ROWS;
-                if (down & (KEY_RIGHT | KEY_A)) cycleOption(G.optRow, 1);
-                if (down & KEY_LEFT)  cycleOption(G.optRow, -1);
+                if (down & (KEY_RIGHT | KEY_A)) { cycleOption(G.optRow, 1); gfxOptionNudge(1); }
+                if (down & KEY_LEFT)  { cycleOption(G.optRow, -1); gfxOptionNudge(-1); }
                 break;
             }
             case ST_PLAY:
@@ -486,6 +562,7 @@ int main(void)
         if (G.msgTimer > 0 && --G.msgTimer == 0) {
             G.msg[0] = 0;
             if (pendingMsg[0]) { setMsg(pendingMsg, pendingFrames); pendingMsg[0] = 0; }
+            else if (G.state == ST_PLAY || G.state == ST_PAUSE) tutorAfterMsg();     // the guide's next prompt, or its end
         }
         boardAnimate(&G);
         musicTick(&G);

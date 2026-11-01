@@ -34,6 +34,14 @@ int main(void)
 
     CHECK("Settings is a whole number of words and the CRC starts at byte 8", sizeof(Settings) % 4 == 0 && offsetof(Settings, theme) == 8);
 
+    {   // the CLEAR theme is the last one: it survives a save and load, and the first value past it clamps
+        char b2[256]; size_t n2;
+        settingsDefaults(); S.theme = THEME_CLEAR; n2 = settingsEncode(b2);
+        settingsDefaults(); CHECK("the CLEAR theme round-trips through a saved file", settingsDecode(b2, n2) && S.theme == THEME_CLEAR && THEME_COUNT == THEME_CLEAR + 1);
+        settingsDefaults(); S.theme = THEME_COUNT; n2 = settingsEncode(b2);
+        settingsDefaults(); CHECK("a theme one past CLEAR clamps to JEWEL", settingsDecode(b2, n2) && S.theme == THEME_JEWEL);
+    }
+
     // ---- defaults round trip
     settingsDefaults();
     size_t n = settingsEncode(buf);

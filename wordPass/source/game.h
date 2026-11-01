@@ -11,6 +11,7 @@
 #define MAX_WORD 20           // longest dictionary word
 #define MAX_CHAIN 20          // gems in a chain
 #define WORD_BUF 48           // room for a full chain spelled out: 20 gems, every one a Qu, plus the NUL
+#define MSG_LEN 40            // a message of up to 39 characters (the tutorial prompts run to 34)
 #define LEDGER_N 8            // words remembered per shelf for the repeat penalty and the HUD ledger
 
 #define TILE_W 24
@@ -97,8 +98,8 @@ typedef struct {
     int  wordsThisShelf;
     int  lastWordLen, lastWordScore;
     char lastWord[MAX_WORD + 1];
-    char msg[32];
-    int  msgTimer;
+    char msg[MSG_LEN];        // the top screen's message line (the first 31 characters are mirrored for the tests)
+    int  msgTimer;            // frames to show it; -1 = sticky (a tutorial prompt), 0 = none
     bool lockdown;
     char bestWord[MAX_WORD + 1];        // per-shelf results card
     int  bestWordScore;
@@ -134,7 +135,11 @@ typedef struct {
     int  pauseRow;            // highlighted row (an index into the visible rows, see pauseRows)
     int  pauseArm;            // frames left of a first activation of RESTART or QUIT that wants a second one (0 = none)
     int  pauseArmId;          // which row that was (PAUSE_RESTART or PAUSE_QUIT)
+    // ---- the guided first shelf (item 14)
+    int  tutorStep;           // TUTOR_*: where the Classic shelf-1 guide has got to (TUTOR_DONE = off)
 } Game;
+
+enum { TUTOR_DRAG = 0, TUTOR_PEEK, TUTOR_FIND, TUTOR_REST, TUTOR_DONE };   // drag a word, peek, find the first pass letter, the closing tip, off
 
 // pause menu rows; the visible ones are listed by pauseRows (Daily has no RESTART)
 enum { PAUSE_RESUME = 0, PAUSE_RESTART, PAUSE_QUIT, PAUSE_ROW_IDS };
@@ -151,7 +156,7 @@ enum { TWIST_NONE = 0, TWIST_INK, TWIST_DAMP, TWIST_BURIED };
 enum { MODE_CLASSIC = 0, MODE_DAILY };
 
 // ---- settings
-enum { THEME_JEWEL = 0, THEME_INK, THEME_CANDY, THEME_EMBER, THEME_COUNT };
+enum { THEME_JEWEL = 0, THEME_INK, THEME_CANDY, THEME_EMBER, THEME_CLEAR, THEME_COUNT };   // CLEAR: colour-blind safe (hues that survive the common deficiencies)
 enum { FRAME_GOLD = 0, FRAME_SILVER, FRAME_ACCENT, FRAME_COUNT };
 enum { HAND_RIGHT = 0, HAND_LEFT };
 enum { FIRE_RELAXED = 0, FIRE_NORMAL, FIRE_FAST, FIRE_COUNT };
@@ -201,7 +206,10 @@ void settingsDebugClock(int ymd);                 // test channel: pretend the c
 
 #define OPT_ROWS 8
 void gfxApplySettings(void);          // rebuild caches after a settings change
-int  gfxOptionRowAt(int px, int py);  // -1 none, 0..OPT_ROWS-1 rows, OPT_ROWS = back
+int  gfxOptionRowAt(int px, int py);  // -1 none, row * 2 + (the right half of the row) for the rows, OPT_ROWS * 2 = back; the list never mirrors
+void gfxOptionNudge(int dir);         // the chevron on that side (-1 left, +1 right) of the lit row flashes white for six frames
+void gfxTipFlip(int dir);             // the title's tip card: -1 previous, +1 next (the timer restarts)
+int  gfxTipIndex(void);               // debug: which tip card shows
 bool gfxInTitleOptions(int px, int py);
 bool gfxInTitleLedger(int px, int py);   // the BEST line under the title buttons: opens THE LEDGER
 
