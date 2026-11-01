@@ -148,6 +148,56 @@ int main(int argc, char **argv)
     set(1, 1, CELL_TILE, 'b'); set(1, 2, CELL_TILE, 'e'); set(1, 3, CELL_TILE, 'd');
     CHECK("boardHasWords finds bed", boardHasWords(&g));
 
+    // ---- scoring: boardChainScore previews exactly what boardSubmit awards
+    boardOf('e'); plantWord();
+    set(0, 1, CELL_TILE, 'b'); set(0, 2, CELL_TILE, 'e'); set(0, 3, CELL_TILE, 'd');
+    boardTryAddToChain(&g, 0, 1); boardTryAddToChain(&g, 0, 2); boardTryAddToChain(&g, 0, 3);
+    int preview = boardChainScore(&g);
+    gained = boardSubmit(&g);
+    int bedBase = letterValue('b' - 'a') + letterValue('e' - 'a') + letterValue('d' - 'a');
+    CHECK("plain word: preview == gain == base*10", preview == gained && gained == bedBase * 10 && g.ledgerN == 1 && g.uniqueWords == 1 &&
+          strcmp(g.ledger[0], "bed") == 0 && g.ledgerPts[0] == gained && !g.lastWordRepeat && !g.lastWordBurn && g.lastWordDiamonds == 0);
+    CHECK("boardChainScore is 0 with no chain", boardChainScore(&g) == 0);
+    boardOf('e'); plantWord();
+    set(0, 1, CELL_TILE, 'b'); set(0, 2, CELL_BURN, 'e'); set(0, 3, CELL_TILE, 'd');
+    boardTryAddToChain(&g, 0, 1); boardTryAddToChain(&g, 0, 2); boardTryAddToChain(&g, 0, 3);
+    preview = boardChainScore(&g); gained = boardSubmit(&g);
+    CHECK("word through a flame: +30 per letter", preview == gained && gained == bedBase * 10 + 30 * 3 && g.lastWordBurn == 1);
+    boardOf('e'); plantWord();
+    set(0, 1, CELL_SECRET, 'b'); set(0, 2, CELL_TILE, 'e'); set(0, 3, CELL_SECRET, 'd');
+    boardTryAddToChain(&g, 0, 1); boardTryAddToChain(&g, 0, 2); boardTryAddToChain(&g, 0, 3);
+    preview = boardChainScore(&g); gained = boardSubmit(&g);
+    CHECK("word through two diamonds scores double", preview == gained && gained == bedBase * 10 * 2 && g.lastWordDiamonds == 2 && st(0, 1) == CELL_SECRET);
+    boardOf('e'); plantWord();
+    set(0, 1, CELL_SECRET, 'b'); set(0, 2, CELL_TILE, 'e'); set(0, 3, CELL_TILE, 'd');
+    boardTryAddToChain(&g, 0, 1); boardTryAddToChain(&g, 0, 2); boardTryAddToChain(&g, 0, 3);
+    preview = boardChainScore(&g); gained = boardSubmit(&g);
+    CHECK("word through one diamond scores x1.5", preview == gained && gained == bedBase * 15 && g.lastWordDiamonds == 1);
+    boardOf('e'); plantWord();
+    set(0, 1, CELL_TILE, 'b'); set(0, 2, CELL_TILE, 'e'); set(0, 3, CELL_TILE, 'd');
+    boardTryAddToChain(&g, 0, 1); boardTryAddToChain(&g, 0, 2); boardTryAddToChain(&g, 0, 3);
+    int first = boardSubmit(&g);
+    set(0, 1, CELL_TILE, 'b'); set(0, 2, CELL_TILE, 'e'); set(0, 3, CELL_TILE, 'd');
+    boardTryAddToChain(&g, 0, 1); boardTryAddToChain(&g, 0, 2); boardTryAddToChain(&g, 0, 3);
+    preview = boardChainScore(&g); gained = boardSubmit(&g);
+    CHECK("repeated word scores half", preview == gained && gained == first / 2 && g.lastWordRepeat == 1 && g.ledgerN == 2 && g.uniqueWords == 1 && g.wordsThisShelf == 2);
+    boardOf('e'); plantWord();
+    strcpy(g.ledger[0], "BED"); g.ledgerN = 1; g.ledgerHead = 1;   // an uppercase ledger entry still counts as the same word
+    set(0, 1, CELL_TILE, 'b'); set(0, 2, CELL_TILE, 'e'); set(0, 3, CELL_TILE, 'd');
+    boardTryAddToChain(&g, 0, 1); boardTryAddToChain(&g, 0, 2); boardTryAddToChain(&g, 0, 3);
+    preview = boardChainScore(&g); gained = boardSubmit(&g);
+    CHECK("repeat check ignores case", preview == gained && gained == bedBase * 5 && g.lastWordRepeat == 1 && strcmp(g.ledger[1], "bed") == 0);
+    CHECK("ledgerIndex: newest first", ledgerIndex(&g, 0) == 1 && ledgerIndex(&g, 1) == 0);
+    boardOf('e'); plantWord();
+    for (int r = 0; r < 7; r++) set(1, r, CELL_TILE, "letters"[r]);
+    for (int r = 0; r < 7; r++) boardTryAddToChain(&g, 1, r);
+    preview = boardChainScore(&g); gained = boardSubmit(&g);
+    int lettersBase = 0; for (int i = 0; i < 7; i++) lettersBase += letterValue("letters"[i] - 'a');
+    CHECK("seven letters: x3 and +200", preview == gained && gained == lettersBase * 30 + 200);
+    for (int i = 0; i < LEDGER_N + 2; i++) { strcpy(g.ledger[g.ledgerHead], "x"); g.ledgerHead = (g.ledgerHead + 1) % LEDGER_N; if (g.ledgerN < LEDGER_N) g.ledgerN++; }
+    g.shelf = 1; g.mode = MODE_CLASSIC; boardNewShelf(&g);
+    CHECK("boardNewShelf empties the ledger", g.ledgerN == 0 && g.ledgerHead == 0 && g.uniqueWords == 0 && g.passBonusKind == 0 && g.speedBonus == 0 && g.peelBonus == 0);
+
     // ---- heat table
     CHECK("boardHeatFor: 3, 2, 1, 1, 0, 0", boardHeatFor(3) == 3 && boardHeatFor(4) == 2 && boardHeatFor(5) == 1 && boardHeatFor(6) == 1 && boardHeatFor(7) == 0 && boardHeatFor(10) == 0);
 

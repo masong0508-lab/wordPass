@@ -17,6 +17,7 @@ static void setMsg(const char *m, int frames)
 static void startShelf(void)
 {
     boardNewShelf(&G);
+    G.newBest = 0;
     gfxFadeIn();
     musicNewShelf(G.shelf, G.lockdown);
     char s[32];
@@ -52,7 +53,7 @@ static void recordScore(void)
         if (G.score > S.bestClassic) { S.bestClassic = G.score; changed = true; }
         if (G.state == ST_PASSED && G.shelf > S.bestClassicShelf) { S.bestClassicShelf = G.shelf; changed = true; }
     }
-    if (changed) settingsSave();
+    if (changed) { G.newBest = 1; settingsSave(); }
 }
 
 static void cycleOption(int row, int dir)
@@ -115,9 +116,20 @@ static void submitChain(void)
         char ps[12]; siprintf(ps, "+%d", gained);
         gfxPopup(cc[cn / 2], cr[cn / 2], ps, 1);
         musicWord(G.lastWordLen, gained);
-        char s[32];
-        const char *tag = G.lastWordLen >= 8 ? "SPECTACULAR" : G.lastWordLen >= 7 ? "EXCELLENT" : G.lastWordLen >= 5 ? "GOOD" : "";
-        if (tag[0]) { siprintf(s, "%s!", tag); setMsg(s, 60); }
+        // callout, one per word, in priority order
+        if (G.lastWordLen >= 8) setMsg("SPECTACULAR!", 60);
+        else if (G.lastWordDiamonds >= 1) {
+            // the "+N" popup sits on the middle gem: put PASS LINK on the diamond (or the
+            // chain's first gem when the diamond is the middle one) so the two never stack
+            int d = cn / 2;
+            for (int i = 0; i < cn; i++) if (G.cell[cc[i]][cr[i]].state == CELL_SECRET) { d = i; break; }
+            if (d == cn / 2) d = 0;
+            gfxPopup(cc[d], cr[d], "PASS LINK", 1);
+            setMsg("PASS LINK!", 60);
+        }
+        else if (G.lastWordLen >= 7) setMsg("EXCELLENT!", 60);
+        else if (G.lastWordLen >= 5) setMsg("GOOD!", 60);
+        else if (G.lastWordRepeat) setMsg("AGAIN", 45);
         else if (G.lastWordTier == 2) setMsg("RARE WORD", 60);
         burstNewFlames();
         if (G.fail) enterFail();
@@ -147,7 +159,10 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
             int res = boardPeel(&G, c, r);
             if (res == 2) {
                 gfxBurst(c, r, BURST_REVEAL, letter);
-                gfxPopup(c, r, "FOUND", 1);
+                int reward = 100 * G.shelf;              // every pass letter pays
+                G.score += reward;
+                char ps[12]; siprintf(ps, "+%d", reward);
+                gfxPopup(c, r, ps, 1);
                 musicReveal(true);
                 if (boardPassComplete(&G)) {
                     char s[32]; siprintf(s, "SHELF %d CLEARED", G.shelf); setMsg(s, 400);
@@ -161,7 +176,18 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
                 G.state = ST_PASSED; G.stateTimer = 0; G.fail = FAIL_NONE;
                 boardClearChain(&G);
                 G.peekHeld = 0; musicPeek(false);
-                G.score += 500 * G.shelf;
+                // shelf bonus, a speed bonus for a quick pass, and a bonus for a tidy peel count
+                int shelfBonus = 1000 * G.shelf;
+                int left = 40 - G.turn;
+                G.speedBonus = 25 * G.shelf * (left > 0 ? left : 0);
+                if (G.peels == G.passLen) { G.passBonusKind = 2; G.peelBonus = 400 * G.shelf; }
+                else if (G.peels <= G.passLen + 2) { G.passBonusKind = 1; G.peelBonus = 150 * G.shelf; }
+                else { G.passBonusKind = 0; G.peelBonus = 0; }
+                G.score += shelfBonus + G.speedBonus + G.peelBonus;
+                if (G.passBonusKind == 2)                // a perfect pass: every diamond sparkles
+                    for (int dc = 0; dc < COLS; dc++)
+                        for (int dr = 0; dr < ROWS; dr++)
+                            if (G.cell[dc][dr].state == CELL_SECRET) gfxBurst(dc, dr, BURST_REVEAL, G.cell[dc][dr].letter);
                 musicPassComplete();
                 recordScore();
             }

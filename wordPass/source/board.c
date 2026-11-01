@@ -142,6 +142,9 @@ void boardNewShelf(Game *g)
     g->peels = 0;
     g->lastWordTier = 0;
     g->rareWords = 0;
+    g->ledgerN = 0; g->ledgerHead = 0; g->uniqueWords = 0;
+    g->lastWordDiamonds = 0; g->lastWordRepeat = 0; g->lastWordBurn = 0;
+    g->speedBonus = 0; g->peelBonus = 0; g->passBonusKind = 0;
     if (g->mode == MODE_DAILY) {
         // one fixed shelf for everyone today: medium pressure, pass buried mid-board
         g->lockdown = false;
@@ -383,24 +386,70 @@ static int wordAccepted(const char *w, int len)
 bool boardWordOk(const char *w, int len) { return wordAccepted(w, len) != 0; }
 int  boardWordTier(const char *w, int len) { return dictLookup(w, len); }
 
-int boardSubmit(Game *g)
+// Case-insensitive compare of a chain word against a ledger entry (entries are stored
+// lowercase; the compare tolerates either case so a poked or uppercase word still matches).
+static bool sameWordCI(const char *a, const char *b)
 {
+    for (;; a++, b++) {
+        int ca = *a, cb = *b;
+        if (ca >= 'A' && ca <= 'Z') ca += 32;
+        if (cb >= 'A' && cb <= 'Z') cb += 32;
+        if (ca != cb) return false;
+        if (!ca) return true;
+    }
+}
+
+int ledgerIndex(const Game *g, int age)
+{
+    return (g->ledgerHead - 1 - age + 2 * LEDGER_N) % LEDGER_N;
+}
+
+static bool ledgerHas(const Game *g, const char *w)
+{
+    for (int i = 0; i < g->ledgerN; i++) if (sameWordCI(g->ledger[i], w)) return true;
+    return false;
+}
+
+// The score a chain is worth, with the parts the callouts and the ledger need. Returns 0
+// when the chain is not an accepted word. Curve: letter values x length multiplier x 10,
+// +200 for seven letters and up, +30 per letter for a word through a flame, +50% per
+// diamond in the chain (two at most), and half for a word already in this shelf's ledger.
+static int chainScoreDetail(const Game *g, char *w, int *lenOut, int *tierOut, int *diamondsOut, int *burnOut, int *repeatOut)
+{
+    *lenOut = 0; *tierOut = 0; *diamondsOut = 0; *burnOut = 0; *repeatOut = 0;
     if (g->chainLen < 3) return 0;
-    char w[24];
     boardChainWord(g, w);
     int len = strlen(w);
     int tier = wordAccepted(w, len);
     if (!tier) return 0;
-
-    int base = 0;
-    bool usedBurn = false;
+    int base = 0, diamonds = 0, usedBurn = 0;
     for (int i = 0; i < g->chainLen; i++) {
-        Cell *cl = &g->cell[g->chainC[i]][g->chainR[i]];
+        const Cell *cl = &g->cell[g->chainC[i]][g->chainR[i]];
         base += letterValue(cl->letter);
-        if (cl->state == CELL_BURN) usedBurn = true;
+        if (cl->state == CELL_BURN) usedBurn = 1;
+        if (cl->state == CELL_SECRET) diamonds++;
     }
+    if (diamonds > 2) diamonds = 2;
     int mult = (len <= 4) ? 1 : (len <= 6) ? 2 : (len <= 8) ? 3 : 4;
-    int gained = base * mult * 10 + (usedBurn ? 100 : 0) + (len >= 7 ? 200 : 0);
+    int gained = base * mult * 10 + (len >= 7 ? 200 : 0) + 30 * len * usedBurn;
+    gained += gained * diamonds / 2;
+    int repeat = ledgerHas(g, w) ? 1 : 0;
+    if (repeat) gained /= 2;
+    *lenOut = len; *tierOut = tier; *diamondsOut = diamonds; *burnOut = usedBurn; *repeatOut = repeat;
+    return gained;
+}
+
+int boardChainScore(const Game *g)
+{
+    char w[24]; int len, tier, diamonds, burn, repeat;
+    return chainScoreDetail(g, w, &len, &tier, &diamonds, &burn, &repeat);
+}
+
+int boardSubmit(Game *g)
+{
+    char w[24]; int len, tier, diamonds, burn, repeat;
+    int gained = chainScoreDetail(g, w, &len, &tier, &diamonds, &burn, &repeat);
+    if (!tier) return 0;
 
     for (int i = 0; i < g->chainLen; i++) {
         Cell *cl = &g->cell[g->chainC[i]][g->chainR[i]];
@@ -413,8 +462,18 @@ int boardSubmit(Game *g)
     g->lastWordLen = len;
     g->lastWordScore = gained;
     g->lastWordTier = tier;
+    g->lastWordDiamonds = diamonds;
+    g->lastWordBurn = burn;
+    g->lastWordRepeat = repeat;
     if (tier == 2) g->rareWords++;
     if (gained > g->bestWordScore) { g->bestWordScore = gained; strcpy(g->bestWord, g->lastWord); }
+    // ledger ring: newest at ledgerHead - 1
+    int keep = len < 11 ? len : 11;
+    memcpy(g->ledger[g->ledgerHead], w, keep); g->ledger[g->ledgerHead][keep] = 0;
+    g->ledgerPts[g->ledgerHead] = gained;
+    g->ledgerHead = (g->ledgerHead + 1) % LEDGER_N;
+    if (g->ledgerN < LEDGER_N) g->ledgerN++;
+    if (!repeat) g->uniqueWords++;
     g->score += gained;
     g->wordsThisShelf++;
     g->chainLen = 0;

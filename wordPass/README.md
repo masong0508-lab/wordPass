@@ -29,6 +29,27 @@ and uncover the pass. Spell weak words and the shelf catches fire.
 - **Scorching.** Peel a burning gem, or the gem directly under one, and the
   flame hits the back layer. If a pass letter was hiding there, it is gone.
 
+### Scoring
+
+- **Words.** Letter values (Bookworm weights, Qu = 10) summed, times a length
+  multiplier (x1 up to four letters, x2 for five and six, x3 for seven and
+  eight, x4 beyond), times 10. Seven letters and up add a flat 200. A word
+  through a burning gem adds 30 per letter. Each diamond (revealed pass
+  letter) in the chain adds half again, up to two, so a word through two pass
+  letters scores double. Spelling a word you already spelled on this shelf
+  halves it (the shelf remembers its last eight words: the ledger on the top
+  screen shows the last five). The panel previews exactly what the chain is
+  worth before you submit.
+- **Pass letters.** Every pass letter found pays 100 x shelf on the spot.
+- **Clearing a shelf.** Shelf bonus 1000 x shelf, a speed bonus of
+  25 x shelf for every turn under 40, and a peel bonus: **PERFECT PASS**
+  (+400 x shelf) when every peel found a pass letter, **CLEAN PASS**
+  (+150 x shelf) with at most two wasted peels.
+
+The curve pays roughly twice what earlier builds did, so best scores saved
+by older versions will be overtaken quickly: they were set under the old
+numbers.
+
 ### Fail states
 
 | Screen | Cause |
@@ -108,7 +129,11 @@ red, the chain rope turns the shelf accent once the word is valid, and a red
 glow creeps up from the floor as fire gets low. Columns fall under gravity and
 squash when they land, each shelf has its own
 accent colour, and clearing a shelf slides up a results card with the pass,
-your best word, words spelled, peels used, turns and the shelf bonus.
+your best word, words spelled (and how many were unique), peels used, turns,
+and the shelf, speed and perfect/clean pass bonuses. Finding a pass letter
+pops its reward over the gem, a word through a diamond calls out PASS LINK,
+a repeat says AGAIN, and the top screen keeps a fading ledger of the last
+five words.
 
 ## Music
 

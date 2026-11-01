@@ -5,8 +5,8 @@ exit status is the number of failures. Screenshots land in outdir (default /tmp)
 """
 import sys, os, traceback
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from wp import Emu, COLS, ROWS, EMPTY, TILE, BURN, HOLE, SECRET, ST_TITLE, ST_PLAY, ST_FAIL, ST_OPTIONS, \
-    FAIL_FIRE, FAIL_SCORCH, FAIL_WORDS, Keys, keymask
+from wp import Emu, COLS, ROWS, EMPTY, TILE, BURN, HOLE, SECRET, ST_TITLE, ST_PLAY, ST_PASSED, ST_FAIL, ST_OPTIONS, \
+    FAIL_FIRE, FAIL_SCORCH, FAIL_WORDS, Keys, keymask, load_words
 
 rom = sys.argv[1]; out = sys.argv[2] if len(sys.argv) > 2 else '/tmp'
 e = Emu(rom)
@@ -27,6 +27,7 @@ def ensure_play():
     """Back to a calm play state from wherever the last scenario left the game."""
     g = e.state()
     if g['state'] == ST_FAIL: e.run(60); e.tap(100, 100); e.run(150)
+    elif g['state'] == ST_PASSED: e.run(40); e.tap(100, 100); e.run(200)
     elif g['state'] == ST_TITLE: e.start_classic()
     g = e.state(); assert g['state'] == ST_PLAY, f'not in play: state {g["state"]}'
     e.press('B', settle=5)
@@ -337,6 +338,101 @@ def _():
     assert g['turn'] >= 30 and g['state'] == ST_PLAY, f'turn {g["turn"]} state {g["state"]}'
     print(f'   survived: turn {g["turn"]} heat {g["heat"]} flames {e.burn_cells(g)} score {g["score"]}')
     e.shot(f'{out}/rules_survived.png')
+
+# ---- scoring (item 07) --------------------------------------------------------------------
+def calm():
+    """A fresh shelf with the fire held still (fresh_shelf restores the shelf's own settings)."""
+    g = fresh_shelf(); e.set_heat(0); e.set_burn(0, 99); return g
+
+def spell(path, settle=50):
+    """Chain `path`, read the preview, press A; returns (preview, gain, g_after)."""
+    e.chain(path); g0 = e.state()
+    assert g0['chainLen'] == len(path), f'chain {g0["chain"]} for {path}'
+    preview = g0['chainScore']
+    e.press('A', settle=settle); g1 = e.state()
+    return preview, g1['score'] - g0['score'], g1
+
+@scenario('chainScore previews the exact gain for five words (one through a flame); ledger line stays in rows 137..143')
+def _():
+    calm()
+    e.set_cell(C, 0, BURN, 'b'); e.set_cell(C, 1, TILE, 'e'); e.set_cell(C, 2, TILE, 'd'); e.run(5)
+    spelled = []
+    for i in range(5):
+        e.set_heat(0)
+        g = e.state(); ws = e.find_words(g)
+        if i == 0: ws = [w for w in ws if (C, 0) in w[1]]
+        assert ws, f'no word on turn {i}'
+        word, path = ws[0]
+        burn = any(g['cell'][c][r][1] == BURN for c, r in path)
+        diamonds = sum(g['cell'][c][r][1] == SECRET for c, r in path)
+        want = e.word_score(word, burn=burn, diamonds=diamonds, repeat=word in spelled[-8:])
+        preview, gain, g1 = spell(path)
+        assert g1['lastWord'] == word, f'{word} did not score: {g1["lastWord"]!r}'
+        assert preview == gain == want, f'{word}: preview {preview} gain {gain} want {want} (burn {burn} diamonds {diamonds})'
+        if i == 0: assert burn and g1['msg'] != 'AGAIN', 'first word did not go through the flame'
+        spelled.append(word)
+    g = e.state(); assert g['ledgerN'] == 5, f'ledgerN {g["ledgerN"]}'
+    assert g['chainScore'] == 0, 'preview with no chain'
+    e.shot(f'{out}/rules_ledger.png')
+    px = e.pixels(); bad = []; lit = 0
+    for y in range(126, 150):
+        for x in range(10, 225):
+            if x % 8 == 4 and y % 8 == 4: continue           # the accent dot grid
+            if sum(px[x, y]) > 60:
+                if 137 <= y <= 143: lit += 1
+                else: bad.append((x, y))
+    assert lit > 40, f'no ledger text in rows 137..143 ({lit} px)'
+    assert not bad, f'{len(bad)} lit pixels outside rows 137..143 near the ledger, first {bad[:3]}'
+
+@scenario('a word through a revealed pass letter: PASS LINK! and x1.5')
+def _():
+    g = calm()
+    e.set_back(C, 0, 1); e.peel(C, 0); g = e.state()
+    assert g['cell'][C][0][1] == SECRET and g['found'][0] == 1, f'peel: {col(g, C)} found {g["found"]}'
+    gem = e.letter(g['cell'][C][0])
+    if e.words is None: e.words = load_words()
+    word = next(w for w in sorted(e.words) if w.startswith(gem) and len(w) == len(gem) + 2 and 'q' not in w[len(gem):])
+    e.set_cell(C, 1, TILE, word[len(gem)]); e.set_cell(C, 2, TILE, word[len(gem) + 1]); e.run(5)
+    preview, gain, g1 = spell([(C, 0), (C, 1), (C, 2)])
+    want = e.word_score(word, diamonds=1)
+    assert g1['lastWord'] == word, f'{word} did not score: {g1["lastWord"]!r}'
+    assert preview == gain == want == e.word_score(word) * 3 // 2, f'{word}: preview {preview} gain {gain} want {want}'
+    assert g1['msg'] == 'PASS LINK!', f'msg {g1["msg"]!r}'
+    assert g1['cell'][C][0][1] == SECRET, 'the diamond was cleared by the word'
+
+@scenario('the same word twice: AGAIN and exactly half')
+def _():
+    calm()
+    for r, ch in enumerate('bed'): e.set_cell(C, 1 + r, TILE, ch)
+    e.run(5)
+    p1, gain1, g1 = spell([(C, 1), (C, 2), (C, 3)])
+    assert g1['lastWord'] == 'bed' and p1 == gain1 == e.word_score('bed'), f'first bed: {p1} {gain1} {g1["lastWord"]!r}'
+    e.set_heat(0)
+    for r, ch in enumerate('bed'): e.set_cell(C, 1 + r, TILE, ch)
+    e.run(5)
+    p2, gain2, g2 = spell([(C, 1), (C, 2), (C, 3)], settle=10)
+    assert g2['msg'] == 'AGAIN', f'msg {g2["msg"]!r}'
+    assert p2 == gain2 == gain1 // 2, f'second bed: preview {p2} gain {gain2}, first {gain1}'
+    assert g2['ledgerN'] == 2
+    e.run(40)
+
+@scenario('perfect pass: only the secrets peeled gives kind 2, +400 per shelf and the speed bonus')
+def _():
+    g = calm(); score0 = g['score']; shelf = g['shelf']; n = g['passLen']
+    for i in range(1, n + 1):
+        e.set_heat(0); g = e.state()
+        c, r = e.secret_cells(g)[i]
+        assert g['cell'][c][r][1] == TILE, f'secret {i} at {(c, r)} is {g["cell"][c][r]}'
+        e.peel(c, r)
+    g = e.state()
+    assert g['state'] == ST_PASSED and g['peels'] == n, f'state {g["state"]} peels {g["peels"]} fail {g["fail"]}'
+    shelfB, speed, peelB, kind = e.pass_bonus(shelf, g['turn'], g['peels'], n)
+    assert kind == 2 and g['passBonusKind'] == 2 and g['peelBonus'] == 400 * shelf and g['speedBonus'] == speed, \
+        f'kind {g["passBonusKind"]} peel {g["peelBonus"]} speed {g["speedBonus"]} (want {speed})'
+    want = 100 * n * shelf + shelfB + speed + peelB
+    assert g['score'] - score0 == want, f'pass paid {g["score"] - score0}, want {want}'
+    e.run(40); e.shot(f'{out}/rules_perfect.png')
+    fps = e.fps(); assert fps >= 118, f'results fps {fps}/120'
 
 # ---- options and the left-hand title --------------------------------------------------
 @scenario('options HAND row: optRow 3, hand flips; left-hand title keeps the top screen inside its frame')

@@ -47,11 +47,15 @@ OFF = {
     'scorched': 368, 'theme': 424, 'hand': 425, 'fire': 426, 'music': 427,
     'optRow': 428, 'chainC': 432, 'chainR': 442,
     'pulseEvery': 452, 'lockTier': 456, 'overtime': 460,
+    'chainScore': 464, 'speedBonus': 468, 'peelBonus': 472, 'passBonusKind': 476, 'ledgerN': 480, 'newBest': 484,
 }
-DBG_SIZE = 464
+DBG_SIZE = 488
 I32_FIELDS = ['state', 'mode', 'shelf', 'score', 'fail', 'turn', 'heat', 'chainLen', 'peels', 'lockdown',
               'bestWordScore', 'dailySeed', 'passLen', 'lastWordTier', 'rareWords', 'library',
-              'heatThreshold', 'burnEvery', 'burnTimer', 'optRow', 'pulseEvery', 'lockTier', 'overtime']
+              'heatThreshold', 'burnEvery', 'burnTimer', 'optRow', 'pulseEvery', 'lockTier', 'overtime',
+              'chainScore', 'speedBonus', 'peelBonus', 'passBonusKind', 'ledgerN', 'newBest']
+# letter values (board.c letterValue), Q stands for Qu
+LETTER_VALUE = [1,3,3,2,1,4,2,4,1,8,5,1,3,1,1,3,10,1,1,1,1,4,4,8,4,10]
 # poke commands (debug.c applyPoke)
 POKE_CELL, POKE_BACK, POKE_HEAT, POKE_BURN, POKE_FIRESTEP, POKE_TURN, POKE_LIVES = range(1, 8)
 
@@ -160,6 +164,29 @@ class Emu:
         self.poke(POKE_FIRESTEP)
     def set_turn(self, n):
         self.poke(POKE_TURN, n)
+    @staticmethod
+    def word_score(letters, burn=False, diamonds=0, repeat=False):
+        """What boardSubmit awards: `letters` is the chain's letter indices (or a lowercase word;
+        'qu' is one gem), burn = a flame in the chain, diamonds = CELL_SECRET gems in it (cap 2)."""
+        if isinstance(letters, str):
+            idx = []; i = 0
+            while i < len(letters):
+                idx.append(ord(letters[i]) - 97); i += 2 if letters[i] == 'q' and letters[i:i+2] == 'qu' else 1
+            n = len(letters)
+        else:
+            idx = list(letters); n = sum(2 if l == 16 else 1 for l in idx)
+        base = sum(LETTER_VALUE[l] for l in idx)
+        mult = 1 if n <= 4 else 2 if n <= 6 else 3 if n <= 8 else 4
+        gained = base * mult * 10 + (200 if n >= 7 else 0) + (30 * n if burn else 0)
+        gained += gained * min(diamonds, 2) // 2
+        return gained // 2 if repeat else gained
+    @staticmethod
+    def pass_bonus(shelf, turn, peels, pass_len):
+        """(shelfBonus, speedBonus, peelBonus, kind) main.c awards when the pass completes."""
+        speed = 25 * shelf * max(0, 40 - turn)
+        if peels == pass_len: return 1000 * shelf, speed, 400 * shelf, 2
+        if peels <= pass_len + 2: return 1000 * shelf, speed, 150 * shelf, 1
+        return 1000 * shelf, speed, 0, 0
     @staticmethod
     def heat_for(n):
         """Heat a word of n letters adds (board.c boardHeatFor)."""

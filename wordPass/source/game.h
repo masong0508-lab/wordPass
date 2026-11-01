@@ -8,6 +8,7 @@
 #define COLS 7
 #define ROWS 8
 #define MAX_CHAIN 10
+#define LEDGER_N 8            // words remembered per shelf for the repeat penalty and the HUD ledger
 
 #define TILE_W 24
 #define TILE_H 22
@@ -102,6 +103,16 @@ typedef struct {
     int  lastWordTier;        // 0 none, 1 common, 2 rare (last accepted word)
     int  rareWords;           // rare words spelled this shelf
     int  optRow;              // highlighted row on the options screen
+    // ---- scoring ledger (per shelf): a ring of the words spelled, newest at ledgerHead - 1
+    char ledger[LEDGER_N][12];
+    int  ledgerPts[LEDGER_N];
+    int  ledgerN, ledgerHead;
+    int  uniqueWords;         // words this shelf that were not repeats
+    int  lastWordDiamonds;    // CELL_SECRET cells in the last scored chain (capped at 2)
+    int  lastWordRepeat;      // the last word was already in the ledger (half score)
+    int  lastWordBurn;        // the last word went through a flame
+    int  speedBonus, peelBonus, passBonusKind;   // results card: kind 0 none, 1 CLEAN, 2 PERFECT
+    int  newBest;             // recordScore changed a saved record (cleared by startShelf)
 } Game;
 
 enum { MODE_CLASSIC = 0, MODE_DAILY };
@@ -142,6 +153,8 @@ void boardDebugFireStep(Game *g);    // test channel: one fire advance plus grav
 bool boardTryAddToChain(Game *g, int c, int r);
 void boardClearChain(Game *g);
 int  boardSubmit(Game *g);           // returns score gained, 0 if invalid
+int  boardChainScore(const Game *g); // exactly what boardSubmit would award for the current chain (0 if invalid)
+int  ledgerIndex(const Game *g, int age);   // ring index of the age-th newest ledger entry (0 = newest)
 int  boardHeatFor(int len);          // heat a word of this length adds: 3, 2, 1, 1, 0 (3,4,5,6,7+)
 int  boardPeel(Game *g, int c, int r); // returns 0 none, 1 hole, 2 secret, 3 scorched, -1 fail; a peel is a turn
 void boardAnimate(Game *g);

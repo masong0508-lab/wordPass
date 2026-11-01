@@ -1096,11 +1096,32 @@ static void drawTop(const Game *g)
     }
 
     // fire meter with a flame cap
-    drawText(222, 48, "FIRE", DIM, 1);
-    rectOutline(226, 58, 8, ROWS * 10 + 2, DIM);
+    drawText(222, 44, "FIRE", DIM, 1);
+    rectOutline(226, 54, 8, ROWS * 10 + 2, DIM);   // rows 54..135: clear of the ledger line below
     int low = boardLowestFireRow(g);
-    for (int r = 0; r <= low; r++) fillRect(227, 59 + r * 10, 6, 9, lerp15(FIRE2, FIRE1, r * 2));
-    if (low >= 0) { int fy = 59 + low * 10 + 9; px(229 + (frame & 1), fy - 12 - (frame & 3), FIRE2); px(230, fy - 11, FIRE2); }
+    for (int r = 0; r <= low; r++) fillRect(227, 55 + r * 10, 6, 9, lerp15(FIRE2, FIRE1, r * 2));
+    if (low >= 0) { int fy = 55 + low * 10 + 9; px(229 + (frame & 1), fy - 12 - (frame & 3), FIRE2); px(230, fy - 11, FIRE2); }
+
+    // word ledger: the last five words of the shelf, newest (with its points) at the right,
+    // fading with age. One 1x line without a shadow: rows 137..143, inside HUD slice 2.
+    if (g->ledgerN && clipY0 <= 143 && clipY1 > 137) {
+        int x = 238;
+        int shown = g->ledgerN < 5 ? g->ledgerN : 5;
+        for (int age = 0; age < shown; age++) {
+            int k = ledgerIndex(g, age);
+            char lw[16]; strcpy(lw, g->ledger[k]);
+            for (char *p = lw; *p; p++) if (*p >= 'a') *p -= 32;
+            if (age == 0) {
+                s[0] = '+'; fmtInt(s + 1, g->ledgerPts[k]);
+                x -= textWidth(s, 1); drawText(x, 137, s, GOLD, 1); x -= 4;
+            }
+            int tw = textWidth(lw, 1);
+            if (x - tw < 8) break;
+            x -= tw;
+            drawText(x, 137, lw, age == 0 ? WHITE : lerp15(INK, DIM, age * 4), 1);
+            x -= 8;
+        }
+    }
 
     // shelf map
     for (int i = 0; i < 20; i++) {
@@ -1282,27 +1303,44 @@ static void drawOverlay(const Game *g)
             drawGemSized(BX(lx), cy + 20, bw, 16, &GEM_DIAMOND, (t / 4) % (n + 4) == i);
             drawChar(BX(lx + 5), cy + 24, 'A' + (g->pass[i] - 'a'), C(4,6,10), 1);
         }
+        // rows at a 9 px pitch: label DIM on the left, value right-aligned
         char s[32], lw[16];
-        int rowy = cy + 46, lx = cx - cw / 2 + 10, rx = cx + cw / 2 - 10;
-        hline(BX(lx), rowy - 5, cw - 20, DIM);
+        int lx = cx - cw / 2 + 10, rx = cx + cw / 2 - 10;
+        hline(BX(lx), cy + 41, cw - 20, DIM);
         strcpy(lw, g->bestWord[0] ? g->bestWord : "-");
         for (char *p = lw; *p; p++) if (*p >= 'a') *p -= 32;
-        drawText(BX(lx), rowy, "BEST WORD", DIM, 1);
-        drawText(BX(rx - textWidth(lw, 1)), rowy, lw, WHITE, 1); rowy += 10;
-        siprintf(s, "+%d", g->bestWordScore);
-        drawText(BX(rx - textWidth(s, 1)), rowy, s, GOLD, 1); rowy += 14;
-        drawText(BX(lx), rowy, "WORDS", DIM, 1); siprintf(s, "%d", g->wordsThisShelf);
-        drawText(BX(rx - textWidth(s, 1)), rowy, s, WHITE, 1); rowy += 10;
-        drawText(BX(lx), rowy, "PEELS", DIM, 1); siprintf(s, "%d", g->peels);
-        drawText(BX(rx - textWidth(s, 1)), rowy, s, g->peels <= g->passLen + 2 ? ACCENT : WHITE, 1); rowy += 10;
-        drawText(BX(lx), rowy, "TURNS", DIM, 1); siprintf(s, "%d", g->turn);
-        drawText(BX(rx - textWidth(s, 1)), rowy, s, WHITE, 1); rowy += 14;
-        hline(BX(lx), rowy - 5, cw - 20, DIM);
-        drawText(BX(lx), rowy, "SHELF BONUS", DIM, 1); siprintf(s, "+%d", 500 * g->shelf);
-        drawText(BX(rx - textWidth(s, 1)), rowy, s, GOLD_LT, 1); rowy += 14;
-        if (g->mode == MODE_DAILY) { siprintf(s, "FINAL %d", g->score); drawTextCenter(BX(cx), rowy, s, GOLD_LT, 1); }
-        else { siprintf(s, "SHELF %d OPEN", g->shelf + 1); drawTextCenter(BX(cx), rowy, s, ACCENT, 1); }
-        if (t > 30 && (frame & 32)) drawTextCenter(BX(cx), cy + ch - 12, "TAP TO CONTINUE", INK, 1);
+        drawText(BX(lx), cy + 46, "BEST WORD", DIM, 1);
+        drawText(BX(rx - textWidth(lw, 1)), cy + 46, lw, WHITE, 1);
+        if (g->bestWordScore) { siprintf(s, "+%d", g->bestWordScore); drawText(BX(rx - textWidth(s, 1)), cy + 55, s, GOLD, 1); }
+        else drawText(BX(rx - textWidth("-", 1)), cy + 55, "-", DIM, 1);
+        drawText(BX(lx), cy + 64, "WORDS", DIM, 1);
+        if (g->uniqueWords < g->wordsThisShelf) siprintf(s, "%d (%d UNIQUE)", g->wordsThisShelf, g->uniqueWords);
+        else siprintf(s, "%d", g->wordsThisShelf);
+        drawText(BX(rx - textWidth(s, 1)), cy + 64, s, WHITE, 1);
+        drawText(BX(lx), cy + 73, "PEELS", DIM, 1); siprintf(s, "%d", g->peels);
+        u16 pc = g->peels == g->passLen ? GOLD_LT : g->peels <= g->passLen + 2 ? ACCENT : WHITE;
+        drawText(BX(rx - textWidth(s, 1)), cy + 73, s, pc, 1);
+        drawText(BX(lx), cy + 82, "TURNS", DIM, 1); siprintf(s, "%d", g->turn);
+        drawText(BX(rx - textWidth(s, 1)), cy + 82, s, WHITE, 1);
+        hline(BX(lx), cy + 90, cw - 20, DIM);
+        drawText(BX(lx), cy + 92, "SHELF BONUS", DIM, 1); siprintf(s, "+%d", 1000 * g->shelf);
+        drawText(BX(rx - textWidth(s, 1)), cy + 92, s, GOLD_LT, 1);
+        drawText(BX(lx), cy + 101, "SPEED", DIM, 1);
+        if (g->speedBonus) { siprintf(s, "+%d", g->speedBonus); drawText(BX(rx - textWidth(s, 1)), cy + 101, s, GOLD_LT, 1); }
+        else drawText(BX(rx - textWidth("-", 1)), cy + 101, "-", DIM, 1);
+        if (g->passBonusKind == 2) {
+            drawText(BX(lx), cy + 110, "PERFECT PASS", GOLD_LT, 1); siprintf(s, "+%d", g->peelBonus);
+            drawText(BX(rx - textWidth(s, 1)), cy + 110, s, GOLD_LT, 1);
+        } else if (g->passBonusKind == 1) {
+            drawText(BX(lx), cy + 110, "CLEAN PASS", ACCENT, 1); siprintf(s, "+%d", g->peelBonus);
+            drawText(BX(rx - textWidth(s, 1)), cy + 110, s, ACCENT, 1);
+        } else {
+            drawText(BX(lx), cy + 110, "PEELS", DIM, 1);
+            drawText(BX(rx - textWidth("-", 1)), cy + 110, "-", DIM, 1);
+        }
+        if (g->mode == MODE_DAILY) { siprintf(s, "FINAL %d", g->score); drawTextCenter(BX(cx), cy + 120, s, GOLD_LT, 1); }
+        else { siprintf(s, "SHELF %d OPEN", g->shelf + 1); drawTextCenter(BX(cx), cy + 120, s, ACCENT, 1); }
+        if (t > 30 && (frame & 32)) drawTextCenter(BX(cx), cy + 130, "TAP TO CONTINUE", INK, 1);
     } else if (g->state == ST_FAIL) {
         overlayCard(BX(16), 66, 140, 60);
         rectOutline(BX(16), 66, 140, 60, (frame & 8) ? FIRE1 : FIRE2);

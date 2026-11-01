@@ -34,7 +34,9 @@ typedef struct {
     s32 optRow;                             // 428
     u8  chainC[MAX_CHAIN], chainR[MAX_CHAIN]; // 432.., 442..
     s32 pulseEvery, lockTier, overtime;     // 452, 456, 460
-} DebugView;                                // total 464
+    s32 chainScore;                         // 464: boardChainScore(g), the live preview
+    s32 speedBonus, peelBonus, passBonusKind, ledgerN, newBest;   // 468, 472, 476, 480, 484
+} DebugView;                                // total 488
 
 #define PIN(field, off) _Static_assert(offsetof(DebugView, field) == (off), "DebugView." #field " moved: update tools/emu/wp.py OFF")
 PIN(magic, 0); PIN(frame, 4); PIN(state, 8); PIN(mode, 12); PIN(shelf, 16); PIN(score, 20);
@@ -48,7 +50,8 @@ PIN(heatThreshold, 356); PIN(burnEvery, 360); PIN(burnTimer, 364);
 PIN(scorched, 368); PIN(theme, 424); PIN(hand, 425); PIN(fire, 426); PIN(music, 427);
 PIN(optRow, 428); PIN(chainC, 432); PIN(chainR, 442);
 PIN(pulseEvery, 452); PIN(lockTier, 456); PIN(overtime, 460);
-_Static_assert(sizeof(DebugView) == 464, "DebugView size changed: update tools/emu/wp.py");
+PIN(chainScore, 464); PIN(speedBonus, 468); PIN(peelBonus, 472); PIN(passBonusKind, 476); PIN(ledgerN, 480); PIN(newBest, 484);
+_Static_assert(sizeof(DebugView) == 488, "DebugView size changed: update tools/emu/wp.py");
 
 volatile DebugView DBG;
 
@@ -115,4 +118,7 @@ void debugSync(Game *g)
     memcpy((void *)DBG.chainC, g->chainC, MAX_CHAIN);
     memcpy((void *)DBG.chainR, g->chainR, MAX_CHAIN);
     DBG.pulseEvery = g->pulseEvery; DBG.lockTier = g->lockTier; DBG.overtime = g->overtime;
+    DBG.chainScore = boardChainScore(g);
+    DBG.speedBonus = g->speedBonus; DBG.peelBonus = g->peelBonus; DBG.passBonusKind = g->passBonusKind;
+    DBG.ledgerN = g->ledgerN; DBG.newBest = g->newBest;
 }
