@@ -447,7 +447,14 @@ def main():
         for name, key in (('THEME', 'THEME_NAMES'), ('FRAME', 'FRAME_NAMES'), ('ACCENT', 'ACCENT_NAMES'), ('FIRE', 'FIRE_NAMES'), ('LIBRARY', 'LIB_NAMES'), ('SPELLING', 'SPELL_NAMES')):
             if rows.get(name) != N[key]: fail(f'options: {name} values {rows.get(name)} != gfx.c {N[key]}')
         if rows.get('HAND') != ['RIGHT', 'LEFT'] or rows.get('MUSIC') != ['ON', 'OFF']: fail('options: HAND and MUSIC values')
-    if 'LANGUAGE' in N['OPT_NAMES']: fail('the options now have a LANGUAGE row: update sections 11 and 14 of the guide (and regenerate the pictures with make guide)')
+        if len(N['OPT_NAMES']) != D['OPT_ROWS']: fail('OPT_ROWS and the option names disagree')
+    langs = re.findall(r'"([A-Z]+)"', re.search(r'NAMES\[LANG_COUNT\]\s*=\s*\{(.*?)\};', read(os.path.join(SRC, 'lang.c')), re.S).group(1))
+    if t:
+        lrow = [r for r in t if r[0].upper() == 'LANGUAGE']
+        if not lrow or [v.strip() for v in lrow[0][1].split(',')] != langs: fail(f'the LANGUAGE row of the options table should list {langs}')
+    t14 = tables.get('options14')
+    for lang_ in langs:
+        if lang_ not in section(text, 'Languages and spelling'): fail(f'section 14 never names {lang_}')
 
     # ---- themes table equals pools.bin
     P = pools()

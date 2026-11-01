@@ -172,8 +172,8 @@ def boot(left=False, tutor_done=True, clock=DAY):
 def set_hand(e, left):
     """Flip HAND through the real options screen (the list never mirrors, so the taps are the same)."""
     e.tap(e.bx + 86, 170); e.run(10)
-    e.tap(130, 34 + 15 * 3 + 7); e.run(10)
-    e.tap(86, 166); e.run(20)
+    e.tap(130, 32 + 13 * 3 + 6); e.run(10)
+    e.tap(86, 161); e.run(20)
     assert bool(e.state()['settings']['hand']) == left, 'HAND did not flip'
     e.set_hand(left)
 
@@ -235,7 +235,7 @@ def title():
     e.run(100)
     img = grab(e)
     save(zoom(img, 2), 'title.png')
-    save(annotate(touch(img).crop((0, 0, 172, 192)), 3, [('m', 1, 52, 145, 'L'), ('m', 2, 120, 143, 'R'), ('m', 3, 86, 166, 'L', 170), ('m', 4, 137, 15, 'R'), ('m', 5, 35, 184, 'L', 186)], margin=40), 'title_zoom.png')
+    save(annotate(touch(img).crop((0, 0, 172, 192)), 3, [('m', 1, 52, 145, 'L'), ('m', 2, 120, 143, 'R'), ('m', 3, 86, 166, 'L', 170), ('m', 4, 137, 15, 'R'), ('m', 5, 35, 184, 'L', 186), ('m', 6, 60, 15, 'L')], margin=40), 'title_zoom.png')
 
 @shot('title_daily_states.png')
 def title_daily_states():
@@ -270,31 +270,31 @@ def open_options(e):
 def options():
     e = boot()
     open_options(e)
-    for _ in range(7): e.press('DOWN', settle=3)
+    for _ in range(8): e.press('DOWN', settle=3)      # LANGUAGE, the ninth row
     e.run(20)
     img = grab(e)
     save(zoom(img, 2), 'options_screen.png')
-    # one panel per row: the sample board and the help line of the lit row, from the top screen (eight DOWN presses wrap back to row 0)
+    # one panel per row: the sample board and the help line of the lit row, from the top screen (nine DOWN presses wrap back to row 0)
     e.press('B', settle=20); open_options(e)
     panels, labels = [], []
-    names = ['THEME', 'FRAME', 'ACCENT', 'HAND', 'FIRE', 'MUSIC', 'LIBRARY', 'SPELLING']
-    for row in range(8):
+    names = ['THEME', 'FRAME', 'ACCENT', 'HAND', 'FIRE', 'MUSIC', 'LIBRARY', 'SPELLING', 'LANGUAGE']
+    for row in range(9):
         e.run(10)
-        panels.append(top(grab(e)).crop((18, 62, 238, 150))); labels.append(f'row {row + 1}: {names[row]}')
+        panels.append(top(grab(e)).crop((18, 62, 238, 156))); labels.append(f'row {row + 1}: {names[row]}')
         e.press('DOWN', settle=3)
     save(montage(panels, 2, labels, k=2), 'options_rows.png')
     # THEME: the sample board in each of the five themes (CLEAR also adds its own second help line)
     panels, labels = [], []
     for i, nm in enumerate(('JEWEL', 'INK', 'CANDY', 'EMBER', 'CLEAR')):
         e.run(10)
-        panels.append(top(grab(e)).crop((18, 62, 238, 150))); labels.append(nm)
+        panels.append(top(grab(e)).crop((18, 62, 238, 156))); labels.append(nm)
         e.press('RIGHT', settle=3)
     save(montage(panels, 2, labels, k=2), 'options_themes.png')
     e.press('DOWN', settle=3)      # FRAME
     panels, labels = [], []
     for nm in ('GOLD', 'SILVER', 'ACCENT'):
         e.run(10)
-        panels.append(top(grab(e)).crop((18, 62, 238, 150))); labels.append(nm)
+        panels.append(top(grab(e)).crop((18, 62, 238, 156))); labels.append(nm)
         e.press('RIGHT', settle=3)
     save(montage(panels, 3, labels, k=2), 'options_frames.png')
     e.press('DOWN', settle=3)      # ACCENT
@@ -353,7 +353,7 @@ def play_layout():
              ('m', 4, 200, 19, 'R'), ('m', 5, 190, 30, 'R', 42), ('m', 6, 226, 42, 'R', 66), ('m', 7, 230, 95, 'R'), ('m', 8, 215, 138, 'R'), ('m', 9, 200, 154, 'R', 164),
              ('m', 10, 88, 192 + 96, 'L'),
              ('m', 11, 242, 192 + 12, 'R'), ('m', 12, 190, 192 + 30, 'R', 192 + 34), ('m', 13, 196, 192 + 47, 'R', 192 + 56), ('m', 14, 200, 192 + 60, 'R', 192 + 78),
-             ('m', 15, 190, 192 + 79, 'R', 192 + 100), ('m', 16, 200, 192 + 98, 'R', 192 + 122), ('m', 17, 214, 192 + 132, 'R', 192 + 148), ('m', 18, 214, 192 + 158, 'R', 192 + 170), ('m', 19, 214, 192 + 182, 'R', 192 + 190)]
+             ('m', 15, 190, 192 + 79, 'R', 192 + 100), ('m', 16, 200, 192 + 98, 'R', 192 + 122), ('m', 17, 214, 192 + 132, 'R', 192 + 140), ('m', 18, 214, 192 + 158, 'R', 192 + 162), ('m', 19, 214, 192 + 182, 'R', 192 + 181)]
     save(annotate(img, 2, items, margin=40), 'play_layout.png')
 
 
@@ -861,6 +861,53 @@ def guided_first_shelf():
     e.press('Y', settle=4)
     panels.append(grab(e)); labels.append('after the first word: peek')
     save(montage(panels, 3, labels, k=1), 'guided_first_shelf.png')
+
+class FirstBootEmu(Emu):
+    """Emu without the constructor's habit of dismissing the first-boot language chooser."""
+    def __init__(self, rom):
+        rom = os.path.abspath(rom)
+        self.emu = wp.DeSmuME(); self.emu.open(rom)
+        self.emu.input.keypad_update(0); self.emu.input.touch_release(); self.emu.volume_set(0)
+        self.mem = self.emu.memory
+        self.dbg = wp.symbol(rom.replace('.nds', '.elf'), 'DBG')
+        self.bx = 0; self.words = None
+        self.run(60)
+
+@shot('language_chooser.png')
+def language_chooser():
+    e = FirstBootEmu(CFG['rom'])
+    assert e.state()['state'] == wp.ST_LANGPICK, 'the first boot should show the chooser'
+    e.press('DOWN', settle=3); e.press('DOWN', settle=3); e.run(10)
+    save(annotate(zoom(touch(grab(e)), 1).crop((0, 0, 172, 192)), 3, [('m', 1, 86, 28, 'L'), ('m', 2, 86, 60, 'R'), ('m', 3, 86, 172, 'L')], margin=40), 'language_chooser.png')
+
+@shot('title_language.png')
+def title_language():
+    e = boot()
+    panels, labels = [], []
+    for idx, nm in ((0, 'English: a quiet tag'), (1, 'Espanol: the tag lights gold'), (3, 'Deutsch')):
+        e.set_language(idx); e.run(60)
+        panels.append(touch(grab(e)).crop((0, 0, 172, 192))); labels.append(nm)
+    e.set_language(0)
+    save(montage(panels, 3, labels, k=2), 'title_language.png')
+
+@shot('language_shelves.png', 'language_options.png')
+def language_shelves():
+    e = boot()
+    panels, labels = [], []
+    for idx, nm in ((1, 'Espanol'), (3, 'Deutsch'), (10, 'Suomi')):
+        e.set_language(idx); e.run(30)
+        to_play(e); calm(e); e.run(280)
+        img = grab(e)
+        panels.append(stack([top(img).crop((8, 8, 248, 184)), touch(img).crop((0, 0, 172, 192))])); labels.append(nm)
+        to_title(e)
+    e.set_language(0)
+    save(montage(panels, 3, labels, k=1), 'language_shelves.png')
+    # the options with another language on: SPELLING is a note, not a choice
+    e.set_language(2); e.run(20); open_options(e)
+    for _ in range(7): e.press('DOWN', settle=3)
+    e.run(20)
+    img = grab(e)
+    save(zoom(img, 2), 'language_options.png')
 
 def run_one(name):
     files, fn = SHOTS[name]

@@ -39,9 +39,9 @@ the **touch screen** (the bottom one): the board of gems on one side and a narro
 ![The title screen: the logo band over a rain of gems, a tip card on the top screen, and the buttons on the touch screen.](img/title.png)
 *The title screen. The top screen turns three tip cards; the touch screen has CLASSIC, the Daily button, OPTIONS and the GUIDE button.*
 
-![The title's touch screen with numbered markers: 1 CLASSIC, 2 the Daily button, 3 OPTIONS, 4 the GUIDE button, 5 the LEDGER line.](img/title_zoom.png)
+![The title's touch screen with numbered markers: 1 CLASSIC, 2 the Daily button, 3 OPTIONS, 4 the GUIDE button, 5 the LEDGER line, 6 the language tag.](img/title_zoom.png)
 *The title buttons. 1 CLASSIC, 2 the Daily Pass button (it shows the date and the day's modifier), 3 OPTIONS, 4 the pulsing ? GUIDE
-button (it pulses until you have finished your first guided shelf), 5 the BEST / LEDGER line, which opens the lifetime statistics.*
+button (it pulses until you have finished your first guided shelf), 5 the BEST / LEDGER line, which opens the lifetime statistics, 6 the language tag (tap it for the next language; section 14).*
 
 ### The first shelf, step by step
 
@@ -105,7 +105,7 @@ That is the whole game. The rest of this guide explains every rule exactly, then
 | Pause | START or the II button on the panel | RESUME, RESTART SHELF, HOW TO PLAY, QUIT TO TITLE |
 | Results card | the last pass letter is found | bonuses and stats; tap to go on |
 | Fail card | a shelf is lost | why, the pass revealed, stats; tap to retry |
-| Options | OPTIONS or Y on the title | eight settings |
+| Options | OPTIONS or Y on the title | nine settings |
 | The Ledger | the BEST line or X on the title | lifetime statistics |
 | HOW TO PLAY | the GUIDE button or B on the title, or the pause menu | eight animated pages |
 
@@ -908,8 +908,8 @@ The title's **BEST** line is your best Classic score. A Classic score is recorde
 
 Open **OPTIONS** from the title (the button, or **Y**). Tap the left half of a row to step its value back and the right half to step it forward, or use the d-pad (up and down pick a row, left and right change it, **A** steps forward). The chevrons on the row flash when they act. The top screen shows a **sample board** in the current theme, accent and frame, with a line of help about the lit row.
 
-![The options screen: eight rows, the SPELLING row lit, the sample board and its help line above.](img/options_screen.png)
-*The options screen with SPELLING lit. The list always sits in the same place, whichever hand you play with.*
+![The options screen: nine rows, the LANGUAGE row lit, the sample board and its help line above.](img/options_screen.png)
+*The options screen with LANGUAGE lit. The list always sits in the same place, whichever hand you play with.*
 
 <!-- check:options -->
 | Option | Values | Effect |
@@ -921,9 +921,10 @@ Open **OPTIONS** from the title (the button, or **Y**). Tap the left half of a r
 | FIRE | RELAXED, NORMAL, FAST | how fast the Classic shelf burns (section 8.3) |
 | MUSIC | ON, OFF | the soundtrack (section 13) |
 | LIBRARY | FULL, COMMON | FULL accepts every dictionary word, COMMON refuses rare ones with TOO OBSCURE |
-| SPELLING | BOTH, AMERICAN, BRITISH | which spellings are accepted (section 4.3) |
+| SPELLING | BOTH, AMERICAN, BRITISH | which spellings are accepted, English only (section 4.3) |
+| LANGUAGE | ENGLISH, ESPANOL, FRANCAIS, DEUTSCH, ITALIANO, PORTUGUES, NEDERLANDS, SVENSKA, POLSKI, DANSK, SUOMI | the language of the tiles, words and pass words (section 14) |
 
-![The help line and sample board for each of the eight rows.](img/options_rows.png)
+![The help line and sample board for each of the nine rows.](img/options_rows.png)
 *Each row's help line, from the top screen. The sample board shows a gem of every palette, a diamond, a hole with a number, a burning gem, a chained gem, an empty cell and a peeked ghost, all drawn by the very code the board uses.*
 
 ### 11.1 Themes, frames and accents
@@ -1052,9 +1053,9 @@ The meter is 5 or 4 and a peel is 2 heat: two peels can light a gem. Long words 
 
 ## 13. Music and sound
 
-> **Regenerated section.** This section describes the soundtrack as the code does *today* (`source/music.c`). A later pass will rewrite the music engine; when it lands, `tools/emu/screens.py` and `python3 tools/check_guide.py` find what changed (the constants below are parsed from the source by the checker), and this section is updated to match.
+> **Regenerated section.** This section describes the soundtrack as the code does *today* (`source/music.c`, with the sound effects and mixes on top of it). When the music changes again, `tools/emu/screens.py` and `python3 tools/check_guide.py` find what moved (the constants and keys below are parsed from the source by the checker), and this section is updated to match.
 
-There are no samples: the soundtrack is **sequenced live on the DS's seven sound channels** (PSG square and noise voices), so each layer can be mixed by game state.
+There are no samples: the soundtrack is **sequenced live on the DS's eight sound channels** (six square-wave voices and two noise voices), each with its own instrument, so every layer can be mixed by game state.
 
 <!-- check:music -->
 | Constant | Value |
@@ -1062,22 +1063,32 @@ There are no samples: the soundtrack is **sequenced live on the DS's seven sound
 | STEP_FRAMES | 8 |
 | PATTERN | 64 |
 
-A step is a sixteenth note of **8 frames** (about 112 beats per minute); the hook is **64 steps**, four bars of 16 steps, about 8.5 seconds.
+A step is a sixteenth note of **8 frames** (about 112 beats per minute) and a pass through the pattern is **64 steps**, four bars. The tune has the form **A A B A**: the four-bar hook plays twice, then a four-bar answer phrase over a different chord walk (vi, IV, I, V), then the hook again: sixteen bars in all.
 
 | Layer | What it does | How it reacts |
 | --- | --- | --- |
-| **Hook** (square, 25% duty) | a fixed four-bar melody that never stops | transposed to a new key on every shelf (eight keys, then round again); Lockdown plays it in **minor**; louder after a pass |
-| **Pulse** (square, 12.5% duty) | a quiet chord arpeggio, always on | a little louder while you peek |
-| **Bass** (square, 50% duty) | eighth notes on the chord root | enters when you score a word; fades after about three quiet bars |
-| **Pad** (square, 37.5% duty) | a slow alternation of chord tones | its volume grows with the share of the pass you have found |
-| **Drums** (noise) | hat, kick and snare | a word of 1 to 4 letters brings the hat, 5 to 6 letters adds the kick, 7+ also the snare; the level decays one notch after eight bars (four bars for each notch after that) |
-| **Chime** (square, 50% duty) | one-shot notes | word chimes follow the score (the pitch climbs a degree every 60 points and wraps after eight); each reveal plays the next note of the hook; a cascade of four or more new gems plays an arpeggio |
-| **Alarm** (square, 12.5% duty) | a clashing tone | climbs in pitch and volume as the lowest flame sinks down the board |
+| **Hook** (square, starts at a thin 12.5% and fills out to 50% with a late vibrato) | the tune, which never stops | transposed to a new key on every shelf (eight keys, then round again); in Lockdown it is in **minor** with the raised seventh on the V chord, so the turn home still pulls; it sits an octave lower in the high keys so it stays singable |
+| **Pulse** (square, plucked) | a chord arpeggio, always on, ping-ponging between the speakers | thins to a slow heartbeat an octave down while you peek, and drops an octave while paused |
+| **Bass** (square) | a riff of eighths (root, fifth, octave) | plays while you keep spelling words and fades after about three quiet bars |
+| **Pad** (square, swells in) | slow chord tones an octave under the lead | swells one chord tone per pass letter found |
+| **Drums** (noise) | hat, kick and snare | level 1 (a word of 1 to 4 letters) is a closed hat on the off-beats; level 2 (5 to 6 letters) adds kick and snare, with a ghost kick before bars two and four; level 3 (7+ letters) runs sixteenth hats with accents, an open hat at the top of every loop and a snare fill into the last beat of bar four; the level decays one notch after eight bars |
+| **Chimes** (square) | one-shot notes that climb the chord with the length of the word | one note for 3 letters, two for 4, three for 5 or 6, four for 7 (the last held with vibrato), a six-note run for 8 and up (which also lifts the pad for a moment); a word worth 500 or more rings louder; a word through a flame hisses like steam |
+| **Alarm** (square) | a pulsed two-tone blip | comes faster and louder the lower the fire has burned (every eighth step on the top rows, every step near the bottom) |
 
-* **Peek** ducks every layer except the pulse, the chimes and the alarm to a fifth of their volume; each reveal plays the next note of the hook, so peeling a path plays the tune, in a higher octave and held longer for a pass letter.
-* **Finishing a pass** puts the hook up an octave in the chime voice for one loop, with the drums at full level.
-* **Failing** cuts everything except the alarm, which slides down for a second and a half.
-* **MUSIC: OFF** mutes everything.
+**Tempo.** While a flame is on row 3 or lower the whole tune speeds up, on row 5 or lower faster still, and it relaxes one bar after the shelf is fire-free.
+
+**Reactions.**
+
+* **Peek** ducks every layer except the chimes and the alarm to a fifth of their volume; each reveal plays the next note of the hook, so peeling a path plays the tune (higher and held longer for a pass letter).
+* **Pausing** pulls the music down to a quarter (the alarm to half); resuming brings it back with a short swell.
+* **Finishing a pass** lands a fanfare on the next beat (a rising chord run, the pad snapping up, the bass on the tonic, a snare fill), then the hook loops an octave up, bright and without drums, for as long as the results card is open.
+* **Failing** has three endings: *Library lost* slides the alarm down over a crackle; *a scorched pass* cracks and stabs, then slides; *out of words* lets the hook sigh down four notes with no alarm. All three settle into a quiet bed (one low pad note and a slow bass toll) that never restarts the tune.
+* **A new shelf** fades the old one out over a quarter of a second and comes in on the new key with one bar of bass and pulse alone. The **title** plays a fuller attract mix (bass and hats always in, a steady pad, the hook on a mellow pulse).
+* **MUSIC: OFF** mutes everything, sound effects included.
+
+**Stereo.** Hook, bass and pulse in the middle; the pad a little right; the drums a little left; the chimes right; the hiss and noise effects far right; the alarm far left.
+
+**Sound effects** run on their own small sequencer with priorities, so a small sound never cuts a bigger one: a rising pentatonic tap for each gem you chain (it climbs with the chain length and tops out at ten gems), a short step back when you drop one, a buzzing pair of notes for a refused word, a rush of air for a peel that finds nothing, a falling hiss and a sliding chime for a scorch, a rising flare when a flame is lit, a low crackle when the fire creeps, and a soft blip on every menu move.
 
 The key by shelf (a MIDI note number for the hook's tonic; 60 is middle C):
 
@@ -1090,14 +1101,44 @@ The key by shelf (a MIDI note number for the hook's tonic; 60 is middle C):
 
 ## 14. Languages and spelling
 
-> **Regenerated section.** The game currently has **one language, English**, and two options that shape its dictionary: LIBRARY and SPELLING. A LANGUAGE option with more dictionaries is planned. When it lands, `tools/emu/screens.py` regenerates the pictures and `python3 tools/check_guide.py` fails on this section (it notices a LANGUAGE row in the options), so a later pass can update it cheaply.
+> **Regenerated section.** This section describes the ten languages as the code does *today* (`source/lang.c`, `source/langload.c`, `data/lang/`). `tools/emu/screens.py` regenerates its pictures and `python3 tools/check_guide.py` checks the option names and the data it quotes, so a later change is found cheaply. The data pipeline and its limits are in `docs/LANGUAGES-DATA.md`.
+
+The game plays in **English** and in **ten more languages**: Spanish, French, German, Italian, Portuguese, Dutch, Swedish, Polish, Danish and Finnish. The **LANGUAGE** option (the ninth row of the options) and the language tag in the title's top left corner (tap it for the next language) switch the whole game.
+
+The first time the game starts, with no saved settings, it shows the **language chooser** before the title. It is also reachable from the title tag and with **A** on the LANGUAGE row.
+
+![The first-boot language chooser: eleven names in a list, the highlighted one boxed.](img/language_chooser.png)
+*The chooser. 1 English and the ten others, 2 the highlighted language (tap one, or use the d-pad and A), 3 the hint line. The language currently in use carries a gold star.*
+
+![The title screen in English, Espanol and Deutsch: the language tag in the top left corner.](img/title_language.png)
+*The title's language tag. In English it is a quiet tag; in any other language it lights gold and shows that language's name, with a chevron: tap it for the next language.*
 
 | Setting | Values | What it decides |
 | --- | --- | --- |
-| LIBRARY | FULL, COMMON | whether rare-tier words are accepted (section 4.2) |
-| SPELLING | BOTH, AMERICAN, BRITISH | whether American-only and British-only spellings are accepted (section 4.3) |
+| LANGUAGE | ENGLISH, ESPANOL, FRANCAIS, DEUTSCH, ITALIANO, PORTUGUES, NEDERLANDS, SVENSKA, POLSKI, DANSK, SUOMI | the tiles, the dictionary and the pass words (below) |
+| LIBRARY | FULL, COMMON | whether rare words are accepted, in every language (COMMON keeps the 30,000 most frequent forms) |
+| SPELLING | BOTH, AMERICAN, BRITISH | American and British spellings, **English only**: in every other language the row reads `ENGLISH ONLY` and does nothing |
 
-The English dictionary is built from the public-domain ENABLE list plus WordNet-derived words, British spellings and modern words (appendix), with 183,419 words of 3 to 20 letters.
+![The options screen with FRANCAIS chosen: the SPELLING row reads ENGLISH ONLY and has no chevrons.](img/language_options.png)
+*The options with another language on. SPELLING becomes a note, not a choice.*
+
+### 14.1 What a language changes
+
+* **Tiles.** Each language has its own tile weights, letter values, vowels and rare letters, and the **Qu** tile only where the language has one. A letter a language hardly uses has no tile: no K or W in Spanish, no Q in Dutch, Swedish, Danish or Finnish.
+* **Words.** The dictionary accepts that language's words (the dictionaries are "every word a player is likely to type", not complete: see `docs/LANGUAGES-DATA.md`).
+* **Pass words.** Every shelf draws from a translated library of the **same 40 themes** in the same order, and the plaque and the shelf intro show the theme name in that language (`PASS - LIBROS`).
+* **Daily boards are per language.** The Daily uses the active language's letter bag and pass pool, so a Spanish Daily is a different board from the English one, and the same for everyone playing Spanish that day. Records (best scores, the streak and the Ledger) are shared across languages.
+
+![A shelf in Espanol, Deutsch and Suomi: the plaque names the pass theme in the language and the tiles use its letters.](img/language_shelves.png)
+*The same game in three other languages. Top screens: the plaque (`PASS - LIBROS`, `PASS - BUCHER`, `PASS - KIRJAT`). Boards: the tiles come from each language's own letter frequencies.*
+
+### 14.2 The limits
+
+* **Letters are A to Z.** The board has 26 tile types, so words are normalised by stripping accents: an acute or grave vowel loses its mark, n-tilde is N, c-cedilla is C, umlauts and the ring lose their marks, o-slash is O, l-stroke is L, the German sharp s is SS, and the ae and oe ligatures are AE and OE. Words that become the same collapse into one. You spell the stripped word.
+* **The menus, the in-game guide and the prompts stay English**; only the words, the pass words and the theme names are translated. The examples in this guide are English whatever the language.
+* **Switching is only possible on the title and the options screen**; a shelf keeps the letters it was dealt.
+* **Loading** a language shows a short LOADING screen (about a quarter of a second in the emulator). English is compiled into the program and always works; the other ten live in the ROM's own filesystem and are read into memory when chosen. If the filesystem is not there (a loader that strips it) only English is offered. The chosen language is saved with the other options, and one that is not on the ROM falls back to English.
+* **Quality varies.** Finnish has the weakest word list, and Swedish and Danish have the thinnest pass pools (`docs/LANGUAGES-DATA.md`).
 
 ---
 
@@ -1225,7 +1266,7 @@ The dictionary holds **183,419** words of 3 to 20 letters, **159,922** of them i
 | `DAILY_LONG_LEN` | 7 | the Daily modifier LONG asks for this pass length |
 | `POOL_MIN_LEN` | 4 | shortest pass word |
 | `POOL_MAX_LEN` | 9 | longest pass word in the pools |
-| `OPT_ROWS` | 8 | rows on the options screen |
+| `OPT_ROWS` | 9 | rows on the options screen |
 | `ACCENT_COUNT` | 9 | accent settings (AUTO and eight colours) |
 | `GUIDE_PAGES` | 8 | pages of HOW TO PLAY |
 | `GHOST_IDLE_FRAMES` | 180 | idle frames before the guided shelf's ghost drag |
