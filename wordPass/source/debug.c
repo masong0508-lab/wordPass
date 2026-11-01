@@ -33,7 +33,8 @@ typedef struct {
     u8  theme, hand, fire, music;           // 424..427
     s32 optRow;                             // 428
     u8  chainC[MAX_CHAIN], chainR[MAX_CHAIN]; // 432.., 442..
-} DebugView;                                // total 452
+    s32 pulseEvery, lockTier, overtime;     // 452, 456, 460
+} DebugView;                                // total 464
 
 #define PIN(field, off) _Static_assert(offsetof(DebugView, field) == (off), "DebugView." #field " moved: update tools/emu/wp.py OFF")
 PIN(magic, 0); PIN(frame, 4); PIN(state, 8); PIN(mode, 12); PIN(shelf, 16); PIN(score, 20);
@@ -46,7 +47,8 @@ PIN(cmd, 336); PIN(a0, 340); PIN(a1, 344); PIN(a2, 348); PIN(a3, 352);
 PIN(heatThreshold, 356); PIN(burnEvery, 360); PIN(burnTimer, 364);
 PIN(scorched, 368); PIN(theme, 424); PIN(hand, 425); PIN(fire, 426); PIN(music, 427);
 PIN(optRow, 428); PIN(chainC, 432); PIN(chainR, 442);
-_Static_assert(sizeof(DebugView) == 452, "DebugView size changed: update tools/emu/wp.py");
+PIN(pulseEvery, 452); PIN(lockTier, 456); PIN(overtime, 460);
+_Static_assert(sizeof(DebugView) == 464, "DebugView size changed: update tools/emu/wp.py");
 
 volatile DebugView DBG;
 
@@ -112,4 +114,5 @@ void debugSync(Game *g)
     DBG.optRow = g->optRow;
     memcpy((void *)DBG.chainC, g->chainC, MAX_CHAIN);
     memcpy((void *)DBG.chainR, g->chainR, MAX_CHAIN);
+    DBG.pulseEvery = g->pulseEvery; DBG.lockTier = g->lockTier; DBG.overtime = g->overtime;
 }

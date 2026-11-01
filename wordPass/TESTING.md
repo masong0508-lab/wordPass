@@ -44,7 +44,8 @@ and `state()` reads through it (no hand-walked slices). Adding a field means: ap
 to `DebugView`, add its `PIN(...)`, bump the size assert, add it to `OFF`, and read it in
 `state()`. `state()` returns the scalars (`state, mode, shelf, score, fail, turn, heat,
 chainLen, peels, lockdown, bestWordScore, dailySeed, passLen, lastWordTier, rareWords,
-library, heatThreshold, burnEvery, burnTimer, optRow`), `pass`, `found`, `cell[c][r] =
+library, heatThreshold, burnEvery, burnTimer, optRow, pulseEvery, lockTier, overtime`),
+`pass`, `found`, `cell[c][r] =
 (letter, state)`, `back`, `scorched`, `msg`, `lastWord`, `bestWord`, `settings`
 (theme/hand/fire/music) and `chain` as a list of `(c, r)`.
 
@@ -60,8 +61,15 @@ Pokes bypass the game's own invariants, so set up whole columns explicitly.
 
 Recipes: `set_burn(0, 99)` keeps the fire still across submits, `set_burn(0, 1)` makes it
 advance on the next word. OUT OF WORDS deterministically: `set_cell` every cell to `'x'`,
-then peel one cell with `back == 0` (the peel's `boardHasWords` check runs with no refill;
-a submit would refill random letters).
+then peel one cell with `back == 0` (a peel is a turn, so its `boardHasWords` check runs,
+but a peel vacates nothing, so nothing refills; a submit would refill random letters).
+Every word and peel is a turn (`turn++`, heat by `Emu.heat_for(len)` or 1 per peel),
+and a turn's heat crossing `heatThreshold` lights the topmost gem of a random column,
+so a scenario that must stay flame-free keeps `set_heat(0)` fresh. `set_turn(0)` keeps
+shelf overtime (turn 24, 16 in Lockdown) out of a long scenario. `burn_cells(g)`,
+`lowest_fire_row(g)` and `heat_for(n)` read the fire state the way board.c computes it.
+`test_rules.py` has `fresh_shelf()` (pause + SELECT restarts the shelf on a clean random
+board) and `play_turn(pick)` with the `shortest` and `longest_fire_aware` strategies.
 
 ## Rules
 - Keep play at 60 fps: `Emu.fps()` must return 120 for 120 cycles in play. Build a copy of

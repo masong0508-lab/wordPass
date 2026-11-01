@@ -46,11 +46,12 @@ OFF = {
     'heatThreshold': 356, 'burnEvery': 360, 'burnTimer': 364,
     'scorched': 368, 'theme': 424, 'hand': 425, 'fire': 426, 'music': 427,
     'optRow': 428, 'chainC': 432, 'chainR': 442,
+    'pulseEvery': 452, 'lockTier': 456, 'overtime': 460,
 }
-DBG_SIZE = 452
+DBG_SIZE = 464
 I32_FIELDS = ['state', 'mode', 'shelf', 'score', 'fail', 'turn', 'heat', 'chainLen', 'peels', 'lockdown',
               'bestWordScore', 'dailySeed', 'passLen', 'lastWordTier', 'rareWords', 'library',
-              'heatThreshold', 'burnEvery', 'burnTimer', 'optRow']
+              'heatThreshold', 'burnEvery', 'burnTimer', 'optRow', 'pulseEvery', 'lockTier', 'overtime']
 # poke commands (debug.c applyPoke)
 POKE_CELL, POKE_BACK, POKE_HEAT, POKE_BURN, POKE_FIRESTEP, POKE_TURN, POKE_LIVES = range(1, 8)
 
@@ -159,6 +160,14 @@ class Emu:
         self.poke(POKE_FIRESTEP)
     def set_turn(self, n):
         self.poke(POKE_TURN, n)
+    @staticmethod
+    def heat_for(n):
+        """Heat a word of n letters adds (board.c boardHeatFor)."""
+        return 3 if n <= 3 else 2 if n == 4 else 1 if n <= 6 else 0
+    def burn_cells(self, g):
+        return [(c, r) for c in range(COLS) for r in range(ROWS) if g['cell'][c][r][1] == BURN]
+    def lowest_fire_row(self, g):
+        return max([r for (_, r) in self.burn_cells(g)], default=-1)
     # ---- board helpers
     def center(self, c, r):
         return self.bx + GX + c*TW + TW//2, GY + r*TH + (ODD if c & 1 else 0) + TH//2
@@ -181,7 +190,7 @@ class Emu:
         avoid = set(avoid)
         def ok(c, r): return g['cell'][c][r][1] in (TILE, BURN, SECRET) and (c, r) not in avoid
         def dfs(path, word):
-            if minlen <= len(word) <= maxlen and word in self.words: found.append((word, list(path)))
+            if minlen <= len(word) <= maxlen and len(path) >= 3 and word in self.words: found.append((word, list(path)))   # a chain needs three gems (Qu counts two letters)
             if len(path) >= 7: return
             c, r = path[-1]
             for n in self.neighbors(c, r):

@@ -71,11 +71,10 @@ int boardBackNumber(const Game *g, int c, int r)
     return k;
 }
 
-static void placeSecrets(Game *g)
+// Bury the pass: a random walk that starts at or below minRow and is biased to stay there.
+static void placeSecrets(Game *g, int minRow)
 {
     memset(g->back, 0, sizeof(g->back));
-    // deeper shelves bury the pass lower in the board
-    int minRow = (g->shelf <= 2) ? 1 : (g->shelf <= 5) ? 3 : 4;
     int placed = 0, guard = 0;
     int c = rand() % COLS, r = minRow + rand() % (ROWS - minRow);
     while (placed < g->passLen && guard++ < 2000) {
@@ -114,13 +113,24 @@ void boardNewShelf(Game *g)
             g->cell[c][r].squash = 0;
             g->cell[c][r].flash = 0;
         }
-    placeSecrets(g);
+    // deeper shelves bury the pass lower in the board
+    int minRow = (g->shelf <= 2) ? 1 : (g->shelf <= 5) ? 3 : (g->shelf <= 11) ? 4 : 5;
+    if (g->mode == MODE_DAILY) minRow = 3;
+    placeSecrets(g, minRow);
     g->chainLen = 0;
     g->turn = 0;
     g->heat = 0;
+    g->overtime = false;
+    g->fireN = 0;
     g->lockdown = g->shelf > 5;
-    g->heatThreshold = g->lockdown ? 4 : (g->shelf <= 2 ? 8 : 6);
+    // Lockdown tiers: shelves 6-8, 9-11, 12-14, 15+ tighten the threshold and the pulse
+    g->lockTier = g->lockdown ? (g->shelf - 6) / 3 : 0;
+    if (g->lockTier > 3) g->lockTier = 3;
+    g->heatThreshold = (g->shelf <= 2) ? 10 : (g->shelf <= 5) ? 7 : 5 - g->lockTier / 2;
+    if (g->heatThreshold < 3) g->heatThreshold = 3;
     g->burnEvery = (g->shelf <= 3) ? 2 : 1;
+    g->pulseEvery = 6 - g->lockTier;
+    if (g->pulseEvery < 3) g->pulseEvery = 3;
     g->burnTimer = 0;
     g->fail = FAIL_NONE;
     g->wordsThisShelf = 0;
@@ -135,14 +145,17 @@ void boardNewShelf(Game *g)
     if (g->mode == MODE_DAILY) {
         // one fixed shelf for everyone today: medium pressure, pass buried mid-board
         g->lockdown = false;
-        g->heatThreshold = 6;
+        g->lockTier = 0;
+        g->pulseEvery = 6;
+        g->heatThreshold = 7;
         g->burnEvery = 2;
     } else if (S.fire == FIRE_RELAXED) {
         g->burnEvery += 1;
-        g->heatThreshold += 2;
+        g->heatThreshold += 3;
     } else if (S.fire == FIRE_FAST) {
         g->burnEvery = 1;
-        if (g->heatThreshold > 4) g->heatThreshold -= 2;
+        g->heatThreshold -= 2;
+        if (g->heatThreshold < 4) g->heatThreshold = 4;
     }
 }
 
@@ -191,8 +204,14 @@ bool boardPassComplete(const Game *g)
     return true;
 }
 
-// Gravity with separators: holes and secrets are floors. Only the top
-// segment of each column (above the highest separator) ever refills.
+// Gravity with separators: holes, diamonds and burning gems are floors that split a
+// column into segments. Gems compact within their segment and every segment refills
+// from its top, so the gems under a hole come back too (they drop in from behind the
+// separator: the renderer clips them to their segment). A flame hangs where it is, so
+// clearing the gems beneath it only refills them: fire moves one row per fire step and
+// never rides your own word down.
+static bool gravityFloor(int s) { return s == CELL_HOLE || s == CELL_SECRET || s == CELL_BURN; }
+
 static int applyGravity(Game *g)
 {
     int spawned = 0;
@@ -200,7 +219,7 @@ static int applyGravity(Game *g)
         int w = ROWS - 1;
         for (int r = ROWS - 1; r >= 0; r--) {
             int s = g->cell[c][r].state;
-            if (s == CELL_HOLE || s == CELL_SECRET) { w = r - 1; continue; }
+            if (gravityFloor(s)) { w = r - 1; continue; }
             if (s == CELL_EMPTY) continue;
             if (w != r) {
                 Cell moved = g->cell[c][r];
@@ -210,35 +229,55 @@ static int applyGravity(Game *g)
             }
             w--;
         }
-        // refill the top segment
-        int topSep = -1;
-        for (int r = 0; r < ROWS; r++) {
-            int s = g->cell[c][r].state;
-            if (s == CELL_HOLE || s == CELL_SECRET) { topSep = r; break; }
-        }
-        int end = (topSep < 0) ? ROWS : topSep;
-        int k = 0;
-        for (int r = end - 1; r >= 0; r--) {
-            if (g->cell[c][r].state == CELL_EMPTY) {
-                g->cell[c][r].letter = randomLetter();
-                g->cell[c][r].state = CELL_TILE;
-                g->cell[c][r].yoff = (-(k + 1) * TILE_H - 12 - (r == 0 ? 0 : 4)) * 16;
-                g->cell[c][r].yv = 0;
-                g->cell[c][r].squash = 0;
-                g->cell[c][r].flash = 0;
+        // refill every segment: after compaction the empties sit at each segment's top
+        int segStart = 0;
+        for (int r = 0; r <= ROWS; r++) {
+            if (r < ROWS && !gravityFloor(g->cell[c][r].state)) continue;
+            int k = 0;
+            for (int rr = r - 1; rr >= segStart; rr--) {
+                if (g->cell[c][rr].state != CELL_EMPTY) continue;
+                g->cell[c][rr].letter = randomLetter();
+                g->cell[c][rr].state = CELL_TILE;
+                g->cell[c][rr].yoff = (-(k + 1) * TILE_H - 12 - (rr == 0 ? 0 : 4)) * 16;
+                g->cell[c][rr].yv = 0;
+                g->cell[c][rr].squash = 0;
+                g->cell[c][rr].flash = 0;
                 k++; spawned++;
             }
+            segStart = r + 1;
         }
     }
     return spawned;
 }
 
-static void spawnFire(Game *g)
+// Ignite the topmost gem of a random column (holes and diamonds above it are skipped),
+// trying every column from a random start. Returns false when no gem is left to light.
+static bool igniteColumn(Game *g, int avoid)
 {
-    for (int t = 0; t < 20; t++) {
-        int c = rand() % COLS;
-        if (g->cell[c][0].state == CELL_TILE) { g->cell[c][0].state = CELL_BURN; return; }
+    int start = rand() % COLS;
+    for (int k = 0; k < COLS; k++) {
+        int c = (start + k) % COLS;
+        if (c == avoid) continue;
+        for (int r = 0; r < ROWS; r++) {
+            if (g->cell[c][r].state != CELL_TILE) continue;
+            g->cell[c][r].state = CELL_BURN;
+            g->cell[c][r].yoff = 0;
+            g->cell[c][r].yv = 0;
+            if (g->fireN < 2) { g->fireC[g->fireN] = c; g->fireR[g->fireN] = r; g->fireN++; }
+            return true;
+        }
     }
+    return false;
+}
+
+// One new flame (two from Lockdown tier 2). The ignition cells are left in fireC/fireR
+// for main.c's burst. Returns whether anything caught fire.
+static bool spawnFire(Game *g)
+{
+    g->fireN = 0;
+    if (!igniteColumn(g, -1)) return false;
+    if (g->lockTier >= 2) igniteColumn(g, g->fireC[0]);
+    return true;
 }
 
 // Each burning tile destroys the tile beneath and takes its place.
@@ -298,20 +337,36 @@ void boardDebugFireStep(Game *g)
     applyGravity(g);
 }
 
-static void endTurn(Game *g, int wordLen)
+// Heat a word adds: short words feed the fire, seven letters and up are free.
+int boardHeatFor(int len)
+{
+    return len <= 3 ? 3 : len == 4 ? 2 : len <= 6 ? 1 : 0;
+}
+
+// Every word and every peel is a turn. Order matters: the cells the turn vacated are
+// refilled before the fire moves (no chimney through your own word), and a new flame is
+// lit after the fire step, so it sits on its spawn row for a full burnEvery before it
+// starts to creep.
+static void endTurn(Game *g, int heatAdd)
 {
     g->turn++;
-    if (wordLen <= 3) g->heat += 2;
-    else if (wordLen == 4) g->heat += 1;
-    if (g->lockdown && (g->turn % 6) == 0) g->heat += 2;
-    if (g->heat >= g->heatThreshold) { g->heat = 0; spawnFire(g); }
+    g->heat += heatAdd;
+    if (g->lockdown && g->pulseEvery > 0 && (g->turn % g->pulseEvery) == 0) g->heat += 2;   // Lockdown pulse
+    int over = g->turn - (g->lockdown ? 16 : 24);                                        // shelf overtime
+    if (over > 0) g->heat += 1 + over / 24;
+    g->overtime = over > 0;
 
+    int spawned = applyGravity(g);
     g->burnTimer++;
     if (g->burnTimer >= g->burnEvery) {
         g->burnTimer = 0;
         fireStep(g);
+        spawned += applyGravity(g);
     }
-    int spawned = applyGravity(g);
+    if (g->fail == FAIL_NONE && g->heat >= g->heatThreshold) {
+        if (spawnFire(g)) g->heat = 0;
+        else g->heat = g->heatThreshold - 1;   // nothing left to light: stay on the brink
+    }
     if (spawned >= 4) musicCascade(spawned);
     if (g->fail == FAIL_NONE && !boardHasWords(g)) g->fail = FAIL_WORDS;
 }
@@ -363,7 +418,7 @@ int boardSubmit(Game *g)
     g->score += gained;
     g->wordsThisShelf++;
     g->chainLen = 0;
-    endTurn(g, len);
+    endTurn(g, boardHeatFor(len));
     return gained;
 }
 
@@ -376,12 +431,13 @@ int boardPeel(Game *g, int c, int r)
     // drop a chained tile from the chain
     g->chainLen = 0;
     int secret = g->back[c][r];
+    int peelHeat = g->lockdown ? 2 : 1;      // a peel is a turn and warms the shelf
     if (scorch) {
         g->scorched[c][r] = 1;
         cl->state = CELL_HOLE;
         cl->flash = 10;
         if (secret) { g->fail = FAIL_SCORCH; return -1; }
-        applyGravity(g);
+        endTurn(g, peelHeat);
         return 3;
     }
     if (secret) {
@@ -389,13 +445,12 @@ int boardPeel(Game *g, int c, int r)
         cl->letter = g->pass[secret - 1] - 'a';
         cl->flash = 14;
         g->found[secret - 1] = 1;
-        applyGravity(g);
+        endTurn(g, peelHeat);
         return 2;
     }
     cl->state = CELL_HOLE;
     cl->flash = 6;
-    applyGravity(g);
-    if (!boardHasWords(g)) g->fail = FAIL_WORDS;
+    endTurn(g, peelHeat);
     return 1;
 }
 
@@ -436,14 +491,14 @@ int boardLowestFireRow(const Game *g)
     return low;
 }
 
-// Is any 3- or 4-letter word still spellable? (longer-only boards are rare)
+// Is any 3- to 5-letter word still spellable? (longer-only boards are rare)
 static bool dfsWords(const Game *g, int c, int r, char *w, int n, bool used[COLS][ROWS])
 {
     int l = g->cell[c][r].letter;
     w[n++] = 'a' + l;
     if (l == 'q' - 'a') w[n++] = 'u';
     if (n >= 3 && wordAccepted(w, n)) return true;
-    if (n >= 4) return false;
+    if (n >= 5) return false;
     used[c][r] = true;
     int nc[6], nr[6], k = boardNeighbors(c, r, nc, nr);
     for (int i = 0; i < k; i++) {

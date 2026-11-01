@@ -31,11 +31,47 @@ def ensure_play():
     g = e.state(); assert g['state'] == ST_PLAY, f'not in play: state {g["state"]}'
     e.press('B', settle=5)
     e.set_heat(0); e.set_burn(0, 99)          # no spontaneous ignition, no fire advance on submits
+    e.set_turn(0)                             # no overtime heat
     for c in range(COLS):
         for r in range(ROWS):
             if g['cell'][c][r][1] == BURN: e.set_cell(c, r, TILE, 'e')
 
+def fresh_shelf():
+    """Pause + SELECT: restart the shelf on a fresh random board (no holes, nothing revealed),
+    with the shelf's own fire settings."""
+    ensure_play()
+    e.press('START', settle=10); e.press('SELECT', settle=150)
+    g = e.state(); assert g['state'] == ST_PLAY and g['turn'] == 0, f'restart: state {g["state"]} turn {g["turn"]}'
+    return g
+
 def col(g, c): return [g['cell'][c][r][1] for r in range(ROWS)]
+
+def topmost_tile_row(g, c):
+    for r in range(ROWS):
+        if g['cell'][c][r][1] == TILE: return r
+    return -1
+
+def play_turn(pick):
+    """One word chosen by pick(words, g); returns (g_before, word, path, g_after) or None."""
+    g0 = e.state()
+    ws = e.find_words(g0)
+    if not ws: return None
+    word, path = pick(ws, g0)
+    e.chain(path); e.press('A')
+    g1 = e.state()
+    assert g1['lastWord'] == word or g1['state'] != ST_PLAY, f'{word} did not score: last {g1["lastWord"]!r}'
+    return g0, word, path, g1
+
+def shortest(ws, g): return min(ws, key=lambda w: len(w[0]))
+def longest_fire_aware(ws, g):
+    """Longest word, but a word through the lowest flame first when the shelf is burning."""
+    burning = e.burn_cells(g)
+    if burning:
+        low = max(r for _, r in burning)
+        through = [w for w in ws if any((c, r) in w[1] for (c, r) in burning if r == low)]
+        if not through: through = [w for w in ws if any(cell in w[1] for cell in burning)]
+        if through: return max(through, key=lambda w: len(w[0]))
+    return max(ws, key=lambda w: len(w[0]))
 
 # ---- title and startup -------------------------------------------------------------
 @scenario('title ignores a tap outside the buttons and CLASSIC still starts')
@@ -170,6 +206,137 @@ def _():
     e.run(40)
     g = e.state(); assert g['lastWord'] == 'eau', f'eau did not score: {g["lastWord"]!r}'
     assert best[0] >= 16 and best[0] > 3 * best[1], f'ruby {best[0]} blue {best[1]} pixels'
+
+# ---- turns, heat and refills (item 06) ---------------------------------------------------
+@scenario('overtime: a 7-letter word at turn 30 still heats the shelf')
+def _():
+    ensure_play()
+    for r, ch in enumerate('letters'): e.set_cell(C, r, TILE, ch)
+    e.run(10); e.set_turn(30)
+    h0 = e.state()['heat']
+    e.chain([(C, r) for r in range(7)]); e.press('A'); g = e.state()
+    assert g['lastWord'] == 'letters', f'last word {g["lastWord"]!r}'
+    assert g['turn'] == 31 and g['overtime'] == 1, f'turn {g["turn"]} overtime {g["overtime"]}'
+    assert g['heat'] >= h0 + 1, f'heat {h0} -> {g["heat"]}: no overtime heat'
+    e.set_turn(0)
+
+@scenario('fire spawns on the topmost gem: holes across row 0, the flame lands in row 1, heat resets')
+def _():
+    ensure_play()
+    for c in range(COLS): e.set_cell(c, 0, HOLE)
+    e.set_cell(C, 1, TILE, 'b'); e.set_cell(C, 2, TILE, 'e'); e.set_cell(C, 3, TILE, 'd')
+    g = e.state(); e.set_heat(g['heatThreshold'] - 1); e.run(5)
+    e.chain([(C, 1), (C, 2), (C, 3)]); e.press('A'); g = e.state()
+    assert g['lastWord'] == 'bed' and g['state'] == ST_PLAY, f'{g["lastWord"]!r} state {g["state"]} fail {g["fail"]}'
+    burns = e.burn_cells(g)
+    want = 2 if g['lockTier'] >= 2 else 1
+    assert len(burns) == want and all(r == 1 for _, r in burns), f'flames {burns} (want {want} in row 1)'
+    assert g['heat'] == 0, f'heat {g["heat"]} after the spawn'
+    assert all(g['cell'][c][0][1] == HOLE for c in range(COLS)), 'a hole was overwritten'
+    e.shot(f'{out}/rules_spawn_row1.png')
+    for c in range(COLS): e.set_cell(c, 0, TILE, 'e')
+    for c, r in burns: e.set_cell(c, r, TILE, 'e')
+
+@scenario('gems refill under a hole and never paint over it while falling')
+def _():
+    ensure_play()
+    e.set_back(C, 0, 0)
+    for r in range(4): e.set_cell(C, r, TILE, 'e')
+    e.run(5); e.peel(C, 0); g = e.state()
+    assert g['cell'][C][0][1] == HOLE and g['turn'] == 1, f'peel: {col(g, C)} turn {g["turn"]}'
+    e.set_cell(C, 1, TILE, 'b'); e.set_cell(C, 2, TILE, 'e'); e.set_cell(C, 3, TILE, 'd'); e.run(20)
+    x0, y0, x1, y1 = e.cell_rect(C, 0)
+    def grab():
+        px = e.pixels(); return {(x, y): px[x, y] for y in range(y0, y1) for x in range(x0, x1)}
+    ref = grab()
+    def longest_run(cur):
+        worst = 0
+        for y in range(y0, y1):
+            run = 0
+            for x in range(x0, x1):
+                digit = x0 + 9 <= x <= x0 + 16 and y0 + 7 <= y <= y0 + 16   # the blinking back number
+                if cur[x, y] != ref[x, y] and not digit: run += 1; worst = max(worst, run)
+                else: run = 0
+        return worst
+    e.chain([(C, 1), (C, 2), (C, 3)])
+    k = keymask(Keys.KEY_A); e.emu.input.keypad_add_key(k)
+    worst = (0, -1)
+    for f in range(16):
+        e.run(1)
+        if f == 1: e.emu.input.keypad_rm_key(k)
+        if f == 2: e.shot(f'{out}/rules_hole_refill.png')
+        run = longest_run(grab())
+        if run > worst[0]: worst = (run, f)
+    e.run(60); g = e.state()
+    assert g['lastWord'] == 'bed', f'bed did not score: {g["lastWord"]!r}'
+    assert col(g, C)[:4] == [HOLE, TILE, TILE, TILE], f'column after the refill: {col(g, C)}'
+    assert worst[0] < 12, f'a gem painted over the hole: {worst[0]} px run on frame {worst[1]}'
+
+@scenario('ten plain peels: ten turns, ten heat (or the flame it lit)')
+def _():
+    ensure_play()
+    g = e.state(); thr = g['heatThreshold']
+    done = 0
+    for c in range(COLS):
+        for r in (ROWS - 1, ROWS - 2):
+            if done >= 10: break
+            g = e.state()
+            if g['cell'][c][r][1] != TILE or g['back'][c][r]: continue
+            e.peel(c, r); done += 1
+            g = e.state(); assert g['state'] == ST_PLAY, f'peel {done} ended the run: fail {g["fail"]}'
+    g = e.state()
+    assert done == 10 and g['turn'] == 10, f'{done} peels, turn {g["turn"]}'
+    assert g['heat'] >= min(10, thr) - 1 or e.burn_cells(g), f'heat {g["heat"]} and no flame after ten peels'
+    e.shot(f'{out}/rules_ten_peels.png')
+
+@scenario('short words burn the shelf down within 60 turns; flames light the topmost gem and creep one row per step')
+def _():
+    fresh_shelf()
+    e.set_burn(0, 99)                          # phase 1: still fire, check where new flames appear
+    spawns = 0
+    for t in range(24):
+        res = play_turn(shortest)
+        assert res, 'no words'
+        g0, word, path, g1 = res
+        if g1['state'] != ST_PLAY: break
+        if g1['heat'] == 0:                    # a word adds heat, so 0 means a flame was lit
+            new = [cell for cell in e.burn_cells(g1) if cell not in e.burn_cells(g0)]
+            assert new, f'heat reset without a new flame on turn {g1["turn"]}'
+            for c, r in new:
+                above = [g1['cell'][c][rr][1] for rr in range(r)]
+                assert TILE not in above, f'flame at ({c},{r}) is not the topmost gem: {above}'
+            spawns += 1
+    assert spawns >= 2, f'only {spawns} spawns in 24 short words'
+    g = e.state(); assert g['state'] == ST_PLAY, f'phase 1 ended the run: fail {g["fail"]}'
+    # phase 2: the shelf's own pace from a clean board; the lowest flame drops at most one row a turn
+    g = fresh_shelf(); e.set_burn(0, g['burnEvery'])
+    log = []
+    for t in range(60):
+        res = play_turn(shortest)
+        if not res: break
+        g0, word, path, g1 = res
+        low0, low1 = e.lowest_fire_row(g0), e.lowest_fire_row(g1)
+        log.append((g1['turn'], word, g1['heat'], low1))
+        assert low1 <= low0 + 1, f'turn {g1["turn"]}: lowest flame {low0} -> {low1} ({word})'
+        if g1['state'] != ST_PLAY: break
+    g = e.state()
+    print('   burn log:', ' '.join(f'{t}:{w}/h{h}/f{l}' for t, w, h, l in log))
+    assert g['state'] == ST_FAIL and g['fail'] == FAIL_FIRE, f'state {g["state"]} fail {g["fail"]} after {g["turn"]} turns'
+    assert g['turn'] <= 60
+    e.shot(f'{out}/rules_burned_down.png')
+
+@scenario('long words through the flames survive 30 turns')
+def _():
+    g = fresh_shelf(); e.set_burn(0, g['burnEvery'])
+    for t in range(30):
+        res = play_turn(longest_fire_aware)
+        assert res, f'no words on turn {t}'
+        g = res[3]
+        assert g['state'] == ST_PLAY, f'turn {g["turn"]}: fail {g["fail"]} after {res[1]}'
+    g = e.state()
+    assert g['turn'] >= 30 and g['state'] == ST_PLAY, f'turn {g["turn"]} state {g["state"]}'
+    print(f'   survived: turn {g["turn"]} heat {g["heat"]} flames {e.burn_cells(g)} score {g["score"]}')
+    e.shot(f'{out}/rules_survived.png')
 
 # ---- options and the left-hand title --------------------------------------------------
 @scenario('options HAND row: optRow 3, hand flips; left-hand title keeps the top screen inside its frame')

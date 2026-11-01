@@ -11,14 +11,21 @@ and uncover the pass. Spell weak words and the shelf catches fire.
 
 - **Spell.** Drag the stylus across touching gems to chain a word (3+ letters),
   then tap **SUBMIT** or press **A**. Scored tiles shatter and the column drops.
+  Every word is a turn.
 - **Peek.** Hold **L** or **R** and tap a gem to peel it off the board.
   Behind it is either a **pass letter** (a diamond you can still chain through)
   or a **number**: how many of the six neighbouring cells hide a pass letter.
-  Peeled cells never refill, so every peel costs you a letter.
-- **Fire.** Short words build **heat**. When the meter fills, a gem ignites at
-  the top and burns one row down per turn (every other turn on early shelves).
-  Put it out by spelling a word through it. Empty cells and holes are
-  chimneys: fire falls straight through them. Diamonds are firebreaks.
+  A peeled cell is a hole for the rest of the shelf; the gems below it still
+  refill. Every peel is a turn too, and warms the shelf like a short word.
+- **Fire.** Short words build **heat**: three letters add 3, four add 2, five
+  or six add 1, seven and up are free; a peel adds 1 (2 in Lockdown). When the
+  meter fills, the topmost gem of a column ignites. A new flame waits one turn
+  before it starts to creep, then burns one row down per turn (every other
+  turn on early shelves). Put it out by spelling a word through it. A flame
+  hangs where it is when the gems under it are cleared. Holes are chimneys:
+  fire falls straight through them. Diamonds are firebreaks.
+- **Overtime.** Past turn 24 on a shelf (16 in Lockdown) every turn adds heat
+  of its own, so a shelf you camp on eventually burns.
 - **Scorching.** Peel a burning gem, or the gem directly under one, and the
   flame hits the back layer. If a pass letter was hiding there, it is gone.
 
@@ -28,7 +35,7 @@ and uncover the pass. Spell weak words and the shelf catches fire.
 | --- | --- |
 | LIBRARY LOST | a flame was still on the bottom row when the fire advanced |
 | PASS DESTROYED | you scorched a cell that held a pass letter |
-| OUT OF WORDS | no 3- or 4-letter word is left on the board |
+| OUT OF WORDS | no 3- to 5-letter word is left on the board |
 
 ### Modes
 
@@ -60,9 +67,12 @@ screen says so.
 ### Shelves
 
 Each shelf has its own pass (BOOK, PAGE, LAMP, SPELL, SHELF, QUILL ...).
-Shelves 1–3 are **Classic**: fire moves every other turn, the pass sits high.
-From shelf 6 on it is **Lockdown**: fire every turn, extra heat over time,
-the pass buried low, and the music drops into a minor key.
+Shelves 1–3 are **Classic**: fire moves every other turn, the pass sits high
+and the heat meter holds 10. Shelves 3–5 tighten it to 7. From shelf 6 on it
+is **Lockdown**: fire every turn, a heat pulse every six turns, the pass
+buried low, and the music drops into a minor key. Lockdown climbs in tiers
+every three shelves: the pulse comes faster, the meter shrinks, and from tier
+two (shelf 12) every ignition lights two columns at once.
 
 ## Controls
 

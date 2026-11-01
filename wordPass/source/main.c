@@ -93,6 +93,13 @@ static void enterFail(void)
     musicFail();
 }
 
+// Sparks on the gem(s) that caught fire this turn (spawnFire leaves them in fireC/fireR).
+static void burstNewFlames(void)
+{
+    for (int i = 0; i < G.fireN; i++) gfxBurst(G.fireC[i], G.fireR[i], BURST_FIRE, G.cell[G.fireC[i]][G.fireR[i]].letter);
+    G.fireN = 0;
+}
+
 // Submit the current chain: score it, shatter the gems (in the colours they had), callouts.
 static void submitChain(void)
 {
@@ -112,6 +119,7 @@ static void submitChain(void)
         const char *tag = G.lastWordLen >= 8 ? "SPECTACULAR" : G.lastWordLen >= 7 ? "EXCELLENT" : G.lastWordLen >= 5 ? "GOOD" : "";
         if (tag[0]) { siprintf(s, "%s!", tag); setMsg(s, 60); }
         else if (G.lastWordTier == 2) setMsg("RARE WORD", 60);
+        burstNewFlames();
         if (G.fail) enterFail();
     } else if (G.chainLen >= 3) {
         char w[24]; boardChainWord(&G, w);
@@ -146,9 +154,11 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
                 } else setMsg("PASS LETTER FOUND", 90);
             } else if (res == 1) musicReveal(false);
             else if (res == 3 || res == -1) { setMsg("SCORCHED", 60); gfxBurst(c, r, BURST_SCORCH, letter); gfxShake(6); }
-            if (G.fail) { enterFail(); return; }
+            burstNewFlames();
+            // the peel that completes the pass wins the shelf even if its turn ended badly
+            if (G.fail && !boardPassComplete(&G)) { enterFail(); return; }
             if (boardPassComplete(&G)) {
-                G.state = ST_PASSED; G.stateTimer = 0;
+                G.state = ST_PASSED; G.stateTimer = 0; G.fail = FAIL_NONE;
                 boardClearChain(&G);
                 G.peekHeld = 0; musicPeek(false);
                 G.score += 500 * G.shelf;

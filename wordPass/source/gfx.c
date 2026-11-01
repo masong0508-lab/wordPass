@@ -785,11 +785,20 @@ static ITCM_CODE __attribute__((noinline)) void drawBackdrop(const Game *g)
 static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
 {
     bool peek = g->peekHeld;
+    int outerClip = clipY0;
     for (int c = 0; c < COLS; c++) {
         for (int r = 0; r < ROWS; r++) {
             const Cell *cl = &g->cell[c][r];
             int x, y; cellOrigin(c, r, &x, &y);
             int yd = y + YOFF_PX(cl);
+            // A gem refilled under a hole, diamond or flame drops in from behind it: clip
+            // everything below a separator to the top of the next cell, so a falling gem
+            // never paints over the separator above it (the composite fast path tests the
+            // same clipY0, and blitGem/drawGemSized clip to it).
+            if (r > 0) {
+                int above = g->cell[c][r - 1].state;
+                if (above == CELL_HOLE || above == CELL_SECRET || above == CELL_BURN) clipY0 = (y > outerClip) ? y : outerClip;
+            }
             bool lit = inChain(c, r);
             if (lit) yd -= 2;
             int sq = cl->squash;           // landing squash: shorter, sits on the slot floor
@@ -872,6 +881,7 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
                 rectOutline(x, y, TILE_W, TILE_H, lerp15(BLACK, WHITE, cl->flash > 14 ? 16 : cl->flash + 2));
             }
         }
+        clipY0 = outerClip;
     }
     // chain links: gold rope that turns to the shelf accent once the word is valid
     bool chainValid = chainValidNow;
@@ -1223,7 +1233,7 @@ static void drawTipCard(int which)
         drawTextCenter(cx, y + 56, "HOLD L AND TAP A GEM YOU CAN SPARE", INK, 1);
         drawTextCenter(cx, y + 66, "A NUMBER COUNTS HIDDEN PASS LETTERS", INK, 1);
         drawTextCenter(cx, y + 76, "IN THE SIX CELLS AROUND IT", INK, 1);
-        drawTextCenter(cx, y + 94, "PEELED GEMS NEVER COME BACK", DIM, 1);
+        drawTextCenter(cx, y + 94, "EVERY PEEL IS A TURN", DIM, 1);
     } else {
         drawTextCenter(cx, y, "FIRE", FIRE2, 1);
         int gx = cx - 40;
@@ -1235,8 +1245,8 @@ static void drawTipCard(int which)
         drawGemSized(gx + 28, y + 24, TILE_W, TILE_H, &GEM_DIAMOND, false); drawChar(gx + 35, y + 28, 'O', C(4,6,10), 2);
         drawGemSized(gx + 56, y + 14, TILE_W, TILE_H, &th[TH_EMERALD], false); drawChar(gx + 63, y + 18, 'P', WHITE, 2);
         drawTextCenter(cx, y + 62, "SHORT WORDS BUILD HEAT AND LIGHT A GEM", INK, 1);
-        drawTextCenter(cx, y + 72, "FIRE DROPS A ROW EACH TURN. IT FALLS", INK, 1);
-        drawTextCenter(cx, y + 82, "THROUGH HOLES. DIAMONDS BLOCK IT", INK, 1);
+        drawTextCenter(cx, y + 72, "FIRE WAITS A TURN, THEN CREEPS DOWN.", INK, 1);
+        drawTextCenter(cx, y + 82, "HOLES ARE CHIMNEYS. DIAMONDS BLOCK IT", INK, 1);
         drawTextCenter(cx, y + 96, "SPELL THROUGH A FLAME TO PUT IT OUT", DIM, 1);
     }
     for (int i = 0; i < 3; i++) {

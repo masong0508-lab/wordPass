@@ -23,7 +23,8 @@ _Static_assert((TILE_W * 2) % 4 == 0, "gem rows must be word multiples");
 
 // Cell states on the front layer
 enum {
-    CELL_EMPTY = 0,   // nothing here (lower segments below a hole never refill)
+    CELL_EMPTY = 0,   // nothing here: transient between a clear or fire step and the gravity
+                      // pass that refills every segment of the column, under holes too
     CELL_TILE,        // normal letter gem
     CELL_BURN,        // burning gem, creeps downward
     CELL_HOLE,        // peeled: shows the back layer number forever
@@ -77,6 +78,11 @@ typedef struct {
     int  heat, heatThreshold;
     int  burnEvery;           // fire advances every N turns
     int  burnTimer;
+    int  pulseEvery;          // Lockdown: +2 heat every N turns
+    int  lockTier;            // Lockdown tier 0..3 (shelf 6-8, 9-11, 12-14, 15+)
+    bool overtime;            // past the shelf's turn budget: extra heat every turn
+    u8   fireC[2], fireR[2];  // cells spawnFire ignited this turn, for main.c's burst
+    int  fireN;               // how many (main.c clears it after use)
     int  fail;
     int  state;
     int  stateTimer;
@@ -136,7 +142,8 @@ void boardDebugFireStep(Game *g);    // test channel: one fire advance plus grav
 bool boardTryAddToChain(Game *g, int c, int r);
 void boardClearChain(Game *g);
 int  boardSubmit(Game *g);           // returns score gained, 0 if invalid
-int  boardPeel(Game *g, int c, int r); // returns 0 none, 1 hole, 2 secret, 3 scorched, -1 fail
+int  boardHeatFor(int len);          // heat a word of this length adds: 3, 2, 1, 1, 0 (3,4,5,6,7+)
+int  boardPeel(Game *g, int c, int r); // returns 0 none, 1 hole, 2 secret, 3 scorched, -1 fail; a peel is a turn
 void boardAnimate(Game *g);
 bool boardIsChainable(const Game *g, int c, int r);
 int  boardNeighbors(int c, int r, int outC[6], int outR[6]);
