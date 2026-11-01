@@ -104,7 +104,7 @@ typedef struct {
     int  rareWords;           // rare words spelled this shelf
     int  optRow;              // highlighted row on the options screen
     // ---- scoring ledger (per shelf): a ring of the words spelled, newest at ledgerHead - 1
-    char ledger[LEDGER_N][12];
+    char ledger[LEDGER_N][14];   // 13 chars: a 10-gem chain through two Qu gems is 12
     int  ledgerPts[LEDGER_N];
     int  ledgerN, ledgerHead;
     int  uniqueWords;         // words this shelf that were not repeats

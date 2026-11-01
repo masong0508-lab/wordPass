@@ -63,7 +63,8 @@ enum {
     POKE_BURN,      // burnTimer = a0, burnEvery = a1
     POKE_FIRESTEP,  // one fire advance plus gravity
     POKE_TURN,      // turn = a0
-    POKE_LIVES      // reserved: lives = a0 (item 08)
+    POKE_LIVES,     // reserved: lives = a0 (item 08)
+    POKE_SCORE      // score = a0 (panel layout checks)
 };
 
 static void applyPoke(Game *g)
@@ -86,6 +87,7 @@ static void applyPoke(Game *g)
         case POKE_FIRESTEP: boardDebugFireStep(g); break;
         case POKE_TURN:     g->turn = a0; break;
         case POKE_LIVES:    break;   // no lives field yet
+        case POKE_SCORE:    g->score = a0; break;
     }
     DBG.cmd = 0;
 }

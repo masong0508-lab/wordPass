@@ -58,7 +58,7 @@ a2, a3)` does the writes and runs two frames, and asserts the command was consum
 Helpers: `set_cell(c, r, state, letter)` (state EMPTY/TILE/BURN/HOLE/SECRET = 0..4,
 letter `'a'..'z'` or 0..25; motion and flash cleared), `set_back(c, r, v)` (0 or pass
 index + 1), `set_heat(h)`, `set_burn(timer, every)`, `fire_step()` (one fire advance plus
-gravity, no turn: `boardDebugFireStep`), `set_turn(n)`. Command 7 (lives) is reserved.
+gravity, no turn: `boardDebugFireStep`), `set_turn(n)`, `set_score(n)` (command 8). Command 7 (lives) is reserved.
 Pokes bypass the game's own invariants, so set up whole columns explicitly.
 
 Recipes: `set_burn(0, 99)` keeps the fire still across submits, `set_burn(0, 1)` makes it

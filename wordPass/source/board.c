@@ -468,7 +468,7 @@ int boardSubmit(Game *g)
     if (tier == 2) g->rareWords++;
     if (gained > g->bestWordScore) { g->bestWordScore = gained; strcpy(g->bestWord, g->lastWord); }
     // ledger ring: newest at ledgerHead - 1
-    int keep = len < 11 ? len : 11;
+    int keep = len < 13 ? len : 13;
     memcpy(g->ledger[g->ledgerHead], w, keep); g->ledger[g->ledgerHead][keep] = 0;
     g->ledgerPts[g->ledgerHead] = gained;
     g->ledgerHead = (g->ledgerHead + 1) % LEDGER_N;

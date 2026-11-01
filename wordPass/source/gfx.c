@@ -950,7 +950,9 @@ static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
     else fillRect(PANEL_X - 2, 0, SCREEN_W - PANEL_X + 2, SCREEN_H, BLACK);
     drawLogo(PANEL_X, 6, 1);
     char s[32];
-    drawTextShadow(PANEL_X, 22, fmtInt(s, g->score), GOLD, 2);
+    fmtInt(s, g->score);
+    if (textWidth(s, 2) <= 80) drawTextShadow(PANEL_X, 22, s, GOLD, 2);   // 80 px of panel: six digits at 2x
+    else drawTextShadow(PANEL_X, 26, s, GOLD, 1);                           // a million and up drops to 1x
     strcpy(s, "SHELF "); fmtInt(s + 6, g->shelf);
     drawText(PANEL_X, 42, s, INK, 1);
     if (g->mode == MODE_DAILY) drawText(PANEL_X, 52, "DAILY", GOLD_LT, 1);

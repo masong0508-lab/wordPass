@@ -57,7 +57,7 @@ I32_FIELDS = ['state', 'mode', 'shelf', 'score', 'fail', 'turn', 'heat', 'chainL
 # letter values (board.c letterValue), Q stands for Qu
 LETTER_VALUE = [1,3,3,2,1,4,2,4,1,8,5,1,3,1,1,3,10,1,1,1,1,4,4,8,4,10]
 # poke commands (debug.c applyPoke)
-POKE_CELL, POKE_BACK, POKE_HEAT, POKE_BURN, POKE_FIRESTEP, POKE_TURN, POKE_LIVES = range(1, 8)
+POKE_CELL, POKE_BACK, POKE_HEAT, POKE_BURN, POKE_FIRESTEP, POKE_TURN, POKE_LIVES, POKE_SCORE = range(1, 9)
 
 def symbol(elf, name):
     """Address of a symbol via arm-none-eabi-nm inside the toolchain container."""
@@ -164,6 +164,8 @@ class Emu:
         self.poke(POKE_FIRESTEP)
     def set_turn(self, n):
         self.poke(POKE_TURN, n)
+    def set_score(self, n):
+        self.poke(POKE_SCORE, n)
     @staticmethod
     def word_score(letters, burn=False, diamonds=0, repeat=False):
         """What boardSubmit awards: `letters` is the chain's letter indices (or a lowercase word;

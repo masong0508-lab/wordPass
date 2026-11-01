@@ -197,6 +197,7 @@ int main(int argc, char **argv)
     for (int i = 0; i < LEDGER_N + 2; i++) { strcpy(g.ledger[g.ledgerHead], "x"); g.ledgerHead = (g.ledgerHead + 1) % LEDGER_N; if (g.ledgerN < LEDGER_N) g.ledgerN++; }
     g.shelf = 1; g.mode = MODE_CLASSIC; boardNewShelf(&g);
     CHECK("boardNewShelf empties the ledger", g.ledgerN == 0 && g.ledgerHead == 0 && g.uniqueWords == 0 && g.passBonusKind == 0 && g.speedBonus == 0 && g.peelBonus == 0);
+    CHECK("ledger entries hold a 10-gem chain through two Qu gems (12 chars)", sizeof(g.ledger[0]) >= 13);
 
     // ---- heat table
     CHECK("boardHeatFor: 3, 2, 1, 1, 0, 0", boardHeatFor(3) == 3 && boardHeatFor(4) == 2 && boardHeatFor(5) == 1 && boardHeatFor(6) == 1 && boardHeatFor(7) == 0 && boardHeatFor(10) == 0);
