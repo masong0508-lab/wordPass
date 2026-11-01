@@ -135,6 +135,12 @@ void boardNewShelf(Game *g)
         g->lockdown = false;
         g->heatThreshold = 6;
         g->burnEvery = 2;
+    } else if (S.fire == FIRE_RELAXED) {
+        g->burnEvery += 1;
+        g->heatThreshold += 2;
+    } else if (S.fire == FIRE_FAST) {
+        g->burnEvery = 1;
+        if (g->heatThreshold > 4) g->heatThreshold -= 2;
     }
 }
 

@@ -43,6 +43,33 @@ static void newGame(int mode)
     G.state = ST_PLAY;
 }
 
+static void recordScore(void)
+{
+    bool changed = false;
+    if (G.mode == MODE_DAILY) {
+        if (G.dailySeed != S.bestDailyDate || G.score > S.bestDaily) { S.bestDaily = G.score; S.bestDailyDate = G.dailySeed; changed = true; }
+    } else {
+        if (G.score > S.bestClassic) { S.bestClassic = G.score; changed = true; }
+        if (G.state == ST_PASSED && G.shelf > S.bestClassicShelf) { S.bestClassicShelf = G.shelf; changed = true; }
+    }
+    if (changed) settingsSave();
+}
+
+static int optRow;
+
+static void cycleOption(int row, int dir)
+{
+    switch (row) {
+        case 0: S.theme = (S.theme + THEME_COUNT + dir) % THEME_COUNT; break;
+        case 1: S.frame = (S.frame + FRAME_COUNT + dir) % FRAME_COUNT; break;
+        case 2: S.accent = (S.accent + 9 + dir) % 9; break;
+        case 3: S.hand = !S.hand; break;
+        case 4: S.fire = (S.fire + FIRE_COUNT + dir) % FIRE_COUNT; break;
+        case 5: S.music = !S.music; break;
+    }
+    gfxApplySettings();
+}
+
 static void quitToTitle(void)
 {
     G.mode = MODE_CLASSIC;
@@ -57,6 +84,7 @@ static void quitToTitle(void)
 static void enterFail(void)
 {
     G.state = ST_FAIL;
+    recordScore();
     gfxShake(14);
     gfxFlash();
     G.peekHeld = 0;
@@ -95,6 +123,7 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
                 G.peekHeld = 0; musicPeek(false);
                 G.score += 500 * G.shelf;
                 musicPassComplete();
+                recordScore();
             }
         }
         return;
@@ -136,6 +165,7 @@ submit:;
 
 int main(void)
 {
+    settingsInit();
     gfxInit();
     dictInit();
     musicInit();
@@ -155,11 +185,24 @@ int main(void)
             case ST_TITLE:
                 if (down & KEY_TOUCH) {
                     srand(seedCounter ^ (t.px << 8) ^ t.py);
-                    if (gfxInTitleDaily(t.px, t.py)) newGame(MODE_DAILY);
+                    if (gfxInTitleOptions(t.px, t.py)) { G.state = ST_OPTIONS; optRow = 0; }
+                    else if (gfxInTitleDaily(t.px, t.py)) newGame(MODE_DAILY);
                     else newGame(MODE_CLASSIC);
                 } else if (down & (KEY_START | KEY_A)) { srand(seedCounter); newGame(MODE_CLASSIC); }
                 else if (down & KEY_SELECT) newGame(MODE_DAILY);
+                else if (down & KEY_Y) { G.state = ST_OPTIONS; optRow = 0; }
                 break;
+            case ST_OPTIONS: {
+                int row = (down & KEY_TOUCH) ? gfxOptionRowAt(t.px, t.py) : -1;
+                if (row == OPT_ROWS || (down & KEY_B)) { settingsSave(); G.state = ST_TITLE; break; }
+                if (row >= 0) { optRow = row; cycleOption(row, 1); }
+                if (down & KEY_UP)    optRow = (optRow + OPT_ROWS - 1) % OPT_ROWS;
+                if (down & KEY_DOWN)  optRow = (optRow + 1) % OPT_ROWS;
+                if (down & (KEY_RIGHT | KEY_A)) cycleOption(optRow, 1);
+                if (down & KEY_LEFT)  cycleOption(optRow, -1);
+                G.stateTimer = optRow;   // the renderer reads the highlighted row from here
+                break;
+            }
             case ST_PLAY:
                 handlePlay(down, held, &t);
                 break;

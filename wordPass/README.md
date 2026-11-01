@@ -37,6 +37,25 @@ and uncover the pass. Spell weak words and the shelf catches fire.
   Same board, same pass, one attempt per run. Pick it from the title screen or
   press SELECT there.
 
+### Options
+
+From the title (OPTIONS button or Y). Tap a row to cycle it, or use the
+d-pad.
+
+| Setting | Values |
+| --- | --- |
+| Theme | Jewel, Ink (slate gems with a tinted edge), Candy (pastels), Ember (warm) |
+| Frame | Gold, Silver, Accent |
+| Accent | Auto (changes per shelf) or one of eight fixed colours |
+| Hand | Right or Left: mirrors the grid and panel for left-handed stylus play |
+| Fire | Relaxed, Normal, Fast |
+| Music | On, Off |
+
+Settings, best Classic score and shelf, and best Daily result are saved to
+`wordPass.cfg` on the card when a FAT filesystem is available (flashcarts
+with DLDI, DSi SD). Without one they last for the session and the options
+screen says so.
+
 ### Shelves
 
 Each shelf has its own pass (BOOK, PAGE, LAMP, SPELL, SHELF, QUILL ...).
@@ -53,6 +72,7 @@ the pass buried low, and the music drops into a minor key.
 | B / CLEAR button | clear chain |
 | Hold L or R | peek mode (tap a gem to peel it) |
 | START | pause (then START resume, SELECT restart shelf, B quit to title) |
+| Y (title) | options |
 
 ![wordPass](screenshot.png) ![fire](screenshot-fire.png) ![results](screenshot-results.png)
 
@@ -145,6 +165,7 @@ source/dict.c    packed dictionary lookup
 source/gfx.c     software renderer for both screens
 source/music.c   PSG sequencer and adaptive stems
 source/font.c    5x7 bitmap font
+source/settings.c options, records, FAT save
 tools/gen_dict.py
 data/dict.bin
 ```

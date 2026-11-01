@@ -92,6 +92,33 @@ typedef struct {
 
 enum { MODE_CLASSIC = 0, MODE_DAILY };
 
+// ---- settings
+enum { THEME_JEWEL = 0, THEME_INK, THEME_CANDY, THEME_EMBER, THEME_COUNT };
+enum { FRAME_GOLD = 0, FRAME_SILVER, FRAME_ACCENT, FRAME_COUNT };
+enum { HAND_RIGHT = 0, HAND_LEFT };
+enum { FIRE_RELAXED = 0, FIRE_NORMAL, FIRE_FAST, FIRE_COUNT };
+
+typedef struct {
+    u32 magic;
+    u8  theme, frame, accent, hand, fire, music, pad0, pad1;
+    int bestClassic;        // best Classic score
+    int bestClassicShelf;   // highest shelf cleared
+    int bestDaily;          // best Daily score
+    int bestDailyDate;      // YYYYMMDD it was set on
+} Settings;
+
+extern Settings S;
+void settingsInit(void);
+void settingsDefaults(void);
+bool settingsSave(void);
+bool settingsPersistent(void);
+
+#define ST_OPTIONS 5
+#define OPT_ROWS 6
+void gfxApplySettings(void);          // rebuild caches after a settings change
+int  gfxOptionRowAt(int px, int py);  // -1 none, 0..OPT_ROWS-1 rows, OPT_ROWS = back
+bool gfxInTitleOptions(int px, int py);
+
 extern Game G;
 
 // board.c

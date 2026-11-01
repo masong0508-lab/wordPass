@@ -204,6 +204,7 @@ void musicTick(const Game *g)
     for (int v = 0; v < NVOICE; v++) {
         int t = V[v].target;
         if (peeking && v != V_PULSE && v != V_CHIME && v != V_ALARM) t = t / 5;
+        if (!S.music) t = 0;
         // smooth ramps
         if (V[v].vol < t) { V[v].vol += 6; if (V[v].vol > t) V[v].vol = t; }
         else if (V[v].vol > t) { V[v].vol -= 4; if (V[v].vol < t) V[v].vol = t; }

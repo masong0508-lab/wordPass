@@ -33,9 +33,11 @@ static u8 prevFound[12], letterPop[12];
 #define C(r,g,b) ARGB16(1,(r),(g),(b))
 #define BLACK      C(1,1,2)
 #define INK        C(24,24,26)
-#define GOLD       C(28,22,6)
-#define GOLD_DK    C(16,11,2)
-#define GOLD_LT    C(31,29,18)
+static u16 frameMid = C(28,22,6), frameDk = C(16,11,2), frameLt = C(31,29,18);
+#define GOLD       frameMid
+#define GOLD_DK    frameDk
+#define GOLD_LT    frameLt
+#define TRUE_GOLD  C(28,22,6)
 static u16 accent = C(6,28,24);
 #define ACCENT     accent
 // one accent per shelf so the library changes colour as you climb
@@ -49,24 +51,40 @@ static const u16 SHELF_ACCENTS[8] = {
 #define FIRE2      C(31,24,4)
 
 typedef struct { u16 dark, mid, light; } GemPal;
-static const GemPal GEM_RUBY     = { C(12,0,3),  C(27,3,8),   C(31,16,20) };
-static const GemPal GEM_SAPPHIRE = { C(1,3,13),  C(4,11,28),  C(16,22,31) };
-static const GemPal GEM_EMERALD  = { C(0,9,3),   C(3,22,9),   C(16,31,19) };
-static const GemPal GEM_AMBER    = { C(13,9,0),  C(30,22,3),  C(31,30,16) };
-static const GemPal GEM_AMETHYST = { C(9,1,13),  C(20,5,27),  C(28,18,31) };
+// five letter groups per theme: vowels, common consonants, rare, soft, other
+static const GemPal THEMES[THEME_COUNT][5] = {
+    { // JEWEL
+      { C(12,0,3),  C(27,3,8),   C(31,16,20) }, { C(1,3,13),  C(4,11,28),  C(16,22,31) },
+      { C(13,9,0),  C(30,22,3),  C(31,30,16) }, { C(9,1,13),  C(20,5,27),  C(28,18,31) },
+      { C(0,9,3),   C(3,22,9),   C(16,31,19) } },
+    { // INK: N+ slate with a tinted edge per group
+      { C(2,2,3),   C(6,6,8),    C(14,26,24) }, { C(2,2,3),   C(6,6,8),    C(18,18,22) },
+      { C(2,2,3),   C(6,6,8),    C(28,22,8)  }, { C(2,2,3),   C(6,6,8),    C(22,14,28) },
+      { C(2,2,3),   C(6,6,8),    C(12,12,14) } },
+    { // CANDY: pastels
+      { C(22,8,14), C(31,17,23), C(31,27,29) }, { C(6,14,20), C(14,25,31), C(24,30,31) },
+      { C(22,20,4), C(31,30,12), C(31,31,24) }, { C(14,8,22), C(22,16,31), C(28,25,31) },
+      { C(6,20,12), C(14,30,20), C(24,31,27) } },
+    { // EMBER: warm library
+      { C(10,1,1),  C(22,4,3),   C(31,14,8)  }, { C(10,6,1),  C(21,13,3),  C(31,24,12) },
+      { C(12,10,1), C(24,20,4),  C(31,30,16) }, { C(8,2,6),   C(17,5,12),  C(28,14,22) },
+      { C(6,8,1),   C(13,16,3),  C(24,28,10) } }
+};
 static const GemPal GEM_DIAMOND  = { C(16,18,21),C(27,28,30), C(31,31,31) };
 static const GemPal GEM_FIRE     = { C(12,0,0),  C(31,6,0),   C(31,22,4) };
+static const GemPal *GEM_RUBY, *GEM_SAPPHIRE, *GEM_AMBER, *GEM_AMETHYST, *GEM_EMERALD;
 
-static const GemPal *gemFor(int letter)
+static int groupFor(int letter)
 {
     switch ('a' + letter) {
-        case 'a': case 'e': case 'i': case 'o': case 'u': return &GEM_RUBY;
-        case 'r': case 's': case 't': case 'l': case 'n': case 'd': return &GEM_SAPPHIRE;
-        case 'j': case 'k': case 'q': case 'x': case 'z': return &GEM_AMBER;
-        case 'v': case 'w': case 'y': case 'f': case 'b': return &GEM_AMETHYST;
-        default: return &GEM_EMERALD;
+        case 'a': case 'e': case 'i': case 'o': case 'u': return 0;
+        case 'r': case 's': case 't': case 'l': case 'n': case 'd': return 1;
+        case 'j': case 'k': case 'q': case 'x': case 'z': return 2;
+        case 'v': case 'w': case 'y': case 'f': case 'b': return 3;
+        default: return 4;
     }
 }
+static const GemPal *gemFor(int letter) { return &THEMES[S.theme][groupFor(letter)]; }
 
 // ---------------------------------------------------------------- primitives
 
@@ -205,7 +223,7 @@ static void drawGemSized(int x, int y, int w, int h, const GemPal *p, bool lit)
 #define NGEMPAL 7
 static DTCM_BSS u16 gemCache[NGEMPAL][TILE_H][TILE_W];   // 7.4 KB in zero-wait DTCM
 static bool gemCacheReady;
-static const GemPal *const GEM_PALS[NGEMPAL] = { &GEM_RUBY, &GEM_SAPPHIRE, &GEM_EMERALD, &GEM_AMBER, &GEM_AMETHYST, &GEM_DIAMOND, &GEM_FIRE };
+static const GemPal *GEM_PALS[NGEMPAL];
 
 static int gemIndex(const GemPal *p)
 {
@@ -213,8 +231,22 @@ static int gemIndex(const GemPal *p)
     return 0;
 }
 
+static void setupTheme(void)
+{
+    const GemPal *t = THEMES[S.theme];
+    GEM_RUBY = &t[0]; GEM_SAPPHIRE = &t[1]; GEM_AMBER = &t[2]; GEM_AMETHYST = &t[3]; GEM_EMERALD = &t[4];
+    GEM_PALS[0] = &t[0]; GEM_PALS[1] = &t[1]; GEM_PALS[2] = &t[4]; GEM_PALS[3] = &t[2]; GEM_PALS[4] = &t[3];
+    GEM_PALS[5] = &GEM_DIAMOND; GEM_PALS[6] = &GEM_FIRE;
+    switch (S.frame) {
+        case FRAME_SILVER: frameMid = C(20,21,24); frameDk = C(10,11,13); frameLt = C(30,30,31); break;
+        case FRAME_ACCENT: frameMid = accent; frameDk = lerp15(accent, BLACK, 9); frameLt = lerp15(accent, WHITE, 8); break;
+        default:           frameMid = C(28,22,6); frameDk = C(16,11,2); frameLt = C(31,29,18); break;
+    }
+}
+
 static void buildGemCache(void)
 {
+    setupTheme();
     static u16 scratch[TILE_H][SCREEN_W];   // row stride must match SCREEN_W for the primitives
     u16 *saved = cur;
     for (int i = 0; i < NGEMPAL; i++) {
@@ -338,31 +370,41 @@ static void drawPopups(void)
 
 // ---------------------------------------------------------------- layout
 
+static int gridX = GRID_X, panelX = 176, boardX0 = 0;   // boardX0: left edge of the framed board area
+#define BX(x) ((x) + boardX0)
+
 static void cellOrigin(int c, int r, int *x, int *y)
 {
-    *x = GRID_X + c * TILE_W;
+    *x = gridX + c * TILE_W;
     *y = GRID_Y + r * TILE_H + ((c & 1) ? ODD_SHIFT : 0);
 }
 
 int gfxCellAt(int pxl, int pyl, int *c, int *r)
 {
-    int cc = (pxl - GRID_X) / TILE_W;
-    if (pxl < GRID_X || cc < 0 || cc >= COLS) return 0;
+    int cc = (pxl - gridX) / TILE_W;
+    if (pxl < gridX || cc < 0 || cc >= COLS) return 0;
     int yy = pyl - GRID_Y - ((cc & 1) ? ODD_SHIFT : 0);
     if (yy < 0) return 0;
     int rr = yy / TILE_H;
     if (rr >= ROWS) return 0;
-    int lx = (pxl - GRID_X) % TILE_W, ly = yy % TILE_H;
+    int lx = (pxl - gridX) % TILE_W, ly = yy % TILE_H;
     if (lx < 3 || lx > TILE_W - 4 || ly < 3 || ly > TILE_H - 4) return 0;
     *c = cc; *r = rr;
     return 1;
 }
 
-#define PANEL_X 176
+#define PANEL_X panelX
 #define SUBMIT_Y 120
 #define CLEAR_Y 150
-bool gfxInSubmit(int x, int y) { return x >= PANEL_X && x < 252 && y >= SUBMIT_Y && y < SUBMIT_Y + 24; }
-bool gfxInClear(int x, int y)  { return x >= PANEL_X && x < 252 && y >= CLEAR_Y && y < CLEAR_Y + 20; }
+bool gfxInSubmit(int x, int y) { return x >= PANEL_X && x < PANEL_X + 76 && y >= SUBMIT_Y && y < SUBMIT_Y + 24; }
+bool gfxInClear(int x, int y)  { return x >= PANEL_X && x < PANEL_X + 76 && y >= CLEAR_Y && y < CLEAR_Y + 20; }
+
+void gfxApplySettings(void)
+{
+    if (S.hand == HAND_LEFT) { boardX0 = SCREEN_W - 173; gridX = boardX0 + GRID_X; panelX = 4; }
+    else { boardX0 = 0; gridX = GRID_X; panelX = 176; }
+    buildGemCache();
+}
 
 // ---------------------------------------------------------------- effects API
 
@@ -409,9 +451,22 @@ void gfxShake(int frames) { shakeFrames = frames; }
 void gfxInvalidWord(void) { invalidTimer = 24; }
 
 // title buttons on the touch screen
-#define TB_Y 136
-bool gfxInTitleClassic(int x, int y) { return x >= 20 && x < 84 && y >= TB_Y && y < TB_Y + 22; }
-bool gfxInTitleDaily(int x, int y)   { return x >= 88 && x < 152 && y >= TB_Y && y < TB_Y + 22; }
+#define TB_Y 134
+bool gfxInTitleClassic(int x, int y) { return x >= BX(20) && x < BX(84) && y >= TB_Y && y < TB_Y + 22; }
+bool gfxInTitleDaily(int x, int y)   { return x >= BX(88) && x < BX(152) && y >= TB_Y && y < TB_Y + 22; }
+bool gfxInTitleOptions(int x, int y) { return x >= BX(54) && x < BX(118) && y >= TB_Y + 26 && y < TB_Y + 46; }
+
+// options list rows on the touch screen
+#define OPT_Y0 38
+#define OPT_DY 15
+int gfxOptionRowAt(int x, int y)
+{
+    if (x < BX(12) || x >= BX(160)) return -1;
+    if (y >= 160 && y < 180) return OPT_ROWS;          // BACK
+    int row = (y - OPT_Y0) / OPT_DY;
+    if (y < OPT_Y0 || row < 0 || row >= OPT_ROWS) return -1;
+    return row;
+}
 
 // ---------------------------------------------------------------- board
 
@@ -437,10 +492,10 @@ static bool inChain(const Game *g, int c, int r);
 static void drawBackdrop(const Game *g)
 {
     // margins around the grid
-    fillRect(0, 0, GRID_X, SCREEN_H, BLACK);
-    fillRect(GRID_X + COLS * TILE_W, 0, 173 - GRID_X - COLS * TILE_W, SCREEN_H, BLACK);
+    fillRect(boardX0, 0, GRID_X, SCREEN_H, BLACK);
+    fillRect(gridX + COLS * TILE_W, 0, 173 - GRID_X - COLS * TILE_W, SCREEN_H, BLACK);
     for (int c = 0; c < COLS; c++) {
-        int x = GRID_X + c * TILE_W, top = GRID_Y + ((c & 1) ? ODD_SHIFT : 0);
+        int x = gridX + c * TILE_W, top = GRID_Y + ((c & 1) ? ODD_SHIFT : 0);
         fillRect(x, 0, TILE_W, top, BLACK);
         fillRect(x, top + ROWS * TILE_H, TILE_W, SCREEN_H - top - ROWS * TILE_H, BLACK);
         for (int r = 0; r < ROWS; r++) {
@@ -462,7 +517,7 @@ static void drawBackdrop(const Game *g)
     // N+ dot grid behind the gems (dots under solid gems are hidden anyway)
     u16 dot = lerp15(BLACK, ACCENT, 3);
     for (int y = 6; y < SCREEN_H; y += 8) {
-        u16 *row = cur + y * SCREEN_W;
+        u16 *row = cur + y * SCREEN_W + boardX0;
         for (int x = 6; x < 172; x += 8) row[x] = dot;
     }
 }
@@ -582,19 +637,20 @@ static void drawDanger(const Game *g)
         int a = (strength * (12 - j)) / 12;
         if (a <= 0) continue;
         int y = SCREEN_H - 2 - j;
-        for (int x = 2; x < 171; x += 1 + (j & 1)) px(x, y, lerp15(cur[y * SCREEN_W + x], FIRE1, a > 16 ? 16 : a));
+        for (int x = BX(2); x < BX(171); x += 1 + (j & 1)) px(x, y, lerp15(cur[y * SCREEN_W + x], FIRE1, a > 16 ? 16 : a));
     }
 }
 
 static void drawPanel(const Game *g)
 {
     // gold frame around the grid, with a shimmer running along the top edge
-    rectOutline(0, 0, 173, SCREEN_H, GOLD_DK);
-    rectOutline(1, 1, 171, SCREEN_H - 2, GOLD);
+    rectOutline(BX(0), 0, 173, SCREEN_H, GOLD_DK);
+    rectOutline(BX(1), 1, 171, SCREEN_H - 2, GOLD);
     int sh = (frame * 2) % 240 - 20;
-    for (int i = 0; i < 14; i++) { px(1 + sh + i, 1, GOLD_LT); px(1 + sh + i, 0, GOLD); }
+    for (int i = 0; i < 14; i++) { px(BX(1 + sh + i), 1, GOLD_LT); px(BX(1 + sh + i), 0, GOLD); }
 
-    fillRect(PANEL_X - 2, 0, SCREEN_W - PANEL_X + 2, SCREEN_H, BLACK);
+    if (S.hand == HAND_LEFT) fillRect(0, 0, boardX0, SCREEN_H, BLACK);
+    else fillRect(PANEL_X - 2, 0, SCREEN_W - PANEL_X + 2, SCREEN_H, BLACK);
     drawLogo(PANEL_X, 6, 1);
     char s[32];
     sprintf(s, "%d", g->score);
@@ -644,13 +700,25 @@ static void drawTopTitle(void)
     drawLogo(16, 16, 2);
     drawText(170, 18, "BOOKWORM", INK, 1);
     drawText(170, 28, "X MINESWEEPER", INK, 1);
+    if (G.state == ST_OPTIONS) {
+        drawTextCenter(128, 60, "MAKE IT YOURS", GOLD_LT, 1);
+        drawTextCenter(128, 80, "THEME CHANGES THE GEMS", INK, 1);
+        drawTextCenter(128, 90, "FRAME AND ACCENT CHANGE THE LIBRARY", INK, 1);
+        drawTextCenter(128, 100, "HAND MIRRORS THE BOARD FOR LEFTIES", INK, 1);
+        drawTextCenter(128, 110, "FIRE SETS HOW FAST THE SHELF BURNS", INK, 1);
+        drawTextCenter(128, 130, "TAP A ROW OR USE THE D-PAD", DIM, 1);
+        char s[40];
+        if (S.bestClassic) { sprintf(s, "BEST CLASSIC %d  SHELF %d", S.bestClassic, S.bestClassicShelf); drawTextCenter(128, 150, s, DIM, 1); }
+        if (S.bestDaily)   { sprintf(s, "BEST DAILY %d ON %d", S.bestDaily, S.bestDailyDate); drawTextCenter(128, 160, s, DIM, 1); }
+        return;
+    }
     drawTipCard((frame / 150) % 3);
 }
 
 static void drawTop(const Game *g)
 {
     fillRect(0, 0, SCREEN_W, SCREEN_H, BLACK);
-    if (g->state == ST_TITLE) {
+    if (g->state == ST_TITLE || g->state == ST_OPTIONS) {
         u16 dot = lerp15(BLACK, ACCENT, 3);
         for (int y = 4; y < SCREEN_H; y += 8)
             for (int x = 4; x < SCREEN_W; x += 8) px(x, y, dot);
@@ -742,34 +810,75 @@ static void drawTop(const Game *g)
 static void drawTitle(const Game *g)
 {
     (void)g;
-    dimRect(0, 0, 173, SCREEN_H);
+    dimRect(boardX0, 0, 173, SCREEN_H);
     // the logo as a row of gems
     static const char *letters = "wordPASS";
-    static const GemPal *pals[8] = { &GEM_RUBY, &GEM_SAPPHIRE, &GEM_EMERALD, &GEM_AMBER, &GEM_AMETHYST, &GEM_RUBY, &GEM_SAPPHIRE, &GEM_EMERALD };
+    const GemPal *pals[8] = { GEM_RUBY, GEM_SAPPHIRE, GEM_EMERALD, GEM_AMBER, GEM_AMETHYST, GEM_RUBY, GEM_SAPPHIRE, GEM_EMERALD };
     int gw = 20, gh = 22, lx = 86 - (8 * gw) / 2;
     for (int i = 0; i < 8; i++) {
         int bob = ((frame + i * 6) & 31) < 16 ? ((frame + i * 6) & 15) / 6 : (15 - ((frame + i * 6) & 15)) / 6;
         int x = lx + i * gw, y = 40 - bob;
-        drawGemSized(x, y, gw - 1, gh, i < 4 ? pals[i] : &GEM_DIAMOND, false);
+        drawGemSized(BX(x), y, gw - 1, gh, i < 4 ? pals[i] : &GEM_DIAMOND, false);
         char ch = letters[i];
         if (ch >= 'a') {
             const u8 *gl = font5x7[fontLogoIndex(ch)];
-            for (int j = 0; j < 7; j++) for (int k = 0; k < 5; k++) if (gl[j] & (0x10 >> k)) fillRect(x + 5 + k * 2, y + 5 + j * 2, 2, 2, WHITE);
-        } else drawChar(x + 5, y + 5, ch, C(4,6,10), 2);
+            for (int j = 0; j < 7; j++) for (int k = 0; k < 5; k++) if (gl[j] & (0x10 >> k)) fillRect(BX(x + 5 + k * 2), y + 5 + j * 2, 2, 2, WHITE);
+        } else drawChar(BX(x + 5), y + 5, ch, C(4,6,10), 2);
     }
-    fillRect(16, 72, 140, 56, BLACK);
-    rectOutline(16, 72, 140, 56, GOLD);
-    drawTextCenter(86, 80, "CRACK THE PASS", ACCENT, 1);
-    drawTextCenter(86, 92, "DON'T BURN THE LIBRARY", INK, 1);
-    drawTextCenter(86, 108, "DRAG TO SPELL. HOLD L TO PEEK", DIM, 1);
+    fillRect(BX(16), 72, 140, 56, BLACK);
+    rectOutline(BX(16), 72, 140, 56, GOLD);
+    drawTextCenter(BX(86), 80, "CRACK THE PASS", ACCENT, 1);
+    drawTextCenter(BX(86), 92, "DON'T BURN THE LIBRARY", INK, 1);
+    drawTextCenter(BX(86), 108, "DRAG SPELLS. L PEEKS", DIM, 1);
     // mode buttons
     bool blink = frame & 32;
-    roundRect(20, TB_Y, 64, 22, blink ? GOLD : GOLD_DK);
-    drawTextCenter(52, TB_Y + 7, "CLASSIC", BLACK, 1);
-    roundRect(88, TB_Y, 64, 22, DIM);
-    rectOutline(88, TB_Y, 64, 22, GOLD_DK);
-    drawTextCenter(120, TB_Y + 7, "DAILY", GOLD_LT, 1);
-    drawTextCenter(86, 166, "SHELVES OF PASSES  /  ONE PASS A DAY", DIM, 1);
+    roundRect(BX(20), TB_Y, 64, 22, blink ? GOLD : GOLD_DK);
+    drawTextCenter(BX(52), TB_Y + 7, "CLASSIC", BLACK, 1);
+    roundRect(BX(88), TB_Y, 64, 22, DIM);
+    rectOutline(BX(88), TB_Y, 64, 22, GOLD_DK);
+    drawTextCenter(BX(120), TB_Y + 7, "DAILY", GOLD_LT, 1);
+    fillRect(BX(54), TB_Y + 26, 64, 20, BLACK);
+    rectOutline(BX(54), TB_Y + 26, 64, 20, DIM);
+    drawTextCenter(BX(86), TB_Y + 32, "OPTIONS", INK, 1);
+    char s[32];
+    if (S.bestClassic) { sprintf(s, "BEST %d", S.bestClassic); drawText(BX(20), 180, s, DIM, 1); }
+    if (S.bestDaily)   { sprintf(s, "DAILY %d", S.bestDaily); drawText(BX(152) - textWidth(s, 1), 180, s, DIM, 1); }
+}
+
+static const char *const OPT_NAMES[OPT_ROWS] = { "THEME", "FRAME", "ACCENT", "HAND", "FIRE", "MUSIC" };
+static const char *const THEME_NAMES[THEME_COUNT] = { "JEWEL", "INK", "CANDY", "EMBER" };
+static const char *const FRAME_NAMES[FRAME_COUNT] = { "GOLD", "SILVER", "ACCENT" };
+static const char *const ACCENT_NAMES[9] = { "AUTO", "TEAL", "MAGENTA", "LIME", "ORANGE", "SKY", "VIOLET", "PINK", "MINT" };
+static const char *const FIRE_NAMES[FIRE_COUNT] = { "RELAXED", "NORMAL", "FAST" };
+
+static void drawOptions(const Game *g)
+{
+    fillRect(boardX0, 0, 173, SCREEN_H, BLACK);
+    rectOutline(BX(0), 0, 173, SCREEN_H, GOLD_DK);
+    rectOutline(BX(1), 1, 171, SCREEN_H - 2, GOLD);
+    drawTextShadow(BX(86) - textWidth("OPTIONS", 2) / 2, 14, "OPTIONS", GOLD_LT, 2);
+    int sel = g->stateTimer;
+    for (int i = 0; i < OPT_ROWS; i++) {
+        int y = OPT_Y0 + i * OPT_DY;
+        const char *val = "";
+        switch (i) {
+            case 0: val = THEME_NAMES[S.theme]; break;
+            case 1: val = FRAME_NAMES[S.frame]; break;
+            case 2: val = ACCENT_NAMES[S.accent]; break;
+            case 3: val = S.hand ? "LEFT" : "RIGHT"; break;
+            case 4: val = FIRE_NAMES[S.fire]; break;
+            case 5: val = S.music ? "ON" : "OFF"; break;
+        }
+        if (i == sel) { fillRect(BX(12), y - 2, 148, OPT_DY - 1, lerp15(BLACK, ACCENT, 4)); rectOutline(BX(12), y - 2, 148, OPT_DY - 1, ACCENT); }
+        drawText(BX(18), y + 2, OPT_NAMES[i], i == sel ? WHITE : INK, 1);
+        char v[16]; sprintf(v, "< %s >", val);
+        drawText(BX(154) - textWidth(v, 1), y + 2, v, i == sel ? ACCENT : INK, 1);
+    }
+    // swatches: the five letter gems in the current theme
+    for (int i = 0; i < 5; i++) { blitGem(BX(16) + i * 28, 132, i); drawLetter(BX(16) + i * 28, 132, "AIRTS"[i] - 'A', WHITE, GEM_PALS[i]->dark); }
+    rectOutline(BX(54), 160, 64, 20, DIM);
+    drawTextCenter(BX(86), 166, "BACK", INK, 1);
+    drawTextCenter(BX(86), 182, settingsPersistent() ? "SAVED TO CARD" : "NOT SAVED: NO CARD", DIM, 1);
 }
 
 // Title top screen: three tip cards that cycle
@@ -777,52 +886,52 @@ static void drawTipCard(int which)
 {
     int cx = 128, y = 52;
     if (which == 0) {
-        drawTextCenter(cx, y, "SPELL", GOLD_LT, 1);
+        drawTextCenter(BX(cx), y, "SPELL", GOLD_LT, 1);
         static const char L[3] = { 'I', 'N', 'K' };
-        static const GemPal *P3[3] = { &GEM_RUBY, &GEM_SAPPHIRE, &GEM_AMBER };
+        const GemPal *P3[3] = { GEM_RUBY, GEM_SAPPHIRE, GEM_AMBER };
         int gx = cx - 40;
         for (int i = 0; i < 3; i++) {
             int x = gx + i * 28, gy = y + 14 + ((i & 1) ? 10 : 0);
-            drawGemSized(x, gy, TILE_W, TILE_H, P3[i], true);
-            drawChar(x + 7, gy + 4, L[i], WHITE, 2);
+            drawGemSized(BX(x), gy, TILE_W, TILE_H, P3[i], true);
+            drawChar(BX(x + 7), gy + 4, L[i], WHITE, 2);
         }
         for (int i = 1; i < 3; i++) {
             int x0 = gx + (i - 1) * 28 + TILE_W / 2, y0 = y + 14 + (((i - 1) & 1) ? 10 : 0) + TILE_H / 2;
             int x1 = gx + i * 28 + TILE_W / 2, y1 = y + 14 + ((i & 1) ? 10 : 0) + TILE_H / 2;
-            for (int t = 0; t <= 8; t++) fillRect(x0 + (x1 - x0) * t / 8 - 1, y0 + (y1 - y0) * t / 8 - 1, 2, 2, GOLD_LT);
+            for (int t = 0; t <= 8; t++) fillRect(BX(x0 + (x1 - x0) * t / 8 - 1), y0 + (y1 - y0) * t / 8 - 1, 2, 2, GOLD_LT);
         }
-        drawTextCenter(cx, y + 56, "DRAG ACROSS TOUCHING GEMS", INK, 1);
-        drawTextCenter(cx, y + 66, "THREE LETTERS OR MORE, THEN SUBMIT", INK, 1);
-        drawTextCenter(cx, y + 80, "LONG WORDS SCORE BIG AND KEEP HEAT DOWN", DIM, 1);
+        drawTextCenter(BX(cx), y + 56, "DRAG ACROSS TOUCHING GEMS", INK, 1);
+        drawTextCenter(BX(cx), y + 66, "THREE LETTERS OR MORE, THEN SUBMIT", INK, 1);
+        drawTextCenter(BX(cx), y + 80, "LONG WORDS SCORE BIG AND KEEP HEAT DOWN", DIM, 1);
     } else if (which == 1) {
-        drawTextCenter(cx, y, "PEEK", ACCENT, 1);
+        drawTextCenter(BX(cx), y, "PEEK", ACCENT, 1);
         int gx = cx - 40;
         for (int i = 0; i < 3; i++) {
             int x = gx + i * 28, gy = y + 14 + ((i & 1) ? 10 : 0);
-            if (i == 0) { rectOutline(x + 1, gy + 1, TILE_W - 2, TILE_H - 2, ACCENT); drawChar(x + 10, gy + 8, '2', ACCENT, 1); }
-            else if (i == 1) { drawGemSized(x, gy, TILE_W, TILE_H, &GEM_DIAMOND, false); drawChar(x + 7, gy + 4, 'B', C(4,6,10), 2); }
-            else { rectOutline(x + 1, gy + 1, TILE_W - 2, TILE_H - 2, DIM); drawChar(x + 10, gy + 8, 'X', DIM, 1); }
+            if (i == 0) { rectOutline(BX(x + 1), gy + 1, TILE_W - 2, TILE_H - 2, ACCENT); drawChar(BX(x + 10), gy + 8, '2', ACCENT, 1); }
+            else if (i == 1) { drawGemSized(BX(x), gy, TILE_W, TILE_H, &GEM_DIAMOND, false); drawChar(BX(x + 7), gy + 4, 'B', C(4,6,10), 2); }
+            else { rectOutline(BX(x + 1), gy + 1, TILE_W - 2, TILE_H - 2, DIM); drawChar(BX(x + 10), gy + 8, 'X', DIM, 1); }
         }
-        drawTextCenter(cx, y + 56, "HOLD L AND TAP A GEM YOU CAN SPARE", INK, 1);
-        drawTextCenter(cx, y + 66, "A NUMBER COUNTS HIDDEN PASS LETTERS", INK, 1);
-        drawTextCenter(cx, y + 76, "IN THE SIX CELLS AROUND IT", INK, 1);
-        drawTextCenter(cx, y + 90, "PEELED GEMS NEVER COME BACK", DIM, 1);
+        drawTextCenter(BX(cx), y + 56, "HOLD L AND TAP A GEM YOU CAN SPARE", INK, 1);
+        drawTextCenter(BX(cx), y + 66, "A NUMBER COUNTS HIDDEN PASS LETTERS", INK, 1);
+        drawTextCenter(BX(cx), y + 76, "IN THE SIX CELLS AROUND IT", INK, 1);
+        drawTextCenter(BX(cx), y + 90, "PEELED GEMS NEVER COME BACK", DIM, 1);
     } else {
-        drawTextCenter(cx, y, "FIRE", FIRE2, 1);
+        drawTextCenter(BX(cx), y, "FIRE", FIRE2, 1);
         int gx = cx - 40;
         GemPal fp = GEM_FIRE; fp.mid = (frame & 8) ? C(31,8,0) : C(31,14,0);
-        drawGemSized(gx, y + 14, TILE_W, TILE_H, &fp, false); drawChar(gx + 7, y + 18, 'R', WHITE, 2);
-        rectOutline(gx + 1, y + 14 + TILE_H + 1, TILE_W - 2, TILE_H - 2, DIM);
+        drawGemSized(BX(gx), y + 14, TILE_W, TILE_H, &fp, false); drawChar(BX(gx + 7), y + 18, 'R', WHITE, 2);
+        rectOutline(BX(gx + 1), y + 14 + TILE_H + 1, TILE_W - 2, TILE_H - 2, DIM);
         for (int j = 0; j < 3; j++) px(gx + 6 + j * 6, y + 12 - ((frame >> 2) + j) % 3, FIRE2);
-        drawGemSized(gx + 28, y + 24, TILE_W, TILE_H, &GEM_DIAMOND, false); drawChar(gx + 35, y + 28, 'O', C(4,6,10), 2);
-        drawGemSized(gx + 56, y + 14, TILE_W, TILE_H, &GEM_EMERALD, false); drawChar(gx + 63, y + 18, 'P', WHITE, 2);
-        drawTextCenter(cx, y + 62, "SHORT WORDS BUILD HEAT AND LIGHT A GEM", INK, 1);
-        drawTextCenter(cx, y + 72, "FIRE DROPS A ROW EACH TURN. IT FALLS", INK, 1);
-        drawTextCenter(cx, y + 82, "THROUGH HOLES. DIAMONDS BLOCK IT", INK, 1);
-        drawTextCenter(cx, y + 96, "SPELL THROUGH A FLAME TO PUT IT OUT", DIM, 1);
+        drawGemSized(BX(gx + 28), y + 24, TILE_W, TILE_H, &GEM_DIAMOND, false); drawChar(BX(gx + 35), y + 28, 'O', C(4,6,10), 2);
+        drawGemSized(BX(gx + 56), y + 14, TILE_W, TILE_H, GEM_EMERALD, false); drawChar(BX(gx + 63), y + 18, 'P', WHITE, 2);
+        drawTextCenter(BX(cx), y + 62, "SHORT WORDS BUILD HEAT AND LIGHT A GEM", INK, 1);
+        drawTextCenter(BX(cx), y + 72, "FIRE DROPS A ROW EACH TURN. IT FALLS", INK, 1);
+        drawTextCenter(BX(cx), y + 82, "THROUGH HOLES. DIAMONDS BLOCK IT", INK, 1);
+        drawTextCenter(BX(cx), y + 96, "SPELL THROUGH A FLAME TO PUT IT OUT", DIM, 1);
     }
     for (int i = 0; i < 3; i++) {
-        if (i == which) fillRect(118 + i * 8, 170, 4, 4, GOLD_LT); else rectOutline(118 + i * 8, 170, 4, 4, DIM);
+        if (i == which) fillRect(BX(118 + i * 8), 170, 4, 4, GOLD_LT); else rectOutline(BX(118 + i * 8), 170, 4, 4, DIM);
     }
 }
 
@@ -830,59 +939,60 @@ static void drawOverlay(const Game *g)
 {
     if (g->state == ST_PLAY) return;
     if (g->state == ST_TITLE) { drawTitle(g); return; }
-    dimRect(0, 0, 173, SCREEN_H);
+    if (g->state == ST_OPTIONS) { drawOptions(g); return; }
+    dimRect(boardX0, 0, 173, SCREEN_H);
     if (g->state == ST_PASSED) {
         // results card slides up from the bottom and settles
         int t = g->stateTimer;
         int slide = t < 12 ? (12 - t) * (12 - t) : 0;
         int cx = 86, cy = 28 + slide, cw = 150, ch = 140;
-        fillRect(cx - cw / 2, cy, cw, ch, BLACK);
-        rectOutline(cx - cw / 2, cy, cw, ch, GOLD_LT);
-        rectOutline(cx - cw / 2 + 2, cy + 2, cw - 4, ch - 4, GOLD_DK);
-        drawTextShadow(cx - textWidth("PASS ACCEPTED", 1) / 2, cy + 8, g->mode == MODE_DAILY ? "DAILY PASS DONE" : "PASS ACCEPTED", GOLD_LT, 1);
+        fillRect(BX(cx - cw / 2), cy, cw, ch, BLACK);
+        rectOutline(BX(cx - cw / 2), cy, cw, ch, GOLD_LT);
+        rectOutline(BX(cx - cw / 2 + 2), cy + 2, cw - 4, ch - 4, GOLD_DK);
+        drawTextShadow(BX(cx - textWidth("PASS ACCEPTED", 1) / 2), cy + 8, g->mode == MODE_DAILY ? "DAILY PASS DONE" : "PASS ACCEPTED", GOLD_LT, 1);
         // the pass itself as small diamonds
         int n = g->passLen, bw = 14, gap = 2, x0 = cx - (n * bw + (n - 1) * gap) / 2;
         for (int i = 0; i < n; i++) {
             int lx = x0 + i * (bw + gap);
-            drawGemSized(lx, cy + 20, bw, 16, &GEM_DIAMOND, (t / 4) % (n + 4) == i);
-            drawChar(lx + 5, cy + 24, 'A' + (g->pass[i] - 'a'), C(4,6,10), 1);
+            drawGemSized(BX(lx), cy + 20, bw, 16, &GEM_DIAMOND, (t / 4) % (n + 4) == i);
+            drawChar(BX(lx + 5), cy + 24, 'A' + (g->pass[i] - 'a'), C(4,6,10), 1);
         }
         char s[32], lw[16];
         int rowy = cy + 46, lx = cx - cw / 2 + 10, rx = cx + cw / 2 - 10;
-        hline(lx, rowy - 5, cw - 20, DIM);
+        hline(BX(lx), rowy - 5, cw - 20, DIM);
         strcpy(lw, g->bestWord[0] ? g->bestWord : "-");
         for (char *p = lw; *p; p++) if (*p >= 'a') *p -= 32;
-        drawText(lx, rowy, "BEST WORD", DIM, 1);
-        drawText(rx - textWidth(lw, 1), rowy, lw, WHITE, 1); rowy += 10;
+        drawText(BX(lx), rowy, "BEST WORD", DIM, 1);
+        drawText(BX(rx - textWidth(lw, 1)), rowy, lw, WHITE, 1); rowy += 10;
         sprintf(s, "+%d", g->bestWordScore);
-        drawText(rx - textWidth(s, 1), rowy, s, GOLD, 1); rowy += 14;
-        drawText(lx, rowy, "WORDS", DIM, 1); sprintf(s, "%d", g->wordsThisShelf);
-        drawText(rx - textWidth(s, 1), rowy, s, WHITE, 1); rowy += 10;
-        drawText(lx, rowy, "PEELS", DIM, 1); sprintf(s, "%d", g->peels);
-        drawText(rx - textWidth(s, 1), rowy, s, g->peels <= g->passLen + 2 ? ACCENT : WHITE, 1); rowy += 10;
-        drawText(lx, rowy, "TURNS", DIM, 1); sprintf(s, "%d", g->turn);
-        drawText(rx - textWidth(s, 1), rowy, s, WHITE, 1); rowy += 14;
-        hline(lx, rowy - 5, cw - 20, DIM);
-        drawText(lx, rowy, "SHELF BONUS", DIM, 1); sprintf(s, "+%d", 500 * g->shelf);
-        drawText(rx - textWidth(s, 1), rowy, s, GOLD_LT, 1); rowy += 14;
-        if (g->mode == MODE_DAILY) { sprintf(s, "FINAL %d", g->score); drawTextCenter(cx, rowy, s, GOLD_LT, 1); }
-        else { sprintf(s, "SHELF %d OPEN", g->shelf + 1); drawTextCenter(cx, rowy, s, ACCENT, 1); }
-        if (t > 30 && (frame & 32)) drawTextCenter(cx, cy + ch - 12, "TAP TO CONTINUE", INK, 1);
+        drawText(BX(rx - textWidth(s, 1)), rowy, s, GOLD, 1); rowy += 14;
+        drawText(BX(lx), rowy, "WORDS", DIM, 1); sprintf(s, "%d", g->wordsThisShelf);
+        drawText(BX(rx - textWidth(s, 1)), rowy, s, WHITE, 1); rowy += 10;
+        drawText(BX(lx), rowy, "PEELS", DIM, 1); sprintf(s, "%d", g->peels);
+        drawText(BX(rx - textWidth(s, 1)), rowy, s, g->peels <= g->passLen + 2 ? ACCENT : WHITE, 1); rowy += 10;
+        drawText(BX(lx), rowy, "TURNS", DIM, 1); sprintf(s, "%d", g->turn);
+        drawText(BX(rx - textWidth(s, 1)), rowy, s, WHITE, 1); rowy += 14;
+        hline(BX(lx), rowy - 5, cw - 20, DIM);
+        drawText(BX(lx), rowy, "SHELF BONUS", DIM, 1); sprintf(s, "+%d", 500 * g->shelf);
+        drawText(BX(rx - textWidth(s, 1)), rowy, s, GOLD_LT, 1); rowy += 14;
+        if (g->mode == MODE_DAILY) { sprintf(s, "FINAL %d", g->score); drawTextCenter(BX(cx), rowy, s, GOLD_LT, 1); }
+        else { sprintf(s, "SHELF %d OPEN", g->shelf + 1); drawTextCenter(BX(cx), rowy, s, ACCENT, 1); }
+        if (t > 30 && (frame & 32)) drawTextCenter(BX(cx), cy + ch - 12, "TAP TO CONTINUE", INK, 1);
     } else if (g->state == ST_FAIL) {
-        fillRect(16, 66, 140, 60, BLACK);
-        rectOutline(16, 66, 140, 60, (frame & 8) ? FIRE1 : FIRE2);
+        fillRect(BX(16), 66, 140, 60, BLACK);
+        rectOutline(BX(16), 66, 140, 60, (frame & 8) ? FIRE1 : FIRE2);
         const char *t = g->fail == FAIL_FIRE ? "LIBRARY LOST" : g->fail == FAIL_SCORCH ? "PASS DESTROYED" : "OUT OF WORDS";
-        drawTextShadow(86 - textWidth(t, 1) / 2, 76, t, FIRE2, 1);
+        drawTextShadow(BX(86 - textWidth(t, 1) / 2), 76, t, FIRE2, 1);
         const char *why = g->fail == FAIL_FIRE ? "FIRE REACHED THE FLOOR" : g->fail == FAIL_SCORCH ? "A PASS LETTER BURNED" : "NO WORDS LEFT TO SPELL";
-        drawTextCenter(86, 90, why, INK, 1);
-        if (frame & 32) drawTextCenter(86, 110, g->mode == MODE_DAILY ? "TAP FOR TITLE" : "TAP TO RETRY SHELF", WHITE, 1);
+        drawTextCenter(BX(86), 90, why, INK, 1);
+        if (frame & 32) drawTextCenter(BX(86), 110, g->mode == MODE_DAILY ? "TAP FOR TITLE" : "TAP TO RETRY SHELF", WHITE, 1);
     } else if (g->state == ST_PAUSE) {
-        fillRect(26, 66, 120, 64, BLACK);
-        rectOutline(26, 66, 120, 64, ACCENT);
-        drawTextCenter(86, 74, "PAUSED", ACCENT, 1);
-        drawText(36, 90, "START", GOLD_LT, 1);  drawText(80, 90, "RESUME", INK, 1);
-        drawText(36, 102, "SELECT", GOLD_LT, 1); drawText(80, 102, "RESTART", INK, 1);
-        drawText(36, 114, "B", GOLD_LT, 1);      drawText(80, 114, "TITLE", INK, 1);
+        fillRect(BX(26), 66, 120, 64, BLACK);
+        rectOutline(BX(26), 66, 120, 64, ACCENT);
+        drawTextCenter(BX(86), 74, "PAUSED", ACCENT, 1);
+        drawText(BX(36), 90, "START", GOLD_LT, 1);  drawText(BX(80), 90, "RESUME", INK, 1);
+        drawText(BX(36), 102, "SELECT", GOLD_LT, 1); drawText(BX(80), 102, "RESTART", INK, 1);
+        drawText(BX(36), 114, "B", GOLD_LT, 1);      drawText(BX(80), 114, "TITLE", INK, 1);
     }
 }
 
@@ -900,13 +1010,14 @@ void gfxInit(void)
     vramSub = bgGetGfxPtr(bgs);
     lcdMainOnBottom();
     bright = -16;
-    buildGemCache();
+    gfxApplySettings();
 }
 
 void gfxFrame(const Game *g)
 {
     frame++;
-    accent = SHELF_ACCENTS[(g->shelf > 0 ? g->shelf - 1 : 0) % 8];
+    accent = S.accent ? SHELF_ACCENTS[(S.accent - 1) % 8] : SHELF_ACCENTS[(g->shelf > 0 ? g->shelf - 1 : 0) % 8];
+    if (S.frame == FRAME_ACCENT) { frameMid = accent; frameDk = lerp15(accent, BLACK, 9); frameLt = lerp15(accent, WHITE, 8); }
     boardChainWord(g, chainWordNow);
     chainValidNow = g->chainLen >= 3 && dictLookup(chainWordNow, strlen(chainWordNow));
     // per-letter pop timers for the pass plaque
