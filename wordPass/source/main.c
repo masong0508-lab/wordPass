@@ -85,6 +85,7 @@ static void cycleOption(int row, int dir)
         case 4: S.fire = (S.fire + FIRE_COUNT + dir) % FIRE_COUNT; break;
         case 5: S.music = !S.music; break;
         case 6: S.library = (S.library + LIB_COUNT + dir) % LIB_COUNT; break;
+        case 7: S.spelling = (S.spelling + SPELL_COUNT + dir) % SPELL_COUNT; break;
     }
     gfxApplySettings();
 }
@@ -156,9 +157,10 @@ static void submitChain(void)
         burstNewFlames();
         if (G.fail) enterFail();
     } else if (G.chainLen >= 3) {
-        char w[24]; boardChainWord(&G, w);
+        char w[WORD_BUF]; boardChainWord(&G, w);
+        int dialect = boardWordSpelling(w, strlen(w));
         bool obscure = S.library == LIB_COMMON && boardWordTier(w, strlen(w)) == 2;
-        setMsg(obscure ? "TOO OBSCURE" : "NOT IN THE LIBRARY", 45);
+        setMsg(dialect == 2 ? "BRITISH SPELLING" : dialect == 1 ? "AMERICAN SPELLING" : obscure ? "TOO OBSCURE" : "NOT IN THE LIBRARY", 45);
         gfxInvalidWord();
     }
 }

@@ -4,6 +4,7 @@
 #include "game.h"
 #include "dict_bin.h"
 #include "pools_bin.h"
+#include "variants_bin.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -48,18 +49,18 @@ static u8 *loadFile(const char *path)
     return buf;
 }
 
-static bool loadDict(const char *path, const char *poolPath)
+static bool loadDict(const char *path, const char *poolPath, const char *variantPath)
 {
-    u8 *d = loadFile(path), *p = loadFile(poolPath);
-    if (!d || !p) return false;
-    dict_bin = d; dictInit();
+    u8 *d = loadFile(path), *p = loadFile(poolPath), *v = loadFile(variantPath);
+    if (!d || !p || !v) return false;
+    dict_bin = d; variants_bin = v; dictInit();
     pools_bin = p; poolsInit();
     return true;
 }
 
 int main(int argc, char **argv)
 {
-    if (!loadDict(argc > 1 ? argv[1] : "data/dict.bin", argc > 2 ? argv[2] : "data/pools.bin")) return 1;
+    if (!loadDict(argc > 1 ? argv[1] : "data/dict.bin", argc > 2 ? argv[2] : "data/pools.bin", argc > 3 ? argv[3] : "data/variants.bin")) return 1;
     srand(1);
 
     // ---- dictionary tiers
@@ -69,6 +70,66 @@ int main(int argc, char **argv)
     S.library = LIB_COMMON;
     CHECK("LIBRARY COMMON rejects a rare word", !boardWordOk("zax", 3) && boardWordOk("book", 4));
     S.library = LIB_FULL;
+
+    // ---- long words: the dictionary holds words up to 20 letters
+    {
+        static const char *const LONG[] = { "lophophores", "livingnesses", "marlinespikes", "microcephalics", "majoritarianism", "magnetostrictive", "kindheartednesses", "largeheartednesses", "interavailabilities", "lymphogranulomatoses" };
+        bool all = true, shortFails = true;
+        for (int n = 11; n <= 20; n++) {
+            const char *lw = LONG[n - 11];
+            if ((int)strlen(lw) != n || dictLookup(lw, n) == 0) { all = false; printf("   %d-letter %s missing\n", n, lw); }
+        }
+        char junk[21]; memset(junk, 'z', 20); junk[20] = 0;
+        for (int n = 3; n <= 20; n++) if (dictLookup(junk, n) != 0) shortFails = false;
+        CHECK("dictLookup finds a word of every length 11..20", all);
+        CHECK("dictLookup rejects zzz... at every length 3..20 and anything over 20", shortFails && dictLookup("zzzzzzzzzzzzzzzzzzzzz", 21) == 0);
+        CHECK("international and counterrevolutionary are words", dictLookup("international", 13) != 0 && dictLookup("counterrevolutionary", 20) != 0);
+    }
+
+    // ---- a 20-gem chain: a snake up and down three columns spells counterrevolutionary
+    {
+        boardOf('e');
+        static const char *const W20 = "counterrevolutionary";
+        int path[20][2], n = 0;
+        for (int r = 0; r < 8; r++) { path[n][0] = 0; path[n][1] = r; n++; }
+        for (int r = 7; r >= 0; r--) { path[n][0] = 1; path[n][1] = r; n++; }
+        for (int r = 0; r < 4; r++) { path[n][0] = 2; path[n][1] = r; n++; }
+        bool ok20 = true;
+        for (int i = 0; i < 20; i++) { set(path[i][0], path[i][1], CELL_TILE, W20[i]); }
+        for (int i = 0; i < 20; i++) ok20 = boardTryAddToChain(&g, path[i][0], path[i][1]) && ok20;
+        bool capped = g.chainLen == 20 && !boardTryAddToChain(&g, 2, 4) && g.chainLen == 20;
+        char cw[WORD_BUF]; boardChainWord(&g, cw);
+        bool spelled = strcmp(cw, W20) == 0 && boardChainScore(&g) > 0;
+        int pts = boardSubmit(&g);
+        CHECK("a 20-gem chain spells and scores a 20-letter word", ok20 && capped && spelled && pts > 0 && g.lastWordLen == 20 &&
+              strcmp(g.lastWord, W20) == 0 && strcmp(g.ledger[0], W20) == 0 && g.chainLen == 0);
+    }
+
+    // ---- spelling: BOTH accepts either, AMERICAN or BRITISH only its own; same-everywhere words always pass
+    {
+        S.spelling = SPELL_BOTH;
+        bool both = boardWordOk("color", 5) && boardWordOk("colour", 6) && boardWordOk("tour", 4) && boardWordOk("organize", 8) && boardWordOk("organise", 8);
+        S.spelling = SPELL_US;
+        bool us = boardWordOk("color", 5) && !boardWordOk("colour", 6) && boardWordOk("tour", 4) && boardWordOk("organise", 8) &&
+                  boardWordOk("center", 6) && !boardWordOk("centre", 6) && boardWordOk("traveled", 8) && !boardWordOk("travelled", 9);
+        S.spelling = SPELL_UK;
+        bool uk = !boardWordOk("color", 5) && boardWordOk("colour", 6) && boardWordOk("tour", 4) && boardWordOk("organize", 8) &&
+                  !boardWordOk("center", 6) && boardWordOk("centre", 6) && boardWordOk("grey", 4) && !boardWordOk("gray", 4);
+        S.spelling = SPELL_US;
+        bool why = boardWordSpelling("colour", 6) == 2 && boardWordSpelling("color", 5) == 0 && boardWordSpelling("tour", 4) == 0 && boardWordSpelling("zzzz", 4) == 0;
+        S.spelling = SPELL_UK;
+        why = why && boardWordSpelling("color", 5) == 1 && boardWordSpelling("colour", 6) == 0;
+        S.spelling = SPELL_BOTH;
+        CHECK("SPELLING BOTH accepts color and colour and the -ize/-ise forms", both);
+        CHECK("SPELLING AMERICAN rejects British-only spellings and keeps shared words", us);
+        CHECK("SPELLING BRITISH rejects American-only spellings and keeps shared words", uk);
+        CHECK("boardWordSpelling names the dialect that rejected a word", why);
+        bool pools = true;
+        for (int t = 0; t < poolThemeCount() && pools; t++)
+            for (int len = POOL_MIN_LEN; len <= POOL_MAX_LEN && pools; len++)
+                for (int i = 0; i < poolCount(t, len); i++) { char pw[12]; poolWord(t, len, i, pw); if (dictSpelling(pw, len)) { pools = false; printf("   %s is spelled one way only\n", pw); break; } }
+        CHECK("no pass word has a US-only or UK-only spelling", pools);
+    }
 
     // ---- fire over a hole over a secret: nothing moves, the hole stays a hole
     boardOf('e');
@@ -109,7 +170,7 @@ int main(int argc, char **argv)
     boardOf('e');
     set(0, 0, CELL_TILE, 'q'); set(0, 1, CELL_TILE, 'i'); set(0, 2, CELL_TILE, 'z');
     bool ok = boardTryAddToChain(&g, 0, 0) && boardTryAddToChain(&g, 0, 1) && boardTryAddToChain(&g, 0, 2);
-    char w[24]; boardChainWord(&g, w);
+    char w[WORD_BUF]; boardChainWord(&g, w);
     int gained = boardSubmit(&g);
     CHECK("Qu+I+Z chain scores quiz", ok && strcmp(w, "quiz") == 0 && gained > 0 && strcmp(g.lastWord, "quiz") == 0 && g.lastWordLen == 4);
 
@@ -386,12 +447,12 @@ int main(int argc, char **argv)
                 }
             }
         }
-        total3k = total >= 18000;
+        total3k = total >= 17500;
         CHECK("theme names are 3 to 7 letters (they sit in a 32 character intro line)", names);
         CHECK("every theme but LEXICON has at least 8 words at each length 4..6", cover);
         CHECK("every pass word is a dictionary word of its stored length", valid);
         CHECK("no theme repeats a word at one length", dups);
-        CHECK("the library holds at least 18000 pass words", total3k);
+        CHECK("the library holds at least 17500 pass words", total3k);
         CHECK("no strong profanity is in the library (ceiling: holy damn crappola moobs)", clean);
         bool mild = false;
         for (int t = 0; t < themes; t++) if (!strcmp(poolName(t), "CURSES")) {

@@ -51,7 +51,7 @@ u32 dbgT[10];
 // presentation state
 static int bright, shakeFrames, invalidTimer;
 static bool chainValidNow;      // computed once per frame
-static char chainWordNow[24];
+static char chainWordNow[WORD_BUF];
 static u8 prevFound[12], letterPop[12];
 
 #define C(r,g,b) ARGB16(1,(r),(g),(b))
@@ -684,7 +684,7 @@ bool gfxInTitleOptions(int x, int y) { return x >= BX(54) && x < BX(118) && y >=
 
 // options list rows on the touch screen
 #define OPT_Y0 36
-#define OPT_DY 14
+#define OPT_DY 12
 int gfxOptionRowAt(int x, int y)
 {
     if (x < BX(12) || x >= BX(160)) return -1;
@@ -962,9 +962,10 @@ static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
         drawText(PANEL_X, 52, TIER[g->lockTier & 3], FIRE1, 1);   // 71 px at most: inside the 76 px panel
     }
 
-    char w[24]; strcpy(w, chainWordNow);
+    char w[WORD_BUF]; strcpy(w, chainWordNow);
     for (char *p = w; *p; p++) *p -= 32;
     bool valid = chainValidNow;
+    if (strlen(w) > 12) { memmove(w + 1, w + strlen(w) - 11, 12); w[0] = '.'; }   // the last 11 letters fit the panel
     drawText(PANEL_X, 70, w, valid ? GOLD_LT : WHITE, 1);
     if (g->chainLen >= 3 && !g->peekHeld) drawText(PANEL_X, 82, valid ? "VALID" : "...", valid ? ACCENT : DIM, 1);
 
@@ -1014,11 +1015,12 @@ static void drawTopTitle(void)
         drawTextCenter(128, 88, "FRAME AND ACCENT CHANGE THE LIBRARY", INK, 1);
         drawTextCenter(128, 98, "HAND MIRRORS THE BOARD FOR LEFTIES", INK, 1);
         drawTextCenter(128, 108, "FIRE SETS HOW FAST THE SHELF BURNS", INK, 1);
-        drawTextCenter(128, 120, "LIBRARY: COMMON REJECTS OBSCURE WORDS", INK, 1);
-        drawTextCenter(128, 130, "TAP A ROW OR USE THE D-PAD", DIM, 1);
+        drawTextCenter(128, 118, "LIBRARY: COMMON REJECTS OBSCURE WORDS", INK, 1);
+        drawTextCenter(128, 128, "SPELLING: COLOR OR COLOUR, OR BOTH", INK, 1);
+        drawTextCenter(128, 140, "TAP A ROW OR USE THE D-PAD", DIM, 1);
         char s[40];
-        if (S.bestClassic) { siprintf(s, "BEST CLASSIC %d  SHELF %d", S.bestClassic, S.bestClassicShelf); drawTextCenter(128, 150, s, DIM, 1); }
-        if (S.bestDaily)   { siprintf(s, "BEST DAILY %d ON %d", S.bestDaily, S.bestDailyDate); drawTextCenter(128, 160, s, DIM, 1); }
+        if (S.bestClassic) { siprintf(s, "BEST CLASSIC %d  SHELF %d", S.bestClassic, S.bestClassicShelf); drawTextCenter(128, 156, s, DIM, 1); }
+        if (S.bestDaily)   { siprintf(s, "BEST DAILY %d ON %d", S.bestDaily, S.bestDailyDate); drawTextCenter(128, 166, s, DIM, 1); }
         return;
     }
     drawTipCard((frame / 150) % 3);
@@ -1086,18 +1088,24 @@ static void drawTop(const Game *g)
     }
 
     // current chain large, or the last word and its score
-    char w[24]; strcpy(w, chainWordNow);
+    char w[WORD_BUF]; strcpy(w, chainWordNow);
     for (char *p = w; *p; p++) *p -= 32;
     if (w[0]) {
         bool valid = chainValidNow;
         int jx = invalidTimer ? ((invalidTimer & 2) ? 3 : -3) : 0;
         u16 wc = invalidTimer ? ((invalidTimer & 4) ? FIRE1 : WHITE) : (valid ? GOLD_LT : WHITE);
-        int cx3 = SCREEN_W / 2 - textWidth(w, 3) / 2 + jx;
-        for (const char *p = w; *p; p++, cx3 += 18) drawChar3Shadow(cx3, 100, *p, wc, DIM2);
+        int wl = (int)strlen(w);
+        if (wl <= 13) {            // 3x letters, 18 px apart, up to 13 across
+            int cx3 = SCREEN_W / 2 - textWidth(w, 3) / 2 + jx;
+            for (const char *p = w; *p; p++, cx3 += 18) drawChar3Shadow(cx3, 100, *p, wc, DIM2);
+        } else {                   // longer words drop to 2x, 12 px apart: 20 letters take 240 px
+            int cx2 = SCREEN_W / 2 - textWidth(w, 2) / 2 + jx;
+            for (const char *p = w; *p; p++, cx2 += 12) drawChar2Shadow(cx2, 104, *p, wc, DIM2);
+        }
     } else if (g->lastWord[0]) {
-        char lw[16]; strcpy(lw, g->lastWord);
+        char lw[MAX_WORD + 1]; strcpy(lw, g->lastWord);
         for (char *p = lw; *p; p++) *p -= 32;
-        drawTextCenter(SCREEN_W / 2, 100, lw, INK, 2);
+        drawTextCenter(SCREEN_W / 2, 100, lw, INK, textWidth(lw, 2) <= 224 ? 2 : 1);
         s[0] = '+'; fmtInt(s + 1, g->lastWordScore);
         drawTextCenter(SCREEN_W / 2, 118, s, GOLD, 1);
     }
@@ -1127,7 +1135,7 @@ static void drawTop(const Game *g)
         int shown = g->ledgerN < 5 ? g->ledgerN : 5;
         for (int age = 0; age < shown; age++) {
             int k = ledgerIndex(g, age);
-            char lw[16]; strcpy(lw, g->ledger[k]);
+            char lw[MAX_WORD + 1]; strcpy(lw, g->ledger[k]);
             for (char *p = lw; *p; p++) if (*p >= 'a') *p -= 32;
             if (age == 0) {
                 s[0] = '+'; fmtInt(s + 1, g->ledgerPts[k]);
@@ -1198,8 +1206,9 @@ static void drawTitle(const Game *g)
     if (S.bestDaily)   { siprintf(s, "DAILY %d", S.bestDaily); drawText(BX(152) - textWidth(s, 1), 180, s, DIM, 1); }
 }
 
-static const char *const OPT_NAMES[OPT_ROWS] = { "THEME", "FRAME", "ACCENT", "HAND", "FIRE", "MUSIC", "LIBRARY" };
+static const char *const OPT_NAMES[OPT_ROWS] = { "THEME", "FRAME", "ACCENT", "HAND", "FIRE", "MUSIC", "LIBRARY", "SPELLING" };
 static const char *const LIB_NAMES[LIB_COUNT] = { "FULL", "COMMON" };
+static const char *const SPELL_NAMES[SPELL_COUNT] = { "BOTH", "AMERICAN", "BRITISH" };
 static const char *const THEME_NAMES[THEME_COUNT] = { "JEWEL", "INK", "CANDY", "EMBER" };
 static const char *const FRAME_NAMES[FRAME_COUNT] = { "GOLD", "SILVER", "ACCENT" };
 static const char *const ACCENT_NAMES[ACCENT_COUNT] = { "AUTO", "TEAL", "MAGENTA", "LIME", "ORANGE", "SKY", "VIOLET", "PINK", "MINT" };
@@ -1223,6 +1232,7 @@ static void drawOptions(const Game *g)
             case 4: val = FIRE_NAMES[S.fire]; break;
             case 5: val = S.music ? "ON" : "OFF"; break;
             case 6: val = LIB_NAMES[S.library]; break;
+            case 7: val = SPELL_NAMES[S.spelling]; break;
         }
         if (i == sel) { fillRect(BX(12), y - 2, 148, OPT_DY - 1, lerp15(BLACK, ACCENT, 4)); rectOutline(BX(12), y - 2, 148, OPT_DY - 1, ACCENT); }
         drawText(BX(18), y + 2, OPT_NAMES[i], i == sel ? WHITE : INK, 1);
@@ -1230,7 +1240,7 @@ static void drawOptions(const Game *g)
         drawText(BX(154) - textWidth(v, 1), y + 2, v, i == sel ? ACCENT : INK, 1);
     }
     // swatches: the five letter gems in the current theme
-    for (int i = 0; i < 5; i++) { blitGem(BX(16) + i * 28, 138, i); drawLetter(BX(16) + i * 28, 138, "AIRTS"[i] - 'A', WHITE, GEM_PALS[i]->dark); }
+    for (int i = 0; i < 5; i++) { blitGem(BX(16) + i * 28, 136, i); drawLetter(BX(16) + i * 28, 136, "AIRTS"[i] - 'A', WHITE, GEM_PALS[i]->dark); }
     rectOutline(BX(54), 160, 64, 20, DIM);
     drawTextCenter(BX(86), 166, "BACK", INK, 1);
     drawTextCenter(BX(86), 182, settingsPersistent() ? "SAVED TO CARD" : "NOT SAVED: NO CARD", DIM, 1);
@@ -1327,12 +1337,13 @@ static void drawOverlay(const Game *g)
             drawChar(BX(lx + 5), cy + 24, 'A' + (g->pass[i] - 'a'), C(4,6,10), 1);
         }
         // rows at a 9 px pitch: label DIM on the left, value right-aligned
-        char s[32], lw[16];
+        char s[32], lw[MAX_WORD + 1];
         int lx = cx - cw / 2 + 10, rx = cx + cw / 2 - 10;
         hline(BX(lx), cy + 41, cw - 20, DIM);
         strcpy(lw, g->bestWord[0] ? g->bestWord : "-");
         for (char *p = lw; *p; p++) if (*p >= 'a') *p -= 32;
         drawText(BX(lx), cy + 46, "BEST WORD", DIM, 1);
+        if (strlen(lw) > 14) { lw[13] = '.'; lw[14] = 0; }    // a long best word keeps the label readable
         drawText(BX(rx - textWidth(lw, 1)), cy + 46, lw, WHITE, 1);
         if (g->bestWordScore) { siprintf(s, "+%d", g->bestWordScore); drawText(BX(rx - textWidth(s, 1)), cy + 55, s, GOLD, 1); }
         else drawText(BX(rx - textWidth("-", 1)), cy + 55, "-", DIM, 1);

@@ -6,6 +6,7 @@
 Settings S;
 const u8 *dict_bin;
 const u8 *pools_bin;
+const u8 *variants_bin;
 
 // music.c is compiled into the check itself, so its hooks (musicCascade ...) are real.
 

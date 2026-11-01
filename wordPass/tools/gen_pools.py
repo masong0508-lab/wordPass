@@ -178,8 +178,9 @@ def build(block_path):
     block = set()
     if block_path and os.path.exists(block_path):
         block = {l.strip().lower() for l in open(block_path, encoding="utf-8") if l.strip()}
+    variants = {w for f in ("us_only.txt", "uk_only.txt") for w in open(os.path.join(HERE, "words", f)).read().split()}
     def ok(w):
-        return (w.isalpha() and w.isascii() and MIN_LEN <= len(w) <= MAX_LEN and w not in block
+        return (w.isalpha() and w.isascii() and MIN_LEN <= len(w) <= MAX_LEN and w not in block and w not in variants   # no pass word is spelled differently in the two dialects
                 and not ("q" in w and "qu" not in w) and gen_dict.lookup(dictdata, w) != 0)
     curated = {n: [w for s in stems for w in read_words_file(f"{s}.txt")] for n, stems, _, _ in THEMES}
     derived = {n: read_words_file(f"wn_{n.lower()}.txt") if cats else [] for n, _, cats, _ in THEMES}

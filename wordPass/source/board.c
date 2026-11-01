@@ -524,13 +524,27 @@ static void endTurn(Game *g, int heatAdd)
     if (g->fail == FAIL_NONE && !boardHasWords(g)) g->fail = FAIL_WORDS;
 }
 
-// A word counts if the dictionary knows it and the LIBRARY setting allows its tier.
+// A word counts if the dictionary knows it, the LIBRARY setting allows its tier and the
+// SPELLING setting allows its spelling (a word spelled the same everywhere always passes).
 static int wordAccepted(const char *w, int len)
 {
     int t = dictLookup(w, len);
     if (!t) return 0;
     if (S.library == LIB_COMMON && t == 2) return 0;
+    if (S.spelling != SPELL_BOTH) {
+        int v = dictSpelling(w, len);
+        if (v && v != S.spelling) return 0;
+    }
     return t;
+}
+
+// Which dialect rejected a dictionary word: 1 = American-only spelling under BRITISH, 2 = the
+// other way round, 0 = the spelling is not the reason.
+int boardWordSpelling(const char *w, int len)
+{
+    if (S.spelling == SPELL_BOTH || !dictLookup(w, len)) return 0;
+    int v = dictSpelling(w, len);
+    return (v && v != S.spelling) ? v : 0;
 }
 
 bool boardWordOk(const char *w, int len) { return wordAccepted(w, len) != 0; }
@@ -591,13 +605,13 @@ static int chainScoreDetail(const Game *g, char *w, int *lenOut, int *tierOut, i
 
 int boardChainScore(const Game *g)
 {
-    char w[24]; int len, tier, diamonds, burn, repeat;
+    char w[WORD_BUF]; int len, tier, diamonds, burn, repeat;
     return chainScoreDetail(g, w, &len, &tier, &diamonds, &burn, &repeat);
 }
 
 int boardSubmit(Game *g)
 {
-    char w[24]; int len, tier, diamonds, burn, repeat;
+    char w[WORD_BUF]; int len, tier, diamonds, burn, repeat;
     int gained = chainScoreDetail(g, w, &len, &tier, &diamonds, &burn, &repeat);
     if (!tier) return 0;
 
@@ -608,7 +622,7 @@ int boardSubmit(Game *g)
             cl->flash = 8;
         }
     }
-    strncpy(g->lastWord, w, 15); g->lastWord[15] = 0;
+    strncpy(g->lastWord, w, MAX_WORD); g->lastWord[MAX_WORD] = 0;
     g->lastWordLen = len;
     g->lastWordScore = gained;
     g->lastWordTier = tier;
@@ -618,8 +632,7 @@ int boardSubmit(Game *g)
     if (tier == 2) g->rareWords++;
     if (gained > g->bestWordScore) { g->bestWordScore = gained; strcpy(g->bestWord, g->lastWord); }
     // ledger ring: newest at ledgerHead - 1
-    int keep = len < 13 ? len : 13;
-    memcpy(g->ledger[g->ledgerHead], w, keep); g->ledger[g->ledgerHead][keep] = 0;
+    memcpy(g->ledger[g->ledgerHead], w, len); g->ledger[g->ledgerHead][len] = 0;   // len <= MAX_WORD: the word was accepted
     g->ledgerPts[g->ledgerHead] = gained;
     g->ledgerHead = (g->ledgerHead + 1) % LEDGER_N;
     if (g->ledgerN < LEDGER_N) g->ledgerN++;

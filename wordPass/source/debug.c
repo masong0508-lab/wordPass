@@ -32,12 +32,13 @@ typedef struct {
     u8  scorched[COLS * ROWS];              // 368..423
     u8  theme, hand, fire, music;           // 424..427
     s32 optRow;                             // 428
-    u8  chainC[MAX_CHAIN], chainR[MAX_CHAIN]; // 432.., 442..
+    u8  chainC[10], chainR[10]; // 432.., 442..
     s32 pulseEvery, lockTier, overtime;     // 452, 456, 460
     s32 chainScore;                         // 464: boardChainScore(g), the live preview
     s32 speedBonus, peelBonus, passBonusKind, ledgerN, newBest;   // 468, 472, 476, 480, 484
     s32 lives, passTheme, twist;            // 488, 492, 496 (lockTier is at 456)
-} DebugView;                                // total 500
+    s32 spelling;                           // 500: S.spelling (0 both, 1 American, 2 British)
+} DebugView;                                // total 504
 
 #define PIN(field, off) _Static_assert(offsetof(DebugView, field) == (off), "DebugView." #field " moved: update tools/emu/wp.py OFF")
 PIN(magic, 0); PIN(frame, 4); PIN(state, 8); PIN(mode, 12); PIN(shelf, 16); PIN(score, 20);
@@ -52,8 +53,8 @@ PIN(scorched, 368); PIN(theme, 424); PIN(hand, 425); PIN(fire, 426); PIN(music, 
 PIN(optRow, 428); PIN(chainC, 432); PIN(chainR, 442);
 PIN(pulseEvery, 452); PIN(lockTier, 456); PIN(overtime, 460);
 PIN(chainScore, 464); PIN(speedBonus, 468); PIN(peelBonus, 472); PIN(passBonusKind, 476); PIN(ledgerN, 480); PIN(newBest, 484);
-PIN(lives, 488); PIN(passTheme, 492); PIN(twist, 496);
-_Static_assert(sizeof(DebugView) == 500, "DebugView size changed: update tools/emu/wp.py");
+PIN(lives, 488); PIN(passTheme, 492); PIN(twist, 496); PIN(spelling, 500);
+_Static_assert(sizeof(DebugView) == 504, "DebugView size changed: update tools/emu/wp.py");
 
 volatile DebugView DBG;
 
@@ -66,7 +67,8 @@ enum {
     POKE_FIRESTEP,  // one fire advance plus gravity
     POKE_TURN,      // turn = a0
     POKE_LIVES,     // lives = a0 (bookmarks)
-    POKE_SCORE      // score = a0 (panel layout checks)
+    POKE_SCORE,     // score = a0 (panel layout checks)
+    POKE_SPELL      // S.spelling = a0 (0 both, 1 American, 2 British)
 };
 
 static void applyPoke(Game *g)
@@ -90,6 +92,7 @@ static void applyPoke(Game *g)
         case POKE_TURN:     g->turn = a0; break;
         case POKE_LIVES:    g->lives = a0; break;
         case POKE_SCORE:    g->score = a0; break;
+        case POKE_SPELL:    if (a0 >= 0 && a0 < SPELL_COUNT) S.spelling = (u8)a0; break;
     }
     DBG.cmd = 0;
 }
@@ -113,14 +116,14 @@ void debugSync(Game *g)
             DBG.scorched[c * ROWS + r] = g->scorched[c][r];
         }
     memcpy((void *)DBG.msg, g->msg, 32);
-    memcpy((void *)DBG.lastWord, g->lastWord, 16);
-    memcpy((void *)DBG.bestWord, g->bestWord, 16);
-    DBG.lastWordTier = g->lastWordTier; DBG.rareWords = g->rareWords; DBG.library = S.library;
+    memcpy((void *)DBG.lastWord, g->lastWord, 15); DBG.lastWord[15] = 0;   // 15 letters at most are mirrored
+    memcpy((void *)DBG.bestWord, g->bestWord, 15); DBG.bestWord[15] = 0;
+    DBG.lastWordTier = g->lastWordTier; DBG.rareWords = g->rareWords; DBG.library = S.library; DBG.spelling = S.spelling;
     DBG.heatThreshold = g->heatThreshold; DBG.burnEvery = g->burnEvery; DBG.burnTimer = g->burnTimer;
     DBG.theme = S.theme; DBG.hand = S.hand; DBG.fire = S.fire; DBG.music = S.music;
     DBG.optRow = g->optRow;
-    memcpy((void *)DBG.chainC, g->chainC, MAX_CHAIN);
-    memcpy((void *)DBG.chainR, g->chainR, MAX_CHAIN);
+    memcpy((void *)DBG.chainC, g->chainC, 10);       // the mirror shows the first ten gems of a chain
+    memcpy((void *)DBG.chainR, g->chainR, 10);
     DBG.pulseEvery = g->pulseEvery; DBG.lockTier = g->lockTier; DBG.overtime = g->overtime;
     DBG.chainScore = boardChainScore(g);
     DBG.speedBonus = g->speedBonus; DBG.peelBonus = g->peelBonus; DBG.passBonusKind = g->passBonusKind;

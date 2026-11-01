@@ -4,7 +4,7 @@
 .SUFFIXES:
 
 # `make check` (native rule tests) and `make dict` run without devkitARM
-NATIVE_GOALS := check dict pools
+NATIVE_GOALS := check dict pools variants
 ifneq ($(MAKECMDGOALS),)
 ifeq ($(filter-out $(NATIVE_GOALS),$(MAKECMDGOALS)),)
 NATIVE := 1
@@ -72,7 +72,7 @@ ifneq (,$(findstring icon.bmp,$(icons)))
   export GAME_ICON := $(CURDIR)/icon.bmp
 endif
 
-.PHONY: $(BUILD) clean dict pools check
+.PHONY: $(BUILD) clean dict pools variants check
 
 $(BUILD):
 	@mkdir -p $@
@@ -81,7 +81,7 @@ $(BUILD):
 # Regenerate the dictionary from a word list, marking COMMON words as the common tier:
 #   make dict WORDS=tools/enable1.txt,tools/words/extra.txt COMMON=tools/common_words.txt
 # WORDS takes several comma separated lists.  `make pools` rebuilds data/pools.bin (see tools/words/SOURCES.md).
-WORDS  ?= tools/enable1.txt,tools/words/extra.txt
+WORDS  ?= tools/enable1.txt,tools/words/extra.txt,tools/words/more_open.txt
 COMMON ?= tools/common_words.txt
 dict:
 	python3 tools/gen_dict.py $(WORDS) data/dict.bin $(COMMON)
@@ -89,6 +89,10 @@ dict:
 
 pools:
 	python3 tools/gen_pools.py
+
+variants:
+	python3 tools/gen_dict.py --variants tools/words/us_only.txt tools/words/uk_only.txt data/variants.bin
+	python3 tools/gen_dict.py --verify-variants data/variants.bin tools/words/us_only.txt tools/words/uk_only.txt
 
 # Native rule tests: board.c, dict.c, pools.c and music.c under gcc with the stubs in tools/check/stub.
 #   make check

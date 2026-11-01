@@ -7,7 +7,9 @@
 
 #define COLS 7
 #define ROWS 8
-#define MAX_CHAIN 10
+#define MAX_WORD 20           // longest dictionary word
+#define MAX_CHAIN 20          // gems in a chain
+#define WORD_BUF 48           // room for a full chain spelled out: 20 gems, every one a Qu, plus the NUL
 #define LEDGER_N 8            // words remembered per shelf for the repeat penalty and the HUD ledger
 
 #define TILE_W 24
@@ -90,11 +92,11 @@ typedef struct {
     int  peekHeld;
     int  wordsThisShelf;
     int  lastWordLen, lastWordScore;
-    char lastWord[16];
+    char lastWord[MAX_WORD + 1];
     char msg[32];
     int  msgTimer;
     bool lockdown;
-    char bestWord[16];        // per-shelf results card
+    char bestWord[MAX_WORD + 1];        // per-shelf results card
     int  bestWordScore;
     int  peels;
     int  mode;                // MODE_CLASSIC or MODE_DAILY
@@ -104,7 +106,7 @@ typedef struct {
     int  rareWords;           // rare words spelled this shelf
     int  optRow;              // highlighted row on the options screen
     // ---- scoring ledger (per shelf): a ring of the words spelled, newest at ledgerHead - 1
-    char ledger[LEDGER_N][14];   // 13 chars: a 10-gem chain through two Qu gems is 12
+    char ledger[LEDGER_N][MAX_WORD + 1];   // the whole word, so a repeat is found whatever its length
     int  ledgerPts[LEDGER_N];
     int  ledgerN, ledgerHead;
     int  uniqueWords;         // words this shelf that were not repeats
@@ -134,12 +136,13 @@ enum { THEME_JEWEL = 0, THEME_INK, THEME_CANDY, THEME_EMBER, THEME_COUNT };
 enum { FRAME_GOLD = 0, FRAME_SILVER, FRAME_ACCENT, FRAME_COUNT };
 enum { HAND_RIGHT = 0, HAND_LEFT };
 enum { FIRE_RELAXED = 0, FIRE_NORMAL, FIRE_FAST, FIRE_COUNT };
+enum { SPELL_BOTH = 0, SPELL_US, SPELL_UK, SPELL_COUNT };   // accepted spellings: both, American only, British only
 enum { LIB_FULL = 0, LIB_COMMON, LIB_COUNT };   // dictionary: every ENABLE word, or common words only
 #define ACCENT_COUNT 9                          // AUTO plus eight fixed colours
 
 typedef struct {
     u32 magic;
-    u8  theme, frame, accent, hand, fire, music, library, pad1;
+    u8  theme, frame, accent, hand, fire, music, library, spelling;
     int bestClassic;        // best Classic score
     int bestClassicShelf;   // highest shelf cleared
     int bestDaily;          // best Daily score
@@ -152,7 +155,7 @@ void settingsDefaults(void);
 bool settingsSave(void);
 bool settingsPersistent(void);
 
-#define OPT_ROWS 7
+#define OPT_ROWS 8
 void gfxApplySettings(void);          // rebuild caches after a settings change
 int  gfxOptionRowAt(int px, int py);  // -1 none, 0..OPT_ROWS-1 rows, OPT_ROWS = back
 bool gfxInTitleOptions(int px, int py);
@@ -181,6 +184,7 @@ int  boardNeighbors(int c, int r, int outC[6], int outR[6]);
 int  boardBackNumber(const Game *g, int c, int r);
 bool boardHasWords(const Game *g);
 bool boardWordOk(const char *w, int len);     // accepted under the current LIBRARY setting
+int  boardWordSpelling(const char *w, int len);    // 0 none, 1 American-only spelling, 2 British-only, that the SPELLING setting rejects
 int  boardWordTier(const char *w, int len);   // raw dictionary tier: 0 none, 1 common, 2 rare
 int  boardLowestFireRow(const Game *g);
 bool boardFireAbove(const Game *g, int c, int r);
@@ -198,6 +202,7 @@ const char *poolName(int theme);                              // "BINDERY"
 int  poolCount(int theme, int len);                           // words of that length in the theme
 void poolWord(int theme, int len, int idx, char *out);        // out holds len + 1 bytes
 int  dictLookup(const char *word, int len);   // 0 none, 1 common, 2 rare
+int  dictSpelling(const char *word, int len); // 0 same everywhere, 1 American only, 2 British only
 
 // gfx.c
 void gfxInit(void);

@@ -21,6 +21,7 @@ void settingsDefaults(void)
     S.fire = FIRE_NORMAL;
     S.music = 1;
     S.library = LIB_FULL;
+    S.spelling = SPELL_BOTH;
 }
 
 void settingsInit(void)

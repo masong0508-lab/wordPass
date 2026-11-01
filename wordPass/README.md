@@ -79,7 +79,8 @@ d-pad.
 | Hand | Right or Left: mirrors the grid and panel for left-handed stylus play |
 | Fire | Relaxed, Normal, Fast |
 | Music | On, Off |
-| Library | Full (every ENABLE word) or Common (rejects obscure words with TOO OBSCURE) |
+| Library | Full (every dictionary word) or Common (rejects obscure words with TOO OBSCURE) |
+| Spelling | Both (default), American only or British only. A word spelled one way only (color / colour, center / centre, traveled / travelled) is refused in the other setting with AMERICAN SPELLING or BRITISH SPELLING. Words spelled the same everywhere, and the -ize / -ise forms, always pass. |
 
 Settings, best Classic score and shelf, and best Daily result are saved to
 `wordPass.cfg` on the card when a FAT filesystem is available (flashcarts
@@ -89,7 +90,7 @@ screen says so.
 ### Shelves
 
 Every shelf draws its pass from a themed pool, and the plaque on the top
-screen names it (PASS - BINDERY). The **word library** holds about 18,000
+screen names it (PASS - BINDERY). The **word library** holds about 17,900
 pass words in 40 themes that cycle as you climb. The first eight shelves are
 the bookish ones: **Bindery** (book, page, spine, jacket ...), **Ink** (nib,
 font, quill, scribe ...), **Verse** (poem, rhyme, sonnet ...), **Tales**
@@ -249,7 +250,7 @@ ROMs built with it do not boot in DeSmuME; use melonDS or real hardware.
 
 ### Word library
 
-`data/pools.bin` (format `WPP1`, about 124 KB) holds the pass words: a theme count, then
+`data/pools.bin` (format `WPP1`, about 122 KB) holds the pass words: a theme count, then
 per theme a name and six counts for lengths 4..9, then the words of each
 length back to back. `tools/gen_pools.py` builds it from hand-written lists
 and WordNet-derived lists in `tools/words/pools`, filters every word against
@@ -260,17 +261,26 @@ lists behind the blocklist).
 
 ### Dictionary
 
-`data/dict.bin` is generated from the public-domain ENABLE list (words of
-3–10 letters, 125k entries) in the `WPD2` format: a 4-byte magic, eight
-`u32` counts for lengths 3..10, then one sorted group of fixed-width records
-per length. Letters are packed 5 bits each, big-endian and left aligned, so
-`memcmp()` order is alphabetical; the record width follows the length (4 bytes
-for 3–6 letters, 5 for 7, 6 for 8, 7 for 9–10, 717 KB in all) and bit 0 of
-the last byte is the **tier**: 0 common, 1 rare. The device binary-searches
-the group for the word's length (one 32-bit compare per step for 3–6 letter
-words) and returns the tier, which drives the RARE WORD callout and the
-Library option. Rebuild it from any word list with one word per line, plus an
-optional list of the words to mark common:
+`data/dict.bin` holds 183,000 words of 3 to 20 letters: the public-domain ENABLE
+list, plus about 11,000 additions (WordNet lemmas that are not names, inflected
+forms of them that a second list confirms, British spellings and modern words).
+It is in the `WPD3` format: a 4-byte magic, eighteen `u32` counts for lengths
+3..20, then one sorted group of fixed-width records per length. Letters are
+packed 5 bits each, big-endian and left aligned, so `memcmp()` order is
+alphabetical; the record width follows the length (4 bytes for 3-6 letters,
+growing to 13 for 19-20, 1.2 MB in all) and bit 0 of the last byte is the
+**tier**: 0 common, 1 rare. The device binary-searches the group for the word's
+length (one 32-bit compare per step for 3-6 letter words) and returns the
+tier, which drives the RARE WORD callout and the Library option. A chain can
+be 20 gems long; the chain preview drops from 3x to 2x letters past 13.
+
+`data/variants.bin` (`WPV1`, 16 KB) lists the words spelled one way only, in
+the same layout, with bit 0 telling American (0) from British (1). A word it
+does not list is accepted under every Spelling setting. It is derived from the
+US and GB Hunspell dictionaries plus a few spelling rules (`tools/derive_variants.py`),
+and `make variants` rebuilds it. Rebuild the dictionary from any word lists
+(comma separated, one word per line), plus an optional list of the words to
+mark common:
 
 ```bash
 make dict WORDS=tools/enable1.txt COMMON=tools/common_words.txt

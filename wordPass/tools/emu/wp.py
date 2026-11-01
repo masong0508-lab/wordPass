@@ -24,7 +24,7 @@ from desmume.emulator import DeSmuME
 from desmume.controls import Keys, keymask
 
 COLS, ROWS, TW, TH, GX, GY, ODD = 7, 8, 24, 22, 4, 2, 11
-MAX_CHAIN = 10
+MAX_CHAIN = 10          # the mirror shows the first ten gems of a chain
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..', '..'))
 IMAGE = 'devkitpro/devkitarm:20240511'
@@ -48,21 +48,21 @@ OFF = {
     'optRow': 428, 'chainC': 432, 'chainR': 442,
     'pulseEvery': 452, 'lockTier': 456, 'overtime': 460,
     'chainScore': 464, 'speedBonus': 468, 'peelBonus': 472, 'passBonusKind': 476, 'ledgerN': 480, 'newBest': 484,
-    'lives': 488, 'passTheme': 492, 'twist': 496,
+    'lives': 488, 'passTheme': 492, 'twist': 496, 'spelling': 500,
 }
-DBG_SIZE = 500
+DBG_SIZE = 504
 I32_FIELDS = ['state', 'mode', 'shelf', 'score', 'fail', 'turn', 'heat', 'chainLen', 'peels', 'lockdown',
               'bestWordScore', 'dailySeed', 'passLen', 'lastWordTier', 'rareWords', 'library',
               'heatThreshold', 'burnEvery', 'burnTimer', 'optRow', 'pulseEvery', 'lockTier', 'overtime',
               'chainScore', 'speedBonus', 'peelBonus', 'passBonusKind', 'ledgerN', 'newBest',
-              'lives', 'passTheme', 'twist']
+              'lives', 'passTheme', 'twist', 'spelling']
 PASS_THEMES = ['BINDERY', 'INK', 'VERSE', 'TALES', 'ATLAS', 'ARCHIVE', 'LAMP', 'STUDY']
 TWIST_NONE, TWIST_INK, TWIST_DAMP, TWIST_BURIED = range(4)
 VOWELS = {0, 4, 8, 14, 20}; RARE = {9, 16, 23, 25}   # a e i o u; j q x z
 # letter values (board.c letterValue), Q stands for Qu
 LETTER_VALUE = [1,3,3,2,1,4,2,4,1,8,5,1,3,1,1,3,10,1,1,1,1,4,4,8,4,10]
 # poke commands (debug.c applyPoke)
-POKE_CELL, POKE_BACK, POKE_HEAT, POKE_BURN, POKE_FIRESTEP, POKE_TURN, POKE_LIVES, POKE_SCORE = range(1, 9)
+POKE_CELL, POKE_BACK, POKE_HEAT, POKE_BURN, POKE_FIRESTEP, POKE_TURN, POKE_LIVES, POKE_SCORE, POKE_SPELL = range(1, 10)
 
 def symbol(elf, name):
     """Address of a symbol via arm-none-eabi-nm inside the toolchain container."""

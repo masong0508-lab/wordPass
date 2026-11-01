@@ -1,23 +1,30 @@
 #!/usr/bin/env python3
-"""Build data/dict.bin from a plain word list (one word per line).
+"""Build data/dict.bin from plain word lists (one word per line).
 
     gen_dict.py WORDS OUT [COMMON]          build (COMMON marks the common tier)
     gen_dict.py --verify OUT WORDS [COMMON] re-read OUT and check every word
+    gen_dict.py --variants US_ONLY UK_ONLY OUT      build the spelling table (WPV1)
+    gen_dict.py --verify-variants OUT US_ONLY UK_ONLY
 
-Format WPD2 (little-endian header):
-  4 bytes  magic "WPD2"
-  8 x u32  word counts for lengths 3..10
+WORDS and COMMON may each be several lists separated by commas.
+
+Format WPD3 (little-endian header):
+  4 bytes  magic "WPD3"
+  18 x u32 word counts for lengths 3..20
   records  grouped by length, each group sorted; record width per length
-           REC_FOR[len] bytes (3-6: 4, 7: 5, 8: 6, 9-10: 7).  Letters are
-           packed 5 bits each, big-endian, left aligned, so memcmp() order ==
-           alphabetical order within a group.  Every width leaves >= 2 spare
-           low bits; bit 0 of the last byte is the tier: 0 common, 1 rare.
+           REC_FOR[len] bytes (3-6: 4, 7: 5, 8: 6, 9-10: 7, 11-12: 8, 13-14: 9, 15: 10,
+           16-17: 11, 18: 12, 19-20: 13).  Letters are packed 5 bits each, big-endian, left
+           aligned, so memcmp() order == alphabetical order within a group.  Every width
+           leaves >= 2 spare low bits; bit 0 of the last byte is the tier: 0 common, 1 rare.
 """
 import random, struct, sys
 
-MIN_LEN, MAX_LEN = 3, 10
-REC_FOR = {3: 4, 4: 4, 5: 4, 6: 4, 7: 5, 8: 6, 9: 7, 10: 7}
-MAGIC = b"WPD2"
+MIN_LEN, MAX_LEN = 3, 20
+REC_FOR = {3: 4, 4: 4, 5: 4, 6: 4, 7: 5, 8: 6, 9: 7, 10: 7, 11: 8, 12: 8, 13: 9, 14: 9,
+           15: 10, 16: 11, 17: 11, 18: 12, 19: 13, 20: 13}
+MAGIC = b"WPD3"
+NLEN = MAX_LEN - MIN_LEN + 1
+HEADER = 4 + 4 * NLEN
 
 for _n, _r in REC_FOR.items():
     assert _r * 8 - 5 * _n >= 2, f"length {_n} leaves no room for the tier bit"
@@ -65,8 +72,8 @@ def lookup(data, word):
     n = len(word)
     if n < MIN_LEN or n > MAX_LEN or data[:4] != MAGIC:
         return 0
-    counts = struct.unpack_from("<8I", data, 4)
-    base = 4 + 8 * 4
+    counts = struct.unpack_from(f"<{NLEN}I", data, 4)
+    base = HEADER
     for m in range(MIN_LEN, n):
         base += counts[m - MIN_LEN] * REC_FOR[m]
     rec = REC_FOR[n]
@@ -114,8 +121,42 @@ def verify(dst, src, common_src=None):
     print(f"verify ok: {len(words)} words of lengths {MIN_LEN}..{MAX_LEN}, "
           f"{len(words & common)} common, 20 random non-words per length rejected")
 
+def build_variants(us_src, uk_src, dst):
+    """data/variants.bin (format WPV1): the words spelled one way only.  Same layout as the
+    dictionary, magic "WPV1", bit 0 of the last byte: 0 US-only, 1 UK-only."""
+    us, uk = read_words(us_src), read_words(uk_src)
+    assert not (us & uk), "a word cannot be both US-only and UK-only"
+    out = bytearray(b"WPV1")
+    groups = {n: sorted([(w, 0) for w in us if len(w) == n] + [(w, 1) for w in uk if len(w) == n]) for n in range(MIN_LEN, MAX_LEN + 1)}
+    for n in range(MIN_LEN, MAX_LEN + 1):
+        out += struct.pack("<I", len(groups[n]))
+    for n in range(MIN_LEN, MAX_LEN + 1):
+        for w, tier in groups[n]:
+            out += pack(w, tier)
+    open(dst, "wb").write(out)
+    print(f"{len(us)} US-only + {len(uk)} UK-only words, {len(out)} bytes -> {dst}")
+
+def verify_variants(dst, us_src, uk_src):
+    data = open(dst, "rb").read().replace(b"WPV1", MAGIC, 1)    # lookup() checks the dictionary magic
+    us, uk = read_words(us_src), read_words(uk_src)
+    bad = 0
+    for w in us:
+        if lookup(data, w) != 1: bad += 1
+    for w in uk:
+        if lookup(data, w) != 2: bad += 1
+    for w in ("color", "colour", "tour", "four", "organize", "organise"):
+        want = 1 if w in us else 2 if w in uk else 0
+        if lookup(data, w) != want: bad += 1; print("MISMATCH", w)
+    if bad:
+        print(f"VERIFY FAILED: {bad} problems"); sys.exit(1)
+    print(f"verify ok: {len(us)} US-only, {len(uk)} UK-only")
+
 if __name__ == "__main__":
     a = sys.argv[1:]
+    if a and a[0] == "--variants":
+        build_variants(a[1], a[2], a[3]); sys.exit(0)
+    if a and a[0] == "--verify-variants":
+        verify_variants(a[1], a[2], a[3]); sys.exit(0)
     if a and a[0] == "--verify":
         verify(a[1], a[2], a[3] if len(a) > 3 else None)
     else:

@@ -93,3 +93,7 @@ completion) for exact score assertions.
   to read the per-stage timings in `dbgT` (board stage: ~73k idle, effects ~6k with fire).
 - `debugSync()` in `source/debug.c` must be kept in sync if you add state the tests need.
 - Commit after each verified change with a descriptive message.
+
+## Long words and spelling
+
+`make check` covers words of 11 to 20 letters, a 20-gem chain that spells a 20-letter word, and the SPELLING setting (BOTH, AMERICAN, BRITISH, the shared and -ize/-ise words, `boardWordSpelling`). The emulator suite cycles the SPELLING row on the options screen and uses `POKE_SPELL`. The check binary loads `data/variants.bin` as its fourth argument, after dict, pools and variants default to `data/`.

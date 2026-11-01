@@ -6,7 +6,7 @@ exit status is the number of failures. Screenshots land in outdir (default /tmp)
 import sys, os, traceback
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from wp import Emu, COLS, ROWS, EMPTY, TILE, BURN, HOLE, SECRET, ST_TITLE, ST_PLAY, ST_PASSED, ST_FAIL, ST_PAUSE, ST_OPTIONS, \
-    FAIL_FIRE, FAIL_SCORCH, FAIL_WORDS, Keys, keymask, load_words
+    FAIL_FIRE, FAIL_SCORCH, FAIL_WORDS, Keys, keymask, load_words, POKE_SPELL
 
 rom = sys.argv[1]; out = sys.argv[2] if len(sys.argv) > 2 else '/tmp'
 e = Emu(rom)
@@ -596,7 +596,7 @@ def _():
     assert e.state()['state'] == ST_TITLE, 'pause + B did not quit to the title'
     e.tap(86, 170); e.run(10)
     g = e.state(); assert g['state'] == ST_OPTIONS and g['optRow'] == 0, f'options: {g["state"]} {g["optRow"]}'
-    e.tap(86, 84); e.run(10)
+    e.tap(86, 78); e.run(10)                      # rows are 12 px apart from y 36: HAND is row 3
     g = e.state(); assert g['optRow'] == 3, f'optRow {g["optRow"]}'
     assert g['settings']['hand'] == 1, 'HAND did not flip'
     e.set_hand(True)
@@ -608,6 +608,32 @@ def _():
     assert not lit, f'top screen column 250 has {len(lit)} lit pixels, first {lit[0]}'
     e.tap(e.bx + 52, 147); e.run(150)
     assert e.state()['state'] == ST_PLAY, 'mirrored CLASSIC did not start'
+
+@scenario('options SPELLING row: BOTH -> AMERICAN -> BRITISH -> BOTH, and the screen shows each')
+def _():
+    ensure_play()
+    e.press('START', settle=10); e.press('B', settle=30)
+    assert e.state()['state'] == ST_TITLE, 'pause + B did not quit to the title'
+    e.tap(e.bx + 86, 170); e.run(10)
+    g = e.state(); assert g['state'] == ST_OPTIONS and g['spelling'] == 0, f'options: {g["state"]} spelling {g["spelling"]}'
+    seen = []
+    for i in range(3):
+        e.tap(e.bx + 86, 126); e.run(10)                 # SPELLING is row 7, y 120..132
+        g = e.state(); assert g['optRow'] == 7, f'optRow {g["optRow"]}'
+        seen.append(g['spelling'])
+        e.shot(f'{out}/rules_options_spelling_{g["spelling"]}.png')
+    assert seen == [1, 2, 0], f'spelling cycle {seen}'
+    e.tap(e.bx + 86, 170); e.run(30)
+    assert e.state()['state'] == ST_TITLE, 'BACK did not leave the options'
+
+@scenario('poke channel sets SPELLING (the rejection rules themselves are in make check)')
+def _():
+    to_title(); e.start_classic()
+    g = e.state(); assert g['state'] == ST_PLAY
+    e.poke(POKE_SPELL, 1); e.run(4)
+    assert e.state()['spelling'] == 1, 'POKE_SPELL did not set AMERICAN'
+    e.poke(POKE_SPELL, 0); e.run(4)
+    assert e.state()['spelling'] == 0
 
 print('RULES OK' if not fails else f'RULES FAILED: {fails}')
 sys.exit(fails)
