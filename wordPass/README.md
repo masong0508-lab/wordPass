@@ -5,7 +5,7 @@ Chain letters into words on a hex grid of gems. Behind the board hides a
 password. Hold a shoulder button to *peek*: peel away letters you can spare
 and uncover the pass. Spell weak words and the shelf catches fire.
 
-![build](https://github.com/OWNER/wordPass/actions/workflows/build.yml/badge.svg)
+![build](https://github.com/masong0508-lab/wordPass/actions/workflows/build.yml/badge.svg)
 
 ## How it plays
 
