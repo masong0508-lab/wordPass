@@ -4,6 +4,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 
 static u16 *vramMain, *vramSub;
 static int bgMain;
@@ -11,9 +12,22 @@ static u16 bufMain[SCREEN_W * SCREEN_H];
 static u16 bufSub[SCREEN_W * SCREEN_H];
 static u16 *cur;
 static int frame;
+// Build with -DWP_PROFILE to expose per-stage render timings in dbgT[]
+#ifdef WP_PROFILE
+u32 dbgT[10];
+#define PROF(i) dbgT[i] = cpuEndTiming(); cpuStartTiming(0)
+#define PROF_START() cpuStartTiming(0)
+#define PROF_SET(i) dbgT[i] = cpuEndTiming()
+#else
+#define PROF(i)
+#define PROF_START()
+#define PROF_SET(i)
+#endif
 
 // presentation state
-static int bright, shakeFrames;
+static int bright, shakeFrames, invalidTimer;
+static bool chainValidNow;      // computed once per frame
+static char chainWordNow[24];
 static u8 prevFound[12], letterPop[12];
 
 #define C(r,g,b) ARGB16(1,(r),(g),(b))
@@ -68,9 +82,15 @@ static void fillRect(int x, int y, int w, int h, u16 col)
     if (x + w > SCREEN_W) w = SCREEN_W - x;
     if (y + h > SCREEN_H) h = SCREEN_H - y;
     if (w <= 0 || h <= 0) return;
+    u32 col2 = col | ((u32)col << 16);
     for (int j = 0; j < h; j++) {
         u16 *p = cur + (y + j) * SCREEN_W + x;
-        for (int i = 0; i < w; i++) p[i] = col;
+        int n = w;
+        if (((uintptr_t)p & 2) && n) { *p++ = col; n--; }
+        u32 *p32 = (u32 *)p;
+        for (; n >= 8; n -= 8) { p32[0] = col2; p32[1] = col2; p32[2] = col2; p32[3] = col2; p32 += 4; }
+        for (; n >= 2; n -= 2) *p32++ = col2;
+        if (n) *(u16 *)p32 = col;
     }
 }
 
@@ -100,8 +120,10 @@ static u16 lerp15(u16 a, u16 b, int t)
 // dither-darken a region (checkerboard of black)
 static void dimRect(int x, int y, int w, int h)
 {
-    for (int j = y; j < y + h; j++)
-        for (int i = x + (j & 1); i < x + w; i += 2) px(i, j, BLACK);
+    for (int j = y; j < y + h; j++) {
+        u16 *row = cur + j * SCREEN_W;
+        for (int i = x + (j & 1); i < x + w; i += 2) row[i] = BLACK;
+    }
 }
 
 static void drawChar(int x, int y, char ch, u16 col, int scale)
@@ -178,6 +200,74 @@ static void drawGemSized(int x, int y, int w, int h, const GemPal *p, bool lit)
     }
 }
 
+
+// ---- gem sprite cache: each palette rendered once, then blitted with word copies
+#define NGEMPAL 7
+static DTCM_BSS u16 gemCache[NGEMPAL][TILE_H][TILE_W];   // 7.4 KB in zero-wait DTCM
+static bool gemCacheReady;
+static const GemPal *const GEM_PALS[NGEMPAL] = { &GEM_RUBY, &GEM_SAPPHIRE, &GEM_EMERALD, &GEM_AMBER, &GEM_AMETHYST, &GEM_DIAMOND, &GEM_FIRE };
+
+static int gemIndex(const GemPal *p)
+{
+    for (int i = 0; i < NGEMPAL; i++) if (GEM_PALS[i] == p) return i;
+    return 0;
+}
+
+static void buildGemCache(void)
+{
+    static u16 scratch[TILE_H][SCREEN_W];   // row stride must match SCREEN_W for the primitives
+    u16 *saved = cur;
+    for (int i = 0; i < NGEMPAL; i++) {
+        cur = &scratch[0][0];
+        for (int j = 0; j < TILE_H; j++) for (int k = 0; k < TILE_W; k++) scratch[j][k] = 0;   // 0 = transparent
+        drawGemSized(0, 0, TILE_W, TILE_H, GEM_PALS[i], false);
+        for (int j = 0; j < TILE_H; j++) for (int k = 0; k < TILE_W; k++) gemCache[i][j][k] = scratch[j][k];
+    }
+    cur = saved;
+    gemCacheReady = true;
+}
+
+// blit a cached gem; colour 0 is transparent (the rounded corners)
+static void blitGem(int x, int y, int pal)
+{
+    if (y < 0 || y + TILE_H > SCREEN_H || x < 0 || x + TILE_W > SCREEN_W) {
+        drawGemSized(x, y, TILE_W, TILE_H, GEM_PALS[pal], false);   // clipped: slow path
+        return;
+    }
+    for (int j = 0; j < TILE_H; j++) {
+        const u16 *src = gemCache[pal][j];
+        u16 *dst = cur + (y + j) * SCREEN_W + x;
+        if (j == 0 || j == TILE_H - 1 || j == 1 || j == TILE_H - 2) {
+            for (int k = 0; k < TILE_W; k++) if (src[k]) dst[k] = src[k];
+        } else if (((uintptr_t)dst & 2) == 0) {
+            const u32 *s32 = (const u32 *)src; u32 *d32 = (u32 *)dst;
+            for (int k = 0; k < TILE_W / 2; k++) d32[k] = s32[k];
+        } else {
+            for (int k = 0; k < TILE_W; k++) dst[k] = src[k];
+        }
+    }
+}
+
+// 2x glyph with a one-pixel drop shadow, written directly (no per-rect clipping)
+static void drawChar2Shadow(int x, int y, char ch, u16 col, u16 shadow)
+{
+    if (x < 1 || y < 1 || x + 11 >= SCREEN_W || y + 15 >= SCREEN_H) { drawChar(x + 1, y + 1, ch, shadow, 2); drawChar(x, y, ch, col, 2); return; }
+    const u8 *gl = font5x7[fontIndex(ch)];
+    for (int j = 0; j < 7; j++) {
+        u8 bits = gl[j];
+        if (!bits) continue;
+        u16 *r0 = cur + (y + j * 2) * SCREEN_W + x, *r1 = r0 + SCREEN_W;
+        u16 *s0 = r0 + SCREEN_W + 1, *s1 = s0 + SCREEN_W;
+        for (int i = 0; i < 5; i++) if (bits & (0x10 >> i)) {
+            int k = i * 2;
+            s0[k] = shadow; s0[k + 1] = shadow; s1[k] = shadow; s1[k + 1] = shadow;
+        }
+        for (int i = 0; i < 5; i++) if (bits & (0x10 >> i)) {
+            int k = i * 2;
+            r0[k] = col; r0[k + 1] = col; r1[k] = col; r1[k + 1] = col;
+        }
+    }
+}
 
 static void drawGemOutline(int x, int y)
 {
@@ -316,6 +406,12 @@ void gfxPopup(int c, int r, const char *txt, int gold)
 void gfxFadeIn(void)  { bright = -16; }
 void gfxFlash(void)   { bright = 10; }
 void gfxShake(int frames) { shakeFrames = frames; }
+void gfxInvalidWord(void) { invalidTimer = 24; }
+
+// title buttons on the touch screen
+#define TB_Y 136
+bool gfxInTitleClassic(int x, int y) { return x >= 20 && x < 84 && y >= TB_Y && y < TB_Y + 22; }
+bool gfxInTitleDaily(int x, int y)   { return x >= 88 && x < 152 && y >= TB_Y && y < TB_Y + 22; }
 
 // ---------------------------------------------------------------- board
 
@@ -328,21 +424,47 @@ static bool inChain(const Game *g, int c, int r)
 static void drawLetter(int x, int y, int letter, u16 col, u16 shadow)
 {
     if (letter == 'q' - 'a') {
-        drawChar(x + 3, y + 6, 'Q', shadow, 2); drawChar(x + 2, y + 5, 'Q', col, 2);
+        drawChar2Shadow(x + 2, y + 5, 'Q', col, shadow);
         drawChar(x + 14, y + 10, 'U', shadow, 1); drawChar(x + 13, y + 9, 'U', col, 1);
     } else {
-        drawChar(x + 8, y + 5, 'A' + letter, shadow, 2);
-        drawChar(x + 7, y + 4, 'A' + letter, col, 2);
+        drawChar2Shadow(x + 7, y + 4, 'A' + letter, col, shadow);
     }
 }
 
-static void drawBackdrop(void)
+static bool inChain(const Game *g, int c, int r);
+
+// Clears the board area, except under gems that will be fully overdrawn.
+static void drawBackdrop(const Game *g)
 {
-    fillRect(0, 0, 173, SCREEN_H, BLACK);
-    // N+ dot grid behind the gems
+    // margins around the grid
+    fillRect(0, 0, GRID_X, SCREEN_H, BLACK);
+    fillRect(GRID_X + COLS * TILE_W, 0, 173 - GRID_X - COLS * TILE_W, SCREEN_H, BLACK);
+    for (int c = 0; c < COLS; c++) {
+        int x = GRID_X + c * TILE_W, top = GRID_Y + ((c & 1) ? ODD_SHIFT : 0);
+        fillRect(x, 0, TILE_W, top, BLACK);
+        fillRect(x, top + ROWS * TILE_H, TILE_W, SCREEN_H - top - ROWS * TILE_H, BLACK);
+        for (int r = 0; r < ROWS; r++) {
+            const Cell *cl = &g->cell[c][r];
+            int y = top + r * TILE_H;
+            bool solid = (cl->state == CELL_TILE || cl->state == CELL_SECRET) && cl->yoff == 0 && !cl->squash && !cl->flash
+                         && g->state == ST_PLAY && !g->peekHeld && !inChain(g, c, r);
+            if (solid) {
+                // only the rounded-corner pixels and the one-pixel rim show through
+                fillRect(x, y, TILE_W, 1, BLACK); fillRect(x, y + TILE_H - 1, TILE_W, 1, BLACK);
+                for (int j = 1; j < TILE_H - 1; j++) { cur[(y + j) * SCREEN_W + x] = BLACK; cur[(y + j) * SCREEN_W + x + TILE_W - 1] = BLACK; }
+                cur[(y + 1) * SCREEN_W + x + 1] = BLACK; cur[(y + 1) * SCREEN_W + x + TILE_W - 2] = BLACK;
+                cur[(y + TILE_H - 2) * SCREEN_W + x + 1] = BLACK; cur[(y + TILE_H - 2) * SCREEN_W + x + TILE_W - 2] = BLACK;
+            } else {
+                fillRect(x, y, TILE_W, TILE_H, BLACK);
+            }
+        }
+    }
+    // N+ dot grid behind the gems (dots under solid gems are hidden anyway)
     u16 dot = lerp15(BLACK, ACCENT, 3);
-    for (int y = 6; y < SCREEN_H; y += 8)
-        for (int x = 6; x < 172; x += 8) px(x, y, dot);
+    for (int y = 6; y < SCREEN_H; y += 8) {
+        u16 *row = cur + y * SCREEN_W;
+        for (int x = 6; x < 172; x += 8) row[x] = dot;
+    }
 }
 
 static void drawBoard(const Game *g)
@@ -379,7 +501,8 @@ static void drawBoard(const Game *g)
                     break;
                 }
                 case CELL_SECRET: {
-                    drawGemSized(x, yd + sq, TILE_W, TILE_H - sq, &GEM_DIAMOND, lit);
+                    if (sq) drawGemSized(x, yd + sq, TILE_W, TILE_H - sq, &GEM_DIAMOND, lit);
+                    else { blitGem(x, yd, 5); if (lit) { rectOutline(x, yd, TILE_W, TILE_H, WHITE); rectOutline(x + 1, yd + 1, TILE_W - 2, TILE_H - 2, WHITE); } }
                     drawLetter(x, yd + sq / 2, cl->letter, C(4,6,10), C(20,22,26));
                     // travelling sparkle across the diamond
                     int sx = x + 3 + ((frame + c * 5 + r * 9) % 40) / 2;
@@ -415,16 +538,22 @@ static void drawBoard(const Game *g)
                         if (cl->letter == 'q' - 'a') drawChar(x + 15, yd + 8, 'U', DIM, 1);
                     } else {
                         const GemPal *p = gemFor(cl->letter);
-                        drawGemSized(x, yd + sq, TILE_W, TILE_H - sq, p, lit);
-                        drawLetter(x, yd + sq / 2, cl->letter, lit ? WHITE : C(31,31,29), lerp15(p->dark, BLACK, 8));
+                        if (sq) drawGemSized(x, yd + sq, TILE_W, TILE_H - sq, p, lit);
+                        else {
+                            blitGem(x, yd, gemIndex(p));
+                            if (lit) { rectOutline(x, yd, TILE_W, TILE_H, WHITE); rectOutline(x + 1, yd + 1, TILE_W - 2, TILE_H - 2, lerp15(WHITE, p->light, 8)); }
+                        }
+                        drawLetter(x, yd + sq / 2, cl->letter, lit ? WHITE : C(31,31,29), p->dark);
                     }
             }
             if (cl->flash) {
-                rectOutline(x, y, TILE_W, TILE_H, lerp15(BLACK, WHITE, cl->flash * 16 / 14));
+                rectOutline(x, y, TILE_W, TILE_H, lerp15(BLACK, WHITE, cl->flash > 14 ? 16 : cl->flash + 2));
             }
         }
     }
-    // chain links: glowing gold rope between lifted gems
+    // chain links: gold rope that turns to the shelf accent once the word is valid
+    bool chainValid = chainValidNow;
+    u16 ropeDk = chainValid ? lerp15(ACCENT, BLACK, 8) : GOLD_DK, ropeLt = chainValid ? ACCENT : GOLD_LT;
     for (int i = 1; i < g->chainLen; i++) {
         int x0, y0, x1, y1;
         cellOrigin(g->chainC[i - 1], g->chainR[i - 1], &x0, &y0);
@@ -432,14 +561,28 @@ static void drawBoard(const Game *g)
         x0 += TILE_W / 2; y0 += TILE_H / 2 - 2; x1 += TILE_W / 2; y1 += TILE_H / 2 - 2;
         for (int t = 0; t <= 10; t++) {
             int xx = x0 + (x1 - x0) * t / 10, yy = y0 + (y1 - y0) * t / 10;
-            fillRect(xx - 2, yy - 2, 4, 4, GOLD_DK);
-            fillRect(xx - 1, yy - 1, 2, 2, ((t + (frame >> 1)) % 5 == 0) ? WHITE : GOLD_LT);
+            fillRect(xx - 2, yy - 2, 4, 4, ropeDk);
+            fillRect(xx - 1, yy - 1, 2, 2, ((t + (frame >> 1)) % 5 == 0) ? WHITE : ropeLt);
         }
     }
     // chain order numbers float above the first gem
     if (g->chainLen) {
         int x, y; cellOrigin(g->chainC[0], g->chainR[0], &x, &y);
         fillRect(x + TILE_W / 2 - 2, y - 4, 4, 2, GOLD_LT);
+    }
+}
+
+// red glow creeping up from the floor as fire gets low
+static void drawDanger(const Game *g)
+{
+    int low = boardLowestFireRow(g);
+    if (low < 4 || g->state != ST_PLAY) return;
+    int strength = (low - 3) * 4 + ((frame & 16) ? 2 : 0);   // 4..18
+    for (int j = 0; j < 12; j++) {
+        int a = (strength * (12 - j)) / 12;
+        if (a <= 0) continue;
+        int y = SCREEN_H - 2 - j;
+        for (int x = 2; x < 171; x += 1 + (j & 1)) px(x, y, lerp15(cur[y * SCREEN_W + x], FIRE1, a > 16 ? 16 : a));
     }
 }
 
@@ -458,11 +601,12 @@ static void drawPanel(const Game *g)
     drawTextShadow(PANEL_X, 22, s, GOLD, 2);
     sprintf(s, "SHELF %d", g->shelf);
     drawText(PANEL_X, 42, s, INK, 1);
-    drawText(PANEL_X, 52, g->lockdown ? "LOCKDOWN" : "CLASSIC", g->lockdown ? FIRE1 : ACCENT, 1);
+    if (g->mode == MODE_DAILY) drawText(PANEL_X, 52, "DAILY", GOLD_LT, 1);
+    else drawText(PANEL_X, 52, g->lockdown ? "LOCKDOWN" : "CLASSIC", g->lockdown ? FIRE1 : ACCENT, 1);
 
-    char w[24]; boardChainWord(g, w);
+    char w[24]; strcpy(w, chainWordNow);
     for (char *p = w; *p; p++) *p -= 32;
-    bool valid = g->chainLen >= 3 && dictLookup(w, strlen(w));
+    bool valid = chainValidNow;
     drawText(PANEL_X, 70, w, valid ? GOLD_LT : WHITE, 1);
     if (g->chainLen >= 3 && !g->peekHeld) drawText(PANEL_X, 82, valid ? "VALID" : "...", valid ? ACCENT : DIM, 1);
 
@@ -491,12 +635,30 @@ static void drawPanel(const Game *g)
 
 // ---------------------------------------------------------------- top screen
 
+static void drawTipCard(int which);
+
+static void drawTopTitle(void)
+{
+    rectOutline(8, 8, 240, 176, GOLD_DK);
+    rectOutline(9, 9, 238, 174, GOLD);
+    drawLogo(16, 16, 2);
+    drawText(170, 18, "BOOKWORM", INK, 1);
+    drawText(170, 28, "X MINESWEEPER", INK, 1);
+    drawTipCard((frame / 150) % 3);
+}
+
 static void drawTop(const Game *g)
 {
     fillRect(0, 0, SCREEN_W, SCREEN_H, BLACK);
+    if (g->state == ST_TITLE) {
+        u16 dot = lerp15(BLACK, ACCENT, 3);
+        for (int y = 4; y < SCREEN_H; y += 8)
+            for (int x = 4; x < SCREEN_W; x += 8) px(x, y, dot);
+        drawTopTitle();
+        return;
+    }
     u16 dot = lerp15(BLACK, ACCENT, 3);
-    for (int y = 4; y < SCREEN_H; y += 8)
-        for (int x = 4; x < SCREEN_W; x += 8) px(x, y, dot);
+    for (int y = 4; y < SCREEN_H; y += 8) { u16 *row = cur + y * SCREEN_W; for (int x = 4; x < SCREEN_W; x += 8) row[x] = dot; }
 
     // gold plaque with a shimmer running around the border
     rectOutline(8, 8, 240, 176, GOLD_DK);
@@ -513,7 +675,8 @@ static void drawTop(const Game *g)
 
     drawLogo(16, 16, 2);
     char s[40];
-    sprintf(s, "SHELF %d", g->shelf);
+    if (g->mode == MODE_DAILY) sprintf(s, "DAILY %d", g->dailySeed % 10000);   // MMDD
+    else sprintf(s, "SHELF %d", g->shelf);
     drawText(170, 18, s, INK, 1);
     sprintf(s, "%d", g->score);
     drawText(170, 28, s, GOLD, 1);
@@ -537,11 +700,13 @@ static void drawTop(const Game *g)
     }
 
     // current chain large, or the last word and its score
-    char w[24]; boardChainWord(g, w);
+    char w[24]; strcpy(w, chainWordNow);
     for (char *p = w; *p; p++) *p -= 32;
     if (w[0]) {
-        bool valid = strlen(w) >= 3 && dictLookup(w, strlen(w));
-        drawTextShadow(SCREEN_W / 2 - textWidth(w, 3) / 2, 100, w, valid ? GOLD_LT : WHITE, 3);
+        bool valid = chainValidNow;
+        int jx = invalidTimer ? ((invalidTimer & 2) ? 3 : -3) : 0;
+        u16 wc = invalidTimer ? ((invalidTimer & 4) ? FIRE1 : WHITE) : (valid ? GOLD_LT : WHITE);
+        drawTextShadow(SCREEN_W / 2 - textWidth(w, 3) / 2 + jx, 100, w, wc, 3);
     } else if (g->lastWord[0]) {
         char lw[16]; strcpy(lw, g->lastWord);
         for (char *p = lw; *p; p++) *p -= 32;
@@ -592,13 +757,73 @@ static void drawTitle(const Game *g)
             for (int j = 0; j < 7; j++) for (int k = 0; k < 5; k++) if (gl[j] & (0x10 >> k)) fillRect(x + 5 + k * 2, y + 5 + j * 2, 2, 2, WHITE);
         } else drawChar(x + 5, y + 5, ch, C(4,6,10), 2);
     }
-    fillRect(16, 72, 140, 64, BLACK);
-    rectOutline(16, 72, 140, 64, GOLD);
+    fillRect(16, 72, 140, 56, BLACK);
+    rectOutline(16, 72, 140, 56, GOLD);
     drawTextCenter(86, 80, "CRACK THE PASS", ACCENT, 1);
     drawTextCenter(86, 92, "DON'T BURN THE LIBRARY", INK, 1);
-    drawTextCenter(86, 108, "DRAG  : SPELL", DIM, 1);
-    drawTextCenter(86, 118, "HOLD L: PEEK", DIM, 1);
-    if (frame & 32) drawTextShadow(86 - textWidth("TAP TO START", 1) / 2, 150, "TAP TO START", WHITE, 1);
+    drawTextCenter(86, 108, "DRAG TO SPELL. HOLD L TO PEEK", DIM, 1);
+    // mode buttons
+    bool blink = frame & 32;
+    roundRect(20, TB_Y, 64, 22, blink ? GOLD : GOLD_DK);
+    drawTextCenter(52, TB_Y + 7, "CLASSIC", BLACK, 1);
+    roundRect(88, TB_Y, 64, 22, DIM);
+    rectOutline(88, TB_Y, 64, 22, GOLD_DK);
+    drawTextCenter(120, TB_Y + 7, "DAILY", GOLD_LT, 1);
+    drawTextCenter(86, 166, "SHELVES OF PASSES  /  ONE PASS A DAY", DIM, 1);
+}
+
+// Title top screen: three tip cards that cycle
+static void drawTipCard(int which)
+{
+    int cx = 128, y = 52;
+    if (which == 0) {
+        drawTextCenter(cx, y, "SPELL", GOLD_LT, 1);
+        static const char L[3] = { 'I', 'N', 'K' };
+        static const GemPal *P3[3] = { &GEM_RUBY, &GEM_SAPPHIRE, &GEM_AMBER };
+        int gx = cx - 40;
+        for (int i = 0; i < 3; i++) {
+            int x = gx + i * 28, gy = y + 14 + ((i & 1) ? 10 : 0);
+            drawGemSized(x, gy, TILE_W, TILE_H, P3[i], true);
+            drawChar(x + 7, gy + 4, L[i], WHITE, 2);
+        }
+        for (int i = 1; i < 3; i++) {
+            int x0 = gx + (i - 1) * 28 + TILE_W / 2, y0 = y + 14 + (((i - 1) & 1) ? 10 : 0) + TILE_H / 2;
+            int x1 = gx + i * 28 + TILE_W / 2, y1 = y + 14 + ((i & 1) ? 10 : 0) + TILE_H / 2;
+            for (int t = 0; t <= 8; t++) fillRect(x0 + (x1 - x0) * t / 8 - 1, y0 + (y1 - y0) * t / 8 - 1, 2, 2, GOLD_LT);
+        }
+        drawTextCenter(cx, y + 56, "DRAG ACROSS TOUCHING GEMS", INK, 1);
+        drawTextCenter(cx, y + 66, "THREE LETTERS OR MORE, THEN SUBMIT", INK, 1);
+        drawTextCenter(cx, y + 80, "LONG WORDS SCORE BIG AND KEEP HEAT DOWN", DIM, 1);
+    } else if (which == 1) {
+        drawTextCenter(cx, y, "PEEK", ACCENT, 1);
+        int gx = cx - 40;
+        for (int i = 0; i < 3; i++) {
+            int x = gx + i * 28, gy = y + 14 + ((i & 1) ? 10 : 0);
+            if (i == 0) { rectOutline(x + 1, gy + 1, TILE_W - 2, TILE_H - 2, ACCENT); drawChar(x + 10, gy + 8, '2', ACCENT, 1); }
+            else if (i == 1) { drawGemSized(x, gy, TILE_W, TILE_H, &GEM_DIAMOND, false); drawChar(x + 7, gy + 4, 'B', C(4,6,10), 2); }
+            else { rectOutline(x + 1, gy + 1, TILE_W - 2, TILE_H - 2, DIM); drawChar(x + 10, gy + 8, 'X', DIM, 1); }
+        }
+        drawTextCenter(cx, y + 56, "HOLD L AND TAP A GEM YOU CAN SPARE", INK, 1);
+        drawTextCenter(cx, y + 66, "A NUMBER COUNTS HIDDEN PASS LETTERS", INK, 1);
+        drawTextCenter(cx, y + 76, "IN THE SIX CELLS AROUND IT", INK, 1);
+        drawTextCenter(cx, y + 90, "PEELED GEMS NEVER COME BACK", DIM, 1);
+    } else {
+        drawTextCenter(cx, y, "FIRE", FIRE2, 1);
+        int gx = cx - 40;
+        GemPal fp = GEM_FIRE; fp.mid = (frame & 8) ? C(31,8,0) : C(31,14,0);
+        drawGemSized(gx, y + 14, TILE_W, TILE_H, &fp, false); drawChar(gx + 7, y + 18, 'R', WHITE, 2);
+        rectOutline(gx + 1, y + 14 + TILE_H + 1, TILE_W - 2, TILE_H - 2, DIM);
+        for (int j = 0; j < 3; j++) px(gx + 6 + j * 6, y + 12 - ((frame >> 2) + j) % 3, FIRE2);
+        drawGemSized(gx + 28, y + 24, TILE_W, TILE_H, &GEM_DIAMOND, false); drawChar(gx + 35, y + 28, 'O', C(4,6,10), 2);
+        drawGemSized(gx + 56, y + 14, TILE_W, TILE_H, &GEM_EMERALD, false); drawChar(gx + 63, y + 18, 'P', WHITE, 2);
+        drawTextCenter(cx, y + 62, "SHORT WORDS BUILD HEAT AND LIGHT A GEM", INK, 1);
+        drawTextCenter(cx, y + 72, "FIRE DROPS A ROW EACH TURN. IT FALLS", INK, 1);
+        drawTextCenter(cx, y + 82, "THROUGH HOLES. DIAMONDS BLOCK IT", INK, 1);
+        drawTextCenter(cx, y + 96, "SPELL THROUGH A FLAME TO PUT IT OUT", DIM, 1);
+    }
+    for (int i = 0; i < 3; i++) {
+        if (i == which) fillRect(118 + i * 8, 170, 4, 4, GOLD_LT); else rectOutline(118 + i * 8, 170, 4, 4, DIM);
+    }
 }
 
 static void drawOverlay(const Game *g)
@@ -614,7 +839,7 @@ static void drawOverlay(const Game *g)
         fillRect(cx - cw / 2, cy, cw, ch, BLACK);
         rectOutline(cx - cw / 2, cy, cw, ch, GOLD_LT);
         rectOutline(cx - cw / 2 + 2, cy + 2, cw - 4, ch - 4, GOLD_DK);
-        drawTextShadow(cx - textWidth("PASS ACCEPTED", 1) / 2, cy + 8, "PASS ACCEPTED", GOLD_LT, 1);
+        drawTextShadow(cx - textWidth("PASS ACCEPTED", 1) / 2, cy + 8, g->mode == MODE_DAILY ? "DAILY PASS DONE" : "PASS ACCEPTED", GOLD_LT, 1);
         // the pass itself as small diamonds
         int n = g->passLen, bw = 14, gap = 2, x0 = cx - (n * bw + (n - 1) * gap) / 2;
         for (int i = 0; i < n; i++) {
@@ -640,8 +865,8 @@ static void drawOverlay(const Game *g)
         hline(lx, rowy - 5, cw - 20, DIM);
         drawText(lx, rowy, "SHELF BONUS", DIM, 1); sprintf(s, "+%d", 500 * g->shelf);
         drawText(rx - textWidth(s, 1), rowy, s, GOLD_LT, 1); rowy += 14;
-        sprintf(s, "SHELF %d OPEN", g->shelf + 1);
-        drawTextCenter(cx, rowy, s, ACCENT, 1);
+        if (g->mode == MODE_DAILY) { sprintf(s, "FINAL %d", g->score); drawTextCenter(cx, rowy, s, GOLD_LT, 1); }
+        else { sprintf(s, "SHELF %d OPEN", g->shelf + 1); drawTextCenter(cx, rowy, s, ACCENT, 1); }
         if (t > 30 && (frame & 32)) drawTextCenter(cx, cy + ch - 12, "TAP TO CONTINUE", INK, 1);
     } else if (g->state == ST_FAIL) {
         fillRect(16, 66, 140, 60, BLACK);
@@ -650,11 +875,14 @@ static void drawOverlay(const Game *g)
         drawTextShadow(86 - textWidth(t, 1) / 2, 76, t, FIRE2, 1);
         const char *why = g->fail == FAIL_FIRE ? "FIRE REACHED THE FLOOR" : g->fail == FAIL_SCORCH ? "A PASS LETTER BURNED" : "NO WORDS LEFT TO SPELL";
         drawTextCenter(86, 90, why, INK, 1);
-        if (frame & 32) drawTextCenter(86, 110, "TAP TO RETRY SHELF", WHITE, 1);
+        if (frame & 32) drawTextCenter(86, 110, g->mode == MODE_DAILY ? "TAP FOR TITLE" : "TAP TO RETRY SHELF", WHITE, 1);
     } else if (g->state == ST_PAUSE) {
-        fillRect(40, 80, 92, 30, BLACK);
-        rectOutline(40, 80, 92, 30, ACCENT);
-        drawTextCenter(86, 92, "PAUSED", ACCENT, 1);
+        fillRect(26, 66, 120, 64, BLACK);
+        rectOutline(26, 66, 120, 64, ACCENT);
+        drawTextCenter(86, 74, "PAUSED", ACCENT, 1);
+        drawText(36, 90, "START", GOLD_LT, 1);  drawText(80, 90, "RESUME", INK, 1);
+        drawText(36, 102, "SELECT", GOLD_LT, 1); drawText(80, 102, "RESTART", INK, 1);
+        drawText(36, 114, "B", GOLD_LT, 1);      drawText(80, 114, "TITLE", INK, 1);
     }
 }
 
@@ -672,12 +900,15 @@ void gfxInit(void)
     vramSub = bgGetGfxPtr(bgs);
     lcdMainOnBottom();
     bright = -16;
+    buildGemCache();
 }
 
 void gfxFrame(const Game *g)
 {
     frame++;
     accent = SHELF_ACCENTS[(g->shelf > 0 ? g->shelf - 1 : 0) % 8];
+    boardChainWord(g, chainWordNow);
+    chainValidNow = g->chainLen >= 3 && dictLookup(chainWordNow, strlen(chainWordNow));
     // per-letter pop timers for the pass plaque
     for (int i = 0; i < g->passLen; i++) {
         if (g->found[i] && !prevFound[i]) letterPop[i] = 24;
@@ -696,16 +927,24 @@ void gfxFrame(const Game *g)
                 }
     stepParticles();
     stepPopups();
+    if (invalidTimer) invalidTimer--;
 
+    PROF_START();
     cur = bufMain;
-    drawBackdrop();
-    drawBoard(g);
+    drawBackdrop(g);  PROF(0);
+    drawBoard(g);     PROF(1);
     drawParticles();
     drawPopups();
-    drawPanel(g);
-    drawOverlay(g);
-    cur = bufSub;
-    drawTop(g);
+    drawDanger(g);    PROF(2);
+    drawPanel(g);     PROF(3);
+    drawOverlay(g);   PROF(4);
+    // the top screen is a HUD: in play, draw it on one frame in four and copy it on
+    // another, so no single frame carries both and the board stays at 60
+    bool playing = g->state == ST_PLAY;
+    bool drawSub = !playing || (frame & 3) == 1;
+    bool copySub = !playing || (frame & 3) == 3;
+    if (drawSub) { cur = bufSub; drawTop(g); }
+    PROF(5);
 
     // fade and shake
     if (bright < 0) { bright += 2; if (bright > 0) bright = 0; }
@@ -713,10 +952,14 @@ void gfxFrame(const Game *g)
     int sx = 0, sy = 0;
     if (shakeFrames > 0) { shakeFrames--; sx = (rand() % 5) - 2; sy = (rand() % 5) - 2; }
 
+    PROF_SET(8);
     swiWaitForVBlank();
+    PROF_START();
     setBrightness(3, bright);
     bgSetScroll(bgMain, sx, sy);
     bgUpdate();
+    DC_FlushRange(bufMain, sizeof(bufMain));
     dmaCopy(bufMain, vramMain, sizeof(bufMain));
-    dmaCopy(bufSub, vramSub, sizeof(bufSub));
+    if (copySub) { DC_FlushRange(bufSub, sizeof(bufSub)); dmaCopy(bufSub, vramSub, sizeof(bufSub)); }
+    PROF_SET(6);
 }

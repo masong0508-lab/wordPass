@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <time.h>
 
 Game G;
 
@@ -23,12 +24,34 @@ static void startShelf(void)
     setMsg(s, 180);
 }
 
-static void newGame(void)
+static int todaySeed(void)
 {
+    time_t t = time(NULL);
+    struct tm *tm = gmtime(&t);
+    if (!tm) return 20260101;
+    return (tm->tm_year + 1900) * 10000 + (tm->tm_mon + 1) * 100 + tm->tm_mday;
+}
+
+static void newGame(int mode)
+{
+    G.mode = mode;
     G.shelf = 1;
     G.score = 0;
+    G.hintShown = 0;
+    if (mode == MODE_DAILY) { G.dailySeed = todaySeed(); srand(G.dailySeed); }
     startShelf();
     G.state = ST_PLAY;
+}
+
+static void quitToTitle(void)
+{
+    G.mode = MODE_CLASSIC;
+    G.shelf = 1;
+    G.score = 0;
+    boardNewShelf(&G);
+    G.state = ST_TITLE;
+    gfxFadeIn();
+    musicNewShelf(1, false);
 }
 
 static void enterFail(void)
@@ -101,7 +124,13 @@ submit:;
             if (G.fail) enterFail();
         } else if (G.chainLen >= 3) {
             setMsg("NOT IN THE LIBRARY", 45);
+            gfxInvalidWord();
         }
+    }
+    // first-shelf nudge: three words in and no peek yet
+    if (G.shelf == 1 && G.mode == MODE_CLASSIC && !G.hintShown && G.peels == 0 && G.wordsThisShelf >= 3) {
+        G.hintShown = 1;
+        setMsg("HOLD L + TAP A GEM TO PEEK", 300);
     }
 }
 
@@ -124,7 +153,12 @@ int main(void)
 
         switch (G.state) {
             case ST_TITLE:
-                if (down & (KEY_TOUCH | KEY_START | KEY_A)) { srand(seedCounter ^ (t.px << 8) ^ t.py); newGame(); }
+                if (down & KEY_TOUCH) {
+                    srand(seedCounter ^ (t.px << 8) ^ t.py);
+                    if (gfxInTitleDaily(t.px, t.py)) newGame(MODE_DAILY);
+                    else newGame(MODE_CLASSIC);
+                } else if (down & (KEY_START | KEY_A)) { srand(seedCounter); newGame(MODE_CLASSIC); }
+                else if (down & KEY_SELECT) newGame(MODE_DAILY);
                 break;
             case ST_PLAY:
                 handlePlay(down, held, &t);
@@ -132,6 +166,7 @@ int main(void)
             case ST_PASSED:
                 G.stateTimer++;
                 if (G.stateTimer > 30 && (down & (KEY_TOUCH | KEY_START | KEY_A))) {
+                    if (G.mode == MODE_DAILY) { quitToTitle(); break; }
                     G.shelf++;
                     startShelf();
                     G.state = ST_PLAY;
@@ -140,6 +175,7 @@ int main(void)
             case ST_FAIL:
                 G.stateTimer++;
                 if (G.stateTimer > 45 && (down & (KEY_TOUCH | KEY_START | KEY_A))) {
+                    if (G.mode == MODE_DAILY) { quitToTitle(); break; }
                     G.score = G.shelfStartScore;
                     startShelf();
                     G.state = ST_PLAY;
@@ -147,6 +183,8 @@ int main(void)
                 break;
             case ST_PAUSE:
                 if (down & KEY_START) G.state = ST_PLAY;
+                else if (down & KEY_SELECT) { G.score = G.shelfStartScore; if (G.mode == MODE_DAILY) srand(G.dailySeed); startShelf(); G.state = ST_PLAY; }
+                else if (down & KEY_B) quitToTitle();
                 break;
         }
         if (G.msgTimer > 0 && --G.msgTimer == 0) G.msg[0] = 0;

@@ -85,7 +85,12 @@ typedef struct {
     char bestWord[16];        // per-shelf results card
     int  bestWordScore;
     int  peels;
+    int  mode;                // MODE_CLASSIC or MODE_DAILY
+    int  dailySeed;           // YYYYMMDD
+    int  hintShown;
 } Game;
+
+enum { MODE_CLASSIC = 0, MODE_DAILY };
 
 extern Game G;
 
@@ -122,6 +127,9 @@ void gfxPopup(int c, int r, const char *txt, int gold);
 void gfxFadeIn(void);
 void gfxFlash(void);
 void gfxShake(int frames);
+void gfxInvalidWord(void);
+bool gfxInTitleDaily(int px, int py);
+bool gfxInTitleClassic(int px, int py);
 
 // music.c
 void musicInit(void);

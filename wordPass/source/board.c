@@ -100,7 +100,7 @@ static void placeSecrets(Game *g)
 
 void boardNewShelf(Game *g)
 {
-    int idx = (g->shelf - 1) % NPASSES;
+    int idx = (g->mode == MODE_DAILY) ? (g->dailySeed * 7 + 3) % NPASSES : (g->shelf - 1) % NPASSES;
     strcpy(g->pass, PASSES[idx]);
     g->passLen = strlen(g->pass);
     memset(g->found, 0, sizeof(g->found));
@@ -130,6 +130,12 @@ void boardNewShelf(Game *g)
     g->bestWord[0] = 0;
     g->bestWordScore = 0;
     g->peels = 0;
+    if (g->mode == MODE_DAILY) {
+        // one fixed shelf for everyone today: medium pressure, pass buried mid-board
+        g->lockdown = false;
+        g->heatThreshold = 6;
+        g->burnEvery = 2;
+    }
 }
 
 bool boardTryAddToChain(Game *g, int c, int r)

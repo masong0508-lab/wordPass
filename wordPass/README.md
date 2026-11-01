@@ -30,6 +30,13 @@ and uncover the pass. Spell weak words and the shelf catches fire.
 | PASS DESTROYED | you scorched a cell that held a pass letter |
 | OUT OF WORDS | no 3- or 4-letter word is left on the board |
 
+### Modes
+
+- **Classic**: climb the shelves. Fire pressure and pass depth rise as you go.
+- **Daily Pass**: one fixed shelf for everyone, seeded from the DS clock date.
+  Same board, same pass, one attempt per run. Pick it from the title screen or
+  press SELECT there.
+
 ### Shelves
 
 Each shelf has its own pass (BOOK, PAGE, LAMP, SPELL, SHELF, QUILL ...).
@@ -45,7 +52,7 @@ the pass buried low, and the music drops into a minor key.
 | A / SUBMIT button | submit word |
 | B / CLEAR button | clear chain |
 | Hold L or R | peek mode (tap a gem to peel it) |
-| START | pause |
+| START | pause (then START resume, SELECT restart shelf, B quit to title) |
 
 ![wordPass](screenshot.png) ![fire](screenshot-fire.png) ![results](screenshot-results.png)
 
@@ -64,7 +71,11 @@ stars and pops into the plaque on the top screen, burning gems pulse with
 flame tongues and shed sparks, callouts pop in at double size, shelves fade
 in, and a failed run flashes and shakes the screen. The gold frames carry a
 travelling shimmer and the submit gem breathes while a valid word is chained.
-Columns fall under gravity and squash when they land, each shelf has its own
+The title screen's top half cycles three illustrated tip cards, a first-shelf
+nudge appears if you haven't peeked after three words, rejected words shake
+red, the chain rope turns the shelf accent once the word is valid, and a red
+glow creeps up from the floor as fire gets low. Columns fall under gravity and
+squash when they land, each shelf has its own
 accent colour, and clearing a shelf slides up a results card with the pass,
 your best word, words spelled, peels used, turns and the shelf bonus.
 
@@ -83,6 +94,15 @@ can be mixed by game state.
   the hook, so peeling a path plays the tune.
 - Word chimes are quantized to the beat. Finishing a pass hands the hook to a
   bright octave-up voice for one loop. Failing cuts to the alarm sliding down.
+
+## Performance
+
+Both screens are software rendered into RAM and DMA'd to VRAM each frame, so
+the budget is memory bandwidth. The board stays at 60 fps by caching gem
+sprites in DTCM, skipping the backdrop under gems that are fully redrawn,
+clipping-free 2x glyph blits, 32-bit fills, and spreading the top-screen HUD
+over four frames (drawn on one, copied on another). Build with
+`-DWP_PROFILE` to expose per-stage timings in `dbgT[]`.
 
 ## Building
 
