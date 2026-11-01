@@ -14,6 +14,7 @@ A clean build must print `built ... wordPass.nds` and no warnings.
 ## Native rule tests (no toolchain, no emulator)
 
     make check          # gcc builds board.c, dict.c and music.c with tools/check/stub, runs build/check
+                        # (before it, build/lang_check from tools/check/lang_test.c checks data/lang)
 
 `tools/check/board_test.c` loads `data/dict.bin` and exercises the rules directly: fire
 over holes and secrets, gravity with a hole, Qu+I+Z, chain backtracking, peeling (scorch,
@@ -25,6 +26,7 @@ for libnds (types, `ARGB16`, empty placement attributes, the PSG calls) and
 `tools/check/stubs.c` defines `S`, `dict_bin` and the sound stubs. When board.c or music.c
 starts calling a new gfx*/music*/sound* symbol, add it to stubs.c or the link will say so.
 `make check` first runs `tools/check/settings_test.c`, which compiles `source/settings.c` against a stub `fat.h` and tests the pure encode/decode (CRC, WPS1 migration, clamping), the streak arithmetic and the temp-file-and-rename save on a scratch file in `build/`.
+`tools/check/lang_test.c` loads all thirty files of `data/lang` (ten languages, three files each) with the game's own `dict.c` and `pools.c` pointed at buffers, and checks: records a-z only and sorted, every word found with its tier, the Qu rule, word counts inside 80k..250k, common tier 15k..35k, pool files (40 themes, names A-Z up to 7 letters, every pool word in the dictionary and in one theme only, tile letters only), letters (weights sum 100, values 1..10, Qu flag, vowel set), known words accepted and non-words rejected per language, the manifest, and that the three English files still match their sha256 pin (`python3 tools/lang/build_all.py --manifest` re-pins them after an intended English change). Its last line is `LANG OK: 0 failure(s)`; the existing check still ends the run with `CHECK OK`. See `docs/LANGUAGES-DATA.md`.
 CI runs `make check` and `python3 -m py_compile tools/emu/*.py` in a second job.
 
 ## Emulator harness

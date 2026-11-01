@@ -30,3 +30,33 @@ python3 tools/gen_pools.py --wordnet DIR --freq en_50k.txt --blocklist tools/wor
 `gen_dict.py` takes several comma separated word lists, so a bigger list you are licensed to use
 (for example a tournament Scrabble list) can be added without touching the code:
 `tools/enable1.txt,tools/words/extra.txt,/path/to/more.txt`.
+
+## Ten languages (`data/lang`, see `docs/LANGUAGES-DATA.md`)
+
+Nothing below is committed except the small hand-written inputs; `tools/lang/fetch.sh` downloads the rest.
+
+| What | Source | Licence |
+| --- | --- | --- |
+| Hunspell dictionaries (es, fr, de, it, pt, nl, sv, pl, da) expanded by `tools/lang/hunspell.py` | wooorm/dictionaries on GitHub, which packages: Spanish (RLA-ES), French (Grammalecte), German (igerman98), Italian (Italian Writing Aids), Portuguese (Raimundo Moura), Dutch (OpenTaal), Swedish (Goran Andersson), Polish (Polish Native Lang Project), Danish (Stavekontrolden) | es GPL-3.0 or LGPL-3.0 or MPL-1.1; fr MPL-2.0; de GPL-2.0 or GPL-3.0; it GPL-3.0; pt LGPL-3.0 or MPL-2.0; nl BSD-3-Clause or CC BY 3.0; sv LGPL-3.0; pl GPL-3.0 or LGPL-3.0 or MPL-2.0; da GPL-2.0 or LGPL-2.1 or MPL-1.1. Only derived word lists are shipped. |
+| Frequency lists (top 50k and full list), used for attestation, the common tier and ordering; Finnish dictionary words | FrequencyWords 2018 (hermitdave), from OpenSubtitles | CC BY-SA 4.0 |
+| Wordnets for pass words (through Open Multilingual Wordnet 1.4 and WordNet 3.0 ids): Spanish | Multilingual Central Repository | CC BY 3.0 |
+| French | WOLF, Wordnet Libre du Francais | CeCILL-C |
+| Italian | MultiWordNet | CC BY 3.0 |
+| Portuguese | OpenWN-PT | CC BY-SA 3.0 |
+| Dutch | Open Dutch WordNet | CC BY-SA 4.0 |
+| Swedish | SALDO wordnet | CC BY 3.0 |
+| Polish | plWordNet | plWordNet licence (permits commercial use with the notice) |
+| Danish (also used for Swedish) | DanNet | DanNet licence (BSD-style, permits redistribution) |
+| Norwegian Bokmal and Nynorsk (used for Danish and Swedish) | Norwegian Wordnet (Language Bank, National Library) | NWN licence (WordNet-style, permits commercial use with the notice) |
+| Finnish | FinnWordNet | CC BY 3.0 |
+| German | Open German WordNet (OdeNet) 1.4, linked to WordNet 3.0 through the Collaborative Interlingual Index (globalwordnet/cili) | CC BY-SA 4.0 (OdeNet), CC BY 4.0 (CILI) |
+| English side of the translation | Princeton WordNet 3.0 (nltk_data) | WordNet licence |
+| `lang/<code>/blocklist.txt` (words that never become a pass word): LDNOOBW lists per language, plus project additions | List of Dirty, Naughty, Obscene and Otherwise Bad Words | CC BY 4.0 |
+| `tools/words/lang/<code>/curses.txt`, `blocklist.txt`, and the verse, myth, motion, making and change lists | written for this project | MIT |
+
+Finnish has no open Hunspell dictionary on a host the build can reach, so its word list is FinnWordNet
+lemmas plus frequent subtitle forms that pass a vowel-harmony and ending test; see `docs/LANGUAGES-DATA.md`.
+
+Regenerating: `tools/lang/fetch.sh RAW`, then `python3 tools/lang/build_all.py RAW WORK` (all ten) or with
+language codes; `python3 tools/lang/build_all.py --manifest` re-pins the English files; `make check`
+runs `tools/check/lang_test.c` over the result.
