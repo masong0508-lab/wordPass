@@ -57,11 +57,13 @@ for i in range(1, g['passLen'] + 1):
     c, r = e.secret_cells(g)[i]
     if g['cell'][c][r][1] in (1,):
         doused += douse(c, r); s0 = e.state()['score']; e.peel(c, r); g = e.state()
-        if g['state'] == 1: assert g['score'] - s0 == 100 * g['shelf'], f'pass letter {i} paid {g["score"] - s0}, want {100 * g["shelf"]}'
+        # every pass letter pays 100 x shelf, and one found right after another pays 100 x shelf more per step of the streak (three steps at most)
+        want = 100 * g['shelf'] * (1 + min(max(g['hitStreak'] - 1, 0), 3))
+        if g['state'] == 1: assert g['score'] - s0 == want, f'pass letter {i} paid {g["score"] - s0}, want {want} (streak {g["hitStreak"]})'
 g = e.state(); assert g['state'] == 2, f'pass not completed: state {g["state"]} fail {g["fail"]} found {g["found"]}'
 print('shelf 1 cleared on turn', g['turn'], 'heat', g['heat'], 'flames', e.burn_cells(g))
 # one plain peel plus every secret: peels == passLen + 1, a CLEAN pass on shelf 1
-want = 100 * g['passLen'] + 1000 + 25 * max(0, 40 - g['turn']) + 150
+want = 100 * g['passLen'] + 100 * sum(min(k - 1, 3) for k in range(1, g['passLen'] + 1)) + 1000 + 25 * max(0, 40 - g['turn']) + 150     # the letters, their streak bonus (every peel after the plain one hit), the shelf, speed, CLEAN
 assert g['peels'] == g['passLen'] + 1 and g['passBonusKind'] == 1, f'peels {g["peels"]} kind {g["passBonusKind"]}'
 assert g['score'] - scoreBeforePeeking - doused == want, f'pass paid {g["score"] - scoreBeforePeeking - doused}, want {want} (turn {g["turn"]}, doused {doused})'
 assert g['speedBonus'] == 25 * max(0, 40 - g['turn']) and g['peelBonus'] == 150, f'speed {g["speedBonus"]} peel {g["peelBonus"]}'

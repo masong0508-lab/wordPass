@@ -257,6 +257,14 @@ class Emu:
         if peels <= pass_len + 2: return 1000 * shelf, speed, 150 * shelf, 1
         return 1000 * shelf, speed, 0, 0
     @staticmethod
+    def streak_bonus(shelf, run):
+        """The streak bonus the run-th pass letter in a row pays (board.c boardStreakBonus): 100 x shelf per step, three steps at most."""
+        return 100 * shelf * max(0, min(run - 1, 3))
+    @staticmethod
+    def streak_total(shelf, n):
+        """What a pass of n letters found in one unbroken run pays in streak bonus."""
+        return sum(Emu.streak_bonus(shelf, k) for k in range(1, n + 1))
+    @staticmethod
     def heat_for(n):
         """Heat a word of n letters adds (board.c boardHeatFor)."""
         return 3 if n <= 3 else 2 if n == 4 else 1 if n <= 6 else 0

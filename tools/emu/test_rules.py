@@ -634,7 +634,7 @@ def _():
     shelfB, speed, peelB, kind = e.pass_bonus(shelf, g['turn'], g['peels'], n)
     assert kind == 2 and g['passBonusKind'] == 2 and g['peelBonus'] == 400 * shelf and g['speedBonus'] == speed, \
         f'kind {g["passBonusKind"]} peel {g["peelBonus"]} speed {g["speedBonus"]} (want {speed})'
-    want = 100 * n * shelf + shelfB + speed + peelB
+    want = 100 * n * shelf + Emu.streak_total(shelf, n) + shelfB + speed + peelB      # every peel found a letter: the whole pass is one streak
     assert g['score'] - score0 == want, f'pass paid {g["score"] - score0}, want {want}'
     e.run(40); e.shot(f'{out}/rules_perfect.png')
     fps = e.fps(); assert fps >= 118, f'results fps {fps}/120'

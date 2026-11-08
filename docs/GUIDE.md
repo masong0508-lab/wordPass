@@ -463,7 +463,7 @@ Multiply each by the **shelf number**. On shelf 3: 300 per letter, 3000 for the 
 
 ### 5.5 The results card, line by line
 
-![The results card for shelf 1 with its tally: best word PLANETS +470, 3 words, 4 peels, 7 turns, shelf bonus +1000, speed +825, perfect pass +400.](img/results_card.png)
+![The results card for shelf 1 with its tally: best word PLANETS +564, 3 words, 4 peels, 7 turns, shelf bonus +1000, speed +825, perfect pass +400.](img/results_card.png)
 *The card from the quick start. The run behind it: three words (STONE, GARDEN and PLANETS), four peels that all found a letter, seven turns.*
 
 | Line | What it shows |
@@ -481,7 +481,7 @@ Multiply each by the **shelf number**. On shelf 3: 300 per letter, 3000 for the 
 
 The score on the panel counts up from the score before the bonuses, filling the three bonus rows in order (shelf, speed, peel). A tap skips to the end. A blinking **NEW BEST** says the run beat a saved record.
 
-Worked, for that card: the words scored 100 (STONE: 5 × 2 × 10), 160 (GARDEN: 8 × 2 × 10) and 470 (PLANETS: 9 × 3 × 10 + 200), a total of 730. The four pass letters paid 4 × 100 = 400 as they were found. Then 1000 for the shelf, 25 × 1 × (40 − 7) = 825 for speed and 400 × 1 for a perfect pass: 730 + 400 + 1000 + 825 + 400 = **3355**, the number on the panel.
+Worked, for that card: the words scored 100 (STONE: 5 × 2 × 10), 160 (GARDEN: 8 × 2 × 10) and 470 (PLANETS: 9 × 3 × 10 + 200), and as the second and third word in a row (no peel between them) the last two carry the combo bonus, +10% and +20%: 176 and 564, a total of 840. The four pass letters paid 4 × 100 = 400 as they were found, and finding them in a row added a streak bonus of 0 + 100 + 200 + 300 = 600 (section 5.7). Then 1000 for the shelf, 25 × 1 × (40 − 7) = 825 for speed and 400 × 1 for a perfect pass: 840 + 400 + 600 + 1000 + 825 + 400 = **4065**, the number on the panel.
 
 <!-- check:example name=stone base=5 len=5 burn=0 diamonds=0 repeat=0 expect=100 -->
 <!-- check:example name=garden base=8 len=6 burn=0 diamonds=0 repeat=0 expect=160 -->

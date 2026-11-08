@@ -543,9 +543,9 @@ def cards():
     e.press('START', settle=20)
     save(zoom(touch(grab(e)), 2), 'pause_menu.png')
     e.press('START', settle=20)
-    # results card, after the tally has finished
+    # results card, after the tally has finished (4065: the words 840 with their combo bonus, the four letters 400 and their streak bonus 600, the shelf 1000, speed 825, perfect 400)
     g = pass_by_peeling(e, keep_turn=True)
-    assert g['score'] == 3355 and g['turn'] == 7 and g['speedBonus'] == 825 and g['peelBonus'] == 400, (g['score'], g['turn'], g['speedBonus'], g['peelBonus'])
+    assert g['score'] == 4065 and g['turn'] == 7 and g['speedBonus'] == 825 and g['peelBonus'] == 400, (g['score'], g['turn'], g['speedBonus'], g['peelBonus'])
     e.run(110)
     save(zoom(touch(grab(e)), 2), 'results_card.png')
     e.tap(100, 100); e.run(200)
