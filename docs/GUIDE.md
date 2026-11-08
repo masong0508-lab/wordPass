@@ -188,16 +188,16 @@ The game has its own eight-page, animated manual: **HOW TO PLAY**. Open it from 
 <summary>The eight pages of HOW TO PLAY (click to open)</summary>
 
 ![HOW TO PLAY page 1, THE BOARD.](img/guide_1.png)
-*Page 1, THE BOARD: dragging a chain, the gold ring, tapping the last gem, undo and cut back.*
+*Page 1, THE BOARD: dragging a chain, the gold ring, tapping the last gem, undo and cut back, the shuffle of a dead board.*
 
 ![HOW TO PLAY page 2, SCORING.](img/guide_2.png)
-*Page 2, SCORING: gem values, the length multipliers, the flat bonus for seven letters, flames, diamonds and repeats.*
+*Page 2, SCORING: gem values, the length multipliers, the flat bonus for seven letters, flames, diamonds, repeats and the combo.*
 
 ![HOW TO PLAY page 3, PEEKING.](img/guide_3.png)
 *Page 3, PEEKING: the buttons, the numbers and their colours, diamonds, and the red gems that scorch.*
 
 ![HOW TO PLAY page 4, THE PASS.](img/guide_4.png)
-*Page 4, THE PASS: hidden letters, the themes, the pass length by shelf, and what each letter and the shelf pay.*
+*Page 4, THE PASS: hidden letters, the themes, the pass length by shelf, and what each letter, a streak of letters and the shelf pay.*
 
 ![HOW TO PLAY page 5, FIRE.](img/guide_5.png)
 *Page 5, FIRE: the heat each word adds, how a flame falls, chimneys and firebreaks, and the three ways to lose a shelf.*
@@ -459,6 +459,7 @@ Multiply each by the **shelf number**. On shelf 3: 300 per letter, 3000 for the 
 * **Speed** pays for turns *under 40* and counts words **and** peels; from turn 40 on it is zero.
 * **PERFECT PASS** is `peels == the pass length`: every peel was a pass letter. **CLEAN PASS** is `peels <= pass length + 2`. One or the other, never both.
 * The bonuses are added the moment the last letter is found. The pass letters themselves were paid as you found them.
+* A pass letter found right after another also pays a **streak bonus** on top (section 5.7).
 
 ### 5.5 The results card, line by line
 
@@ -500,6 +501,19 @@ Worked, for that card: the words scored 100 (STONE: 5 × 2 × 10), 160 (GARDEN: 
 A peel breaks the streak, so combos and peeling pull in opposite directions: the shelf is won by peeling, the score is made by words. The balance bot shows peeling alone wins most shelves, so the combo is a score reward, not a way to win (it does not change a shelf's clear rate).
 
 **Hints.** Press **SELECT** in play and the ghost drag traces a common word of three to five letters on the real board (the same breathing outline and trail the guided first shelf uses). When a flame burns, the hint looks first for a word through a flame. A shelf has **two hints**; the message line says how many are left. The hint hides at the first touch of the board. Ten seconds with no input and hints in hand make the game offer one (`STUCK? PRESS SELECT FOR A HINT`), once a shelf; the offer is free.
+
+### 5.7 Pass-letter streaks
+
+Finding pass letters back to back pays a **streak bonus** on top of the 100 × shelf each letter already pays. A streak is a run of **consecutive peels that each found a pass letter**: the second pass letter in a row pays **100 × shelf** more, the third **200 × shelf**, the fourth and every later one **300 × shelf** (the cap). A **plain hole** or a **scorch** ends the run; **a word does not**, so you can spell a word in the middle of a streak (to put a flame out, say) and carry on. Every shelf starts at zero.
+
+<!-- check:streak -->
+| Pass letters in a row | 1 | 2 | 3 | 4 and more |
+| --- | --- | --- | --- | --- |
+| Bonus, times the shelf number | +0 | +100 | +200 | +300 |
+
+The panel shows it twice: a row of **four pips** between the score and the pass slots (one per pass letter in the run, in the accent colour, gold once the bonus is capped) and `STREAK X3` in the row where the combo marker goes (the chain value comes first, then the combo, then the streak). The second pass letter of a run calls out **STREAK X2!**, the popup shows the letter's pay plus the bonus, and the message line names the bonus. Both sit on the panel side of the screen in either hand layout.
+
+It is a score reward and not a difficulty change: it never touches the heat, the meter or the fire, and the balance bot clears exactly the same shelves with and without it (`docs/BALANCE.md`, "The streak reward"). It cannot be farmed: it pays only when a peel finds a pass letter, a pass has at most nine letters and each pays once, so a shelf pays at most 100 × shelf × 21 in streak bonus (nine letters), a player who never peels earns none of it and one who peels at random almost none.
 
 ---
 
@@ -1318,6 +1332,8 @@ The dictionary holds **183,419** words of 3 to 20 letters, **159,922** of them i
 | `SHUFFLE_HEAT` | 3 | heat a re-deal costs |
 | `COMBO_PCT_PER_WORD` | 10 | each word of a streak without a peel scores this much more percent than the one before |
 | `COMBO_CAP_PCT` | 50 | the streak bonus stops here |
+| `STREAK_PER_SHELF` | 100 | a pass letter found right after another pays this x the shelf per step of the pass-letter streak |
+| `STREAK_CAP` | 3 | the most steps a pass-letter streak pays (the fourth letter in a row and later) |
 | `HINTS_PER_SHELF` | 2 | hints (SELECT) a shelf has |
 | `HINT_IDLE_FRAMES` | 600 | idle frames before the game offers a hint |
 | `INK_SPILL_HOLES` | 3 | holes an INK SPILL opens with |

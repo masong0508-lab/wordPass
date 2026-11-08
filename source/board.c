@@ -221,6 +221,13 @@ int boardOvertimeFor(int shelf, bool lockdown)
     int t = OVERTIME_TURNS - OVERTIME_EASE_STEP * (shelf - LOCKDOWN_FROM_SHELF);
     return t < OVERTIME_TURNS_LOCKDOWN ? OVERTIME_TURNS_LOCKDOWN : t;
 }
+int boardStreakBonus(int shelf, int streak)
+{
+    int steps = streak - 1;
+    if (steps < 0) steps = 0;
+    if (steps > STREAK_CAP) steps = STREAK_CAP;
+    return STREAK_PER_SHELF * shelf * steps;
+}
 int boardPassLetterReward(int shelf) { return PASS_LETTER_PER_SHELF * shelf; }
 int boardShelfBonus(int shelf) { return SHELF_BONUS_PER_SHELF * shelf; }
 int boardSpeedBonus(int shelf, int turn) { int left = SPEED_TURNS - turn; return SPEED_PER_SHELF_TURN * shelf * (left > 0 ? left : 0); }
@@ -359,6 +366,7 @@ void boardNewShelf(Game *g)
     g->twinEighths = rules.twinEighths;
     g->ignitions = 0;
     g->shuffles = SHUFFLES_PER_SHELF; g->shuffled = 0;
+    g->hitStreak = 0; g->bestHitStreak = 0; g->lastStreakBonus = 0;
     g->combo = 0; g->bestCombo = 0; g->hints = HINTS_PER_SHELF; g->hintReq = 0; g->hintIdle = 0; g->hintOffered = 0;
     g->burnTimer = 0;
     g->fail = FAIL_NONE;
@@ -886,10 +894,12 @@ int boardPeel(Game *g, int c, int r)
     bool scorch = (cl->state == CELL_BURN) || (r > 0 && g->cell[c][r - 1].state == CELL_BURN);
     g->peels++;
     g->combo = 0;                    // a peel breaks the streak of words
+    g->lastStreakBonus = 0;
     if (!g->practice) S.peels++;
     // drop a chained tile from the chain
     g->chainLen = 0;
     int secret = g->back[c][r];
+    if (!secret || scorch) g->hitStreak = 0;        // a plain hole or a scorch ends the run of pass letters (words do not)
     int peelHeat = boardPeelHeat(g->lockdown);      // a peel is a turn and warms the shelf
     if (scorch) {
         g->scorched[c][r] = 1;
@@ -904,6 +914,9 @@ int boardPeel(Game *g, int c, int r)
         cl->letter = g->pass[secret - 1] - 'a';
         cl->flash = 14;
         g->found[secret - 1] = 1;
+        g->hitStreak++;                                       // a pass letter right after another: the streak grows and pays
+        if (g->hitStreak > g->bestHitStreak) g->bestHitStreak = g->hitStreak;
+        g->lastStreakBonus = boardStreakBonus(g->shelf, g->hitStreak);
         if (!g->practice) S.peelsHit++;
         endTurn(g, peelHeat);
         return 2;

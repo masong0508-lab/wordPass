@@ -156,6 +156,8 @@ static int pageBoard(Page p)
     L(UI_GB_7);
     L(UI_GB_8);
     GAP();
+    L(UI_GB_11);
+    L(UI_GB_12, SHUFFLE_HEAT);
     L(UI_GB_9, ui(UI_EX_WORD), boardWordPoints(ink, wl, false, 0, false));
     L(UI_GB_10);
     return n;
@@ -176,6 +178,7 @@ static int pageScoring(Page p)
     L(UI_GS_5, BURN_BONUS_PER_LETTER);
     L(UI_GS_6, DIAMOND_CAP);
     L(UI_GS_7);
+    L(UI_GS_10, COMBO_PCT_PER_WORD, COMBO_CAP_PCT);
     GAP();
     u8 gem[4]; int wl, ng = guideGems(UI_EX_SCORE, gem, &wl), v[3] = { 0, 0, 0 };    // the example word's three gems
     char label[16]; label[0] = 0;
@@ -225,6 +228,7 @@ static int pagePass(Page p)
     LS(runs);
     GAP();
     L(UI_GA_6, PASS_LETTER_PER_SHELF);
+    L(UI_GA_12, STREAK_PER_SHELF);
     L(UI_GA_7);
     L(UI_GA_8, SHELF_BONUS_PER_SHELF, SPEED_PER_SHELF_TURN);
     L(UI_GA_9, SPEED_TURNS);

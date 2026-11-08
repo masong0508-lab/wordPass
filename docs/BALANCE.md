@@ -49,12 +49,15 @@ how many times the meter filled; **stall** means 100 turns passed with the shelf
 
 | 12 | The weak bot has a cliff at the first Lockdown shelf: 61% on shelf 5, 25% on shelf 6 (English; 31 to 37 points of fall in every bot language), because a peel starts to cost 2 heat there and the weak bot peels fourteen times a shelf. | The meter on shelf 6 is 8 (the ladder's 7 plus one) and Lockdown's overtime starts at turn 24, 22, 20, 18 on shelves 6 to 9 and 16 from shelf 10, instead of 16 from shelf 6. | GUIDE 8.2, 8.6, 9.3 (new table), 9.4 ladder, 12.7, README, the in-game SHELVES page |
 
+| 13 | A streak of pass-letter hits earned nothing extra, and a second pass letter found right after the first was worth the same as a lone one. | A streak bonus of 100 x shelf per step, three steps at most, for pass letters found by consecutive peels (score only: it never touches heat or fire). | GUIDE 5.4, 5.7 (new table), 16.3, README, the in-game THE PASS page |
+
 Features added (each with a native test, an emulator scenario, a README and GUIDE paragraph, and strings in all ten languages):
 
 * **Shuffle** (above, finding 6). `SHUFFLES_PER_SHELF` 1, `SHUFFLE_HEAT` 3.
 * **Combo**: +10% per word of a streak without a peel, to +50% (`COMBO_PCT_PER_WORD`, `COMBO_CAP_PCT`); `COMBO Xn` on the panel, a callout at the third word. The score-seeking bot's streaks reach 15 words and the bonus is worth about 1,400 to 1,800 points an attempt to it (15% of its score) and 0 to 350 to the competent player.
 * **Hint**: SELECT traces a common word with the ghost drag (through a flame, if one burns), two a shelf; ten idle seconds offer one for free.
-* Not built: **pass-letter streak rewards**. The data does not ask for them: the competent peel hit rate is 40 to 60% and a streak of two hits is common, so a reward would be a bonus to the thing the player already does; the combo already pays the opposite habit (words). **Settings** did not change, so there is no migration.
+* **Pass-letter streak** (second pass, item 3): pass letters found by consecutive peels pay `STREAK_PER_SHELF` (100) x shelf per step, one step for the second in a row, two for the third, three (`STREAK_CAP`) for the fourth and later; a hole or a scorch resets it, a word does not. The first pass left it out because the data did not ask for it (a streak of two hits is common, so it rewards what a player already does); it was built on request, as a score reward, and measured below ("The streak reward").
+* **Settings** did not change, so there is no migration.
 
 ## Results
 
@@ -269,6 +272,87 @@ in every language (German 30 to 22 points, English 37 to 25); the step from shel
 strong bot's budget (3 points on shelves 6 to 10) is smaller than what would flatten it: the variants that cut the fall to
 16 to 21 points raised the German and Spanish competent bot by 3.0 to 4.9 points on shelf 6. The competent bot's change is
 +1.0 or less on every shelf and language (shelf 8 moves by -1.2 in German, which is noise at this sample size).
+
+### The streak reward (item 3 of the second pass)
+
+The reward is a score reward, not a difficulty change: `boardPeel` counts the run (`hitStreak`) and the caller adds
+`lastStreakBonus` to the score, so no rule that decides a shelf reads it. The bot confirms it with the reward switched off
+at compile time (`-DSTREAK_PER_SHELF=0`): the same seeds give the same clear rate on every shelf, to the last decimal
+(English, 400 attempts a shelf, five players, six shelves each; 0.0 points of difference against the 2 allowed).
+
+Per-attempt averages for each kind of player (`build/bot --lang en --streak --n 400`; a clear needs the pass found, so the
+never-peeling and random-peeling bots almost never clear):
+
+| player | shelf | clear % | score | streak points | share of score % | longest streak | peel hit % |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| competent | 1 | 100.0 | 2454 | 138 | 5.6 | 2.01 | 36 |
+| competent | 3 | 100.0 | 7408 | 664 | 9.0 | 2.37 | 41 |
+| competent | 5 | 99.0 | 12281 | 1072 | 8.7 | 2.34 | 40 |
+| competent | 8 | 94.0 | 20473 | 2374 | 11.6 | 2.61 | 45 |
+| competent | 12 | 79.5 | 29655 | 5037 | 17.0 | 2.94 | 49 |
+| competent | 18 | 50.2 | 38296 | 9472 | 24.7 | 3.29 | 51 |
+| scorer | 1 | 84.0 | 9407 | 128 | 1.4 | 1.98 | 29 |
+| scorer | 3 | 83.2 | 12987 | 544 | 4.2 | 2.18 | 35 |
+| scorer | 5 | 66.5 | 15502 | 846 | 5.5 | 2.13 | 33 |
+| scorer | 8 | 65.5 | 20082 | 2104 | 10.5 | 2.50 | 38 |
+| scorer | 12 | 40.0 | 23839 | 4278 | 17.9 | 2.79 | 42 |
+| scorer | 18 | 18.2 | 29954 | 7970 | 26.6 | 3.08 | 47 |
+| weak | 1 | 91.2 | 3133 | 131 | 4.2 | 1.99 | 28 |
+| weak | 3 | 80.5 | 6522 | 540 | 8.3 | 2.18 | 29 |
+| weak | 5 | 56.0 | 8174 | 751 | 9.2 | 2.00 | 28 |
+| weak | 8 | 23.0 | 8368 | 1240 | 14.8 | 2.02 | 29 |
+| weak | 12 | 2.8 | 8192 | 1977 | 24.1 | 2.00 | 31 |
+| weak | 18 | 1.5 | 11318 | 3334 | 29.5 | 2.12 | 35 |
+| never-peel | 1 | 0.0 | 13531 | 0 | 0.0 | 0.00 | 0 |
+| never-peel | 3 | 0.0 | 13675 | 0 | 0.0 | 0.00 | 0 |
+| never-peel | 5 | 0.0 | 13897 | 0 | 0.0 | 0.00 | 0 |
+| never-peel | 8 | 0.0 | 13129 | 0 | 0.0 | 0.00 | 0 |
+| never-peel | 12 | 0.0 | 12838 | 0 | 0.0 | 0.00 | 0 |
+| never-peel | 18 | 0.0 | 13025 | 0 | 0.0 | 0.00 | 0 |
+| random-peel | 1 | 3.2 | 219 | 9 | 4.2 | 0.95 | 7 |
+| random-peel | 3 | 0.5 | 638 | 40 | 6.2 | 1.02 | 9 |
+| random-peel | 5 | 0.0 | 635 | 26 | 4.1 | 0.80 | 8 |
+| random-peel | 8 | 0.0 | 958 | 84 | 8.8 | 0.81 | 11 |
+| random-peel | 12 | 0.0 | 1434 | 183 | 12.8 | 0.81 | 12 |
+| random-peel | 18 | 0.0 | 2403 | 279 | 11.6 | 0.89 | 13 |
+
+German (competent, never-peeling and random-peeling rows):
+
+| player | shelf | clear % | score | streak points | share of score % | longest streak | peel hit % |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| competent | 1 | 99.5 | 2669 | 140 | 5.3 | 2.04 | 35 |
+| competent | 3 | 100.0 | 7518 | 645 | 8.6 | 2.34 | 41 |
+| competent | 5 | 99.0 | 12500 | 1029 | 8.2 | 2.30 | 41 |
+| competent | 8 | 91.2 | 20969 | 2446 | 11.7 | 2.64 | 45 |
+| competent | 12 | 78.2 | 30986 | 5394 | 17.4 | 3.08 | 50 |
+| competent | 18 | 54.8 | 40662 | 9382 | 23.1 | 3.28 | 52 |
+| never-peel | 1 | 0.0 | 24230 | 0 | 0.0 | 0.00 | 0 |
+| never-peel | 3 | 0.0 | 24019 | 0 | 0.0 | 0.00 | 0 |
+| never-peel | 5 | 0.0 | 24896 | 0 | 0.0 | 0.00 | 0 |
+| never-peel | 8 | 0.0 | 22769 | 0 | 0.0 | 0.00 | 0 |
+| never-peel | 12 | 0.0 | 21761 | 0 | 0.0 | 0.00 | 0 |
+| never-peel | 18 | 0.0 | 21817 | 0 | 0.0 | 0.00 | 0 |
+| random-peel | 1 | 2.5 | 200 | 9 | 4.4 | 0.94 | 7 |
+| random-peel | 3 | 1.5 | 659 | 33 | 5.0 | 0.99 | 9 |
+| random-peel | 5 | 0.0 | 659 | 41 | 6.3 | 0.84 | 9 |
+| random-peel | 8 | 0.0 | 922 | 66 | 7.2 | 0.75 | 10 |
+| random-peel | 12 | 0.0 | 1446 | 147 | 10.2 | 0.80 | 12 |
+| random-peel | 18 | 0.0 | 2606 | 328 | 12.6 | 0.92 | 14 |
+
+What it shows:
+
+* **A good player earns it, a weak one earns it too, neither can farm it.** The competent bot's longest run is 2.0 to 3.3
+  pass letters (a run needs pass letters found back to back, and a pass has four to nine), and the reward is 6% of its score
+  on shelf 1 and 25% on shelf 18: it scales with the shelf like the pass letters it rides on (100 x shelf each), while words
+  do not. On shelf 5 it adds 1,072 points to a 12,281 point shelf (9%).
+* **A player who never peels earns nothing.** The never-peeling bot makes 13,000 to 14,000 points an attempt in English on
+  words alone (the farming that finding 4 above capped with the overtime tenth) and 0 streak points: there is no streak
+  without peeling.
+* **A player who peels at random earns almost nothing.** Its hit rate is 7 to 13%, its longest run under one letter on
+  average and its streak points 9 to 279 an attempt, 4 to 13% of a score of 219 to 2,400.
+* **A shelf cannot pay more than its letters allow.** Each pass letter is found once, so the most a shelf can pay is
+  100 x shelf x (1 + 2 + 3 x 6) = 2,100 x shelf for a nine-letter pass found in one unbroken run (50,400 on shelf 24), which
+  needs every peel of the shelf to be a hit; a native test pins the bound.
 
 ### Daily modifiers, before / after
 

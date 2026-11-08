@@ -162,6 +162,10 @@ typedef struct {
     int  hintReq;             // a hint is on show (the ghost drag traces it until the player touches the board)
     int  hintIdle;            // frames the player has done nothing this shelf (the idle offer)
     int  hintOffered;         // the idle offer has been shown on this shelf
+    // ---- pass-letter streak (second balance pass)
+    int  hitStreak;           // pass letters found by consecutive peels (a hole or a scorch resets it, words do not)
+    int  bestHitStreak;       // the longest such run this shelf
+    int  lastStreakBonus;     // what the latest peel's streak paid (0 when it was not a hit or the first of a run); main.c adds it to the score
 } Game;
 enum { CUE_NONE = 0, CUE_GHOST, CUE_TAIL, CUE_PEEKBTN, CUE_ARMED };   // ghost drag, tail gem of a valid chain, the PEEK button, the armed cell
 #define GHOST_IDLE_FRAMES 180   // idle this long before the ghost drag traces a word
@@ -203,6 +207,10 @@ int  pauseRows(const Game *g, int ids[PAUSE_ROWS_MAX]);   // main.c: the visible
 #define SHUFFLE_HEAT               3    // the re-deal costs this much heat, like a three-letter word
 #define COMBO_PCT_PER_WORD        10    // each word of a streak without a peel scores this much more percent than the one before ...
 #define COMBO_CAP_PCT             50    // ... up to this bonus (the sixth word of a streak)
+#ifndef STREAK_PER_SHELF            // (overridable so the bot can measure a build without the reward)
+#define STREAK_PER_SHELF         100    // a pass letter found right after another pays a streak bonus: this x shelf per step ...
+#endif
+#define STREAK_CAP                 3    // ... the second in a row one step, the third two, the fourth and every later one three (the cap)
 #define HINTS_PER_SHELF            2    // SELECT shows a word on the board this many times a shelf
 #define HINT_IDLE_FRAMES         600    // idle this long (ten seconds) with hints left and the game offers one
 #define INK_SPILL_HOLES            3
@@ -216,6 +224,7 @@ typedef struct { bool lockdown; int tier, threshold, burnEvery, pulseEvery, minR
 void boardShelfRules(int shelf, ShelfRules *out);   // a Classic shelf on FIRE NORMAL with no twist: Lockdown, tier, meter, fire speed, pulse, shallowest pass row
 void boardDailyRules(int mod, ShelfRules *out);     // the same for a Daily with modifier DAILYMOD_*
 int  boardComboPct(int combo);                       // the bonus percent the next word scores after `combo` words in a row without a peel
+int  boardStreakBonus(int shelf, int streak);        // the bonus the streak-th pass letter in a row pays (0 for the first)
 int  boardTwinEighths(int shelf);                   // of every eight ignitions on this Classic shelf, how many light two columns (0 before shelf 11)
 int  boardPassLenFor(int shelf);                    // the pass length a Classic shelf asks for (4, 5, 6, 7, 8)
 bool boardTwistShelf(int shelf);                    // does a Classic shelf carry a twist (4, 7, 10 ...)

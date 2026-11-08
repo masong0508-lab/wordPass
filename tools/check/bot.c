@@ -106,6 +106,9 @@ typedef struct {
 static const Player COMPETENT = { "competent", 9, 0.95, 0.70, 0.10, 0.92, 2.2, 1.6, 2, 0.30, 0.90, 3, 0.90, 1, 0.05 };
 // the competent player who plays for score: it peels only when a cell is likely and spells a word on every other turn
 static const Player SCORER    = { "scorer",     12, 0.95, 0.85, 0.10, 0.92, 2.2, 1.6, 2, 0.60, 0.12, 3, 0.90, 1, 0.05 };
+// the two players the streak reward must not pay: one that never peels unless nothing else is left, one that peels a random gem every turn
+static const Player NEVERPEEL = { "never-peel", 9, 0.95, 0.70, 0.10, 0.92, 2.2, 1.6, 2, 9.0, 0.0, 3, 0.90, 0, 0.0 };
+static const Player RANDPEEL  = { "random-peel", 5, 0.55, 0.20, 0.00, 0.40, 0.2, 0.0, 0, 0.50, 1.0, 2, 0.60, 0, 0.0 };
 static const Player WEAK      = { "weak",       5, 0.55, 0.20, 0.00, 0.40, 0.2, 0.0, 1, 0.50, 0.25, 2, 0.60, 0, 0.0 };
 
 // ---------------------------------------------------------------------------------------------- candidate words
@@ -343,7 +346,7 @@ typedef struct {
     double flamesLit, ignitions, fireUnreach, wordsAtFail, chainable, heatSum;
     long fireFailUnreach;
     long outWordsHoles; double outWordsCells;
-    double comboPts, bestCombo, shuffles;
+    double comboPts, bestCombo, shuffles, streakPts, bestStreak, streakSum;
 } Stat;
 
 typedef struct { int outcome; int fail; } Outcome;
@@ -378,7 +381,7 @@ static int playShelf(const Player *pl, Stat *st, bool verbose)
     int nled = 0;
     int words = 0, wordLen = 0, hits = 0, guesses = 0, ignitions = 0;
     int result = FAILX_TIMEOUT;
-    double comboPts = 0;
+    double comboPts = 0, streakPts = 0;
     bool lastFlameReach = true;
     int lastFlameDanger = 0;
     int prevHeat = G.heat;
@@ -460,7 +463,7 @@ static int playShelf(const Player *pl, Stat *st, bool verbose)
             if (gs) guesses++;
             if (getenv("BOTTRACE") && G.turn > 90) printf("peel %d,%d p=%.2f urgent %d\n", pc, prr, pp, urgent);
             int res = boardPeel(&G, pc, prr);
-            if (res == 2) { hits++; G.score += boardPassLetterReward(G.shelf); }
+            if (res == 2) { hits++; G.score += boardPassLetterReward(G.shelf) + G.lastStreakBonus; streakPts += G.lastStreakBonus; }
             if (res == 0) { /* not peelable: skip the turn */ continue; }
             (void)sec;
             if (boardPassComplete(&G)) { result = FAILX_NONE; break; }
@@ -506,7 +509,7 @@ static int playShelf(const Player *pl, Stat *st, bool verbose)
     }
     st->attempts++;
 #ifndef BOT_OLD_RULES
-    st->comboPts += comboPts; st->bestCombo += G.bestCombo; st->shuffles += SHUFFLES_PER_SHELF - G.shuffles;
+    st->comboPts += comboPts; st->bestCombo += G.bestCombo; st->streakPts += streakPts; st->bestStreak += G.bestHitStreak; st->shuffles += SHUFFLES_PER_SHELF - G.shuffles;
 #endif
     st->fails[result]++;
     st->turns += G.turn;
@@ -657,6 +660,27 @@ static void boardQuality(int lang, int n)
     (void)qs;
 }
 
+// What the pass-letter streak reward pays each kind of player (docs/BALANCE.md "Streak reward"): the bonus is score only, so
+// a player that never peels earns none and one that peels at random almost none
+static void streakReport(int n)
+{
+    static const int SH[] = { 1, 3, 5, 8, 12, 18 };
+    const Player *pls[] = { &COMPETENT, &SCORER, &WEAK, &NEVERPEEL, &RANDPEEL };
+    printf("| player | shelf | clear %% | score | streak pts | streak share of score %% | longest streak | peel hit %% |\n| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n");
+    for (unsigned p = 0; p < sizeof pls / sizeof pls[0]; p++)
+        for (unsigned i = 0; i < sizeof SH / sizeof SH[0]; i++) {
+            Stat st; memset(&st, 0, sizeof st);
+            for (int k = 0; k < n; k++) {
+                u32 seed = 9000u + (u32)SH[i] * 100003u + (u32)k * 7919u;
+                rseed(seed ^ 0xABCDEF); setupClassic(SH[i], seed);
+                playShelf(pls[p], &st, false);
+            }
+            double a = st.attempts ? st.attempts : 1;
+            printf("| %s | %d | %.1f | %.0f | %.0f | %.1f | %.2f | %.0f |\n", pls[p]->name, SH[i], 100.0 * st.clears / a, st.score / a, st.streakPts / a,
+                st.score > 0 ? 100.0 * st.streakPts / st.score : 0.0, st.bestStreak / a, st.peels > 0 ? 100.0 * st.hits / st.peels : 0.0);
+        }
+}
+
 static int selftest(void)
 {
     int fails = 0;
@@ -679,7 +703,7 @@ static int selftest(void)
 int main(int argc, char **argv)
 {
     int lang = 0, n = 200, runs = 60, dailyN = 240, shelves = 24;
-    bool boardsOnly = false, self = false, weakToo = true, md = false;
+    bool boardsOnly = false, self = false, weakToo = true, md = false, streakMode = false;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--lang") && i + 1 < argc) { lang = langIndex(argv[++i]); if (lang < 0) { fprintf(stderr, "unknown language\n"); return 2; } }
         else if (!strcmp(argv[i], "--n") && i + 1 < argc) n = atoi(argv[++i]);
@@ -687,6 +711,7 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "--daily") && i + 1 < argc) dailyN = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--shelves") && i + 1 < argc) shelves = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--boards")) boardsOnly = true;
+        else if (!strcmp(argv[i], "--streak")) streakMode = true;
         else if (!strcmp(argv[i], "--selftest")) self = true;
         else if (!strcmp(argv[i], "--competent-only")) weakToo = false;
         else if (!strcmp(argv[i], "--md")) md = true;
@@ -702,6 +727,7 @@ int main(int argc, char **argv)
     if (self) return selftest() ? 1 : 0;
     useLanguage(lang);
     if (boardsOnly) { boardQuality(lang, 400); return 0; }
+    if (streakMode) { streakReport(n); return 0; }
     if (shelves > 39) shelves = 39;
 
     Table *comp = calloc(1, sizeof *comp), *weak = calloc(1, sizeof *weak);

@@ -992,6 +992,52 @@ int main(int argc, char **argv)
         memset(&g, 0, sizeof g); g.mode = MODE_CLASSIC; g.shelf = 3; g.combo = 4; g.bestCombo = 4; boardNewShelf(&g);
         CHECK("a new shelf starts with no combo", g.combo == 0 && g.bestCombo == 0 && g.hints == HINTS_PER_SHELF && g.shuffles == SHUFFLES_PER_SHELF);
     }
+    // ---- pass-letter streak: pass letters found by consecutive peels pay 100 x shelf more per step (1, 2, 3 steps, then capped);
+    // a hole or a scorch resets the run, a word does not; the bonus is paid by the caller (main.c, the bot) from lastStreakBonus
+    {
+        CHECK("streak bonus: 0 for the first, then 1, 2, 3 steps of 100 x shelf, capped",
+              boardStreakBonus(5, 0) == 0 && boardStreakBonus(5, 1) == 0 && boardStreakBonus(5, 2) == 500 && boardStreakBonus(5, 3) == 1000 &&
+              boardStreakBonus(5, 4) == 1500 && boardStreakBonus(5, 5) == 1500 && boardStreakBonus(5, 99) == 1500 && boardStreakBonus(1, 4) == 300 && boardStreakBonus(-2, 3) <= 0);
+        // a six-letter pass in the bottom row of a quiet board: peel it letter by letter
+        boardOf('e'); strcpy(g.pass, "abcdef"); g.passLen = 6; g.shelf = 4;
+        plantWord();
+        for (int i = 0; i < 6; i++) g.back[i][ROWS - 1] = (u8)(i + 1);
+        int paid = 0, bonus[6] = {0};
+        for (int i = 0; i < 6; i++) { int pr = boardPeel(&g, i, ROWS - 1); bonus[i] = g.lastStreakBonus; paid += bonus[i]; if (pr != 2) paid = -999999; }
+        CHECK("six pass letters in a row pay 0, 400, 800, 1200, 1200, 1200 at shelf 4 and the streak stands at six",
+              bonus[0] == 0 && bonus[1] == 400 && bonus[2] == 800 && bonus[3] == 1200 && bonus[4] == 1200 && bonus[5] == 1200 && paid == 4800 && g.hitStreak == 6 && g.bestHitStreak == 6);
+        // a plain hole resets the run; a word in between does not
+        boardOf('e'); strcpy(g.pass, "abcd"); g.passLen = 4; g.shelf = 2;
+        for (int i = 0; i < 4; i++) g.back[i][ROWS - 1] = (u8)(i + 1);
+        plantWord();
+        boardPeel(&g, 0, ROWS - 1); boardPeel(&g, 1, ROWS - 1);
+        CHECK("two pass letters in a row: the second pays a step, the streak is 2", g.hitStreak == 2 && g.lastStreakBonus == 200);
+        set(0, 1, CELL_TILE, 'b'); set(0, 2, CELL_TILE, 'e'); set(0, 3, CELL_TILE, 'd');
+        boardTryAddToChain(&g, 0, 1); boardTryAddToChain(&g, 0, 2); boardTryAddToChain(&g, 0, 3);
+        boardSubmit(&g);
+        CHECK("a word between two peels does not break the streak", g.hitStreak == 2 && g.combo == 1);
+        boardPeel(&g, 2, ROWS - 1);
+        CHECK("the next pass letter after the word pays the third step", g.hitStreak == 3 && g.lastStreakBonus == 400 && g.bestHitStreak == 3);
+        boardOf('e'); strcpy(g.pass, "abcd"); g.passLen = 4; g.shelf = 2; plantWord();
+        for (int i = 0; i < 4; i++) g.back[i][ROWS - 1] = (u8)(i + 1);
+        boardPeel(&g, 0, ROWS - 1); boardPeel(&g, 6, 0);
+        CHECK("a plain hole resets the streak and pays nothing (the best stays)", g.hitStreak == 0 && g.lastStreakBonus == 0 && g.bestHitStreak == 1);
+        boardPeel(&g, 1, ROWS - 1);
+        CHECK("after a hole the next pass letter starts a new run: streak 1, no bonus", g.hitStreak == 1 && g.lastStreakBonus == 0);
+        // a scorch (peeling under a flame) also resets it
+        boardOf('e'); strcpy(g.pass, "abcd"); g.passLen = 4; g.shelf = 2; plantWord();
+        for (int i = 0; i < 4; i++) g.back[i][ROWS - 1] = (u8)(i + 1);
+        g.hitStreak = 3; set(5, 2, CELL_BURN, 'e'); g.fail = 0;
+        boardPeel(&g, 5, 3);
+        CHECK("peeling under a flame resets the streak", g.hitStreak == 0 && g.lastStreakBonus == 0);
+        // a new shelf starts clean
+        memset(&g, 0, sizeof g); g.mode = MODE_CLASSIC; g.shelf = 3; g.hitStreak = 4; g.bestHitStreak = 4; g.lastStreakBonus = 300; boardNewShelf(&g);
+        CHECK("a new shelf starts with no streak", g.hitStreak == 0 && g.bestHitStreak == 0 && g.lastStreakBonus == 0);
+        // it cannot be farmed: a pass has at most 9 letters and each pays once, so one shelf pays at most
+        int most = 0;
+        for (int n = 1; n <= 9; n++) most += boardStreakBonus(24, n);
+        CHECK("the most a shelf can ever pay is bounded by its letters: 9 letters at shelf 24 pay 100 x 24 x 24 steps", most == 100 * 24 * (1 + 2 + 3 * 6));
+    }
     // ---- a word past the turn limit pays a tenth (a burning shelf cannot be farmed)
     {
         boardOf('e'); plantWord();
@@ -1482,7 +1528,7 @@ int main(int argc, char **argv)
                         int de = 0, dl = 0;
                         for (const char *ch = pe; *ch; ch++) if (*ch >= '0' && *ch <= '9') de += *ch - '0' + 1;
                         for (const char *ch = plain; *ch; ch++) if (*ch >= '0' && *ch <= '9') dl += *ch - '0' + 1;
-                        if (de != dl && i != 1 && !(p == 1) && !(p == 0 && i == 11)) { lnum = false; printf("   lang %d page %d line %d: digits differ from English: %s | %s\n", lg, p + 1, i, pe, plain); }
+                        if (de != dl && i != 1 && !(p == 1) && !(p == 0 && i == 13)) { lnum = false; printf("   lang %d page %d line %d: digits differ from English: %s | %s\n", lg, p + 1, i, pe, plain); }
                     }
                     if (h > GUIDE_MAX_H) { ltall = false; printf("   lang %d page %d is %d px tall\n", lg, p + 1, h); }
                     if (!guideTitle(p)[0] || strlen(guideTitle(p)) * 12 > 150) { ltitle = false; printf("   lang %d title %s too wide\n", lg, guideTitle(p)); }

@@ -125,6 +125,15 @@ are in `tools/check/board_test.c`; the emulator scenarios `SHUFFLE`, `COMBO`, `H
 `tools/emu/test_rules.py` drive them through `Emu.set_features(shuffles, hints, combo, twin)` (poke 16). A test that wants a
 dead board (every gem an `x`) must spend the shelf's re-deal first with `e.set_features(shuffles=0)`.
 
+Second balance pass: `boardOvertimeFor(shelf, lockdown)` (the Lockdown ramp's overtime limits) and the first Lockdown shelf's
+meter of 8 are tested in `board_test.c` ("the meter by shelf", "Lockdown overtime starts at turn 24, 22, 20, 18 ..."); the German
+letter table has a density guard there too (a fresh German board must hold over 300 word paths of 3 to 5 tiles; `lang_test.c` caps a
+tile weight at 25). The pass-letter streak (`hitStreak`, `lastStreakBonus`, `boardStreakBonus`) has native tests in `board_test.c`
+and the emulator scenario `STREAK`, which pokes it with `Emu.set_streak(n)` (poke 17; the DBG mirror gained `hitStreak`,
+`bestHitStreak` and `lastStreakBonus` at offsets 740 to 748, 752 bytes in all). `build/bot --lang en --streak --n 400` prints what
+the reward pays a competent, a score-seeking, a weak, a never-peeling and a random-peeling player (`docs/BALANCE.md`, "The
+streak reward"). Compiling the bot's sources with `-DSTREAK_PER_SHELF=0` (the command line of `make bot` plus the flag) builds it without the reward, to show it changes no clear rate.
+
 ## Long words and spelling
 
 `make check` covers words of 11 to 20 letters, a 20-gem chain that spells a 20-letter word, and the SPELLING setting (BOTH, AMERICAN, BRITISH, the shared and -ize/-ise words, `boardWordSpelling`). The emulator suite cycles the SPELLING row on the options screen and uses `POKE_SPELL`. The check binary loads `data/variants.bin` as its fourth argument, after dict, pools and variants default to `data/`.

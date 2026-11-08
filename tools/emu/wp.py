@@ -61,8 +61,9 @@ OFF = {
     'language': 644, 'loadMs': 648, 'langMask': 652,
     'seq': 656,
     'combo': 708, 'hints': 712, 'shuffles': 716, 'hintReq': 720, 'shuffled': 724, 'twinEighths': 728, 'ignitions': 732, 'bestCombo': 736,
+    'hitStreak': 740, 'bestHitStreak': 744, 'lastStreakBonus': 748,
 }
-DBG_SIZE = 740
+DBG_SIZE = 752
 I32_FIELDS = ['state', 'mode', 'shelf', 'score', 'fail', 'turn', 'heat', 'chainLen', 'peels', 'lockdown',
               'bestWordScore', 'dailySeed', 'passLen', 'lastWordTier', 'rareWords', 'library',
               'heatThreshold', 'burnEvery', 'burnTimer', 'optRow', 'pulseEvery', 'lockTier', 'overtime',
@@ -71,14 +72,14 @@ I32_FIELDS = ['state', 'mode', 'shelf', 'score', 'fail', 'turn', 'heat', 'chainL
               'streak', 'dailyPlayed', 'dailyLast', 'dailyLastScore', 'peek', 'armed', 'armC', 'armR', 'curC', 'curR', 'curOn',
               'calloutLife', 'pressBits', 'shownScore', 'pauseRow', 'pauseArm',
               'tutorStep', 'tutorDone', 'tipIndex', 'msgTimer', 'guidePage', 'guideFrom', 'cue', 'cueAge', 'hintLen',
-              'language', 'loadMs', 'langMask', 'combo', 'hints', 'shuffles', 'hintReq', 'shuffled', 'twinEighths', 'ignitions', 'bestCombo']
+              'language', 'loadMs', 'langMask', 'combo', 'hints', 'shuffles', 'hintReq', 'shuffled', 'twinEighths', 'ignitions', 'bestCombo', 'hitStreak', 'bestHitStreak', 'lastStreakBonus']
 PASS_THEMES = ['BINDERY', 'INK', 'VERSE', 'TALES', 'ATLAS', 'ARCHIVE', 'LAMP', 'STUDY']
 TWIST_NONE, TWIST_INK, TWIST_DAMP, TWIST_BURIED = range(4)
 VOWELS = {0, 4, 8, 14, 20}; RARE = {9, 16, 23, 25}   # a e i o u; j q x z
 # letter values (board.c letterValue), Q stands for Qu
 LETTER_VALUE = [1,3,3,2,1,4,2,4,1,8,5,1,3,1,1,3,10,1,1,1,1,4,4,8,4,10]
 # poke commands (debug.c applyPoke)
-POKE_CELL, POKE_BACK, POKE_HEAT, POKE_BURN, POKE_FIRESTEP, POKE_TURN, POKE_LIVES, POKE_SCORE, POKE_SPELL, POKE_CLOCK, POKE_DAILY, POKE_PASS, POKE_TUTOR, POKE_GUIDENAV, POKE_LANG, POKE_FEATURES = range(1, 17)
+POKE_CELL, POKE_BACK, POKE_HEAT, POKE_BURN, POKE_FIRESTEP, POKE_TURN, POKE_LIVES, POKE_SCORE, POKE_SPELL, POKE_CLOCK, POKE_DAILY, POKE_PASS, POKE_TUTOR, POKE_GUIDENAV, POKE_LANG, POKE_FEATURES, POKE_STREAK = range(1, 18)
 # the ten languages (source/game.h LANG_*; index 0 is English) and the label of each on the options row and the title tag
 LANG_CODES = ['en', 'es', 'fr', 'de', 'it', 'pt', 'nl', 'sv', 'pl', 'da', 'fi']
 LANG_NAMES = ['ENGLISH', 'ESPANOL', 'FRANCAIS', 'DEUTSCH', 'ITALIANO', 'PORTUGUES', 'NEDERLANDS', 'SVENSKA', 'POLSKI', 'DANSK', 'SUOMI']
@@ -224,6 +225,9 @@ class Emu:
     def set_features(self, shuffles=1, hints=2, combo=0, twin=0):
         """Re-deals and hints left on the shelf, the combo streak and the shelf's twin share (in eighths)."""
         self.poke(POKE_FEATURES, shuffles, hints, combo, twin)
+    def set_streak(self, n):
+        """poke: the pass-letter streak (consecutive peels that found a pass letter) becomes n"""
+        self.poke(POKE_STREAK, n)
     def set_lives(self, n):
         """Bookmarks left in the Classic run (3 at the start; a fail or a pause restart costs one)."""
         self.poke(POKE_LIVES, n)

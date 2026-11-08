@@ -1178,7 +1178,7 @@ static void panelRow(int y, const char *label, const char *val, u16 vcol)
 }
 
 // Panel rows (every string is at most 12 characters, 71 px, so it fits the 76 px panel):
-//   6 logo and pause   22 score   42 pass tracker   55 PEELS   64 TURN   74 chain word (or the peek hint)
+//   6 logo and pause   22 score   38 streak pips   42 pass tracker   55 PEELS   64 TURN   74 chain word (or the peek hint)
 //   84 chain value   94 HEAT / OVERTIME and the heat preview   102 heat bar   111 fire countdown
 //   120 SUBMIT   150 CLEAR   166 RED: SCORCH   174 PEEK
 static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
@@ -1212,6 +1212,11 @@ static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
             hline(x + 2, 50, 3, GOLD);
         }
     }
+    if (g->hitStreak >= 1) {   // the pass-letter streak: one 6 x 3 pip per letter found in a row (the first pays nothing, then one step each), gold once the bonus is at its cap
+        int pips = g->hitStreak < STREAK_CAP + 1 ? g->hitStreak : STREAK_CAP + 1;
+        for (int i = 0; i < STREAK_CAP + 1; i++)
+            fillRect(PANEL_X + i * 8, 38, 6, 3, i < pips ? (g->hitStreak > STREAK_CAP ? GOLD_LT : ACCENT) : DIM);
+    }
     fmtInt(s, g->peels); panelRow(55, ui(UI_PEELS), s, WHITE);
     fmtInt(s, g->turn);  panelRow(64, ui(UI_TURN), s, g->overtime ? FIRE1 : WHITE);
 
@@ -1231,6 +1236,9 @@ static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
     } else if (g->combo >= 2 && !peek) {      // the streak of words without a peel: gold once the bonus is at its cap
         char cb[24]; uiFmt(cb, sizeof cb, UI_P_COMBO, g->combo);
         drawText(PANEL_X, 84, cb, boardComboPct(g->combo) >= COMBO_CAP_PCT ? GOLD_LT : ACCENT, 1);
+    } else if (g->hitStreak >= 2 && !peek) {  // pass letters found in a row: the same row, after the chain value and the combo
+        char sb[24]; uiFmt(sb, sizeof sb, UI_P_STREAK, g->hitStreak);
+        drawText(PANEL_X, 84, sb, g->hitStreak > STREAK_CAP ? GOLD_LT : ACCENT, 1);
     }
 
     // heat: OVERTIME replaces the label past the shelf's turn budget, and a valid chain previews its cost

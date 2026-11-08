@@ -275,6 +275,45 @@ def _():
     e.peel(peel_c, peel_r); g = e.state()
     assert g['combo'] == 0 and g['bestCombo'] >= 4, f'after a peel: combo {g["combo"]} best {g["bestCombo"]}'
 
+@scenario('STREAK: pass letters found by consecutive peels pay 100 x shelf more per step (three steps at most), a hole resets it, a word does not; pips and marker on the panel')
+def _():
+    g = fresh_shelf(); e.set_heat(0); e.set_burn(0, 99); e.set_turn(0)
+    shelf, n = g['shelf'], g['passLen']; secrets = e.secret_cells(g)
+    X0 = 4 if e.bx else 176
+    def pips():
+        px = e.pixels()
+        return [sum(1 for y in range(192 + 38, 192 + 41) for x in range(X0 + i * 8, X0 + i * 8 + 6) if sum(px[x, y]) > 300) >= 15 for i in range(4)]
+    def marker():
+        px = e.pixels(); return sum(1 for y in range(192 + 84, 192 + 92) for x in range(X0, X0 + 76) if sum(px[x, y]) > 120)
+    def peel_hit(i):
+        e.set_heat(0); s0 = e.state()['score']; e.peel(*secrets[i]); g1 = e.state()
+        return g1, g1['score'] - s0
+    assert pips() == [False] * 4 and g['hitStreak'] == 0, f'a fresh shelf shows no streak: pips {pips()} streak {g["hitStreak"]}'
+    g1, d = peel_hit(1)
+    assert g1['hitStreak'] == 1 and g1['lastStreakBonus'] == 0 and d == 100 * shelf, f'first letter: streak {g1["hitStreak"]} bonus {g1["lastStreakBonus"]} score +{d}'
+    assert pips() == [True, False, False, False] and marker() < 5, f'one pip and no marker after one letter: {pips()} {marker()}'
+    g1, d = peel_hit(2)
+    assert g1['hitStreak'] == 2 and g1['lastStreakBonus'] == 100 * shelf and d == 100 * shelf + 100 * shelf, f'second letter in a row: streak {g1["hitStreak"]} bonus {g1["lastStreakBonus"]} score +{d}'
+    assert pips() == [True, True, False, False] and marker() > 25, f'two pips and the marker: {pips()} {marker()}'
+    # a word between peels does not break it: spell BED in a column that hides no pass letter
+    cc = next(c for c in range(COLS) if not any(g1['back'][c][r] for r in range(1, 4)))
+    e.set_cell(cc, 1, TILE, 'b'); e.set_cell(cc, 2, TILE, 'e'); e.set_cell(cc, 3, TILE, 'd'); e.set_heat(0)
+    e.chain([(cc, 1), (cc, 2), (cc, 3)]); e.press('A'); g1 = e.state()
+    assert g1['lastWord'] == 'bed' and g1['hitStreak'] == 2 and g1['combo'] == 1, f'a word keeps the streak: {g1["lastWord"]!r} streak {g1["hitStreak"]} combo {g1["combo"]}'
+    # the cap: the sixth letter in a row pays the same three steps as the fourth
+    e.set_streak(5)
+    if n > 3:
+        g1, d = peel_hit(3)
+        assert g1['hitStreak'] == 6 and g1['lastStreakBonus'] == 300 * shelf and d == 100 * shelf + 300 * shelf, f'capped: streak {g1["hitStreak"]} bonus {g1["lastStreakBonus"]} score +{d}'
+        assert pips() == [True] * 4, f'four gold pips at the cap: {pips()}'
+    # a plain hole ends it
+    g1 = e.state()
+    plain = next((c, r) for c in range(COLS) for r in range(ROWS) if g1['cell'][c][r][1] == TILE and not g1['back'][c][r])
+    e.set_heat(0); e.peel(*plain); g1 = e.state()
+    assert g1['hitStreak'] == 0 and g1['lastStreakBonus'] == 0 and g1['bestHitStreak'] >= 6, f'a hole ends the streak: {g1["hitStreak"]} best {g1["bestHitStreak"]}'
+    assert pips() == [False] * 4, f'the pips go out with the streak: {pips()}'
+    e.shot(f'{out}/rules_streak_panel.png')
+
 @scenario('HINT: SELECT shows a word with the ghost drag, costs one of two hints a shelf, stops at the first touch')
 def _():
     ensure_play()

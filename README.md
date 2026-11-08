@@ -53,6 +53,14 @@ against the source and the data files by `tools/check_guide.py`, and every pictu
 - **Combo.** Words in a row without a peel each score 10% more than the one
   before, up to +50% from the sixth. A peel breaks the streak. The panel shows
   COMBO Xn and the third word of a streak calls it out.
+- **Pass-letter streak.** Pass letters found by consecutive peels pay a bonus on
+  top of the 100 x shelf each one pays: the second in a row +100 x shelf, the
+  third +200 x shelf, the fourth and every later one +300 x shelf. A plain hole or
+  a scorch ends the run; a word does not. The panel shows four pips under the
+  score and STREAK Xn where the combo marker goes, and the second pass letter of a
+  run calls it out. It is a score reward and nothing else: the clear rates are the
+  same with and without it, a player who never peels earns none of it and one
+  who peels at random almost none.
 - **Hint.** SELECT shows a common word on the board with the ghost drag, twice a
   shelf (through a flame, if one burns). Ten idle seconds offer one for free.
 - **Shuffle.** A board with no word left is re-dealt once a shelf (+3 heat)
@@ -77,7 +85,8 @@ against the source and the data files by `tools/check_guide.py`, and every pictu
   halves it (the shelf remembers its last eight words: the ledger on the top
   screen shows the last five). The panel previews exactly what the chain is
   worth before you submit, with its length multiplier and the heat it will add.
-- **Pass letters.** Every pass letter found pays 100 x shelf on the spot.
+- **Pass letters.** Every pass letter found pays 100 x shelf on the spot, and more
+  when they come in a row (the streak above).
 - **Clearing a shelf.** Shelf bonus 1000 x shelf, a speed bonus of
   25 x shelf for every turn under 40, and a peel bonus: **PERFECT PASS**
   (+400 x shelf) when every peel found a pass letter, **CLEAN PASS**
@@ -305,10 +314,10 @@ lesson, the guide is the long one.
 
 | Page | What it teaches |
 | --- | --- |
-| 1 THE BOARD | dragging a chain, the gold ring, tapping the last gem (or SUBMIT or A), undo and cut back, with INK worth +70 |
-| 2 SCORING | gem values, the length multiplier ladder, the flat +200 at seven letters, flames, diamonds, repeats, with Qu+I+Z worked out |
+| 1 THE BOARD | dragging a chain, the gold ring, tapping the last gem (or SUBMIT or A), undo and cut back, the shuffle of a dead board, with INK worth +70 |
+| 2 SCORING | gem values, the length multiplier ladder, the flat +200 at seven letters, flames, diamonds, repeats, the combo, with Qu+I+Z worked out |
 | 3 PEEKING | the shoulder buttons, X and the PEEK button, arm and lift, the hole numbers and their colours, diamonds, the red gems that scorch |
-| 4 THE PASS | the hidden letters and their themes, the pass length by shelf, what a letter pays, the shelf, speed, PERFECT and CLEAN bonuses |
+| 4 THE PASS | the hidden letters and their themes, the pass length by shelf, what a letter pays and the streak bonus, the shelf, speed, PERFECT and CLEAN bonuses |
 | 5 FIRE | the heat each word adds, what a peel adds, how a flame falls, chimneys and firebreaks, the three ways to lose a shelf |
 | 6 SHELVES | bookmarks, the three twists, Lockdown and its tiers, overtime |
 | 7 MODES | Classic, the Daily Pass (one scored try, then practice, the modifiers, the streak), THE LEDGER |

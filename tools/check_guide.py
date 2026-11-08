@@ -76,6 +76,7 @@ int main(int argc, char **argv)
     printf("\"values\": ["); for (int l = 0; l < 26; l++) printf("%s%d", l ? "," : "", letterValue(l)); printf("],\n");
     printf("\"peelheat\": [%d,%d],\n", boardPeelHeat(false), boardPeelHeat(true));
     printf("\"combo\": ["); for (int n = 0; n <= 7; n++) printf("%s%d", n ? "," : "", boardComboPct(n)); printf("],\n");
+    printf("\"streak\": ["); for (int n = 0; n <= 7; n++) printf("%s%d", n ? "," : "", boardStreakBonus(1, n)); printf("],\n");   // the pass-letter streak at shelf 1: its bonus is STREAK_PER_SHELF x shelf x steps
     printf("\"overtime\": [%d,%d],\n", boardOvertimeTurns(false), boardOvertimeTurns(true));
     printf("\"lockovertime\": ["); for (int sh = LOCKDOWN_FROM_SHELF; sh <= LOCKDOWN_FROM_SHELF + 6; sh++) printf("%s%d", sh > LOCKDOWN_FROM_SHELF ? "," : "", boardOvertimeFor(sh, true)); printf("],\n");   // the Lockdown overtime limit on shelves 6 to 12
     // heat a turn adds on top of the move's own, by turn number: overtime alone (no pulse), and a Lockdown pulse alone
@@ -396,6 +397,15 @@ def main():
             for i in range(1, 7):
                 if num(bonus[i].replace('%', '')) != F['combo'][i - 1]: fail(f'combo bonus of word {i}: guide {bonus[i]}, game {F["combo"][i - 1]}')
             if F['combo'][5] != F['combo'][7] or F['combo'][5] != D['COMBO_CAP_PCT']: fail('the combo bonus is not capped at COMBO_CAP_PCT from the sixth word')
+    t = need('streak')            # | Pass letters in a row | 1 | 2 | 3 | 4 and more |   the bonus of the Nth letter in a row, per shelf number
+    if t:
+        bonus = next((r for r in t if r[0].lower().startswith('bonus')), None)
+        if not bonus: fail('streak table needs a Bonus row')
+        else:
+            for i in range(1, 5):
+                if num(bonus[i].replace('+', '')) != F['streak'][i]: fail(f'streak bonus of letter {i}: guide {bonus[i]}, game {F["streak"][i]} per shelf')
+            if not (F['streak'][4] == F['streak'][5] == F['streak'][6] == F['streak'][7] == D['STREAK_PER_SHELF'] * D['STREAK_CAP']): fail('the streak bonus is not capped at STREAK_PER_SHELF x STREAK_CAP from the fourth letter')
+            if F['streak'][0] != 0 or F['streak'][1] != 0: fail('the first pass letter of a run pays no streak bonus')
     t = need('bonuses')           # | Bonus | Per shelf number |
     if t:
         b = F['bonus']

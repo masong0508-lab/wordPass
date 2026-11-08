@@ -498,12 +498,17 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
             if (res == 2) {
                 gfxBurst(c, r, BURST_REVEAL, letter);
                 int reward = boardPassLetterReward(G.shelf);   // every pass letter pays
-                G.score += reward;
-                char ps[12]; siprintf(ps, "+%d", reward);
+                int streakBonus = G.lastStreakBonus;           // ... and a pass letter right after another pays a streak bonus on top
+                G.score += reward + streakBonus;
+                char ps[12]; siprintf(ps, "+%d", reward + streakBonus);
                 gfxPopup(c, r, ps, 1);
                 musicReveal(true);
                 if (boardPassComplete(&G)) {
                     char s[MSG_LEN]; uiFmt(s, sizeof s, UI_MS_SHELFCLEARED, G.shelf); setMsg(s, 400);
+                } else if (streakBonus > 0) {
+                    char sm[MSG_LEN], sc[MSG_LEN];
+                    uiFmt(sm, sizeof sm, UI_MS_STREAK, streakBonus, G.hitStreak); setMsg(sm, 90);
+                    uiFmt(sc, sizeof sc, UI_CO_STREAK, G.hitStreak); gfxCallout(sc, CALLOUT_GOLD);
                 } else { setMsg(ui(UI_MS_PASSFOUND), 90); gfxCallout(ui(UI_CO_PASSLETTER), CALLOUT_ACCENT); }
             } else if (res == 1) { musicSfx(SFX_PEEL, 0); musicReveal(false); }
             else if (res == 3 || res == -1) { musicSfx(SFX_SCORCH, 0); setMsg(ui(UI_CO_SCORCHED), 60); gfxCallout(ui(UI_CO_SCORCHED), CALLOUT_FIRE); gfxBurst(c, r, BURST_SCORCH, letter); gfxShake(6); }

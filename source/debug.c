@@ -54,7 +54,8 @@ typedef struct {
     MusicDbg seq;                           // 656..707: what the sequencer last sent to the sound hardware (music.c)
     s32 combo, hints, shuffles, hintReq;    // 708, 712, 716, 720: words in a row without a peel, hints and shuffles left, a hint is on show
     s32 shuffled, twinEighths, ignitions, bestCombo;   // 724, 728, 732, 736: the board was just re-dealt, the shelf's twin share, ignitions so far, the shelf's longest combo
-} DebugView;                                // total 740
+    s32 hitStreak, bestHitStreak, lastStreakBonus;   // 740, 744, 748: pass letters found in a row by peels, the shelf's longest run, what the latest peel's streak paid
+} DebugView;                                // total 752
 
 #define PIN(field, off) _Static_assert(offsetof(DebugView, field) == (off), "DebugView." #field " moved: update tools/emu/wp.py OFF")
 PIN(magic, 0); PIN(frame, 4); PIN(state, 8); PIN(mode, 12); PIN(shelf, 16); PIN(score, 20);
@@ -81,7 +82,8 @@ PIN(language, 644); PIN(loadMs, 648); PIN(langMask, 652);
 PIN(guidePage, 624); PIN(guideFrom, 628); PIN(cue, 632); PIN(cueAge, 636); PIN(hintLen, 640);
 PIN(seq, 656);
 PIN(combo, 708); PIN(hints, 712); PIN(shuffles, 716); PIN(hintReq, 720); PIN(shuffled, 724); PIN(twinEighths, 728); PIN(ignitions, 732); PIN(bestCombo, 736);
-_Static_assert(sizeof(DebugView) == 740, "DebugView size changed: update tools/emu/wp.py");
+PIN(hitStreak, 740); PIN(bestHitStreak, 744); PIN(lastStreakBonus, 748);
+_Static_assert(sizeof(DebugView) == 752, "DebugView size changed: update tools/emu/wp.py");
 
 volatile DebugView DBG;
 
@@ -102,7 +104,8 @@ enum {
     POKE_TUTOR,     // S.tutorDone = a0; the guide restarts (a0 = 0) or is switched off (a0 = 1) for the next Classic shelf 1
     POKE_GUIDENAV,  // the guide's prev/next buttons count as unused again (they pulse until first used)
     POKE_LANG,      // a0 = LANG_*: load that language (title or options only; one that is not on the ROM filesystem is English)
-    POKE_FEATURES   // shuffles = a0, hints = a1, combo = a2, twinEighths = a3 (the shelf's re-deals, hints, streak and twin share)
+    POKE_FEATURES,  // shuffles = a0, hints = a1, combo = a2, twinEighths = a3 (the shelf's re-deals, hints, streak and twin share)
+    POKE_STREAK     // hitStreak = a0 (the pass-letter streak, for the panel checks)
 };
 
 static void applyPoke(Game *g)
@@ -135,6 +138,7 @@ static void applyPoke(Game *g)
                 for (int i = 0; i < 12; i++) { g->pass[i] = i < a0 ? (char)('a' + i) : 0; g->found[i] = (i < a0 && ((a1 >> i) & 1)) ? 1 : 0; }
             }
             break;
+        case POKE_STREAK:   g->hitStreak = a0 < 0 ? 0 : a0; if (g->hitStreak > g->bestHitStreak) g->bestHitStreak = g->hitStreak; break;
         case POKE_FEATURES: g->shuffles = a0; g->hints = a1; g->combo = a2; g->twinEighths = a3 < 0 ? 0 : a3 > 8 ? 8 : a3; break;
         case POKE_GUIDENAV: gfxGuideNavReset(); break;
         case POKE_LANG:     gameSetLanguage(a0); break;
@@ -191,5 +195,6 @@ void debugSync(Game *g)
     { MusicDbg m; musicDebug(&m); memcpy((void *)&DBG.seq, &m, sizeof m); }
     DBG.combo = g->combo; DBG.hints = g->hints; DBG.shuffles = g->shuffles; DBG.hintReq = g->hintReq;
     DBG.shuffled = g->shuffled; DBG.twinEighths = g->twinEighths; DBG.ignitions = g->ignitions; DBG.bestCombo = g->bestCombo;
+    DBG.hitStreak = g->hitStreak; DBG.bestHitStreak = g->bestHitStreak; DBG.lastStreakBonus = g->lastStreakBonus;
     DBG.dailyPlayed = S.dailyPlayedDate; DBG.dailyLast = S.dailyLastDate; DBG.dailyLastScore = S.dailyLastScore;
 }
