@@ -22,7 +22,7 @@ static int fails;
 #define MIN_LEXICON_WORDS 100
 #define MIN_POOL_WORDS 13000            // pass words in all, per language (Swedish and Danish have the smallest wordnets)
 // languages still being brought to the standard: none (each stage of the word-table work removed one)
-static const char *PENDING_CODES = "sv da fi";
+static const char *PENDING_CODES = "fi";
 static const char *CODES[NLANG] = { "es", "fr", "de", "it", "pt", "nl", "sv", "pl", "da", "fi" };
 static const u8 REC[21] = { 0, 0, 0, 4, 4, 4, 4, 5, 6, 7, 7, 8, 8, 9, 9, 10, 11, 11, 12, 13, 13 };
 
