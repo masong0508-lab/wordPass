@@ -2490,7 +2490,7 @@ def _():
             for page in range(GUIDE_PAGES):
                 g = e.state(); assert g['guidePage'] == page, f'{code} {tag}: expected page {page}, on {g["guidePage"]}'
                 e.run(50)
-                if page in (0, 3, 5, 6): e.shot(f'{out}/ui_guide_{code}_{tag}_{page + 1}.png')
+                e.shot(f'{out}/ui_guide_{code}_{tag}_{page + 1}.png')
                 guide_margins(f'{code} {tag}', page, ticks=32, step=2)
                 if page < GUIDE_PAGES - 1: e.tap(*GUIDE_NEXT, settle=10)
             e.tap(*guide_back(left), settle=15); g = e.state(); assert g['state'] == ST_TITLE, f'{code} {tag}: BACK did not return to the title: {g["state"]}'

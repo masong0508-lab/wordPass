@@ -1302,7 +1302,8 @@ int main(int argc, char **argv)
                 uiTestLang(lg);
                 for (int p = 0; p < GUIDE_PAGES; p++) {
                     int c = guideLines(p, pl[p]), h = 0;
-                    if (c != cnt[p]) { lfits = false; printf("   lang %d page %d has %d lines, English %d\n", lg, p + 1, c, cnt[p]); }
+                    // the letter-value table of SCORING is as long as the language's alphabet needs (one line more or less)
+                    if (c != cnt[p] && !(p == 1 && c >= cnt[p] - 1 && c <= cnt[p] + 1)) { lfits = false; printf("   lang %d page %d has %d lines, English %d\n", lg, p + 1, c, cnt[p]); }
                     for (int i = 0; i < c; i++) {
                         int v = guideVisibleLen(pl[p][i]);
                         h += v ? GUIDE_LINE_H : GUIDE_GAP_H;
@@ -1314,7 +1315,7 @@ int main(int argc, char **argv)
                         int de = 0, dl = 0;
                         for (const char *ch = pe; *ch; ch++) if (*ch >= '0' && *ch <= '9') de += *ch - '0' + 1;
                         for (const char *ch = plain; *ch; ch++) if (*ch >= '0' && *ch <= '9') dl += *ch - '0' + 1;
-                        if (de != dl && i != 1 && !(p == 1)) { lnum = false; printf("   lang %d page %d line %d: digits differ from English: %s | %s\n", lg, p + 1, i, pe, plain); }
+                        if (de != dl && i != 1 && !(p == 1) && !(p == 0 && i == 11)) { lnum = false; printf("   lang %d page %d line %d: digits differ from English: %s | %s\n", lg, p + 1, i, pe, plain); }
                     }
                     if (h > GUIDE_MAX_H) { ltall = false; printf("   lang %d page %d is %d px tall\n", lg, p + 1, h); }
                     if (!guideTitle(p)[0] || strlen(guideTitle(p)) * 12 > 150) { ltitle = false; printf("   lang %d title %s too wide\n", lg, guideTitle(p)); }
@@ -1324,7 +1325,7 @@ int main(int argc, char **argv)
             CHECK("guide in ten languages: same line count, no visible line over 38 characters", lfits);
             CHECK("guide in ten languages: every page fits its 139 px, every title fits at 2x", ltall && ltitle);
             CHECK("guide in ten languages: every character has a glyph", lglyph);
-            CHECK("guide in ten languages: the numbers are the English numbers", lnum);
+            CHECK("guide in ten languages: the numbers are the English numbers (but the examples, which are the language's own)", lnum);
         }
 
         // the text of a page with the colour codes taken out, lines joined by '|'
@@ -1574,6 +1575,60 @@ int main(int argc, char **argv)
                 char cw[WORD_BUF]; boardChainWord(&g, cw);
                 int gain = boardSubmit(&g);
                 CHECK(strcat(strcpy(list, nm), " a spelled word scores with the language's letter values"), strcmp(cw, sw) == 0 && gain == boardWordPoints(want, (int)wl, false, 0, false) && strcmp(g.ledger[0], sw) == 0);
+            }
+            // the guide's examples in this language: words of its dictionary, spelled with its tiles, and the numbers the pages print
+            // come from its own letter table (the board word, the scoring word with its Qu or its three gems, the four fire words)
+            {
+                static char gpg[GUIDE_PAGES][GUIDE_MAX_LINES][GUIDE_LINE_BUF];
+                static char text[GUIDE_PAGES][1600];
+                bool exOk = true, numOk = true;
+                const int ids[6] = { UI_EX_WORD, UI_EX_SCORE, UI_EX_F1, UI_EX_F2, UI_EX_F3, UI_EX_F4 };
+                const int lens[6] = { 3, -1, 3, 3, 4, 3 };            // -1: three gems (four letters with a Qu)
+                for (int k = 0; k < 6; k++) {
+                    char ew[12]; const char *u = ui(ids[k]); size_t n = strlen(u);
+                    for (size_t i = 0; i <= n; i++) ew[i] = (char)(u[i] >= 'A' && u[i] <= 'Z' ? u[i] + 32 : u[i]);
+                    if (!boardWordOk(ew, (int)n)) { exOk = false; printf("   %s: example %s is not in the dictionary\n", langCode(li), u); }
+                    u8 gm[4]; int wl2, ng = guideGems(ids[k], gm, &wl2);
+                    if (lens[k] > 0 ? (wl2 != lens[k] || ng != lens[k]) : (ng != 3 || wl2 != 3 + (langQuTile() && u[0] == 'Q' ? 1 : 0))) { exOk = false; printf("   %s: example %s has the wrong length\n", langCode(li), u); }
+                    for (int q = 0; q < ng; q++) if (!T->weight[gm[q]]) { exOk = false; printf("   %s: example %s has a letter without a tile\n", langCode(li), u); }
+                }
+                int gcnt[GUIDE_PAGES];
+                for (int p = 0; p < GUIDE_PAGES; p++) {
+                    gcnt[p] = guideLines(p, gpg[p]);
+                    text[p][0] = 0;
+                    for (int i = 0; i < gcnt[p]; i++) { char pl2[GUIDE_LINE_BUF]; guideStrip(pl2, gpg[p][i]); strcat(text[p], pl2); strcat(text[p], "|"); }
+                }
+                u8 gm[4]; int wl2, ng = guideGems(UI_EX_WORD, gm, &wl2), gsum = 0;
+                for (int q = 0; q < ng; q++) gsum += letterValue(gm[q]);
+                char need[48], pts[16];
+                snprintf(need, sizeof need, "SPELL %s", ui(UI_EX_WORD));
+                snprintf(pts, sizeof pts, "+%d", boardWordPoints(gsum, wl2, false, 0, false));
+                if (!strstr(text[0], ui(UI_EX_WORD)) || !strstr(text[0], pts)) { numOk = false; printf("   %s: THE BOARD does not print %s %s\n", langCode(li), ui(UI_EX_WORD), pts); }
+                ng = guideGems(UI_EX_SCORE, gm, &wl2); gsum = 0;
+                int vv[3] = { 0, 0, 0 };
+                for (int q = 0; q < 3 && q < ng; q++) { vv[q] = letterValue(gm[q]); gsum += vv[q]; }
+                char eq[40]; snprintf(eq, sizeof eq, "%d+%d+%d = %d", vv[0], vv[1], vv[2], gsum);
+                snprintf(pts, sizeof pts, "= +%d", boardWordPoints(gsum, wl2, false, 0, false));
+                if (!strstr(text[1], eq) || !strstr(text[1], pts)) { numOk = false; printf("   %s: SCORING does not print %s ... %s\n", langCode(li), eq, pts); }
+                char names[48]; snprintf(names, sizeof names, "%s, %s, %s", poolName(0), poolName(8), poolName(17));
+                if (!strstr(text[3], names)) { numOk = false; printf("   %s: THE PASS does not name %s\n", langCode(li), names); }
+                // the value table (the lines under the first one, up to the first gap) lists exactly the tile letters, each under its value
+                u32 listed = 0;
+                for (int ln = 1; ln < gcnt[1] && gpg[1][ln][0]; ln++) {
+                    char pl2[GUIDE_LINE_BUF]; guideStrip(pl2, gpg[1][ln]);
+                    for (const char *tk = pl2; *tk;) {
+                        int v = atoi(tk);
+                        while (*tk && *tk != ' ') tk++;
+                        while (*tk == ' ') tk++;
+                        for (; *tk && *tk != ' '; tk++) { listed |= 1u << (*tk - 'A'); if (letterValue(*tk - 'A') != v) numOk = false; }
+                        while (*tk == ' ') tk++;
+                    }
+                }
+                u32 tileSet = 0;
+                for (int l = 0; l < 26; l++) if (T->weight[l]) tileSet |= 1u << l;
+                if (listed != tileSet) { numOk = false; printf("   %s: the SCORING value table lists %x, the tiles are %x\n", langCode(li), listed, tileSet); }
+                CHECK(strcat(strcpy(list, nm), " guide examples: words of the dictionary, tile letters, the right lengths"), exOk);
+                CHECK(strcat(strcpy(list, nm), " guide pages print the examples' numbers, the value table and the theme names of the language"), numOk);
             }
         }
         // back to English: the bag, the boards and the tables are exactly the old ones again; the buffers were freed

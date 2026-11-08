@@ -1135,10 +1135,10 @@ The first time the game starts, with no saved settings, it shows the **language 
 ### 14.2 The limits
 
 * **Letters are A to Z.** The board has 26 tile types, so words are normalised by stripping accents: an acute or grave vowel loses its mark, n-tilde is N, c-cedilla is C, umlauts and the ring lose their marks, o-slash is O, l-stroke is L, the German sharp s is SS, and the ae and oe ligatures are AE and OE. Words that become the same collapse into one. You spell the stripped word.
-* **The menus, the in-game guide and the prompts stay English**; only the words, the pass words and the theme names are translated. The examples in this guide are English whatever the language.
+* **The menus, the in-game guide (HOW TO PLAY) and the prompts are translated** too, from one table (`tools/lang/ui_strings.tsv`). The in-game guide's examples are the language's own: its letter values, an example word of its dictionary on the board page and on the scoring page, four on the fire page, and its own theme names. This manual's examples are English whatever the language.
 * **Switching is only possible on the title and the options screen**; a shelf keeps the letters it was dealt.
 * **Loading** a language shows a short LOADING screen (about a quarter of a second in the emulator). English is compiled into the program and always works; the other ten live in the ROM's own filesystem and are read into memory when chosen. If the filesystem is not there (a loader that strips it) only English is offered. The chosen language is saved with the other options, and one that is not on the ROM falls back to English.
-* **Quality varies.** Finnish has the weakest word list, and Swedish and Danish have the thinnest pass pools (`docs/LANGUAGES-DATA.md`).
+* **Quality varies.** Every theme of every language has the same pass-word standard as English (25 words, 8 at each of 4, 5 and 6 letters, 5 at 7), but the wordnets behind the themes differ in size, so a theme is a flavour more than a definition; the Finnish word list is cut at 220,000 forms (`docs/LANGUAGES-DATA.md`).
 
 ---
 

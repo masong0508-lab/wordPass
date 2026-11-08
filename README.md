@@ -175,15 +175,20 @@ The honest limits:
   language against the width of the slot it is drawn in, so a long translation fails the build instead of being
   clipped. The eight in-game guide pages (HOW TO PLAY) come from the same file: each line is an id with colour codes
   and number slots, the numbers still computed from the rules, and every page in every language is checked
-  for 38 characters a line and its 139 px of height. The guide's example word (INK) and the English pass
-  theme names it quotes stay as they are.
+  for 38 characters a line and its 139 px of height. The guide's examples are the language's own: the letter
+  values it lists and the numbers it works out come from that language's letter table, its example words (the
+  board page's INK, the scoring page's QUIZ, the four words on the fire page) are words of that language's
+  dictionary spelled with its tiles (`gen_ui.py` and `make check` verify it), and the theme names it quotes are
+  that language's. The controller picture keeps START and SELECT as the console prints them and puts the
+  language's word beside each where it differs and fits.
 - **Daily boards are per language**: the Daily uses the active language's letter bag and pass pool, so a Daily
   in Spanish is a different board from the English one (and the same for everyone playing Spanish that day).
   Records (best scores, the streak) are shared across languages.
 - **The first start shows a LANGUAGE chooser** (before the title; also from the title tag and A on the LANGUAGE row).
 - **Spelling is English only** (it is about US and UK spellings); the option reads ENGLISH ONLY elsewhere.
 - **The dictionaries are "every word a player is likely to type", not complete** (see `docs/LANGUAGES-DATA.md`:
-  rare inflections are missing, Finnish has the weakest list, Swedish and Danish the thinnest pass pools).
+  rare inflections are missing, and the Finnish list, cut at 220,000 forms, misses the rarest of a very inflected
+  language; every theme of every language has the same pass-word standard as English, see below).
 - Switching language is only possible on the title and the options screen; a shelf keeps the letters it was dealt.
 
 Loading a language shows a short LOADING screen (about a quarter of a second in the emulator). English is
@@ -545,8 +550,10 @@ for Spanish, French, German, Italian, Portuguese, Dutch, Swedish, Polish, Danish
 all, built from open Hunspell dictionaries, wordnets and subtitle frequencies by `tools/lang`. Words are
 normalised to A-Z (diacritics stripped, sharp s to ss). The Makefile copies them into `nitrofiles/lang`,
 which becomes the ROM's filesystem (the copy is not committed; `make clean` removes it), and the game reads
-them from there (see *Languages* above). `docs/LANGUAGES-DATA.md` has the pipeline, the limits (Finnish has the weakest list,
-Swedish and Danish the thinnest pools) and the exact file formats; `make check` verifies them.
+them from there (see *Languages* above). `docs/LANGUAGES-DATA.md` has the pipeline, the limits and the exact file formats;
+`make check` verifies them. Every theme of every language has at least 25 words, 8 at each of 4, 5 and 6 letters
+and 5 at 7 letters (LEXICON 100), every language at least 13,000 pass words, and the Finnish dictionary is the
+forms the Voikko morphology accepts.
 
 ### Dictionary
 
@@ -620,5 +627,8 @@ Language data credits (details and licences in `tools/words/SOURCES.md`): Hunspe
 wooorm/dictionaries (Spanish, French, German, Italian, Portuguese, Dutch, Swedish, Polish, Danish);
 OpenSubtitles frequencies by hermitdave/FrequencyWords (CC BY-SA 4.0); the Open Multilingual Wordnet
 (MCR, WOLF, MultiWordNet, OpenWN-PT, Open Dutch WordNet, SALDO, plWordNet, DanNet, the Norwegian
-wordnet, FinnWordNet) and Princeton WordNet 3.0; Open German WordNet (OdeNet, CC BY-SA 4.0) with the
-Collaborative Interlingual Index; LDNOOBW bad-word lists (CC BY 4.0).
+wordnet, FinnWordNet) and Princeton WordNet 3.0; the Wiktionary-derived wordnets of omwn/omw-data (CC BY-SA) and
+the FreeDict dictionaries (GPL-2+) for extra senses; Open German WordNet (OdeNet, CC BY-SA 4.0) with the
+Collaborative Interlingual Index; the Voikko Finnish morphology (corevoikko/voikko-fi, GPL-2+) and the Universal
+Dependencies Finnish treebanks (CC BY-SA 4.0, FTB CC BY 4.0) for the Finnish dictionary; LDNOOBW bad-word lists
+(CC BY 4.0).

@@ -13,8 +13,15 @@ The TSV is the one place the interface text lives. Columns (tab separated, '#' l
 
   python3 tools/lang/gen_ui.py            write the two files (fails on a bad row or an overflow)
   python3 tools/lang/gen_ui.py --check    only validate
+
+The EX_* rows are the guide's example words. Each must be a word of that language's dictionary (data/lang/CODE/dict.bin,
+data/dict.bin for English) spelled with letters that have a tile, of the length the page needs (EX_WORD 3 letters, EX_SCORE
+3 gems: a Qu language writes QU for one gem, EX_F1..F4 3, 3, 4 and 3 letters); the numbers the pages print are computed in
+the game from the language's letter table, so a word that fits here scores as the page says.
 """
 import os, re, sys
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+import gen_dict
 
 LANGS = "en es fr de it pt nl sv pl da fi".split()
 OK = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .,:!?'-+/=<>()%_@")
@@ -70,8 +77,45 @@ def load():
     return rows
 
 
+EX_LEN = {"EX_WORD": 3, "EX_F1": 3, "EX_F2": 3, "EX_F3": 4, "EX_F4": 3}
+
+
+def example_words(rows):
+    """Check the EX_* rows against the dictionary and the letter table of each language; return the problems."""
+    bad = []
+    for lang_i, lang in enumerate(LANGS):
+        d = os.path.join(ROOT, "data") if lang == "en" else os.path.join(ROOT, "data", "lang", lang)
+        try:
+            dic = open(os.path.join(d, "dict.bin"), "rb").read()
+        except OSError:
+            continue
+        if lang == "en":
+            weight, qu = [1] * 26, True
+        else:
+            let = open(os.path.join(d, "letters.bin"), "rb").read()
+            weight, qu = list(let[16:42]), bool(let[4] & 1)
+        for ln, id_, scale, budget, samp, txt in rows:
+            if not id_.startswith("EX_"):
+                continue
+            w = txt[lang_i].lower()
+            if gen_dict.lookup(dic, w) == 0:
+                bad.append(f"{id_} {lang}: {txt[lang_i]} is not in the dictionary")
+            letters = w.replace("qu", "q") if qu else w
+            for ch in letters:
+                if not ("a" <= ch <= "z") or not weight[ord(ch) - 97]:
+                    bad.append(f"{id_} {lang}: {txt[lang_i]} uses {ch!r}, which has no tile")
+            if id_ == "EX_SCORE":
+                if len(letters) != 3 or (qu and "q" in letters[1:]):
+                    bad.append(f"{id_} {lang}: {txt[lang_i]} must be three gems (QU is one)")
+                if "q" in w and not qu:
+                    bad.append(f"{id_} {lang}: {txt[lang_i]} has a Q and the language has no Qu tile")
+            elif len(w) != EX_LEN[id_]:
+                bad.append(f"{id_} {lang}: {txt[lang_i]} must have {EX_LEN[id_]} letters")
+    return bad
+
+
 def validate(rows):
-    bad, seen = [], set()
+    bad, seen = example_words(rows), set()
     byid = {r[1]: r[5] for r in rows}
     for ln, id_, scale, budget, samp, txt in rows:
         if id_ in seen:

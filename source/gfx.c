@@ -1596,8 +1596,10 @@ static void gCaption(const char *txt, u16 col) { drawTextCenter(SCREEN_W / 2, 16
 // ---- 1 THE BOARD: gems drop in, a stylus drags I, N, K (the rope grows with a spark), the word glows, a tap cashes it in
 static void gdBoard(int t)
 {
-    static const char PATCH[5][2] = { { 'I', 'S' }, { 'N', 'R' }, { 'E', 'K' }, { 'A', 'T' }, { 'D', 'E' } };   // [column][row]
-    static const u8 pc[3] = { 0, 1, 2 }, pr[3] = { 0, 0, 1 };                                                    // the path I, N, K
+    char PATCH[5][2] = { { 'I', 'S' }, { 'N', 'R' }, { 'E', 'K' }, { 'A', 'T' }, { 'D', 'E' } };               // [column][row]
+    static const u8 pc[3] = { 0, 1, 2 }, pr[3] = { 0, 0, 1 };                                                    // the path: the example word
+    u8 gem[4]; int wl, ng = guideGems(UI_EX_WORD, gem, &wl);                                                     // its three gems, in this language
+    for (int k = 0; k < 3 && k < ng; k++) PATCH[pc[k]][pr[k]] = (char)('A' + gem[k]);
     static const u8 tl[3] = { 12, 18, 24 };                                                                      // the tick each gem joins the chain
     const int ox = 68, oy = 36;      // two rows keep the patch above y 96, so its gems sit in two slices only
     int n = t >= tl[2] ? 3 : t >= tl[1] ? 2 : t >= tl[0] ? 1 : 0;
@@ -1637,8 +1639,9 @@ static void gdBoard(int t)
     gRipple(cxk[2], cyk[2], t - 37);
     // the word on the line below, and once it is cashed in what it paid
     {
-        int ink = letterValueEn('i' - 'a') + letterValueEn('n' - 'a') + letterValueEn('k' - 'a');
-        char sc[12]; sc[0] = '+'; fmtInt(sc + 1, boardWordPoints(ink, 3, false, 0, false) * ease16(t - 40, 6) / 16);
+        int ink = 0;
+        for (int k = 0; k < 3 && k < ng; k++) ink += letterValue(gem[k]);
+        char sc[12]; sc[0] = '+'; fmtInt(sc + 1, boardWordPoints(ink, wl, false, 0, false) * ease16(t - 40, 6) / 16);
         int ww = n * 12 - 2, sw = textWidth(sc, 2), total = t >= 40 ? 3 * 12 - 2 + 14 + sw : ww;
         int wx = SCREEN_W / 2 - total / 2;
         for (int i = 0; i < n; i++) drawChar2Shadow(wx + i * 12, 106, PATCH[pc[i]][pr[i]], valid || t >= 40 ? GOLD_LT : WHITE, DIM2);
@@ -1650,12 +1653,11 @@ static void gdBoard(int t)
 // ---- 2 SCORING: Qu, I, Z drop in and each floats up its value, the sum meets the length multiplier, the total counts up
 static void gdScoring(int t)
 {
-    static const u8 L[3] = { 'q' - 'a', 'i' - 'a', 'z' - 'a' };
     static const u8 cc[3] = { 0, 1, 2 }, rr[3] = { 0, 0, 1 }, tl[3] = { 12, 18, 24 };
     const int ox = 84, oy = 44;
-    int sum = 0, vals[3];
-    for (int i = 0; i < 3; i++) { vals[i] = letterValueEn(L[i]); sum += vals[i]; }
-    int len = 4, mult = boardLenMult(len), total = boardWordPoints(sum, len, false, 0, false);
+    u8 L[4]; int len, sum = 0, vals[3] = { 0, 0, 0 }, ng = guideGems(UI_EX_SCORE, L, &len);   // the example word's gems; Qu is one gem, two letters
+    for (int i = 0; i < 3 && i < ng; i++) { vals[i] = letterValue(L[i]); sum += vals[i]; }
+    int mult = boardLenMult(len), total = boardWordPoints(sum, len, false, 0, false);
     int n = t >= tl[2] ? 3 : t >= tl[1] ? 2 : t >= tl[0] ? 1 : 0;
     for (int i = 1; i < n; i++) gRope(HX(ox, cc[i - 1]), HY(oy, cc[i - 1], rr[i - 1]), HX(ox, cc[i]), HY(oy, cc[i], rr[i]), false, 10);
     for (int i = 0; i < 3; i++) {
@@ -1754,11 +1756,17 @@ static void gdPass(int t)
     int tp = t - ph * 21, shelf = SHELVES[ph];
     int theme = (shelf - 1) % (poolThemeCount() > 0 ? poolThemeCount() : 1), len = boardPassLenFor(shelf);
     char word[12];
-    poolWordEn(theme, len, 0, word);
-    if (!word[0]) { strcpy(word, "password"); word[len] = 0; }
+    int wl = len;
+    poolWord(theme, len, 0, word);                                                  // the first (most familiar) word of the language's own theme
+    for (int d = 1; !word[0] && d < 6; d++) {                                       // a theme short at this length: the nearest length that has one
+        if (len + d <= POOL_MAX_LEN) { poolWord(theme, len + d, 0, word); wl = len + d; }
+        if (!word[0] && len - d >= POOL_MIN_LEN) { poolWord(theme, len - d, 0, word); wl = len - d; }
+    }
+    if (!word[0]) { memset(word, 'a', 9); word[len] = 0; wl = len; }
+    len = wl;
     int found = tp < 3 ? 0 : (tp - 3) / 2 + 1; if (found > len) found = len;
     rectOutline(24, 34, 208, 70, GOLD_DK); rectOutline(25, 35, 206, 68, GOLD);
-    char s[48]; uiFmt(s, sizeof s, UI_H_PASSPLAQUE, poolNameEn(theme));
+    char s[48]; uiFmt(s, sizeof s, UI_H_PASSPLAQUE, poolName(theme));
     int le = ease16(tp, 4), lx = SCREEN_W / 2 - textWidth(s, 1) / 2 + (16 - le);      // the plaque's name slides in from the right
     drawTextBox(lx, 42, s, lerp15(BLACK, DIM_TEXT, le), 1, 28, 228);
     int gap = len >= 9 ? 1 : 4, bw = PLAQUE_W, x0 = ((SCREEN_W - (len * bw + (len - 1) * gap)) / 2) & ~1, y0 = 58;
@@ -1792,7 +1800,7 @@ static void gdPass(int t)
 // own flame cell, new gems dropping in behind it) until a diamond stops it. Heat per word is boardHeatFor, the meter boardShelfRules(1)
 static void gdFire(int t)
 {
-    static const char *const WORDS[4] = { "CAT", "ODE", "RATE", "EAT" };
+    const char *const WORDS[4] = { ui(UI_EX_F1), ui(UI_EX_F2), ui(UI_EX_F3), ui(UI_EX_F4) };      // the example words, 3, 3, 4 and 3 letters
     static const u8 COL[4] = { 's' - 'a', 'e' - 'a', 'a' - 'a', 't' - 'a' };
     static const u8 TW[4] = { 6, 14, 22, 30 }, SLIDE[3] = { 44, 52, 58 };
     ShelfRules sr; boardShelfRules(1, &sr);
@@ -1992,8 +2000,13 @@ static void gdControls(int t)
     bool sp = hi == 7;
     fillRect(190, 126 + (sp ? 1 : 0), 24, 8, sp ? ACCENT : DIM2); rectOutline(190, 126 + (sp ? 1 : 0), 24, 8, sp ? lit : DIM_TEXT);
     fillRect(190, 138, 24, 8, DIM2); rectOutline(190, 138, 24, 8, DIM_TEXT);
-    drawText(150, 126, "START", sp ? ACCENT : DIM_TEXT, 1);
+    drawText(150, 126, "START", sp ? ACCENT : DIM_TEXT, 1);                 // the console prints these two words on its buttons: they stay as printed
     drawText(138, 138, "SELECT", DIM_TEXT, 1);
+    {   // the language's own word beside each, in the free band to its left, when it differs and fits
+        const char *ls = ui(UI_G_KEY_START), *lt = ui(UI_G_KEY_SELECT);
+        if (strcmp(ls, "START") && textWidth(ls, 1) <= 66) drawText(144 - textWidth(ls, 1), 126, ls, sp ? ACCENT : lerp15(BLACK, ACCENT, 11), 1);
+        if (strcmp(lt, "SELECT") && textWidth(lt, 1) <= 66) drawText(132 - textWidth(lt, 1), 138, lt, lerp15(BLACK, ACCENT, 11), 1);
+    }
     if (sp) gRipple(202, 130, tp);
     gCaption(ui(CAP[hi]), ACCENT);
 }
