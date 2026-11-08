@@ -1734,6 +1734,41 @@ int main(int argc, char **argv)
                 for (int c = 0; c < COLS; c++) for (int r = 0; r < ROWS; r++) if (!T->weight[g.cell[c][r].letter]) shelvesOk = false;
             }
             CHECK(strcat(strcpy(list, nm), " shelves 1..40: pass in the language's pool and dictionary, tiles from its alphabet"), shelvesOk);
+            // German word density (balance pass 2): its dictionary holds a third as many 3 to 5 letter words as English, and the
+            // untuned letter table gave a board 214 word paths against English's 382 (the competent bot cleared shelves 12 to
+            // 24 some 12 to 24 points less often). The tuned table must keep a fresh board above 300 (it is about 350).
+            if (li == LANG_DE) {
+                long paths = 0; int boardsN = 60;
+                for (int b = 0; b < boardsN; b++) {
+                    memset(&g, 0, sizeof(g)); g.shelf = 1 + b % 24; g.mode = MODE_CLASSIC; srand(5000 + b * 31); boardNewShelf(&g);
+                    char wbuf[8];
+                    for (int c0 = 0; c0 < COLS; c0++) for (int r0 = 0; r0 < ROWS; r0++) {
+                        // an explicit stack walk over every simple path of at most five tiles from (c0, r0)
+                        int pc[5], pr[5], pk[5], depth = 0; bool used[COLS][ROWS]; memset(used, 0, sizeof used);
+                        pc[0] = c0; pr[0] = r0; pk[0] = -1; used[c0][r0] = true; depth = 1;
+                        while (depth > 0) {
+                            int nc[6], nr[6], n = boardNeighbors(pc[depth - 1], pr[depth - 1], nc, nr);
+                            int k = ++pk[depth - 1];
+                            if (k >= n || depth >= 5) {
+                                used[pc[depth - 1]][pr[depth - 1]] = false; depth--; continue;
+                            }
+                            if (used[nc[k]][nr[k]]) continue;
+                            pc[depth] = nc[k]; pr[depth] = nr[k]; pk[depth] = -1; used[nc[k]][nr[k]] = true; depth++;
+                            if (depth >= 3) {
+                                bool plain = true;
+                                for (int i = 0; i < depth; i++) {
+                                    int l = g.cell[pc[i]][pr[i]].letter;
+                                    if (l == 'q' - 'a') plain = false;
+                                    wbuf[i] = (char)('a' + l);
+                                }
+                                if (plain) { wbuf[depth] = 0; if (boardWordOk(wbuf, depth)) paths++; }
+                            }
+                        }
+                    }
+                }
+                printf("   de: %.0f word paths of 3 to 5 tiles per fresh board\n", (double)paths / boardsN);
+                CHECK("de: a fresh board holds over 300 word paths of 3 to 5 tiles (was 214 before the letter table was tuned)", paths > 300L * boardsN);
+            }
             // SPELLING is English only: BRITISH changes nothing here
             S.spelling = SPELL_UK;
             bool spellIgnored = boardWordOk(KNOWN[li], (int)(strchr(KNOWN[li], ' ') - KNOWN[li])) && boardWordSpelling("color", 5) == 0;

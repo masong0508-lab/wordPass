@@ -23,6 +23,28 @@ Format WPL1, 68 bytes, little endian:
 import math, os, struct, sys
 import common
 
+# Hand-tuned tile weights, applied on top of the dictionary-derived ones (compute() below).  German's dictionary has a
+# third as many 3 to 5 letter words as English (332 / 1,367 / 3,382 against 999 / 4,006 / 8,894), so a board built from
+# its natural letter shares held about 214 short-word paths against 382 in English and the competent bot cleared
+# shelves 12 to 24 some 12 to 24 points less often.  The weights below lean the bag toward the letters that spell the
+# short words (E, S, T, N, R, I, A) and away from the ones that mostly sit in long compounds (C, D, H, L, M, G, B, F, K,
+# P), which brings a German board to about 350 paths and the competent clear rate to within 5 points of the other
+# languages (docs/BALANCE.md, "German letter table").  Letter values (scores) and the rare letters stay the
+# dictionary's.  Every list sums to 100 and keeps every letter the language has at 1 or more.
+TUNED_WEIGHTS = {
+    "de": dict(zip("abcdefghijklmnopqrstuvwxyz",
+                   [3, 1, 1, 1, 24, 1, 1, 1, 6, 1, 1, 1, 1, 9, 2, 1, 1, 9, 14, 14, 2, 1, 1, 1, 1, 1])),
+}
+
+def tune(code, w):
+    """The language's tuned tile weights, or `w` unchanged."""
+    t = TUNED_WEIGHTS.get(code)
+    if not t:
+        return w
+    out = [t.get(chr(97 + i), 0) for i in range(26)]
+    assert sum(out) == 100 and all((out[i] > 0) == (w[i] > 0) for i in range(26)), code
+    return out
+
 def compute(code, work):
     words = open(os.path.join(work, code, "words.txt")).read().split()
     freq = {}
@@ -48,6 +70,7 @@ def compute(code, work):
         else:
             i = max((k for k in present if w[k] > 1), key=lambda k: w[k] - raw[k])
             w[i] -= 1
+    w = tune(code, w)
     smax = max(share)
     smin = min(share[i] for i in present)
     value = [0] * 26
@@ -69,10 +92,23 @@ def build(code, work, out):
     letters = "".join(f"{chr(97 + i)}{w[i]}/{value[i]} " for i in range(26) if w[i])
     print(f"{code}: qu={qu} rare={[chr(97 + r) for r in rare if r < 26]} vowels={bin(mask)} {letters}")
 
+def retune(code, path):
+    """Rewrite the weights of an existing letters.bin with the language's tuned table (what `build` does after the
+    dictionary step), for when the downloads of tools/lang/fetch.sh are not at hand: letters.py --retune CODE FILE."""
+    data = bytearray(open(path, "rb").read())
+    p = parse(bytes(data))
+    w = tune(code, p["weight"])
+    data[16:42] = bytes(w)
+    open(path, "wb").write(bytes(data))
+    print(f"{code}: " + " ".join(f"{chr(97 + i)}{w[i]}" for i in range(26) if w[i]))
+
 def parse(data):
     assert data[:4] == b"WPL1" and len(data) == 68
     return dict(qu=data[4] & 1, rare=list(data[6:10]), vowels=struct.unpack_from("<I", data, 12)[0],
                 weight=list(data[16:42]), value=list(data[42:68]))
 
 if __name__ == "__main__":
+    if sys.argv[1] == "--retune":
+        retune(sys.argv[2], sys.argv[3])
+        sys.exit(0)
     build(sys.argv[1], sys.argv[2], sys.argv[3])

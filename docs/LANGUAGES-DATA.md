@@ -72,7 +72,11 @@ sha256 of all thirty files; repeated after the second pass with a fresh fetch.sh
    letter counts weighted by `1 + log10(1 + frequency)`, a Qu counted as one tile, apportioned to
    exactly 100, at least 1 for every letter in use; values 1..10 on a log scale from the commonest
    letter (1) to the rarest (10); the Qu flag; the vowel mask (A E I O U, plus Y in Swedish, Polish,
-   Danish and Finnish where it is a true vowel letter); the four rarest letters.
+   Danish and Finnish where it is a true vowel letter); the four rarest letters. A hand-tuned weight
+   table (`TUNED_WEIGHTS`) overrides the apportioned weights for a language whose dictionary starves the
+   boards of short words: today only German (E 24, S 14, T 14, N 9, R 9, I 6; its dictionary holds a third
+   as many 3 to 5 letter words as English, see docs/BALANCE.md "German letter table"). `letters.py
+   --retune CODE FILE` applies the table to an existing letters.bin without the downloads.
 5. **`tools/lang/build_pools.py`** translates the English library theme by theme through WordNet
    (details below) and writes `pools.bin` in format WPP1 with `tools/lang/themes.py` names.
 

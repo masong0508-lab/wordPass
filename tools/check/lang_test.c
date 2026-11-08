@@ -202,12 +202,12 @@ static void checkLanguage(int li, const Row *row)
     for (int i = 0; i < 26; i++) {
         sum += wt[i];
         if (wt[i] && (val[i] < 1 || val[i] > 10)) vOk = 0;
-        if (wt[i] > 20) wOk = 0;
+        if (wt[i] > 25) wOk = 0;           // German's tuned table gives E 24 (tools/lang/letters.py)
         if (wt[i] && !letterSeen[i]) present = 0;          // a tile letter that no word uses
         if (!wt[i] && letterSeen[i]) absent = 0;           // a word letter the bag never deals
     }
     snprintf(what, sizeof what, "%s: tile weights sum to 100", code); CHECK(what, sum == 100);
-    snprintf(what, sizeof what, "%s: tile weights at most 20 each", code); CHECK(what, wOk);
+    snprintf(what, sizeof what, "%s: tile weights at most 25 each", code); CHECK(what, wOk);
     snprintf(what, sizeof what, "%s: letter values 1..10 for every tile letter", code); CHECK(what, vOk);
     snprintf(what, sizeof what, "%s: every tile letter occurs in the dictionary", code); CHECK(what, present);
     snprintf(what, sizeof what, "%s: every dictionary letter has a tile", code); CHECK(what, absent);

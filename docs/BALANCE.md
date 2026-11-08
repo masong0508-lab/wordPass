@@ -39,7 +39,7 @@ how many times the meter filled; **stall** means 100 turns passed with the shelf
 | 2 | Flames stacked: a flame stuck on a diamond (a firebreak) was joined by the next ignition of that column, and a stack of two to four could park on an unfound pass letter for good. Most stalls were this. | A new flame goes to a column that has no flame; only when every column burns does one join a column. | GUIDE 8.4 |
 | 3 | Overtime did not end a shelf, it stalled it: the meter lit at most one gem (two from tier III) a turn and a player who put one flame out per word never died. 5% of competent attempts (5 to 11% from shelf 12) were still going after 100 turns. | Overtime heat grows twice as fast (+1 for twelve turns, then +2 ...), and in overtime the heat over the meter is kept and lights as many more gems as it fills the meter again. Stalls fall to 1%. | GUIDE 8.6 and its table, README |
 | 4 | Words farm a burning shelf: a bot that never peeled made 37,000 points in 100 turns of words on a first-rung shelf (the fire never beat it), against 2,300 for clearing the shelf quickly; even the score-seeking bot, which does peel, made 14,400 a shelf-1 attempt before the change. | Words spelled past the turn limit score a tenth. | GUIDE 8.6, README |
-| 5 | A fifth of FIRE losses (English 20%, German 30%) had no word through any flame on the last look. German boards hold a third as many 3-5-letter paths as the other languages. | The re-deal below fixes dead boards; the unreachable-flame share fell to 7% in English once flames stopped stacking. German remains 12 to 24 points harder than the other four languages from shelf 12 on (see below). | |
+| 5 | A fifth of FIRE losses (English 20%, German 30%) had no word through any flame on the last look. German boards hold a third as many 3-5-letter paths as the other languages. | The re-deal below fixes dead boards; the unreachable-flame share fell to 7% in English once flames stopped stacking. German was 12 to 24 points harder than the other four languages from shelf 12 on; its letter table is retuned (see "German letter table" below) and it now sits within 5 points of them. | |
 | 6 | Dead boards (OUT OF WORDS) are rare: 0 in 7,200 competent English shelves, 3 in 7,200 competent German shelves (about 43 chainable gems and 13 holes left), and the German score-seeking bot, which plays more words, re-dealt 0.2 to 0.5% of its early shelves. | The first dead board of a shelf is re-dealt (+3 heat); the second ends the shelf. | GUIDE 8.7, 8.8, README |
 | 7 | Daily modifiers were uneven: the weak bot cleared STANDARD 76%, EMBER 60%, LONG 63%, DEEP 78% (English), and in German EMBER 46% against DEEP 72%. A pass buried in three rows is a smaller area to search, so DEEP, meant to be harder, was the easiest. | Meters: STANDARD 6 (was 7), EMBER 9 (was 8), DEEP 9 (was 7) with the fire every turn (was every other), LONG 8 (was 7). The weak bot now clears STANDARD 70%, EMBER 67%, DEEP 63%, LONG 64% in English (a 7 point spread, was 18) and 52 to 55% in German (a 3 point spread, was 26). A competent player clears every Daily 98 to 100% before and after: it is a shelf 4 to 5 in difficulty. | GUIDE 10.3, README |
 | 8 | Pass depth is not a clock (the guide said it was): a deeper pass was a little easier for the bot (finding it is one connected cluster in a smaller area). | The guide's claim is corrected; the first pass row stays as it was. | GUIDE 9.4 |
@@ -70,9 +70,10 @@ The steepest fall is the largest drop between two consecutive three-shelf averag
 the largest remaining single step is shelf 14 to 15 (Lockdown tier IV: pulse every 3 turns and three ignitions in eight
 twins), 12 to 14 points. The competent bot now clears shelf 1 to 5 at 98 to 100% (its 5% slips cannot hurt on a shelf with
 no fire to speak of: the first shelf is meant to be nearly unlosable), falls about 3 points a shelf from shelf 6 to shelf 20
-and sits at 43% on shelf 20 (English); the target was 95% falling to about 40% around shelf 20. German stays 12 to
-24 points under the other four (30% against 42 to 54% at shelf 21 to 24); its dictionary has fewer short words, and fixing
-that is a letters-table job (`tools/lang/letters.py`), not a rules job, so it is left open.
+and sits at 43% on shelf 20 (English); the target was 95% falling to about 40% around shelf 20. German
+was 12 to 24 points under the other four (30% against 42 to 54% at shelf 21 to 24) because its dictionary has fewer short
+words; the letter table fixed that (`tools/lang/letters.py`, see "German letter table" below), so the German column of the
+tables in this summary is the measurement before that change.
 
 **Competent bot: clear rate (%) by shelf, before and after**
 
@@ -135,6 +136,90 @@ that is a letters-table job (`tools/lang/letters.py`), not a rules job, so it is
 The weak bot clears 92% of shelves 1 and 2 (it is not dead at shelf 1), 60 to 90% on shelves 3 to 5, 5 to 25% on the Lockdown
 shelves 6 to 11, and is gone by shelf 12. It still falls off a ledge at shelf 6 (61% to 21%): the shelf where a peel
 starts to cost 2 heat, and the weak bot peels fourteen times a shelf. That step is part of what Lockdown is, so it was left.
+
+### German letter table (item 1 of the second pass)
+
+German's dictionary holds a third as many words of 3, 4 and 5 letters as English (332 / 1,367 / 3,382 against 999 / 4,006 /
+8,894, common tier plus rare), so a board dealt from its natural letter shares held 214 word paths of 3 to 5 tiles against
+English's 382, and the competent bot cleared shelves 12 to 24 some 12 to 24 points less often. The fix is in the tile
+weights (`TUNED_WEIGHTS` in `tools/lang/letters.py`, written into `data/lang/de/letters.bin`; the other nine languages'
+files and English are byte-identical): the bag leans toward the letters that spell the short words and away from the ones
+that live in long compounds.
+
+| letter | A | B | C | D | E | F | G | H | I | J | K | L | M | N | O | P | Q | R | S | T | U | V | W | X | Y | Z |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| before | 6 | 2 | 3 | 2 | 16 | 2 | 4 | 5 | 6 | 1 | 2 | 4 | 2 | 9 | 3 | 1 | 1 | 8 | 7 | 7 | 4 | 1 | 1 | 1 | 1 | 1 |
+| after | 3 | 1 | 1 | 1 | 24 | 1 | 1 | 1 | 6 | 1 | 1 | 1 | 1 | 9 | 2 | 1 | 1 | 9 | 14 | 14 | 2 | 1 | 1 | 1 | 1 | 1 |
+
+How it was found: a hill climb over the weights (one tile moved from one letter to another at a time) against the bot's
+fresh-board measurement (`build/bot --lang de --boards`, 400 boards), then the competent bot's clear rate per band to
+confirm. Searches that kept every letter at 2 to 5 tiles reached only 284 paths and fell 3 to 8 points short at shelves
+16 to 24, and searches with no floor at all reached 400 paths with E at 30 and A, O, U at one tile, which makes a
+board of ESSEN; this table is the compromise: 350 paths, 21 vowels per 56 tiles, no board under 15 vowels. Letter
+values (scoring) and the four rare letters are unchanged.
+
+**Competent bot, clear rate (%) by band of shelves** (300 attempts per shelf; the other four languages are the "after"
+measurement of the first pass, unchanged because their data and the rules are unchanged)
+
+| band | de before | de after | en | es | fr | fi | others (lowest to highest) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 1-5 | 99.2 | 99.2 | 99.6 | 99.5 | 99.5 | 99.7 | 100 to 100 |
+| 6-10 | 85.4 | 89.0 | 90.8 | 90.9 | 91.9 | 91.4 | 91 to 92 |
+| 11-15 | 63.5 | 73.7 | 73.5 | 78.5 | 77.7 | 78.8 | 73 to 79 |
+| 16-20 | 42.8 | 54.9 | 51.9 | 60.3 | 59.1 | 61.8 | 52 to 62 |
+| 21-24 | 29.9 | 46.6 | 42.1 | 49.2 | 50.2 | 54.2 | 42 to 54 |
+
+German is now within 5 points of the average of the other four at every band (2 to 3.5 points under it from shelf 6) and
+inside the span of the four at 11 to 15 and 21 to 24.
+
+**Competent bot, clear rate (%) by shelf**
+
+| shelf | de before | de after | en | es | fr | fi |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 100.0 | 98.7 | 100.0 | 100.0 | 99.7 | 99.3 |
+| 2 | 99.7 | 99.3 | 100.0 | 100.0 | 99.7 | 100.0 |
+| 3 | 99.7 | 99.7 | 100.0 | 100.0 | 99.7 | 100.0 |
+| 4 | 99.0 | 99.7 | 99.7 | 99.3 | 99.3 | 100.0 |
+| 5 | 97.7 | 98.7 | 98.3 | 98.3 | 99.3 | 99.0 |
+| 6 | 92.0 | 93.7 | 94.3 | 92.3 | 94.7 | 96.0 |
+| 7 | 90.3 | 93.3 | 94.3 | 93.3 | 93.3 | 93.3 |
+| 8 | 87.7 | 91.3 | 90.0 | 91.0 | 94.7 | 92.3 |
+| 9 | 78.0 | 85.7 | 86.3 | 87.3 | 87.3 | 87.3 |
+| 10 | 79.0 | 81.0 | 89.3 | 90.7 | 89.3 | 88.0 |
+| 11 | 79.3 | 82.3 | 81.0 | 86.7 | 83.3 | 84.0 |
+| 12 | 70.0 | 77.0 | 83.0 | 82.7 | 88.3 | 84.7 |
+| 13 | 62.7 | 70.7 | 74.0 | 76.0 | 77.3 | 77.7 |
+| 14 | 60.7 | 75.3 | 71.7 | 80.0 | 76.7 | 81.0 |
+| 15 | 44.7 | 63.3 | 57.7 | 67.0 | 62.7 | 66.7 |
+| 16 | 53.7 | 65.0 | 58.0 | 67.3 | 64.7 | 64.3 |
+| 17 | 40.7 | 53.7 | 52.7 | 59.0 | 61.3 | 67.3 |
+| 18 | 44.7 | 50.7 | 57.7 | 65.7 | 55.3 | 62.3 |
+| 19 | 38.0 | 54.3 | 48.0 | 58.7 | 55.0 | 58.3 |
+| 20 | 37.0 | 51.0 | 43.3 | 50.7 | 59.0 | 57.0 |
+| 21 | 28.0 | 49.3 | 42.3 | 50.3 | 52.0 | 56.3 |
+| 22 | 35.7 | 46.0 | 49.3 | 54.3 | 51.3 | 54.0 |
+| 23 | 30.7 | 44.0 | 36.0 | 49.7 | 49.3 | 54.7 |
+| 24 | 25.3 | 47.3 | 40.7 | 42.7 | 48.3 | 51.7 |
+
+**Weak bot, clear rate (%) by band of shelves**
+
+| band | de before | de after | en | es | fr | fi |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1-5 | 73.0 | 77.3 | 81.8 | 80.1 | 79.9 | 79.1 |
+| 6-10 | 12.6 | 18.8 | 18.7 | 21.0 | 21.5 | 18.2 |
+| 11-15 | 2.7 | 3.5 | 4.1 | 6.1 | 4.4 | 4.5 |
+| 16-20 | 1.0 | 1.2 | 1.7 | 1.8 | 1.1 | 1.9 |
+| 21-24 | 0.1 | 0.8 | 0.6 | 1.0 | 0.2 | 0.8 |
+
+
+**Fresh boards, German** (400 deals): vowels per 56 21.4 (was 20.3), fewest vowels 15 (was 13), boards under 14 vowels 0.0%
+(was 0.2%), 3 to 5 letter word paths 350 (was 214, English 382), boards under 25 paths 0.0%, boards without a word 0.00%.
+The other ten rows of the fresh-board table above are unchanged (re-measured: identical).
+
+Other effects (competent, 60 whole runs and 240 dates): a run clears 21.2 shelves on average (was 16.2, the other four 19.7
+to 22.5), the Daily modifiers clear 99.6, 100, 100 and 99.6% (weak 63, 62, 58 and 62%, was 55, 52, 55 and 53%), FIRE fails with
+no word through any flame fell from 375 to 224, and OUT OF WORDS fails stay at 0. The guard is a native test:
+`tools/check/board_test.c` counts the 3 to 5 tile word paths of 60 fresh German boards and fails under 300 (it reads 349).
 
 ### Daily modifiers, before / after
 
@@ -328,7 +413,7 @@ Highest shelf cleared, competent: 8:1 10:1 12:2 14:3 15:9 16:6 17:4 18:9 19:4 20
 | en | 23.8 | 16 | 0.0% | 382 | 0.0% | 0.00% |
 | es | 24.1 | 16 | 0.0% | 564 | 0.0% | 0.00% |
 | fr | 24.1 | 15 | 0.0% | 452 | 0.0% | 0.00% |
-| de | 20.3 | 13 | 0.2% | 214 | 0.0% | 0.00% |
+| de | 21.4 | 15 | 0.0% | 350 | 0.0% | 0.00% |
 | it | 25.9 | 19 | 0.0% | 494 | 0.0% | 0.00% |
 | pt | 25.7 | 18 | 0.0% | 779 | 0.0% | 0.00% |
 | nl | 21.3 | 16 | 0.0% | 430 | 0.0% | 0.00% |
