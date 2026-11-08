@@ -1,0 +1,28 @@
+# Finnish theme words written for this project to bring thin cells to the standard (8 words at 4, 5 and 6 letters,
+# 5 at 7, 25 in all).  One line per theme, the English theme name first.  A word only counts when it is in the
+# Finnish dictionary (the forms Voikko accepts), seen at least 8 times in the subtitle corpus and not blocked
+# (tools/lang/build_pools.py).  Diacritics are written plain: a for a-umlaut, o for o-umlaut.
+ARCHIVE  asia luku tili nimi kuva sivu teos laki
+MUSIC    urut aani folk bass solo levy
+MYTH     ukko uhri pyha peto taru velho noita henki keiju hiisi tuoni taika sampo jumala myytti peikko tonttu manala loitsu haltia jumalat taikuri
+WEATHER  sade lumi sumu ilma usva pouta halla viima leuto kuuro
+GUILD    mies opas pomo hovi orja pappi kokki seppa herra neito paavi rouva vouti kuski
+ATTIRE   hame puku koru toga pipo side
+HOUSE    talo koti sali lasi pata kori peti tupa kota piha
+CURSES   piru aasi nolo kana ruma tyly hitto pahus hupsu hullu tyhma pelle tuhma kurja
+MOTION   tule mene meni tuli ajaa ajoi uida kavi pako kaya tulee menee lensi nousi kulki kulje tulla menna kulke hiipi
+CLANS    suku kyla rotu laji jono pari veli heimo kansa kerho seura jengi lauma parvi kunta tiimi kilta klubi piiri perhe
+TIMES    aika ilta aamu kesa ajat heti aina taas pian ensi sitten tunnit huomen tanaan joskus hetken vuotta viikon vuonna paivan
+MAKING   teki teen teet luon luot taon tein teit teko
+CHANGE   uusi kasvu muut sula muuta vaihe sulaa kypsa kasvaa muutos murros kaanto vaihto muunto kaanne kasvoi
+TRADE    raha osto kulu tulo euro sent osti vero arvo myyn hinta velka lahja laina kassa maksu ostaa
+ARCHIVE  sana rivi arkki
+MYTH     aave ahti unet loru tapio haamu
+GUILD    ukki vahti mummo vaari luoja
+ATTIRE   hiha sari paita toppi pitsi tasku
+MOTION   ajan meno nouse juoksu lento laske
+CLANS    vaki isat parit
+CHANGE   kova raaka kasva muutu tulla heraa sulat
+GUILD    seta tati lady poju
+CHANGE   erot alku vuoro
+CHANGE   olla ollut tuli

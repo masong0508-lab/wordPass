@@ -353,6 +353,14 @@ enum {
     UI_GC_8,
     UI_GC_9,
     UI_GC_10,
+    UI_EX_WORD,
+    UI_EX_SCORE,
+    UI_EX_F1,
+    UI_EX_F2,
+    UI_EX_F3,
+    UI_EX_F4,
+    UI_G_KEY_START,
+    UI_G_KEY_SELECT,
     UI_COUNT
 };
 #endif

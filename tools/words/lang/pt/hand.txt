@@ -1,0 +1,13 @@
+# Portuguese theme words written for this project to bring thin cells to the standard (8 words at 4, 5 and 6 letters,
+# 5 at 7, 25 in all).  One line per theme, the English theme name first.  A word only counts when it is in the
+# Portuguese dictionary, seen at least 8 times in the subtitle corpus and not blocked (tools/lang/build_pools.py).
+ARCHIVE  nota dado fila tomo data base nome caso lote
+WEATHER  neve gelo frio seco raio gota onda
+GUILD    papa juiz frei dama mago chef guia sabio monge padre conde pajem poeta bispo tutor
+CURSES   bobo tolo asno poxa puxa pato boba tola mula
+MOTION   anda sobe gira vais veio pula nada foge vira vamos
+MAKING   faco cria cose tece obra arma cola feito
+CHANGE   muda mude cede vire gire
+EVENTS   gala jogo luta rito voto fuga ceia tiro show
+WEATHER  luar aura fria seca
+CHANGE   move mova cura sara

@@ -1,0 +1,8 @@
+# Swedish theme words written for this project to bring thin cells to the standard (8 words at 4, 5 and 6 letters,
+# 5 at 7, 25 in all).  One line per theme, the English theme name first.  A word only counts when it is in the
+# Swedish dictionary, seen at least 8 times in the subtitle corpus and not blocked (tools/lang/build_pools.py).
+MYTH     ande mara runa odin thor magi jinn tomte nisse troll gudom
+GUILD    kung vakt chef smed kock herr lord munk prins greve baron bonde pilot fogde herre
+ATTIRE   kjol byxa rock kapa hatt vast pals toga ring slips kappa krage klade mossa silke kofta balte troja
+CURSES   fjol toka pest dumt tjat attans jisses stolle dumbom fjant trams
+MYTH     haxa guds oden faun jatte

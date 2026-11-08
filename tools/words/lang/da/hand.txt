@@ -1,0 +1,8 @@
+# Danish theme words written for this project to bring thin cells to the standard (8 words at 4, 5 and 6 letters,
+# 5 at 7, 25 in all).  One line per theme, the English theme name first.  A word only counts when it is in the
+# Danish dictionary, seen at least 8 times in the subtitle corpus and not blocked (tools/lang/build_pools.py).
+MYTH     myte rune magi heks helt odin thor sagn
+GUILD    smed chef lord munk page vagt dame frue konge herre greve baron bonde pilot fogde fyrst abbed
+ATTIRE   sjal vest ring pels toga slip mode knap stof kappe silke bluse jakke
+CHANGE   blev bliv vend drej skift vaekst tage byde
+MYTH     elve aand ork tor guds jinn nixe

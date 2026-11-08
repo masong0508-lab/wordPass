@@ -38,7 +38,9 @@ Nothing below is committed except the small hand-written inputs; `tools/lang/fet
 | What | Source | Licence |
 | --- | --- | --- |
 | Hunspell dictionaries (es, fr, de, it, pt, nl, sv, pl, da) expanded by `tools/lang/hunspell.py` | wooorm/dictionaries on GitHub, which packages: Spanish (RLA-ES), French (Grammalecte), German (igerman98), Italian (Italian Writing Aids), Portuguese (Raimundo Moura), Dutch (OpenTaal), Swedish (Goran Andersson), Polish (Polish Native Lang Project), Danish (Stavekontrolden) | es GPL-3.0 or LGPL-3.0 or MPL-1.1; fr MPL-2.0; de GPL-2.0 or GPL-3.0; it GPL-3.0; pt LGPL-3.0 or MPL-2.0; nl BSD-3-Clause or CC BY 3.0; sv LGPL-3.0; pl GPL-3.0 or LGPL-3.0 or MPL-2.0; da GPL-2.0 or LGPL-2.1 or MPL-1.1. Only derived word lists are shipped. |
-| Frequency lists (top 50k and full list), used for attestation, the common tier and ordering; Finnish dictionary words | FrequencyWords 2018 (hermitdave), from OpenSubtitles | CC BY-SA 4.0 |
+| Frequency lists (top 50k and full list), used for attestation, the common tier and ordering | FrequencyWords 2018 (hermitdave), from OpenSubtitles | CC BY-SA 4.0 |
+| Finnish: word forms of the Universal Dependencies treebanks (TDT, FTB, OOD, PUD: written Finnish), which rank ahead of rare subtitle forms; only the derived word list is shipped | UniversalDependencies/UD_Finnish-* on GitHub (raw files) | CC BY-SA 3.0 or 4.0 (TDT, OOD, PUD), CC BY 4.0 (FTB) |
+| Finnish word check: the Voikko morphology (the vocabulary `joukahainen.xml` with its Kotus inflection classes, the generators and the lexc grammar), compiled by `tools/lang/voikko_fi.py` with foma (Debian and Ubuntu package foma-bin); only the derived word list is shipped | corevoikko/voikko-fi on GitHub (raw files; the Voikko dictionary binary is not on an allowed host, its sources are) | GPL-2.0 or later |
 | Wordnets for pass words (through Open Multilingual Wordnet 1.4 and WordNet 3.0 ids): Spanish | Multilingual Central Repository | CC BY 3.0 |
 | French | WOLF, Wordnet Libre du Francais | CeCILL-C |
 | Italian | MultiWordNet | CC BY 3.0 |
@@ -49,13 +51,18 @@ Nothing below is committed except the small hand-written inputs; `tools/lang/fet
 | Danish (also used for Swedish) | DanNet | DanNet licence (BSD-style, permits redistribution) |
 | Norwegian Bokmal and Nynorsk (used for Danish and Swedish) | Norwegian Wordnet (Language Bank, National Library) | NWN licence (WordNet-style, permits commercial use with the notice) |
 | Finnish | FinnWordNet | CC BY 3.0 |
+| Extra senses for every language (the main source for Swedish and Danish): the Wiktionary-derived wordnets `wn-wikt-CODE.tab` | omwn/omw-data on GitHub (Open Multilingual Wordnet) | CC BY-SA 3.0 (Wiktionary text) |
+| English word to the language's word, for Swedish, Danish, Spanish, French, Portuguese and Dutch (each English word's WordNet senses) | FreeDict dictionaries swe-eng, dan-eng, eng-dan, spa-eng, fra-eng, eng-fra, por-eng, eng-por, nld-eng, eng-nld (freedict/fd-dictionaries on GitHub) | GPL-2.0 or later (Swedish and Danish: generated from Ergane) |
 | German | Open German WordNet (OdeNet) 1.4, linked to WordNet 3.0 through the Collaborative Interlingual Index (globalwordnet/cili) | CC BY-SA 4.0 (OdeNet), CC BY 4.0 (CILI) |
 | English side of the translation | Princeton WordNet 3.0 (nltk_data) | WordNet licence |
 | `lang/<code>/blocklist.txt` (words that never become a pass word): LDNOOBW lists per language, plus project additions | List of Dirty, Naughty, Obscene and Otherwise Bad Words | CC BY 4.0 |
-| `tools/words/lang/<code>/curses.txt`, `blocklist.txt`, and the verse, myth, motion, making and change lists | written for this project | MIT |
+| `tools/words/lang/<code>/curses.txt`, `blocklist.txt`, `hand.txt` (words written to top up thin theme cells), and the verse, myth, motion, making and change lists | written for this project | MIT |
 
-Finnish has no open Hunspell dictionary on a host the build can reach, so its word list is FinnWordNet
-lemmas plus frequent subtitle forms that pass a vowel-harmony and ending test; see `docs/LANGUAGES-DATA.md`.
+Finnish has no Hunspell dictionary on a host the build can reach (wooorm/dictionaries ships an empty stub for it),
+so its words are the forms of the subtitle list that the Voikko transducer accepts (every inflected form of
+the Joukahainen lexemes, compounds included), plus the lexemes themselves; see `docs/LANGUAGES-DATA.md` for every
+attempt. UniMorph, which has inflection tables for several of the other languages, has no Finnish file on a
+reachable host either.
 
 Regenerating: `tools/lang/fetch.sh RAW`, then `python3 tools/lang/build_all.py RAW WORK` (all ten) or with
 language codes; `python3 tools/lang/build_all.py --manifest` re-pins the English files; `make check`

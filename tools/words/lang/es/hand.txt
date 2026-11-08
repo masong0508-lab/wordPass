@@ -1,0 +1,34 @@
+# Spanish theme words written for this project to bring thin cells to the standard (8 words at 4, 5 and 6 letters,
+# 5 at 7, 25 in all).  One line per theme, the English theme name first.  A word only counts when it is in the
+# Spanish dictionary, seen at least 8 times in the subtitle corpus and not blocked (tools/lang/build_pools.py).
+INK      tiza goma hoja nota mina tipo cera trazo
+VERSE    rima lira odas coro aria epos musa tema arte
+ARCHIVE  acta caja tomo nota dato foto fila lote
+STUDY    aula beca mesa lupa mapa leer guia idea tema
+MYTH     dios mito zeus hera elfo ogro hada mago rito alma orco thor odin isis
+ALCHEMY  agua aire cera roca luna lava gema brea sosa alga
+WEATHER  frio nube rayo aire seco gota humo
+GUILD    juez cura mozo jefe papa guia paje cabo chef peon dama emir monje sabio poeta reina lider tutor actor bufon jueces curas
+ATTIRE   capa bota bata velo ropa toga seda lana saco chal traje falda gorra boina manto cinta bolso joyas gorro blusa
+HOUSE    casa mesa cama sofa taza olla vaso cuna sala tapa
+MOODS    amor odio pena gozo risa duda asco
+CURSES   bobo lelo asno mulo rata sapo memo zote tuno
+MOTION   huir caer sube baja gira anda pasa sale vino
+CLANS    club clan liga raza coro pais
+TIMES    hora ayer alba dias eras edad
+MAKING   hace hizo crea arma cose teje pega haga hago hice
+CHANGE   muda mude torna vira cede sana
+TRADE    pago paga debe vale bono euro peso tasa suma toma
+EVENTS   boda gala misa obra caso acto cita cena fuga paro
+ARCHIVE  libro cinta clave serie lista copia
+WEATHER  tibio calma lluvia
+SMITHY   pala maza daga arco pico lima
+CLANS    tropa banda bando casta
+CHANGE   mudar vira tuerce pase gire
+STATES   vida ocio luto fama sano
+ARCHIVE  mapa arca baul lema
+WEATHER  neva seca gris arde
+CLANS    masa hato crew gens
+CHANGE   alza vire sane
+CLANS    grey tuna gang bloc
+CLANS    trio hijos

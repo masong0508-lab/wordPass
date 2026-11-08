@@ -95,14 +95,29 @@ static bool isLockdown(int s) { ShelfRules r; boardShelfRules(s, &r); return r.l
 static bool isTwinFire(int s) { ShelfRules r; boardShelfRules(s, &r); return r.tier >= LOCKDOWN_TWIN_FIRE_TIER; }
 static bool isTier1(int s) { ShelfRules r; boardShelfRules(s, &r); return r.tier >= 1; }
 
-// letter values, grouped by value ("1 AEILNORSTU  2 DG ...") and packed into lines of at most GUIDE_MAX_CHARS
+// The gems of an example word (a UI_EX_* string of the active language): Qu is one gem when the language has the Qu tile.
+// Returns the gem count (at most 4) and the word's length in letters.
+int guideGems(int id, u8 gems[4], int *wordLen)
+{
+    const char *w = ui(id);
+    int n = 0;
+    for (const char *c = w; *c && n < 4;) {
+        if (c[0] == 'Q' && c[1] == 'U' && langQuTile()) { gems[n++] = 'q' - 'a'; c += 2; continue; }
+        gems[n++] = (u8)((*c >= 'A' && *c <= 'Z' ? *c - 'A' : 0));
+        c++;
+    }
+    if (wordLen) *wordLen = (int)strlen(w);
+    return n;
+}
+
+// letter values of the active language, grouped by value ("1 AEILNORSTU  2 DG ...") and packed into lines of at most GUIDE_MAX_CHARS
 static int valueLines(char lines[][GUIDE_LINE_BUF], int max)
 {
     int n = 0, last = 0;
     lines[0][0] = 0;
     for (int v = 1; v <= 10; v++) {
         char grp[28]; int k = 0;
-        for (int l = 0; l < 26; l++) if (letterValueEn(l) == v) grp[k++] = (char)('A' + l);
+        for (int l = 0; l < 26; l++) if (letterValue(l) == v) grp[k++] = (char)('A' + l);
         grp[k] = 0;
         if (!k) continue;
         char tok[48]; tok[0] = 0;
@@ -127,7 +142,8 @@ static int valueLines(char lines[][GUIDE_LINE_BUF], int max)
 static int pageBoard(Page p)
 {
     int n = 0;
-    int ink = letterValueEn('i' - 'a') + letterValueEn('n' - 'a') + letterValueEn('k' - 'a');   // the example word: I, N, K
+    u8 gem[4]; int wl, ng = guideGems(UI_EX_WORD, gem, &wl), ink = 0;                            // the example word, in this language
+    for (int i = 0; i < ng; i++) ink += letterValue(gem[i]);
     L(UI_GB_1);
     L(UI_GB_2, MAX_CHAIN);
     L(UI_GB_3);
@@ -139,7 +155,7 @@ static int pageBoard(Page p)
     L(UI_GB_7);
     L(UI_GB_8);
     GAP();
-    L(UI_GB_9, boardWordPoints(ink, 3, false, 0, false));
+    L(UI_GB_9, ui(UI_EX_WORD), boardWordPoints(ink, wl, false, 0, false));
     L(UI_GB_10);
     return n;
 }
@@ -160,9 +176,16 @@ static int pageScoring(Page p)
     L(UI_GS_6, DIAMOND_CAP);
     L(UI_GS_7);
     GAP();
-    int qu = letterValueEn('q' - 'a'), iv = letterValueEn('i' - 'a'), zv = letterValueEn('z' - 'a');
+    u8 gem[4]; int wl, ng = guideGems(UI_EX_SCORE, gem, &wl), v[3] = { 0, 0, 0 };    // the example word's three gems
+    char label[16]; label[0] = 0;
+    for (int i = 0; i < 3 && i < ng; i++) {
+        v[i] = letterValue(gem[i]);
+        if (i) strcat(label, "+");
+        if (gem[i] == 'q' - 'a' && langQuTile()) strcat(label, "QU"); else { char c[2] = { (char)('A' + gem[i]), 0 }; strcat(label, c); }
+    }
+    int sum = v[0] + v[1] + v[2];
     L(UI_GS_8);
-    L(UI_GS_9, qu, iv, zv, qu + iv + zv, boardLenMult(4), SCORE_UNIT, boardWordPoints(qu + iv + zv, 4, false, 0, false));
+    L(UI_GS_9, label, v[0], v[1], v[2], sum, boardLenMult(wl), SCORE_UNIT, boardWordPoints(sum, wl, false, 0, false));
     return n;
 }
 
@@ -194,7 +217,7 @@ static int pagePass(Page p)
     L(UI_GA_1);
     L(UI_GA_2);
     L(UI_GA_3);
-    L(UI_GA_4, poolNameEn(0), poolNameEn(8), poolNameEn(17), poolThemeCount());
+    L(UI_GA_4, poolName(0), poolName(8), poolName(17), poolThemeCount());
     GAP();
     runList(runs, 1, 20, boardPassLenFor, "", NULL, "  ", NULL, ":");
     L(UI_GA_5);

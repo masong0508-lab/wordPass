@@ -34,7 +34,7 @@ static int fails;
 static int slots(const char *f, char *kinds)
 {
     int n = 0, seq = 1;
-    memset(kinds, 0, 8);
+    memset(kinds, 0, 16);
     for (; *f; f++) {
         if (*f != '%') continue;
         const char *p = f + 1;
@@ -54,11 +54,11 @@ static int slots(const char *f, char *kinds)
 // the text with its slots filled from the sample (the same rule as gen_ui.py)
 static void expand(const char *f, const char *samp, char *out, int lang)
 {
-    char toks[4][16];
+    char toks[8][16];
     int nt = 0;
     if (strcmp(samp, "-")) {
         const char *p = samp;
-        while (*p && nt < 4) {
+        while (*p && nt < 8) {
             int k = 0;
             while (*p && *p != '|' && k < 15) toks[nt][k++] = *p++;
             toks[nt++][k] = 0;
@@ -98,7 +98,7 @@ static int fontHas(char c)
 
 int main(void)
 {
-    char kinds[8], kinds0[8], buf[160];
+    char kinds[16], kinds0[16], buf[160];
     int total = 0, widest[LANG_COUNT] = { 0 };
     for (int id = 0; id < UI_COUNT; id++) {
         const char *en = uiIn(id, 0);
@@ -108,7 +108,7 @@ int main(void)
             total++;
             CHECK(s && s[0], "%s lang %d is empty", UI_IDNAME[id], l);
             slots(s, kinds);
-            CHECK(!memcmp(kinds, kinds0, 8), "%s lang %s: slots differ from English: %s", UI_IDNAME[id], langCode(l), s);
+            CHECK(!memcmp(kinds, kinds0, 16), "%s lang %s: slots differ from English: %s", UI_IDNAME[id], langCode(l), s);
             expand(s, UI_SAMPLE[id], buf, l);
             for (const char *c = buf; *c; c++) CHECK(fontHas(*c), "%s lang %s: glyph %c in %s", UI_IDNAME[id], langCode(l), *c, s);
             int w = (int)strlen(buf) * 6 * UI_SCALE[id] - UI_SCALE[id];

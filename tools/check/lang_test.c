@@ -18,6 +18,11 @@ static int fails;
 #define NLEN 18                 // dictionary lengths 3..20
 #define NTHEME 40
 #define LET_SIZE 68
+#define MIN_THEME_WORDS 25
+#define MIN_LEXICON_WORDS 100
+#define MIN_POOL_WORDS 13000            // pass words in all, per language (Swedish and Danish have the smallest wordnets)
+// languages still being brought to the standard: none (each stage of the word-table work removed one)
+static const char *PENDING_CODES = "";
 static const char *CODES[NLANG] = { "es", "fr", "de", "it", "pt", "nl", "sv", "pl", "da", "fi" };
 static const u8 REC[21] = { 0, 0, 0, 4, 4, 4, 4, 5, 6, 7, 7, 8, 8, 9, 9, 10, 11, 11, 12, 13, 13 };
 
@@ -111,6 +116,7 @@ static void checkLanguage(int li, const Row *row)
 {
     const char *code = CODES[li];
     char path[128], what[160];
+    const int pending = strstr(PENDING_CODES, code) != NULL;
     size_t dsz = 0, psz = 0, lsz = 0;
     snprintf(path, sizeof path, "data/lang/%s/dict.bin", code);   u8 *dict = slurp(path, &dsz);
     snprintf(path, sizeof path, "data/lang/%s/pools.bin", code);  u8 *pools = slurp(path, &psz);
@@ -260,10 +266,16 @@ static void checkLanguage(int li, const Row *row)
             }
         }
         pw += themeWords;
-        if (t != 39 && themeWords < 25) { snprintf(what, sizeof what, "%s: theme %d has at least 25 words (has %ld)", code, t, themeWords); CHECK(what, 0); }
-        // a pool is allowed to be short at 4 letters (the game falls back to the nearest length) but
-        // every theme but LEXICON must offer words at 5 and 6 letters
-        if (t != 39 && (poolCount(t, 5) < 3 || poolCount(t, 6) < 5)) { snprintf(what, sizeof what, "%s: theme %d has 3+ words of 5 and 5+ of 6 letters (%d, %d)", code, t, poolCount(t, 5), poolCount(t, 6)); CHECK(what, 0); }
+        // the standard, the same for every language and for English: 25 words a theme, 8 of 4, 5 and 6 letters, 5 of 7
+        // letters; the catch-all LEXICON needs 100 words.  PENDING_CODES lists languages not yet at the standard (none).
+        if (!pending) {
+            if (t != 39 && themeWords < MIN_THEME_WORDS) { snprintf(what, sizeof what, "%s: theme %d has at least %d words (has %ld)", code, t, MIN_THEME_WORDS, themeWords); CHECK(what, 0); }
+            if (t == 39 && themeWords < MIN_LEXICON_WORDS) { snprintf(what, sizeof what, "%s: LEXICON has at least %d words (has %ld)", code, MIN_LEXICON_WORDS, themeWords); CHECK(what, 0); }
+            if (t != 39 && (poolCount(t, 4) < 8 || poolCount(t, 5) < 8 || poolCount(t, 6) < 8 || poolCount(t, 7) < 5)) {
+                snprintf(what, sizeof what, "%s: theme %d has 8+ words of 4, 5 and 6 letters and 5+ of 7 (%d, %d, %d, %d)", code, t, poolCount(t, 4), poolCount(t, 5), poolCount(t, 6), poolCount(t, 7));
+                CHECK(what, 0);
+            }
+        } else if (t != 39 && themeWords < 25) { snprintf(what, sizeof what, "%s: theme %d has at least 25 words (has %ld)", code, t, themeWords); CHECK(what, 0); }
     }
     snprintf(what, sizeof what, "%s: pool file size = header + words", code); CHECK(what, poolExpect == psz);
     snprintf(what, sizeof what, "%s: pool words are a-z and the right length", code); CHECK(what, badWord == 0);
@@ -272,6 +284,7 @@ static void checkLanguage(int li, const Row *row)
     snprintf(what, sizeof what, "%s: at most 1000 words per theme and length", code); CHECK(what, over == 0);
     snprintf(what, sizeof what, "%s: theme names are 2..7 letters A-Z and distinct", code); CHECK(what, nameBad == 0 && dupName == 0);
     snprintf(what, sizeof what, "%s: pool word count matches the manifest", code); CHECK(what, row && pw == row->poolWords && row->themes == NTHEME);
+    if (!pending) { snprintf(what, sizeof what, "%s: at least %d pass words in all (has %ld)", code, MIN_POOL_WORDS, pw); CHECK(what, pw >= MIN_POOL_WORDS); }
     SAY("%s: %ld pool words in %d themes, %zu bytes\n", code, pw, NTHEME, psz);
     // pool words must also pass the Qu tile rule and stay inside the tile alphabet
     long outside = 0;

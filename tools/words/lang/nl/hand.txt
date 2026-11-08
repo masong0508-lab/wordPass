@@ -1,0 +1,11 @@
+# Dutch theme words written for this project to bring thin cells to the standard (8 words at 4, 5 and 6 letters,
+# 5 at 7, 25 in all).  One line per theme, the English theme name first.  A word only counts when it is in the
+# Dutch dictionary, seen at least 8 times in the subtitle corpus and not blocked (tools/lang/build_pools.py).
+MYTH     gods reus heks held ziel nimf trol elfen feeen geest draak
+GUILD    pater graaf pilot agent tutor vorst knaap baron klerk dames
+MOTION   gaan ging komt loop liep rent rolt reis reed zwem zwom gaat kwam klim stap valt viel loopt rijdt stapt keert vloog zwemt rolde
+MAKING   maak deed doen bouw vorm bakt lijm knip
+CHANGE   werd word ruil rijp wend keer past wordt groei ander beter
+MYTH     ogre mana orks zeus thor odin hades eden
+CHANGE   daal boog gist wijk mild
+MYTH     wolf faun bard heil

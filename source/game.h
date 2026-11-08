@@ -413,7 +413,8 @@ const LangTables *langTables(void);
 bool langParseLetters(const u8 *b, size_t n, LangTables *out);
 bool langApply(int idx, const u8 *dict, const u8 *pools, const u8 *letters, size_t lettersBytes);
 void langInitEnglish(void);
-int  letterValueEn(int letter);               // the English value table: the in-game guide always quotes English
+int  letterValueEn(int letter);               // the English value table (the compiled-in one, whatever the language)
+int  guideGems(int id, u8 gems[4], int *wordLen);   // the gems of a guide example word (a UI_EX_* string); Qu is one gem
 int  langWeight(int letter);
 bool langIsVowel(int letter);
 bool langQuTile(void);
