@@ -792,7 +792,7 @@ Each cell is `meter / turns per step / pass length` on FIRE NORMAL.
 
 ### 9.3 Lockdown
 
-From **shelf 6**, the shelf is in **Lockdown**: the music drops into a minor key, the mode label turns red, and the rules tighten.
+From **shelf 6**, the shelf is in **Lockdown**: the music turns to one of the dark songs, the mode label turns red, and the rules tighten.
 
 * The fire moves **every turn**.
 * A peel adds **2 heat**, not 1.
@@ -1055,27 +1055,29 @@ The meter is 5 or 4 and a peel is 2 heat: two peels can light a gem. Long words 
 
 > **Regenerated section.** This section describes the soundtrack as the code does *today* (`source/music.c`, with the sound effects and mixes on top of it). When the music changes again, `tools/emu/screens.py` and `python3 tools/check_guide.py` find what moved (the constants and keys below are parsed from the source by the checker), and this section is updated to match.
 
-There are no samples: the soundtrack is **sequenced live on the DS's eight sound channels** (six square-wave voices and two noise voices), each with its own instrument, so every layer can be mixed by game state.
+There are no samples: the soundtrack is **sequenced live on the DS's eight sound channels** (six square-wave voices and two noise voices), each with its own instrument, so every layer can be mixed by game state. It is **ten songs** (the list is at the end of this section), each a short tune with its own key, tempo, bass riff, drum groove and instruments, distilled from the songs of the author's other game; `docs/MUSIC.md` is the listening guide and the credits.
 
 <!-- check:music -->
 | Constant | Value |
 | --- | --- |
-| STEP_FRAMES | 8 |
+| MIN_STEP_FRAMES | 5 |
 | PATTERN | 64 |
 
-A step is a sixteenth note of **8 frames** (about 112 beats per minute) and a pass through the pattern is **64 steps**, four bars. The tune has the form **A A B A**: the four-bar hook plays twice, then a four-bar answer phrase over a different chord walk (vi, IV, I, V), then the hook again: sixteen bars in all.
+A step is a sixteenth note of **5 to 12 frames** depending on the song (180 down to 75 beats per minute) and a pass through the pattern is **64 steps**, four bars. Every tune has the form **A A B A**: the four-bar hook plays twice, then a four-bar answer phrase over a different chord walk, then the hook again: sixteen bars in all.
 
 | Layer | What it does | How it reacts |
 | --- | --- | --- |
-| **Hook** (square, starts at a thin 12.5% and fills out to 50% with a late vibrato) | the tune, which never stops | transposed to a new key on every shelf (eight keys, then round again); in Lockdown it is in **minor** with the raised seventh on the V chord, so the turn home still pulls; it sits an octave lower in the high keys so it stays singable |
+| **Hook** (square; each song has its own: a bell, a rhodes, a whistle, an oud, an acid lead ...) | the tune, which never stops | the song's own key and mode (the dark songs are minor, harmonic minor or hijaz, with the raised seventh on the V chord where the song asks for it); it sits in a singable register in every song |
 | **Pulse** (square, plucked) | a chord arpeggio, always on, ping-ponging between the speakers | thins to a slow heartbeat an octave down while you peek, and drops an octave while paused |
-| **Bass** (square) | a riff of eighths (root, fifth, octave) | plays while you keep spelling words and fades after about three quiet bars |
+| **Bass** (square) | the song's one-bar riff (octave bounce, off-beat house pulse, rolling 16ths, a hijaz drone ...) | plays while you keep spelling words and fades after about three quiet bars |
 | **Pad** (square, swells in) | slow chord tones an octave under the lead | swells one chord tone per pass letter found |
-| **Drums** (noise) | hat, kick and snare | level 1 (a word of 1 to 4 letters) is a closed hat on the off-beats; level 2 (5 to 6 letters) adds kick and snare, with a ghost kick before bars two and four; level 3 (7+ letters) runs sixteenth hats with accents, an open hat at the top of every loop and a snare fill into the last beat of bar four; the level decays one notch after eight bars |
+| **Drums** (noise) | hat, kick and snare in the song's own groove (four on the floor, a half-time snare, a two-step, a breakbeat ...) | level 1 (a word of 1 to 4 letters) is a closed hat; level 2 (5 to 6 letters) adds kick and snare, with a ghost kick before bars two and four; level 3 (7+ letters) runs the full groove with accented hats, an open hat at the top of every loop and a snare fill into the last beat of bar four; the level decays one notch after eight bars |
 | **Chimes** (square) | one-shot notes that climb the chord with the length of the word | one note for 3 letters, two for 4, three for 5 or 6, four for 7 (the last held with vibrato), a six-note run for 8 and up (which also lifts the pad for a moment); a word worth 500 or more rings louder; a word through a flame hisses like steam |
 | **Alarm** (square) | a pulsed two-tone blip | comes faster and louder the lower the fire has burned (every eighth step on the top rows, every step near the bottom) |
 
-**Tempo.** While a flame is on row 3 or lower the whole tune speeds up, on row 5 or lower faster still, and it relaxes one bar after the shelf is fire-free.
+**Tempo.** While a flame is on row 3 or lower the whole tune speeds up by one frame a step, on row 5 or lower by two (never faster than 5 frames a step), and it relaxes one bar after the shelf is fire-free.
+
+**Which song.** The **title, options, ledger, guide, language chooser and first-boot chooser** all play one dedicated **menu song**, a slow, warm music box. **Classic** shelves rotate through five songs by shelf (shelf 1 the first, shelf 6 the first again); **Lockdown** plays a dark, hard song by tier (tier 0 the slowest, tiers 2 and 3 the hardest); a Classic shelf on **FIRE: FAST** borrows the dark songs by shelf; the **Daily Pass** has its own song. Pausing, peeking, results, failing and the sound effects work the same on top of whichever song plays.
 
 **Reactions.**
 
@@ -1083,19 +1085,28 @@ A step is a sixteenth note of **8 frames** (about 112 beats per minute) and a pa
 * **Pausing** pulls the music down to a quarter (the alarm to half); resuming brings it back with a short swell.
 * **Finishing a pass** lands a fanfare on the next beat (a rising chord run, the pad snapping up, the bass on the tonic, a snare fill), then the hook loops an octave up, bright and without drums, for as long as the results card is open.
 * **Failing** has three endings: *Library lost* slides the alarm down over a crackle; *a scorched pass* cracks and stabs, then slides; *out of words* lets the hook sigh down four notes with no alarm. All three settle into a quiet bed (one low pad note and a slow bass toll) that never restarts the tune.
-* **A new shelf** fades the old one out over a quarter of a second and comes in on the new key with one bar of bass and pulse alone. The **title** plays a fuller attract mix (bass and hats always in, a steady pad, the hook on a mellow pulse).
+* **A new shelf** fades the old one out over a quarter of a second and comes in on the new song with one bar of bass and pulse alone. The **menu song** plays its whole arrangement (bass and a very soft hat always in, a quiet pad) at a lower level than the game songs, so it sits behind the screens.
 * **MUSIC: OFF** mutes everything, sound effects included.
 
 **Stereo.** Hook, bass and pulse in the middle; the pad a little right; the drums a little left; the chimes right; the hiss and noise effects far right; the alarm far left.
 
 **Sound effects** run on their own small sequencer with priorities, so a small sound never cuts a bigger one: a rising pentatonic tap for each gem you chain (it climbs with the chain length and tops out at ten gems), a short step back when you drop one, a buzzing pair of notes for a refused word, a rush of air for a peel that finds nothing, a falling hiss and a sliding chime for a scorch, a rising flare when a flame is lit, a low crackle when the fire creeps, and a soft blip on every menu move.
 
-The key by shelf (a MIDI note number for the hook's tonic; 60 is middle C):
+The songs (generated from `tools/music/songs_src.py`; the checker compares this table with `source/songs.c`):
 
-<!-- check:music-keys -->
-| Shelf | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Key | 60 | 62 | 57 | 65 | 64 | 67 | 55 | 69 |
+<!-- check:music-songs -->
+| Song | Plays | Beats per minute | Tonic (MIDI) | Mode |
+| --- | --- | --- | --- | --- |
+| MORNING MUSIC BOX | title and menus | 90 | 60 | mixolydian |
+| SUNNY CHIPS | Classic shelves | 112 | 62 | lydian |
+| PATIO HOUSE | Classic shelves | 129 | 55 | major |
+| MEADOW HOUSE | Classic shelves | 129 | 57 | major |
+| STAGE LIGHTS | Classic shelves | 129 | 65 | dorian |
+| PURDIE WALK | Classic shelves | 150 | 60 | dorian |
+| TWO STEP DAILY | Daily Pass | 129 | 60 | minor |
+| DESERT FIRE | Lockdown, FIRE: FAST | 150 | 53 | hijaz |
+| ACID ALARM | Lockdown, FIRE: FAST | 129 | 57 | minor |
+| NIGHT TRAIN | Lockdown, FIRE: FAST | 180 | 62 | harmonic minor |
 
 ---
 

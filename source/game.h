@@ -430,7 +430,10 @@ void gameSetLanguage(int idx);                // main.c: from the title or the o
 // music.c
 void musicInit(void);
 void musicTick(const Game *g);       // once per vblank
-void musicNewShelf(int shelf, bool lockdown);
+void musicNewShelf(int shelf, bool lockdown);   // a Classic shelf with no fire pressure (tests); the game uses musicPlayShelf
+void musicPlayShelf(const Game *g);   // a new shelf of the running game: the song comes from its mode, tier and the FIRE setting
+void musicMenu(void);                 // the title, options, ledger, guide and chooser screens: the one menu song
+int  musicSongFor(int shelf, bool lockdown, int tier, bool daily, int fire);   // which song (index into SONGS) a shelf plays
 void musicWord(int len, int score, bool burn);   // a scored word: the chime by length, a steam hiss when it went through a flame
 void musicCascade(int tiles);
 void musicPeek(bool on);
@@ -452,6 +455,7 @@ typedef struct {
     u8  mix, failPhase, fanfare, pickup;   // state mix (0 play, 1 attract, 2 pause, 3 results, 4 fail), 0 none / 1 stinger / 2 bed, 0 none / 1 pending / 2 fanfare / 3 loop, pickup bars left
     u8  fade, reserved;             // frames of cross-fade left
     u16 wordCount;                  // words chimed since boot
+    u8  song, role, gain, songs;    // the current song (index into SONGS), its role (SR_*), its level in percent, the number of songs
 } MusicDbg;
 void musicDebug(MusicDbg *out);
 

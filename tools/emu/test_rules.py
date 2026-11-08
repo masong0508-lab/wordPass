@@ -2167,9 +2167,29 @@ def _():
 
 # ---- music: the sequencer through the debug mirror (nothing here is judged by ear) -------------
 SFX_TAP, SFX_UNTAP, SFX_INVALID, SFX_PEEL, SFX_SCORCH, SFX_IGNITE, SFX_FIRESTEP, SFX_MENU = range(8)
-HOOK_C = 523                      # shelf 1 is in C: the hook's first note is C5
 
-@scenario('music mirror: a new shelf fades out, plays one pickup bar of bass and pulse, then the hook enters on step 16 at 64 on a 12.5% pulse')
+# The songs: the same tables the ROM was built from (tools/music/songs_src.py through build_songs.py), so a scenario
+# can state what the mirror must read for whichever song is playing.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'tools', 'music'))
+import build_songs as _bs, songs_src as _ss
+TUNES = _bs.build(_ss.SONGS)
+OCT8 = [4186, 4435, 4699, 4978, 5274, 5588, 5920, 6272, 6645, 7040, 7459, 7902]
+def note_hz(n):
+    sh = 9 - n // 12
+    return ((OCT8[n % 12] + (1 << (sh - 1))) >> sh) if sh > 0 else OCT8[n % 12] << -sh
+def tune(m): return TUNES[m['song']]
+def tdata(m): return TUNES[m['song']]['d']
+def by_role(role): return [i for i, t in enumerate(TUNES) if t['d']['role'] == role]
+def hook_midi(m, deg, chord, octave=None):
+    d = tdata(m); dd = deg - 1; o, dd = divmod(dd, 7); semi = _bs.SCALES[d['mode']][dd]
+    if d.get('harm') and chord == 5 and dd == 6: semi = 11
+    return d['root'] + semi + 12 * (o + (d.get('lead_oct', 1) if octave is None else octave))
+def duty_enum(pct): return 0 if pct <= 12 else 1 if pct <= 25 else 2 if pct <= 37 else 3
+def gain(m): return tdata(m).get('gain', 100)
+def hook_inst(m): return tdata(m)['inst'][0]
+def first_hook_hz(m): return note_hz(tdata(m)['root'] + 12 * tdata(m).get('lead_oct', 1))    # degree 1: where every chime run starts
+
+@scenario('music mirror: a new shelf fades out, plays one pickup bar of bass and pulse, then the hook enters on step 16 with its song\'s onset level')
 def _():
     to_title(); e.run(60)
     assert e.state()['settings']['music'] == 1, 'MUSIC defaults to ON'
@@ -2184,16 +2204,22 @@ def _():
             bass |= m['vol'][2] > 0
         if m['step'] == 16: break
     assert fade and bass, f'fade {fade} bass in the pickup bar {bass}'
-    assert m['tempo'] == 8 and m['mix'] == 0, f'tempo {m["tempo"]} mix {m["mix"]}'
-    assert m['hz'][0] == HOOK_C and m['vol'][0] == 64 and m['duty'][0] == 0, f'hook at step 16: {m["hz"][0]} Hz vol {m["vol"][0]} duty {m["duty"][0]}'
+    t = tune(m); d = t['d']; ins = hook_inst(m); F = d['frames']
+    assert d['role'] == 'classic' and m['song'] == by_role('classic')[0], f'shelf 1 plays classic song {by_role("classic")[0]}, the mirror says {m["song"]}'
+    assert m['tempo'] == F and m['mix'] == 0, f'tempo {m["tempo"]} (song says {F}) mix {m["mix"]}'
+    want_hz = note_hz(hook_midi(m, t['hookA'][16], t['chordsA'][1]))
+    assert m['hz'][0] == want_hz and m['vol'][0] == ins[3] * gain(m) // 100 and m['duty'][0] == duty_enum(ins[0]), \
+        f'hook at step 16: {m["hz"][0]} Hz (want {want_hz}) vol {m["vol"][0]} duty {m["duty"][0]}'
     seen = []
-    for _ in range(9):
+    for _ in range(F + 1):
         e.run(1); seen.append(e.music())
-    assert [x['duty'][0] for x in seen[:3]] == [0, 0, 3], 'the hook goes from 12.5% to 50% duty on the third frame'
-    assert seen[6]['vol'][0] == 44, f'the hook settles at 44 after seven frames, read {seen[6]["vol"][0]}'
-    assert seen[7]['step'] == 17 and seen[6]['step'] == 16, 'the next step arrives eight frames later'
+    if ins[2]:
+        assert seen[ins[2] - 1]['duty'][0] == duty_enum(ins[1]), f'the hook changes duty after {ins[2]} frames'
+    need = -(-(ins[3] - ins[4]) // max(1, ins[5]))                 # frames to fall from the onset to the sustain level
+    if need < F - 1: assert seen[need]['vol'][0] == ins[4] * gain(m) // 100, f'the hook settles at {ins[4] * gain(m) // 100}, read {seen[need]["vol"][0]}'
+    assert seen[F - 1]['step'] == 17 and seen[F - 2]['step'] == 16, f'the next step arrives {F} frames later'
 
-@scenario('music: the MUSIC option silences every channel, effects included, and ON brings the hook back (attract mix: 60 on a 50% pulse)')
+@scenario('music: the MUSIC option silences every channel, effects included, and ON brings the hook back (the menu song comes back, softly)')
 def _():
     to_title(); e.run(5)
     e.tap(e.bx + 86, 170); e.run(10)
@@ -2206,7 +2232,7 @@ def _():
     e.tap(130, opt_row_y(5)); e.run(4)
     assert e.state()['settings']['music'] == 1
     m = e.wait_step(0)
-    assert m['mix'] == 1 and m['vol'][0] == 60 and m['duty'][0] == 3, f'attract mix hook: vol {m["vol"][0]} duty {m["duty"][0]} mix {m["mix"]}'
+    assert m['mix'] == 1 and m['role'] == 0 and 0 < m['vol'][0] <= 40, f'menu song hook: vol {m["vol"][0]} role {m["role"]} mix {m["mix"]}'
     e.press('B', settle=20)
 
 @scenario('music effects from play: taps climb, an untap steps back, a bad word, peels, scorch, ignite, firestep')
@@ -2278,20 +2304,21 @@ def _():
     ensure_play(); fresh_shelf(); e.run(5)
     m = e.wait_step(0); assert m['section'] == 0, 'a new shelf starts in section A'
 
-@scenario('music under fire: alarm blips by the lowest flame, tempo lifts to 6 on row 5 and relaxes a bar after the fire is out')
+@scenario('music under fire: alarm blips by the lowest flame, the tempo lifts two frames a step on row 5 and relaxes a bar after the fire is out')
 def _():
     fresh_shelf(); e.set_heat(0); e.set_burn(0, 99); e.run(5)
     e.wait_step(15); e.wait_step(0)
-    assert e.music()['tempo'] == 8, 'a fire-free shelf plays at 8 frames a step'
+    base = tdata(e.music())['frames']; fast = max(base - 2, 5)
+    assert e.music()['tempo'] == base, f'a fire-free shelf plays at its song\'s {base} frames a step'
     blips = 0
     for _ in range(64 * 8):                                  # a loop with no fire: the alarm is silent
         e.run(1); blips += e.music()['vol'][4] > 0
     assert blips == 0, f'alarm sounded {blips} frames with no fire'
     e.set_cell(C, 5, BURN, 'a')
     e.wait_step(15); m = e.wait_step(0)
-    assert m['tempo'] == 6, f'tempo {m["tempo"]} with a flame on row 5'
+    assert m['tempo'] == fast, f'tempo {m["tempo"]} with a flame on row 5 (want {fast})'
     n = 0; vols = set(); duty = set()
-    for _ in range(16 * 6):
+    for _ in range(16 * fast):
         e.run(1); m = e.music()
         if m['vol'][4]: n += 1; vols.add(m['vol'][4]); duty.add(m['duty'][4])
     assert vols and vols <= {53}, f'row 5 alarm volume {vols}'     # min(60, 28 + 5 * 5)
@@ -2301,7 +2328,7 @@ def _():
     seen = []
     for st in (32, 48):
         e.wait_step(st); seen.append(e.music()['tempo'])
-    assert seen == [6, 8], f'the tempo should hold one bar after the fire is out, then relax: {seen}'
+    assert seen == [fast, base], f'the tempo should hold one bar after the fire is out, then relax: {seen}'
 
 @scenario('music: a word brings in the bass riff and the groove (the drum level and the kick are visible in the mirror)')
 def _():
@@ -2313,11 +2340,11 @@ def _():
     kick = False; bass = False
     for _ in range(64 * 8 // 2):
         e.run(1); m = e.music()
-        kick |= m['vol'][6] == 54 and m['hz'][6] == 2400
+        kick |= m['vol'][6] == tdata(m).get('drum_vol', (54, 46, 30, 24))[0] * gain(m) // 100 and m['hz'][6] == tdata(m).get('drum_hz', (2400, 7000, 16000, 12000))[0]
         bass |= m['vol'][2] > 0
     assert kick and bass, f'kick {kick} bass {bass}'
 
-@scenario('music words: the chime follows the length of the word (C5 first, 64 for five or six letters, 72 for seven, 76 for eight and more)')
+@scenario('music words: the chime follows the length of the word (the tonic first, 64 for five or six letters, 72 for seven, 76 for eight and more)')
 def _():
     fresh_shelf(); e.set_heat(0); e.set_burn(0, 99); e.run(5)
     g = e.state(); ws = e.find_words(g, minlen=5, maxlen=7)
@@ -2328,7 +2355,7 @@ def _():
     m = e.music()
     assert m['wordCount'] == w0 + 1, 'musicWord was not called'
     want = 64 if len(word) <= 6 else 72
-    assert m['hz'][5] == HOOK_C and m['vol'][5] in (want, want + 8) and m['duty'][5] == 3, f'{word}: chime {m["hz"][5]} Hz vol {m["vol"][5]}'
+    assert m['hz'][5] == first_hook_hz(m) and m['vol'][5] in (want, want + 8) and m['duty'][5] == 3, f'{word}: chime {m["hz"][5]} Hz (want {first_hook_hz(m)}) vol {m["vol"][5]}'
 
 @scenario('music: a failed shelf plays its stinger and settles into the quiet bed; the next shelf fades it out')
 def _():
@@ -2338,7 +2365,7 @@ def _():
     e.run(120); m = e.music(); st = m['step']
     assert m['failPhase'] == 2, 'the stinger gives way to the bed'
     e.run(80); m = e.music()
-    assert m['vol'][3] == 22 and m['hz'][3] == 311 and not (m['vol'][0] or m['vol'][1] or m['vol'][4] or m['vol'][6] or m['vol'][7]), f'bed: {m["vol"]}'
+    assert m['vol'][3] == 22 and m['hz'][3] == note_hz(tdata(m)['root'] + 3) and not (m['vol'][0] or m['vol'][1] or m['vol'][4] or m['vol'][6] or m['vol'][7]), f'bed: {m["vol"]}'
     assert m['step'] == st, 'the step sequencer stays stopped under the bed'
     e.tap(e.bx + 100, 100, hold=2, settle=0); e.run(2)
     m = e.music(); assert m['failPhase'] == 0 and m['fade'] > 0 and m['mix'] == 0, f'next shelf: phase {m["failPhase"]} fade {m["fade"]} mix {m["mix"]}'
@@ -2354,7 +2381,7 @@ def _():
     for _ in range(300):
         e.run(1); m = e.music(); top = max(top, m['vol'][0])
         assert not (m['vol'][6] or m['vol'][7]) and m['vol'][2] == 0, 'the results loop has no drums and no bass'
-    assert top == 89 and m['vol'][3] == 60, f'octave-up hook vol {top}, pad {m["vol"][3]}'
+    assert top == (hook_inst(m)[3] * 140 // 100) * gain(m) // 100 and m['vol'][3] == 60 * gain(m) // 100, f'octave-up hook vol {top}, pad {m["vol"][3]}'
     e.tap(e.bx + 100, 100, hold=2, settle=0); e.run(2)
     m = e.music(); assert m['fanfare'] == 0 and m['fade'] > 0, f'next shelf: fanfare {m["fanfare"]} fade {m["fade"]}'
     ensure_play()
@@ -2365,26 +2392,100 @@ def _():
     top = 0
     for _ in range(160):
         e.run(1); top = max(top, e.music()['vol'][0])
-    assert top == 64, f'hook peak in play {top}'
+    ins = hook_inst(e.music()); gn = gain(e.music())
+    assert top == ins[3] * gn // 100, f'hook peak in play {top} (want {ins[3] * gn // 100})'
     e.hold('L', True); e.run(30)
     peak = 0
     for _ in range(160):
         e.run(1); peak = max(peak, e.music()['vol'][0])
     e.hold('L', False)
-    assert 0 < peak <= 64 // 5, f'peeking: hook peak {peak}'
+    assert 0 < peak <= ins[3] * gn // 100 // 5 + 1, f'peeking: hook peak {peak}'
     e.press('START', settle=30); m = e.music(); assert m['mix'] == 2
     pk = 0
     for _ in range(160):
         e.run(1); pk = max(pk, e.music()['vol'][0])
-    assert 0 < pk <= 16, f'paused: hook peak {pk}'
+    assert 0 < pk <= ins[3] * gn // 100 // 4 + 1, f'paused: hook peak {pk}'
     e.press('START', settle=20); assert e.music()['mix'] == 0
-    to_title(); e.run(30); m = e.music(); assert m['mix'] == 1
+    to_title(); e.run(30); m = e.music(); assert m['mix'] == 1 and m['role'] == 0, f'the title plays the menu song: mix {m["mix"]} role {m["role"]}'
     bass = hats = False
     for _ in range(300):
         e.run(1); m = e.music(); bass |= m['vol'][2] > 0; hats |= m['vol'][7] > 0
     assert bass and hats and m['drumLevel'] >= 1, f'attract: bass {bass} hats {hats} drums {m["drumLevel"]}'
     e.tap(e.bx + 52, 147); e.run(400); m = e.music()
     assert m['mix'] == 0 and m['drumLevel'] == 0, f'playing: mix {m["mix"]} drums {m["drumLevel"]}'
+
+@scenario('music songs: title, options and ledger play the one menu song; the song is gentle (tempo, level) and the sequencer runs at 60 fps')
+def _():
+    to_title(); e.run(60)
+    menu = by_role('menu')[0]; d = TUNES[menu]['d']
+    for where, go in (('title', None), ('options', lambda: e.tap(e.bx + 86, 170)), ('ledger', lambda: (e.press('B', settle=20), e.press('X', settle=20)))):
+        if go: go(); e.run(30)
+        m = e.music()
+        assert m['mix'] == 1 and m['song'] == menu and m['role'] == 0 and m['tempo'] == d['frames'] and m['gain'] == d.get('gain', 100), \
+            f'{where}: song {m["song"]} (menu is {menu}) role {m["role"]} mix {m["mix"]} tempo {m["tempo"]} level {m["gain"]}'
+        assert m['songs'] == len(TUNES), f'the mirror counts {m["songs"]} songs, the tables {len(TUNES)}'
+        hv = 0
+        for _ in range(d['frames'] * 64):
+            e.run(1); hv = max(hv, e.music()['vol'][0])
+        assert 0 < hv <= 40, f'{where}: the menu hook peaks at {hv}'
+        assert e.fps() == 120, f'{where}: {e.fps()}/120 fps with the music running'
+        m0 = e.wait_step(0); m1 = e.wait_step(1)
+    e.press('B', settle=20)
+    to_title(); e.run(30)
+
+@scenario('music songs: Classic shelves 1..12 play their songs by (shelf - 1) % songs and the Lockdown shelves 6..12 the dark songs by tier')
+def _():
+    to_title(); e.start_classic(); e.run(60)
+    classic, dark = by_role('classic'), by_role('dark')
+    got = {}
+    g = e.state()
+    while True:
+        e.run(40); m = e.music(); g = e.state()
+        shelf = g['shelf']
+        want = dark[min(g['lockTier'], 2)] if g['lockdown'] else classic[(shelf - 1) % len(classic)]
+        assert m['song'] == want, f'shelf {shelf} (lockdown {g["lockdown"]} tier {g["lockTier"]}): song {m["song"]} want {want}'
+        assert m['role'] == (3 if g['lockdown'] else 1), f'shelf {shelf}: role {m["role"]}'
+        got[shelf] = m['song']
+        if shelf == 12: break
+        e.set_lives(3)
+        clear_shelf()
+    assert len(set(got[s] for s in range(1, 6))) == len(classic), f'shelves 1..5 play every Classic song once: {got}'
+    assert got[6] == dark[0] and got[9] == dark[1] and got[12] == dark[2], f'Lockdown tiers walk the dark songs: {got}'
+    assert e.fps() == 120, f'shelf 12: {e.fps()}/120 fps'
+    # the mirror moves at 60 fps: a step is `tempo` frames long
+    m = e.wait_step(3); f0 = e.state()['frame']; m = e.wait_step(4); f1 = e.state()['frame']
+    assert f1 - f0 == m['tempo'], f'a step took {f1 - f0} frames at tempo {m["tempo"]}'
+
+@scenario('music songs: the Daily Pass plays its own song')
+def _():
+    to_title(); e.run(10)
+    d = date_with_mod(1)
+    daily_title(d); tap_daily(); e.run(60)
+    g = e.state(); m = e.music()
+    assert g['state'] == ST_PLAY and g['mode'] == 1, f'daily: state {g["state"]} mode {g["mode"]}'
+    assert m['song'] == by_role('daily')[0] and m['role'] == 2, f'Daily plays song {m["song"]} role {m["role"]}'
+    assert e.fps() == 120, f'Daily: {e.fps()}/120 fps'
+    pause_do('QUIT'); e.set_clock(0); e.run(30)
+
+@scenario('music songs: Classic on FIRE FAST borrows a dark song; FIRE NORMAL plays the Classic rotation again')
+def _():
+    to_title(); e.run(10)
+    e.tap(e.bx + 86, 170); e.run(10)
+    assert e.state()['state'] == ST_OPTIONS
+    for _ in range(3):
+        if e.state()['settings']['fire'] == 2: break
+        e.tap(130, opt_row_y(4)); e.run(4)
+    assert e.state()['settings']['fire'] == 2, 'FIRE did not reach FAST'
+    e.press('B', settle=20); e.start_classic(); e.run(60)
+    m = e.music(); assert m['role'] == 3 and m['song'] in by_role('dark'), f'FIRE FAST plays a dark song: song {m["song"]} role {m["role"]}'
+    to_title(); e.run(10)
+    e.tap(e.bx + 86, 170); e.run(10)
+    for _ in range(3):
+        if e.state()['settings']['fire'] == 1: break
+        e.tap(130, opt_row_y(4)); e.run(4)
+    assert e.state()['settings']['fire'] == 1, 'FIRE did not return to NORMAL'
+    e.press('B', settle=20); e.start_classic(); e.run(60)
+    m = e.music(); assert m['role'] == 1 and m['song'] == by_role('classic')[0], f'FIRE NORMAL: song {m["song"]} role {m["role"]}'
 
 # ---- the interface in every language: nothing lit on a frame edge or in the gutter beside the next element -----------------
 def ui_lit(px, xs, ys, thr=200, lattice=False):

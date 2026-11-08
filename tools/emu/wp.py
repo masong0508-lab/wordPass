@@ -61,7 +61,7 @@ OFF = {
     'language': 644, 'loadMs': 648, 'langMask': 652,
     'seq': 656,
 }
-DBG_SIZE = 704
+DBG_SIZE = 708
 I32_FIELDS = ['state', 'mode', 'shelf', 'score', 'fail', 'turn', 'heat', 'chainLen', 'peels', 'lockdown',
               'bestWordScore', 'dailySeed', 'passLen', 'lastWordTier', 'rareWords', 'library',
               'heatThreshold', 'burnEvery', 'burnTimer', 'optRow', 'pulseEvery', 'lockTier', 'overtime',
@@ -303,7 +303,7 @@ class Emu:
         self.run(200); self.tap(self.bx + 52, 147); self.run(150)
     def start_daily(self):
         self.run(200); self.tap(self.bx + 120, 147); self.run(150)
-    # ---- music: the sequencer's mirror (source/music.c MusicDbg, 48 bytes at OFF['seq'])
+    # ---- music: the sequencer's mirror (source/music.c MusicDbg, 52 bytes at OFF['seq'])
     VOICES = ['hook', 'pulse', 'bass', 'pad', 'alarm', 'chime', 'drum', 'noise2']
     def music(self):
         """What the sequencer last sent to the hardware: hz/vol/duty lists per voice (HOOK PULSE BASS PAD ALARM CHIME
@@ -311,13 +311,14 @@ class Emu:
         (frames per step), drumLevel, lastSfx (-1 none), sfxCount, and the state of the show: mix (0 play, 1 attract, 2 pause,
         3 results, 4 fail), failPhase (0 none, 1 stinger, 2 bed), fanfare (0 none, 1 pending, 2 playing, 3 the loop after it),
         pickup (bars of bass and pulse alone left), fade (cross-fade frames left) and wordCount."""
-        v = struct.unpack_from('<8H8B8B4BhH6BH', self.raw(), OFF['seq'])
+        v = struct.unpack_from('<8H8B8B4BhH6BH4B', self.raw(), OFF['seq'])
         return {'hz': list(v[0:8]), 'vol': list(v[8:16]), 'duty': list(v[16:24]), 'step': v[24], 'section': v[25],
                 'tempo': v[26], 'drumLevel': v[27], 'lastSfx': v[28], 'sfxCount': v[29],
-                'mix': v[30], 'failPhase': v[31], 'fanfare': v[32], 'pickup': v[33], 'fade': v[34], 'wordCount': v[36]}
-    def wait_step(self, n, limit=600):
+                'mix': v[30], 'failPhase': v[31], 'fanfare': v[32], 'pickup': v[33], 'fade': v[34], 'wordCount': v[36],
+                'song': v[37], 'role': v[38], 'gain': v[39], 'songs': v[40]}
+    def wait_step(self, n, limit=1000):
         """Run frame by frame until the sequencer has sequenced step n (its notes were sent on that frame)."""
-        for _ in range(8):                              # already on step n: let it pass, the next onset is wanted
+        for _ in range(16):                             # already on step n: let it pass (a step lasts 5..12 frames), the next onset is wanted
             if self.music()['step'] != n: break
             self.run(1)
         for _ in range(limit):

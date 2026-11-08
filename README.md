@@ -229,7 +229,7 @@ moves every other turn and the pass can sit anywhere but the top row. Shelf 3
 keeps the slow fire but cuts the meter to 7 (it stays 7 through shelf 5, where
 the fire moves every turn). From shelf 6 on it
 is **Lockdown**: fire every turn, a heat pulse every six turns, the pass
-buried low, and the music drops into a minor key. Lockdown climbs in tiers
+buried low, and the music turns to one of the dark songs. Lockdown climbs in tiers
 every three shelves (the panel reads LOCKDOWN, LOCKDOWN II, III, IV): the
 pulse comes faster, the meter shrinks, and from LOCKDOWN III (shelf 12) every
 ignition lights two columns at once.

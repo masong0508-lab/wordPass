@@ -101,7 +101,7 @@ static void startShelf(void)
     boardNewShelf(&G);
     G.newBest = 0;
     gfxFadeIn();
-    musicNewShelf(G.shelf, G.lockdown);
+    musicPlayShelf(&G);
     char s[MSG_LEN];
     uiFmt(s, sizeof s, UI_MS_FIND, boardPassTheme(&G), G.passLen);   // 31 chars at most in English
     pendingMsg[0] = 0;
@@ -261,7 +261,7 @@ static void quitToTitle(void)
     G.msg[0] = 0; G.msgTimer = 0; pendingMsg[0] = 0;
     refreshClock();
     gfxFadeIn();
-    musicNewShelf(1, false);
+    musicMenu();
     settingsSave();
 }
 

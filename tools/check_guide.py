@@ -177,7 +177,7 @@ def build_facts(queries=()):
     with open(cfile, 'w') as f: f.write(FACTS_C)
     cmd = ['gcc', '-std=gnu11', '-w', '-I', os.path.join(REPO, 'tools/check/stub'), '-I', SRC, cfile,
            os.path.join(REPO, 'tools/check/stubs.c'), os.path.join(SRC, 'board.c'), os.path.join(SRC, 'dict.c'),
-           os.path.join(SRC, 'pools.c'), os.path.join(SRC, 'lang.c'), os.path.join(SRC, 'langload.c'), os.path.join(SRC, 'music.c'), os.path.join(SRC, 'ui.c'), os.path.join(SRC, 'ui_strings.c'), '-o', exe]
+           os.path.join(SRC, 'pools.c'), os.path.join(SRC, 'lang.c'), os.path.join(SRC, 'langload.c'), os.path.join(SRC, 'music.c'), os.path.join(SRC, 'songs.c'), os.path.join(SRC, 'ui.c'), os.path.join(SRC, 'ui_strings.c'), '-o', exe]
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode: raise SystemExit('cannot build the facts program:\n' + r.stderr)
     qfile = os.path.join(out, 'queries.txt')
@@ -544,11 +544,18 @@ def main():
         for r in t:
             m = re.search(r'#define\s+' + re.escape(r[0].strip('`')) + r'\s+(\d+)', music)
             if not m or int(m.group(1)) != num(r[1]): fail(f'music constant {r[0]}: music.c has {m.group(1) if m else "nothing"}, the guide says {r[1]}')
-    t = need('music-keys')        # | Shelf | 1 | ... | 8 |  then | Key | ... |
+    t = need('music-songs')       # | Song | Plays | Beats per minute | Tonic (MIDI) | Mode |
     if t:
-        m = re.search(r'static const u8 keys\[\]\s*=\s*\{([^}]*)\}', music)
-        keys_ = [int(x) for x in m.group(1).split(',') if x.strip()] if m else []
-        if [num(c) for c in t[0][1:]] != keys_: fail(f'music keys: music.c has {keys_}, the guide says {t[0][1:]}')
+        songsc = read(os.path.join(SRC, 'songs.c'))
+        got = re.findall(r'"([A-Z0-9 ]+)",\n\s+(SR_\w+), (\d+), MODE_(\w+), (\d+),\n\s+(\d+),', songsc)
+        if len(got) != len(t): fail(f'music songs: songs.c has {len(got)} songs, the guide lists {len(t)}')
+        else:
+            for g_, r in zip(got, t):
+                name, role, root, mode, harm, frames = g_
+                if r[0] != name: fail(f'music songs: songs.c has {name}, the guide has {r[0]}')
+                elif num(r[2]) != round(900.0 / int(frames)): fail(f'music songs: {name} is {round(900.0 / int(frames))} BPM in songs.c, the guide says {r[2]}')
+                elif num(r[3]) != int(root): fail(f'music songs: {name} has tonic {root} in songs.c, the guide says {r[3]}')
+                elif r[4].replace(' ', '').upper() != mode.replace('HARMINOR', 'HARMONICMINOR'): fail(f'music songs: {name} is {mode} in songs.c, the guide says {r[4]}')
 
     # ---- controls: every key main.c reads is in the control table
     t = need('controls')          # | Input | Where | Action |

@@ -4,7 +4,7 @@
 .SUFFIXES:
 
 # `make check` (native rule tests) and `make dict` run without devkitARM
-NATIVE_GOALS := check dict pools variants guide guide-check
+NATIVE_GOALS := check dict pools variants guide guide-check songs music-render
 ifneq ($(MAKECMDGOALS),)
 ifeq ($(filter-out $(NATIVE_GOALS),$(MAKECMDGOALS)),)
 NATIVE := 1
@@ -72,7 +72,7 @@ ifneq (,$(findstring icon.bmp,$(icons)))
   export GAME_ICON := $(CURDIR)/icon.bmp
 endif
 
-.PHONY: $(BUILD) clean dict pools variants check guide guide-check
+.PHONY: $(BUILD) clean dict pools variants check guide guide-check songs music-render
 
 # The ROM filesystem (NitroFS): the ten languages, lang/<code>/{dict,pools,letters}.bin, copied from data/lang so the
 # source of truth stays in data/ (the copy is not committed). English is compiled in and not in it.
@@ -104,7 +104,7 @@ variants:
 # Native rule tests: board.c, dict.c, pools.c, music.c, guide.c and font.c under gcc with the stubs in tools/check/stub,
 # after settings.c on its own (stub fat.h, a scratch file for the card). The last line is CHECK OK.
 #   make check
-CHECK_SRC := tools/check/board_test.c tools/check/stubs.c source/board.c source/dict.c source/pools.c source/lang.c source/langload.c source/music.c source/guide.c source/font.c source/ui.c source/ui_strings.c
+CHECK_SRC := tools/check/board_test.c tools/check/stubs.c source/board.c source/dict.c source/pools.c source/lang.c source/langload.c source/music.c source/songs.c source/guide.c source/font.c source/ui.c source/ui_strings.c
 LANG_SRC  := tools/check/lang_test.c tools/check/stubs.c source/dict.c source/pools.c
 check:
 	@mkdir -p $(BUILD)
@@ -129,6 +129,14 @@ guide:
 
 guide-check:
 	python3 tools/check_guide.py
+
+# source/songs.c is generated from tools/music/analysis/*.json and tools/music/songs_src.py (deterministic; commit the result)
+songs:
+	python3 tools/music/build_songs.py
+
+# docs/music/*.wav and *.mid: a software render of the same song tables (no DS needed to listen)
+music-render:
+	python3 tools/music/render.py
 
 clean:
 	@echo clean ...

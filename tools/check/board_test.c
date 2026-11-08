@@ -2,6 +2,7 @@
 // tools/check/stub. Run with `make check` from the repo root (loads data/dict.bin).
 // Each scenario prints PASS or FAIL; the exit status is the number of failures.
 #include "game.h"
+#include "songs.h"
 #include "dict_bin.h"
 #include "pools_bin.h"
 #include "variants_bin.h"
@@ -87,14 +88,54 @@ static void capture(Snap *out, int n, int word)
     }
 }
 
+
+// ---- the reference tune: the sequencer's original fixed tune expressed as a Song. The engine tests below
+// (envelopes, drum levels, the mixes, effects, fanfare, fail stingers) run on it, so a refactor of the engine cannot
+// slip through; the real songs get their own tests (songTests). LEGACY_MIN is the same tune in minor with the
+// harmonic-minor V chord.
+#define LH(a) a
+static const Song LEGACY = {
+    "legacy", SR_CLASSIC, 60, MODE_MAJOR, 0,
+    8, 1, 100, 0,
+    60, 50, 36,
+    54, 46, 30, 24,
+    2400, 7000, 16000, 12000,
+    40, { 2, 4 },
+    { 0, 2, 4, 7 },
+    { 1, 6, 4, 5 }, { 6, 4, 1, 5 },
+    { { 0, BASS_REST, 0, BASS_REST, 7, BASS_REST, 0, BASS_REST, 0, BASS_REST, 12, BASS_REST, 7, BASS_REST, 0, BASS_REST },
+      { 0, BASS_REST, 0, BASS_REST, 7, BASS_REST, 0, BASS_REST, 0, BASS_REST, 12, BASS_REST, 10, BASS_REST, 7, BASS_REST } },
+    0x0101,
+    { 1,0,3,0, 5,0,3,0, 6,0,5,0, 0,0,3,0,
+      1,0,3,0, 5,0,8,0, 7,0,5,0, 0,0,99,0,
+      6,0,8,0, 9,0,8,0, 6,0,5,0, 4,0,5,0,
+      3,0,2,0, 7,0,0,0, 5,0,2,0, 7,0,99,0 },
+    { 6,0,8,0, 10,0,8,0, 6,0,5,0, 0,0,3,0,
+      4,0,6,0, 8,0,9,0, 8,0,6,0, 0,0,99,0,
+      5,0,3,0, 1,0,3,0, 5,0,6,0, 8,0,6,0,
+      5,0,4,0, 2,0,0,0, 7,0,0,0, 9,0,99,0 },
+    {
+        { { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, { 0, 0, 0, 0 },
+          { 0,0,16,0, 0,0,16,0, 0,0,16,0, 0,0,16,0 }, 0 },
+        { { 0x0101, 0x0101, 0x0101, 0x0101 }, { 0x1010, 0x1010, 0x1010, 0x1010 }, { 0, 0x4000, 0, 0x4000 }, { 0, 0, 0, 0 },
+          { 0,0,16,0, 0,0,16,0, 0,0,16,0, 0,0,16,0 }, 0 },
+        { { 0x0101, 0x0101, 0x0101, 0x0101 }, { 0x1010, 0x1010, 0x1010, 0x1010 }, { 0, 0x4000, 0, 0x4000 }, { 1, 0, 0, 0 },
+          { 16,8,12,8, 16,8,12,8, 16,8,12,8, 16,8,12,8 }, 1 },
+    },
+    { { 12, 50, 3, 64, 44, 3, 10, 96, 8 }, { 12, 12, 0, 26, 14, 2, 0, 0, 8 }, { 25, 25, 0, 64, 48, 4, 0, 0, 6 }, { 37, 50, 0, 0, 0, 0, 0, 0, 2 } },
+};
+static Song LEGACY_MIN;
+
 static void musicTests(void)
 {
     u16 nhz[128];
     musicBuildNotes(nhz);
-    static const int keys[8] = { 60, 62, 57, 65, 64, 67, 55, 69 };
     boardOf('a'); g.passLen = 0;
     memset(&S, 0, sizeof(S)); S.music = 1;
+    LEGACY_MIN = LEGACY; LEGACY_MIN.mode = MODE_MINOR; LEGACY_MIN.harm = 1;
     musicInit();
+    CHECK("the title boots on the menu song", mdbg().song == musicSongFor(1, false, 0, false, FIRE_NORMAL) || mdbg().role == SR_MENU);
+    musicForceSong(&LEGACY);
 
     // the voices sit where the spec puts them in the stereo field
     static const int PAN[8] = { 64, 64, 64, 72, 24, 70, 60, 92 };
@@ -102,30 +143,6 @@ static void musicTests(void)
     for (int v = 0; v < 8; v++) if (stubPan[v] != PAN[v]) pans = false;
     CHECK("stereo: hook 64 pulse 64 bass 64 pad 72 alarm 24 chime 70 drum 60 noise2 92", pans);
     CHECK("no sequenced step yet reads 255", mdbg().step == 255);
-
-    // register window: the lead stays in a singable range in every key, major and minor
-    {
-        bool top = true, low = true;
-        for (int lock = 0; lock < 2; lock++)
-            for (int shelf = 1; shelf <= 8; shelf++) {
-                int root = keys[shelf - 1];
-                musicNewShelf(shelf, lock);
-                int hi = 0, lo = 99999;
-                for (int f = 0; f < 64 * 8 * 4; f++) {
-                    musicTick(&g);
-                    if (mdbg().step == 255) continue;
-                    int h = mdbg().hz[0];
-                    if (h > hi) hi = h;
-                    if (h < lo) lo = h;
-                }
-                int topNote = root >= 64 ? 85 : 90;
-                int floorNote = root == 64 || root == 65 ? 64 : 67;   // the E and F keys cannot reach G4 on scale degree 1
-                if (hi > nhz[topNote] * 102 / 100) top = false;
-                if (lo < nhz[floorNote] * 98 / 100) low = false;
-            }
-        CHECK("register window: the hook never goes above C#6 (high keys) or F#6 (low keys)", top);
-        CHECK("register window: the hook never goes below G4 (E4 for the E and F keys)", low);
-    }
 
     // the hook's envelope: instant onset at 64 on a 12.5% pulse, 50% after three frames, settles at 44, vibrato after ten
     {
@@ -206,13 +223,15 @@ static void musicTests(void)
         CHECK("section A's hook: bar 3 climbs to degree 9 and bar 4 ends on the tonic (C5 at step 48 is degree 3)", sn[32].hz[0] == nhz[81] && sn[36].hz[0] == nhz[60 + 14 + 12] && sn[48].hz[0] == nhz[76]);
         CHECK("section B opens on degree 6 and reaches degree 10", sn[64 * 2].hz[0] == nhz[81] && sn[64 * 2 + 4].hz[0] == nhz[88]);
 
-        musicNewShelf(1, true);                                   // Lockdown: the minor key, harmonic on the fifth chord
+        musicForceSong(&LEGACY_MIN);                              // the minor key, harmonic on the fifth chord
+        musicNewShelf(1, true);
         capture(sn, 64 * 3, 0);
         CHECK("minor: degree 7 over the vi chord is the natural 7th (Bb5), over the V chord the raised one (B5)",
               sn[24].hz[0] == nhz[60 + 10 + 12] && sn[52].hz[0] == nhz[60 + 11 + 12]);
         CHECK("minor: the B section's last bar also raises its degree 7 (step 56 of loop 2)", sn[64 * 2 + 56].hz[0] == nhz[60 + 11 + 12]);
         CHECK("the pulse arpeggio over the V chord uses the raised 7th (G, B, D, G in minor)", sn[49].hz[1] == nhz[71]);
 
+        musicForceSong(&LEGACY);
         musicNewShelf(1, false);
         capture(sn, 128, 0);
         CHECK("pulse: a plucked arpeggio C E G C that ping-pongs 44 / 84", sn[0].hz[1] == nhz[60] && sn[1].hz[1] == nhz[64] && sn[2].hz[1] == nhz[67] && sn[3].hz[1] == nhz[72] &&
@@ -332,7 +351,7 @@ static void musicTests(void)
         mrun(14); d = mdbg();
         CHECK("the fade ends silent, then step 0 comes in the new key with one pickup bar", d.fade == 0 && d.vol[0] == 0 && d.vol[2] == 0 && d.vol[3] == 0 && d.pickup == 1 && d.step == 255);
         while (mdbg().step != 0) mrun(1);
-        CHECK("the pickup bar opens on step 0 in D (the bass is on the D below)", mdbg().hz[2] == nhz[50] && mdbg().vol[2] == 64);
+        CHECK("the pickup bar opens on step 0 (the bass is on the tonic below)", mdbg().hz[2] == nhz[48] && mdbg().vol[2] == 64);
     }
 
     // word chimes by length, a steam hiss through fire, the pad accent of a long word
@@ -567,6 +586,8 @@ static void musicTests(void)
         CHECK("the sequencer never writes a value the hardware already holds", stubRedundant == 0 && stubWrites > 100);
     }
 }
+
+#include "songs_test.h"
 
 int main(int argc, char **argv)
 {
@@ -1602,6 +1623,7 @@ int main(int argc, char **argv)
     CHECK("note table octaves double", hz[81] == 880 && hz[57] == 220);
 
     musicTests();
+    songTests();
 
     printf("%s: %d failure(s)\n", fails ? "CHECK FAILED" : "CHECK OK", fails);
     return fails;
