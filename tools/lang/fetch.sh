@@ -15,6 +15,8 @@
 #   ili-map-pwn30.tab            Collaborative Interlingual Index to WordNet 3.0 offsets (globalwordnet/cili)
 #   voikko-fi/                   the sources of the Finnish Voikko morphology (corevoikko/voikko-fi, GPL-2+): the
 #                                vocabulary, the generators and the lexc grammar; tools/lang/voikko_fi.py compiles them
+#   ud-fi/*.conllu               the Universal Dependencies Finnish treebanks (TDT, FTB, OOD, PUD: written Finnish with
+#                                gold lemmas), whose word forms rank ahead of rare subtitle forms in the Finnish dictionary
 set -e
 RAW=${1:?usage: fetch.sh RAW_DIR}
 mkdir -p "$RAW"/hun "$RAW"/freq "$RAW"/ldnoobw "$RAW"/wn "$RAW"/omw "$RAW"/odenet "$RAW"/wikt "$RAW"/freedict
@@ -52,5 +54,11 @@ for f in Makefile COPYING CONTRIBUTORS common/voikkoutils.py common/hfconv.py co
          vvfst/suomi.lexc vvfst/olla-ei.lexc vvfst/poikkeavat.lexc vvfst/lukusanat.lexc vvfst/asemosanat.lexc \
          vvfst/seikkasanat.lexc vvfst/suhdesanat.lexc vvfst/generate_sukija.py vvfst/poikkeavat-sukija.lexc; do
   curl -fsS -o voikko-fi/$f $V/$f
+done
+# Universal Dependencies Finnish treebanks (CC BY-SA 4.0, FTB CC BY 4.0)
+mkdir -p ud-fi
+U=$GH/UniversalDependencies
+for f in TDT/fi_tdt-ud-train TDT/fi_tdt-ud-dev TDT/fi_tdt-ud-test FTB/fi_ftb-ud-train FTB/fi_ftb-ud-dev FTB/fi_ftb-ud-test OOD/fi_ood-ud-test PUD/fi_pud-ud-test; do
+  curl -fsS -o ud-fi/$(basename $f).conllu $U/UD_Finnish-${f%%/*}/master/$(basename $f).conllu
 done
 echo "done: $RAW"

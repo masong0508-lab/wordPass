@@ -20,7 +20,10 @@ How a word gets in (all sources are open, see tools/words/SOURCES.md):
      every lower-case form of the subtitle list that the transducer accepts (any inflected
      form of the Joukahainen lexemes, compounds included) is a Finnish word.  A compound that
      Voikko only accepts as two glued words must occur 4 times, like the other compounding
-     languages; the lexemes themselves are bare entries.
+     languages; the lexemes themselves are bare entries.  The word forms of the Universal
+     Dependencies Finnish treebanks (written Finnish, names left out) are candidates too, and
+     each occurrence there counts as 20 subtitle occurrences when the list is ranked for the
+     cap, so written forms outrank the rarest subtitle ones.
   4. Normalise (diacritics stripped, sharp s -> ss, ...), keep 3..20 letters, at least one vowel,
      no letter three times in a row, and drop words that use a letter outside the language's
      alphabet (a letter with under 0.04 percent of the tiles, see letters.py).
@@ -54,6 +57,18 @@ def fin_lemmas(raw):
     return out
 
 COMPOUND_MIN = 4        # a form Voikko accepts only as glued words must occur this often
+UD_WEIGHT = 20          # a form seen once in the Finnish treebanks counts as this many subtitle occurrences when the list is ranked
+
+def ud_forms(raw):
+    """Counter of the lower-case word forms of the Universal Dependencies Finnish treebanks (written Finnish, names left out)."""
+    out = collections.Counter()
+    d = os.path.join(raw, "ud-fi")
+    for name in sorted(os.listdir(d)) if os.path.isdir(d) else ():
+        for line in open(os.path.join(d, name), encoding="utf-8"):
+            p = line.split("\t")
+            if len(p) > 3 and p[0].isdigit() and p[3] != "PROPN" and p[1].isalpha():
+                out[p[1].lower()] += 1
+    return out
 
 def build(code, raw, work, cap=CAP):
     out = os.path.join(work, code)
@@ -62,7 +77,7 @@ def build(code, raw, work, cap=CAP):
     top = read_list(os.path.join(raw, "freq", f"{code}.txt"))
     vowels = {l[0]: l[3] for l in common.LANGS}[code]
     minc = MIN_COUNT[code]
-    stems, forms = set(), set()
+    stems, forms, boost = set(), set(), {}
     if code != "fi":
         dic, aff = os.path.join(raw, "hun", f"{code}.dic"), os.path.join(raw, "hun", f"{code}.aff")
         keep = None
@@ -79,18 +94,19 @@ def build(code, raw, work, cap=CAP):
         import voikko_fi
         mor = voikko_fi.build(raw, work)
         stems = voikko_fi.lemmas(raw) | fin_lemmas(raw)           # Joukahainen lexemes and FinnWordNet lemmas, if Voikko accepts them
-        analysis = voikko_fi.analyse(mor, {w for w, n in freq.items() if w.islower() and n >= minc} | stems)
+        boost = {w: UD_WEIGHT * n for w, n in ud_forms(raw).items()}
+        analysis = voikko_fi.analyse(mor, {w for w, n in freq.items() if w.islower() and n >= minc} | set(boost) | stems)
         forms = set()
         for w, an in analysis.items():
             if all(re.match(r"\[L(ee|es|ep|em)\]", a) for a in an):      # a first name, surname, place or other name, only
                 continue
             glued = all("[Bc]" in a for a in an)
-            if w in stems or freq.get(w, 0) >= (COMPOUND_MIN if glued else minc):
+            if w in stems or freq.get(w, 0) + boost.get(w, 0) >= (COMPOUND_MIN if glued else minc):
                 forms.add(w)
         stems &= forms
     cand = {}                                   # normalised word -> attested count
     for f in forms:
-        n = freq.get(f, 0)
+        n = freq.get(f, 0) + (boost.get(f, 0) if code == "fi" else 0)
         if f in stems:
             ok = True
         else:
