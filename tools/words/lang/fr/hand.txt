@@ -1,0 +1,18 @@
+# French theme words written for this project to bring thin cells to the standard (8 words at 4, 5 and 6 letters,
+# 5 at 7, 25 in all).  One line per theme, the English theme name first.  A word only counts when it is in the
+# French dictionary, seen at least 8 times in the subtitle corpus and not blocked (tools/lang/build_pools.py).
+ARCHIVE  acte note date pile case tome code base fond
+MYTH     dieu mage elfe ogre rite mana ange sort
+WEATHER  vent ciel doux gris bise gele nuee brume
+GUILD    reine moine maire garde poete baron comte clerc valet
+ATTIRE   robe jupe cape pull jean gant toge mode laine soie
+MOODS    joie peur rage faim soif rire aise zele aime hait
+CURSES   bete veau buse zozo naze gogo sacre
+MOTION   part vole suit fuir nage sort vais vont alla vint fuit
+TIMES    jour nuit soir mois tard tot aube hier midi mars juin fois
+MAKING   fait fais cree coud mets pose bati unit
+CHANGE   muer vire croit fond tord rend vira
+EVENTS   fete gala noce coup duel show mort
+CURSES   mule bouc gaga cave
+EVENTS   saut crue vote bond
+CLANS    camp race club clan gang pays gens

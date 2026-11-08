@@ -1,0 +1,22 @@
+# Italian theme words written for this project to bring thin cells to the standard (8 words at 4, 5 and 6 letters,
+# 5 at 7, 25 in all).  One line per theme, the English theme name first.  A word only counts when it is in the
+# Italian dictionary, seen at least 8 times in the subtitle corpus and not blocked (tools/lang/build_pools.py).
+INK      nero cera nota tela riga tipo foto
+ARCHIVE  atto dati file pila voce tomo base
+MYTH     mito eroe fata orco mago elfo rito idra anima ninfa drago genio
+WEATHER  sole neve gelo nube aria mite luce
+GUILD    papa capo duca dama oste cuoco frate prete conte abate sarto madre padre guida
+MOODS    odio pena noia riso gaio sete fame zelo pace
+CURSES   uffa boia orso pera mulo babbeo stolto somaro zotico grullo
+TIMES    anno mese sera alba oggi ieri dopo fase
+MAKING   fare fece crea cuce pone fate creo fatto fatta forma pinge tesse mette plasma
+CHANGE   muta vira cede gira cade cala sana varia torna passa volge sfuma
+TRADE    dare dono paga euro vale dote bene lira peso
+ARCHIVE  nome caso
+WEATHER  fumo onda buio mare
+CURSES   cane gufo rana topo
+TIMES    anni mesi luna giro
+MAKING   lima sega tira mura cuoce opera salda scava tinge taglia ripara
+CHANGE   sale cali cadi vari muto ruota volta svolta scorre
+WEATHER  gela nevi nubi lume piove venti
+CHANGE   dura sali muti vira rota volge ruota

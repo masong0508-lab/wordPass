@@ -1,0 +1,18 @@
+# German theme words written for this project to bring thin cells to the standard (8 words at 4, 5 and 6 letters,
+# 5 at 7, 25 in all).  One line per theme, the English theme name first.  A word only counts when it is in the
+# German dictionary, seen at least 8 times in the subtitle corpus and not blocked (tools/lang/build_pools.py).
+INK      Heft Text Pult Mine Kiel Rand Buch Wort
+VERSE    Vers Lied Reim Epos Takt Chor Poem Epik Lyrik Hymne Psalm Sagen Lieder Reime Verse Strophe
+LAMP     Glut Herd Ofen Glas Teer Mond
+VOYAGE   Boot Mast Meer Bord Kahn Flug Bahn Wind Seil Deck Kurs Tour Ziel
+MYTH     Gott Elfe Ogre Hexe Held Gnom Geist Troll Zwerg Riese Magie Fluch Engel Damon Titan Wesen Mythen Gotter Zauber Teufel Kobold Nymphe
+ATTIRE   Hose Rock Hemd Tuch Ring Gurt Cape Robe Mode Kilt Toga Pelz
+MOODS    Lust Zorn Hass Neid Gram Leid Qual Pein Reue Wahn
+CURSES   Mist Pech Pfui Esel Depp Narr Lump Dumm Doof
+MOTION   geht ging fuhr flog lief eilt floh komm lauf fahr kommt rennt fahrt reist zieht tritt rollt fallt
+TIMES    Zeit Jahr Juni Juli Marz Ende Tage bald dann fruh spat
+MAKING   baut baue mach naht webt schuf malt
+CHANGE   wird ward dreh kehr wend heil reif neue alte wach Wende wurde wuchs reift kehrt kippt dreht
+VERSE    Zeile Barde Klang Idyll Hymnen Tanka
+MYTH     Zeus Odin Thor Ares Hera Mana Orks Feen Hexen Elfen Gigant Zyklop Magier Orakel Sirene Faune Seher Heros
+MYTH     Faun Nixe Rune Runen Fabeln Wunder Sphinx Hydra Harpie Satyr Ahnen Fabel Ritter Nymphen Drachen

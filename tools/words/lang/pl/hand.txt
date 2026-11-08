@@ -1,0 +1,13 @@
+# Polish theme words written for this project to bring thin cells to the standard (8 words at 4, 5 and 6 letters,
+# 5 at 7, 25 in all).  One line per theme, the English theme name first.  A word only counts when it is in the
+# Polish dictionary, seen at least 8 times in the subtitle corpus and not blocked (tools/lang/build_pools.py).
+VERSE    wers lira tren hymn epos rytm takt chor nuta muza sonet rymy psalm piesn poeta tekst slowa wiersz poezja strofa poemat refren
+MYTH     bogi elfy mity duch boga czar smok gnom
+GUILD    krol pani szef lord cech dama baca
+MOODS    nuda duma szal ulga chec gnew gniew wstyd pycha pasja zapal humor
+CURSES   gapa glab pala kiep osla psia licho diabli balwan matol
+MOTION   ruch bieg krok skok chod rusz szla plyn rusza idzie lecac skacz szedl
+MAKING   robi zrob szyc lepi kuje ciac tkac piec zrobi robic lepic szyje
+CHANGE   zmienia zmienic zmienil zmienny wzrasta rozwija
+LAMP     swit zar knot lont mrok cien blask
+MOODS    mily lubi mina wrog kocha cieszy
