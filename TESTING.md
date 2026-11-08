@@ -100,6 +100,10 @@ the letter bag directly through `boardSeed`, `boardBagReset` and `boardRandomLet
 passLen)` are Python ports of the scoring curve (board.c `chainScoreDetail`, main.c pass
 completion) for exact score assertions.
 
+## Latency
+
+`python3 tools/emu/latency.py wordPass.nds [--left] [--fps] [--only "gem|submit"] [--json f]` measures, in frames, the delay between an input and the first screen change, sound event or state change it causes (savestate control run against input run, so it is exact). `--fps` also gates `Emu.fps()` after each action; `--table before.json after.json` prints a markdown comparison. See `docs/PERFORMANCE.md` for the method, the pipeline floors (a key shows at 2, a stylus touch at 3) and the table. The `responsiveness` scenario of `test_rules.py` covers the queued results-card tap, the iris leaving no window behind and the top screen's chain word latency.
+
 ## Rules
 - Keep play at 60 fps: `Emu.fps()` must return 120 for 120 cycles in play. Build a copy of
   the tree with `-DWP_PROFILE` (add to CFLAGS) and run `python3 tools/emu/prof.py <copy>`

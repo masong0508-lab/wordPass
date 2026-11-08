@@ -35,7 +35,7 @@ static int dimCardX, dimCardY, dimCardW, dimCardH;
 // The HUD on the top screen has two layouts (title/options and in-game). When the layout
 // changes, all four slices are redrawn over two frames (two per vblank) so the whole screen
 // updates at once without crowding the vblank.
-static int lastTopKind = -1, topBurst;
+static int lastTopKind = -1, topNeed;   // topNeed: bit per 48-row slice that must be redrawn (a layout change sets all four)
 // Build with -DWP_PROFILE to expose per-stage render timings in dbgT[]
 #ifdef WP_PROFILE
 u32 dbgT[10];
@@ -65,6 +65,7 @@ static int tallyPrev = -1, cardFlash;   // the state last frame; frames of white
 static int tipIndex, tipTimer;  // the title's tip card and the frames it has been up
 static char lastMsg[MSG_LEN];   // the message line as last frame saw it, and how long it has stood (the sticky prompts slide in)
 static int msgAge;
+static int frameDanger, frameMood;   // 0..12: the gold frame pulses toward fire as the flame nears the floor (at most 2.5 Hz); toward the accent in peek
 static bool rainAlive;          // the title's gem rain may have particles in flight
 
 #define C(r,g,b) ARGB16(1,(r),(g),(b))
@@ -75,6 +76,7 @@ static u16 frameMid = C(28,22,6), frameDk = C(16,11,2), frameLt = C(31,29,18);
 #define GOLD_DK    frameDk
 #define GOLD_LT    frameLt
 static u16 accent = C(6,28,24);
+static u16 bgTint = C(20,5,27);    // the board dots' second colour: the theme's amethyst slot, set in setupTheme
 #define ACCENT     accent
 // one accent per shelf so the library changes colour as you climb
 static const u16 SHELF_ACCENTS[ACCENT_COUNT - 1] = {
@@ -412,6 +414,7 @@ static void setupTheme(void)
         case FRAME_ACCENT: frameMid = accent; frameDk = lerp15(accent, BLACK, 9); frameLt = lerp15(accent, WHITE, 8); break;
         default:           frameMid = C(28,22,6); frameDk = C(16,11,2); frameLt = C(31,29,18); break;
     }
+    bgTint = t[TH_AMETHYST].light;
     static const u8 groupToPal[5] = { 0, 1, 3, 4, 2 };   // letter group -> GEM_PALS slot
     for (int l = 0; l < 26; l++) palOf[l] = groupToPal[groupFor(l)];
     buildHeatTables();
@@ -577,10 +580,12 @@ static void drawGemOutline(int x, int y)
 
 // ---------------------------------------------------------------- particles
 
-enum { P_SHARD = 0, P_SPARK, P_STAR, P_RAIN };   // P_RAIN: the title's falling gems (constant speed, no gravity)
+enum { P_SHARD = 0, P_SPARK, P_STAR, P_RAIN, P_CONF, P_FLYSCORE, P_FLYPASS };   // P_RAIN: the title's falling gems (constant speed, no gravity); P_CONF: confetti; P_FLY*: a gem chip that flies to the score or the pass tracker
 typedef struct { s16 x, y, vx, vy; u8 life, maxLife, kind; u16 col; } Particle;   // 1/8 px units
 #define MAXP 112
 static DTCM_BSS Particle P[MAXP];
+static int flyScoreX = 210, flyScoreY = 30, flyPassX = 210, flyPassY = 46;   // where the flying chips land (set from the panel layout)
+static int scoreGlint, passGlint;   // frames the score / pass row glow after a chip arrives
 
 static void spawn(int kind, int x, int y, int vx, int vy, int life, u16 col)
 {
@@ -596,9 +601,24 @@ static void stepParticles(void)
     for (int i = 0; i < MAXP; i++) {
         Particle *q = &P[i];
         if (!q->life) continue;
+        if (q->kind >= P_FLYSCORE) {     // an eased flight: a seventh of the way to the target each frame, never slower than 1 px
+            int tx = (q->kind == P_FLYSCORE ? flyScoreX : flyPassX) * 8, ty = (q->kind == P_FLYSCORE ? flyScoreY : flyPassY) * 8;
+            int dx = tx - q->x, dy = ty - q->y;
+            int ax = dx < 0 ? -dx : dx, ay = dy < 0 ? -dy : dy;
+            if (ax + ay < 40) { q->life = 1; if (q->kind == P_FLYSCORE) scoreGlint = 7; else passGlint = 7; }
+            else {
+                int mx = dx / 6, my = dy / 6;
+                if (mx == 0 && dx) mx = dx < 0 ? -8 : 8;
+                if (my == 0 && dy) my = dy < 0 ? -8 : 8;
+                q->x += mx; q->y += my + (q->life > q->maxLife - 4 ? -10 : 0);     // a small hop first
+            }
+            q->life--;
+            continue;
+        }
         q->x += q->vx; q->y += q->vy;
         if (q->kind == P_SHARD) q->vy += 3;
         if (q->kind == P_SPARK) q->vx += (rand() % 5) - 2;
+        if (q->kind == P_CONF) { if (q->vy < 14) q->vy += 1; q->vx += (rand() % 3) - 1; }
         q->life--;
     }
 }
@@ -616,6 +636,8 @@ static ITCM_CODE __attribute__((noinline)) void drawParticles(void)
             case P_SPARK: px(x, y, col); if (fade > 8) px(x, y + 1, lerp15(BLACK, col, 8)); break;
             case P_STAR:  px(x, y, col); px(x - 1, y, col); px(x + 1, y, col); px(x, y - 1, col); px(x, y + 1, col); break;
             case P_RAIN:  fillRect(x, y, 3, 3, col); px(x, y, lerp15(col, WHITE, 8)); break;
+            case P_CONF:  fillRect(x, y, (q->life & 2) ? 4 : 2, (q->life & 2) ? 2 : 4, q->life < 10 ? col : q->col); break;     // flutters: wide, then tall
+            default:      fillRect(x - 1, y - 1, 3, 3, q->col); px(x, y, WHITE); break;                                     // P_FLYSCORE / P_FLYPASS
         }
     }
 }
@@ -710,6 +732,7 @@ void gfxBurst(int c, int r, int kind, int letter)
         const GemPal *p = gemFor(letter);
         for (int i = 0; i < 10; i++)
             spawn(P_SHARD, cx + (rand() % 12) - 6, cy + (rand() % 10) - 5, (rand() % 25) - 12, -(rand() % 20) - 4, 18 + rand() % 10, (i & 1) ? p->light : p->mid);
+        spawn(P_FLYSCORE, cx, cy, 0, 0, 40, p->light);        // one chip per gem flies to the score on the panel
     } else if (kind == BURST_REVEAL) {
         for (int i = 0; i < 16; i++) {
             int a = i * 4;  // 16 directions
@@ -718,6 +741,7 @@ void gfxBurst(int c, int r, int kind, int letter)
             spawn(P_STAR, cx, cy, dirx[a / 4] * 2, diry[a / 4] * 2, 16 + (i & 3) * 2, (i & 1) ? WHITE : GOLD_LT);
         }
         for (int i = 0; i < 8; i++) spawn(P_SPARK, cx + (rand() % 16) - 8, cy, 0, -(rand() % 8) - 2, 20, WHITE);
+        spawn(P_FLYPASS, cx, cy, 0, 0, 44, GOLD_LT); spawn(P_FLYPASS, cx, cy, 0, 0, 40, WHITE);     // the found letter flies to the pass tracker
     } else if (kind == BURST_SCORCH) {
         for (int i = 0; i < 14; i++)
             spawn(P_SPARK, cx + (rand() % 16) - 8, cy + (rand() % 8), (rand() % 9) - 4, -(rand() % 14) - 4, 14 + rand() % 10, (i & 1) ? FIRE2 : FIRE1);
@@ -739,7 +763,9 @@ void gfxPopup(int c, int r, const char *txt, int gold)
     }
 }
 
-void gfxFadeIn(void)  { bright = -16; shelfAge = 0; callout.life = 0; }
+static int wipeT;      // frames of iris left (a shelf or the title opening)
+#define WIPE_FRAMES 9
+void gfxFadeIn(void)  { bright = -8; wipeT = WIPE_FRAMES; shelfAge = 0; callout.life = 0; }
 void gfxFlash(void)   { bright = 10; }
 void gfxShake(int frames) { shakeFrames = frames; }
 void gfxInvalidWord(void) { invalidTimer = 24; }
@@ -810,8 +836,15 @@ static int dangerRows;               // active rows this frame (0 = no glow)
 static void dangerSetup(const Game *g)
 {
     dangerRows = 0;
+    frameDanger = 0;
+    frameMood = (g->state == ST_PLAY && g->peekHeld) ? 10 : 0;
     if (g->state != ST_PLAY) return;
     int low = fireLow;
+    if (low >= 5) {       // the frame pulses red on a 24-frame (2.5 Hz) triangle, deeper the lower the fire
+        int ph = frame % 24, tri = ph < 12 ? ph : 24 - ph;
+        frameDanger = tri * (low - 4) / 3;
+        if (frameDanger > 12) frameDanger = 12;
+    }
     if (low < 4) return;
     int strength = (low - 3) * 4 + ((frame & 16) ? 2 : 0);   // 4..18
     for (int j = 0; j < DANGER_ROWS; j++) {
@@ -842,24 +875,27 @@ static void drawCallout(const Game *g)
 // N+ dot grid behind the gems (dots under solid gems are hidden anyway)
 static ITCM_CODE __attribute__((noinline)) void drawBoardDots(void)
 {
-    u16 dot = lerp15(BLACK, ACCENT, 3);
+    u16 dotA = lerp15(BLACK, ACCENT, frameMood ? 7 : 3), dotB = lerp15(BLACK, bgTint, frameMood ? 8 : 5);   // alternate dots: accent and the theme's own tint
     for (int y = 6; y < SCREEN_H; y += 8) {
         if (y < clipY0 || y >= clipY1) continue;
         u16 *row = cur + y * SCREEN_W + boardX0;
-        for (int x = 6; x < 172; x += 8) row[x] = dot;
+        for (int x = 6; x < 172; x += 8) row[x] = (((x >> 3) + (y >> 3)) & 1) ? dotB : dotA;
     }
 }
 
 // gold frame around the board strip, with a shimmer running along the top edge
 static void drawBoardFrame(void)
 {
-    rectOutline(BX(0), 0, BOARD_W, SCREEN_H, GOLD_DK);
-    rectOutline(BX(1), 1, BOARD_W - 2, SCREEN_H - 2, GOLD);
+    u16 fdk = GOLD_DK, fmd = GOLD;
+    if (frameDanger) { fdk = lerp15(fdk, FIRE1, frameDanger); fmd = lerp15(fmd, FIRE2, frameDanger); }
+    else if (frameMood) { fdk = lerp15(fdk, lerp15(ACCENT, BLACK, 6), frameMood); fmd = lerp15(fmd, ACCENT, frameMood); }
+    rectOutline(BX(0), 0, BOARD_W, SCREEN_H, fdk);
+    rectOutline(BX(1), 1, BOARD_W - 2, SCREEN_H - 2, fmd);
     int sh = (frame * 2) % 240 - 20;
     for (int i = 0; i < 14; i++) {
         int x = 1 + sh + i;
         if (x < 1 || x > BOARD_W - 2) continue;      // the shimmer runs along the frame only
-        px(BX(x), 1, GOLD_LT); px(BX(x), 0, GOLD);
+        px(BX(x), 1, frameDanger ? FIRE2 : GOLD_LT); px(BX(x), 0, fmd);
     }
 }
 
@@ -1055,15 +1091,31 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
     bool chainValid = chainValidNow;
     u16 ropeDk = chainValid ? lerp15(ACCENT, BLACK, 8) : GOLD_DK, ropeLt = chainValid ? ACCENT : GOLD_LT;
     if (invalidTimer) { ropeDk = lerp15(FIRE1, BLACK, 8); ropeLt = FIRE1; }     // a rejected word: the rope and rims flash red
-    for (int i = 1; i < g->chainLen; i++) {
-        int x0, y0, x1, y1;
-        cellOrigin(g->chainC[i - 1], g->chainR[i - 1], &x0, &y0);
-        cellOrigin(g->chainC[i], g->chainR[i], &x1, &y1);
-        x0 += TILE_W / 2; y0 += TILE_H / 2 - 2; x1 += TILE_W / 2; y1 += TILE_H / 2 - 2;
-        for (int t = 0; t <= 10; t++) {
-            int xx = x0 + (x1 - x0) * t / 10, yy = y0 + (y1 - y0) * t / 10;
-            fillRect(xx - 2, yy - 2, 4, 4, ropeDk);
-            fillRect(xx - 1, yy - 1, 2, 2, ((t + (frame >> 1)) % 5 == 0) ? (invalidTimer ? FIRE2 : WHITE) : ropeLt);
+    {   // the rope: 5 px links brightening toward the tail, with a spark running the whole chain
+        int segs = g->chainLen - 1;
+        for (int i = 1; i < g->chainLen; i++) {
+            int x0, y0, x1, y1;
+            cellOrigin(g->chainC[i - 1], g->chainR[i - 1], &x0, &y0);
+            cellOrigin(g->chainC[i], g->chainR[i], &x1, &y1);
+            x0 += TILE_W / 2; y0 += TILE_H / 2 - 2; x1 += TILE_W / 2; y1 += TILE_H / 2 - 2;
+            u16 core = lerp15(ropeLt, invalidTimer ? FIRE2 : WHITE, (i - 1) * 7 / (segs > 1 ? segs - 1 : 1));
+            for (int t = 0; t <= 5; t++) {
+                int xx = x0 + (x1 - x0) * t / 5, yy = y0 + (y1 - y0) * t / 5;
+                fillRect(xx - 2, yy - 2, 5, 5, ropeDk);
+                fillRect(xx - 1, yy - 1, 3, 3, core);
+            }
+        }
+        if (segs > 0) {
+            int total = segs * 6, pos = (frame * 2) % (total + 14);
+            if (pos < total) {
+                int i = pos / 6 + 1, t = pos % 6;
+                int x0, y0, x1, y1;
+                cellOrigin(g->chainC[i - 1], g->chainR[i - 1], &x0, &y0);
+                cellOrigin(g->chainC[i], g->chainR[i], &x1, &y1);
+                int xx = x0 + TILE_W / 2 + (x1 - x0) * t / 6, yy = y0 + TILE_H / 2 - 2 + (y1 - y0) * t / 6;
+                u16 sp = invalidTimer ? FIRE2 : WHITE;
+                fillRect(xx - 1, yy - 1, 3, 3, sp); px(xx, yy - 2, sp); px(xx, yy + 2, sp); px(xx - 2, yy, sp); px(xx + 2, yy, sp);
+            }
         }
     }
     // a valid word: a gold ring on the tail gem advertises the tap that submits it
@@ -1144,14 +1196,16 @@ static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
     }
     char s[32];
     fmtInt(s, shownScore);
-    if (textWidth(s, 2) <= 80) drawTextShadow(PANEL_X, 22, s, GOLD, 2);   // 80 px of panel: six digits at 2x
-    else drawTextShadow(PANEL_X, 26, s, GOLD, 1);                           // a million and up drops to 1x
+    flyScoreX = PANEL_X + 24; flyScoreY = 28; flyPassX = PANEL_X + 4 + 8 * (g->passLen > 0 ? 0 : 0); flyPassY = 47;
+    u16 scoreCol = scoreGlint ? lerp15(GOLD, WHITE, scoreGlint * 2) : GOLD;
+    if (textWidth(s, 2) <= 80) drawTextShadow(PANEL_X, 22, s, scoreCol, 2);   // 80 px of panel: six digits at 2x
+    else drawTextShadow(PANEL_X, 26, s, scoreCol, 1);                           // a million and up drops to 1x
 
     // the pass: one 7 x 10 slot per letter (nine fit the 76 px panel), a diamond once found
     for (int i = 0; i < g->passLen; i++) {
         int x = PANEL_X + i * 8;
         if (g->found[i]) {
-            fillRect(x, 42, 7, 10, letterPop[i] > 12 ? GOLD_LT : GEM_DIAMOND.light);
+            fillRect(x, 42, 7, 10, (letterPop[i] > 12 || passGlint) ? GOLD_LT : GEM_DIAMOND.light);
             drawChar(x + 1, 44, 'A' + (g->pass[i] - 'a'), C(4,6,10), 1);
         } else {
             rectOutline(x, 42, 7, 10, GOLD_DK);
@@ -2285,6 +2339,14 @@ static void drawTitle(const Game *g)
         if (ch >= 'a') drawGlyph(BX(x + 5), y + 5, font5x7[fontLogoIndex(ch)], WHITE, 2);
         else drawChar(BX(x + 5), y + 5, ch, C(4,6,10), 2);
     }
+    {   // a twinkle crosses one logo gem every 11 frames (a different one each time) and the diamond gets a glint
+        int k = frame / 11, ph = frame % 11, gi = (k * 5 + (k >> 2)) & 7;
+        int r = ph < 6 ? ph / 2 : (10 - ph) / 2;                 // 0 1 2 2 1 0
+        int sx = BX(lx + gi * gw + 4 + (k * 7) % 10), sy = 44 + (k * 3) % 9 - 2;
+        if (r > 0) {
+            for (int d = -r - 1; d <= r + 1; d++) { px(sx + d, sy, d == 0 ? WHITE : lerp15(BLACK, WHITE, 12 - 3 * (d < 0 ? -d : d))); px(sx, sy + d, d == 0 ? WHITE : lerp15(BLACK, WHITE, 12 - 3 * (d < 0 ? -d : d))); }
+        }
+    }
     {   // GUIDE: pulses until the first guided shelf has been done (S.tutorDone), then rests
         bool cue = !S.tutorDone;
         int pp = (frame & 31) < 16 ? (frame & 15) : 15 - (frame & 15);
@@ -2515,8 +2577,10 @@ static void overlayCard(int x, int y, int w, int h)
 
 static int cardTop(const Game *g)
 {
+    // slides up with a small overshoot and settles (a spring: 11 frames to rest, 8 px past the final row at the deepest)
+    static const s8 spring[11] = { 120, 84, 54, 30, 12, 0, -6, -8, -5, -2, -1 };
     int t = g->stateTimer;
-    return 22 + (t < 12 ? (12 - t) * (12 - t) : 0);
+    return 22 + (t < 11 ? spring[t] : 0);
 }
 
 // One row of a card: a label at the left edge, its value right-aligned to the right edge.
@@ -2606,7 +2670,7 @@ static void drawResultsCard(const Game *g)
     } else { uiFmt(s, sizeof s, UI_R_SHELFOPEN, g->shelf + 1); drawTextCenter(BX(cx), cy + 122, s, ACCENT, 1); }
     if (g->practice) drawTextCenter(BX(cx), cy + 132, ui(UI_R_NOTSCORED), DIM_TEXT, 1);
     else if (g->newBest && (frame & 16)) drawTextCenter(BX(cx), cy + 132, ui(UI_R_NEWBEST), GOLD_LT, 1);
-    if (t > 30 && (frame & 32)) drawTextCenter(BX(cx), cy + 141, ui(UI_R_TAPCONT), INK, 1);
+    if (t > CARD_GATE_PASSED && (frame & 32)) drawTextCenter(BX(cx), cy + 141, ui(UI_R_TAPCONT), INK, 1);
 }
 
 static void drawFailCard(const Game *g)
@@ -2644,7 +2708,7 @@ static void drawFailCard(const Game *g)
         else if (g->practice) drawTextCenter(BX(cx), cy + 117, ui(UI_R_PRACTICENS), DIM_TEXT, 1);
     }
     if (g->newBest && (frame & 16)) drawTextCenter(BX(cx), cy + 132, ui(UI_R_NEWBEST), GOLD_LT, 1);
-    if (t > 45 && (frame & 32)) drawTextCenter(BX(cx), cy + 141, ui((g->mode == MODE_CLASSIC && !runOver) ? UI_R_TAPRETRY : UI_R_TAPTITLE), WHITE, 1);
+    if (t > CARD_GATE_FAIL && (frame & 32)) drawTextCenter(BX(cx), cy + 141, ui((g->mode == MODE_CLASSIC && !runOver) ? UI_R_TAPRETRY : UI_R_TAPTITLE), WHITE, 1);
 }
 
 // The pause menu: a card with one 16 px row per entry (RESUME, RESTART SHELF, HOW TO PLAY, QUIT TO TITLE).
@@ -2740,6 +2804,11 @@ static void stepTally(const Game *g)
         shownScore = g->score - (boardShelfBonus(g->shelf) + g->speedBonus + g->peelBonus);
         if (shownScore < 0) shownScore = 0;
     }
+    if (g->stateTimer >= 2 && g->stateTimer <= 12) {       // shelf-clear confetti in the theme's colours, raining over the strip
+        const GemPal *th = THEMES[S.theme];
+        for (int i = 0; i < (g->passBonusKind == 2 ? 5 : 3); i++)
+            spawn(P_CONF, BX(6 + rand() % 160), -2 - rand() % 8, (rand() % 9) - 4, 10 + rand() % 12, 46 + rand() % 24, (rand() & 3) ? th[rand() % 5].light : GOLD_LT);
+    }
     if (g->stateTimer >= 18 && shownScore < g->score) {
         shownScore = boardTallyNext(shownScore, g->score);
         if ((g->stateTimer & 3) == 0) musicReveal(false);
@@ -2796,6 +2865,116 @@ void gfxInit(void)
     gfxApplySettings();
 }
 
+#define LINES_PER_FRAME 263
+#define VBLANK_LINE 192
+#define TOUCH_POLL_LINE 80
+#define TOUCH_SLACK 14
+#define LATE_FLIP_MAX 256                              // a draw that ends inside vblank up to this line still flips at once
+
+// The iris: a hardware window on BG3 that opens from the screen centre with an ease-out, on both screens, so it costs the
+// CPU nothing; outside the window the backdrop is black. A card's dim uses the same windows, so a dimmed state ends the iris.
+#define REG_DISPCNT_SUB_ (*(vu32 *)0x04001000)
+#define REG_WIN0H_SUB (*(vu16 *)0x04001040)
+#define REG_WIN0V_SUB (*(vu16 *)0x04001044)
+#define REG_WININ_SUB (*(vu16 *)0x04001048)
+#define REG_WINOUT_SUB (*(vu16 *)0x0400104A)
+static bool wipeWasOn;
+static void applyWipe(bool dim)
+{
+    if (dim) { wipeT = 0; wipeWasOn = false; return; }
+    if (wipeT > 0) {
+        int p = WIPE_FRAMES - wipeT + 1;                       // 1..WIPE_FRAMES
+        int r = 256 - 256 * p / WIPE_FRAMES;                   // 256 -> 0
+        int e = 256 - (r * r * r) / 65536;                     // ease-out cubic, 0..256
+        int hw = (128 * e) >> 8, hh = (96 * e) >> 8;
+        if (hw < 2) hw = 2;
+        if (hh < 2) hh = 2;
+        int x0 = 128 - hw, x1 = 128 + hw; if (x1 > 255) x1 = 255;
+        int y0 = 96 - hh, y1 = 96 + hh;
+        REG_WIN0H = (x0 << 8) | x1; REG_WIN0V = (y0 << 8) | y1; WIN_IN = WIN_BG3; WIN_OUT = 0; REG_DISPCNT |= DISPLAY_WIN0_ON;
+        REG_WIN0H_SUB = (x0 << 8) | x1; REG_WIN0V_SUB = (y0 << 8) | y1; REG_WININ_SUB = WIN_BG3; REG_WINOUT_SUB = 0; REG_DISPCNT_SUB_ |= DISPLAY_WIN0_ON;
+        wipeT--; wipeWasOn = true;
+    } else if (wipeWasOn) {
+        REG_DISPCNT &= ~DISPLAY_WIN0_ON; REG_DISPCNT_SUB_ &= ~DISPLAY_WIN0_ON; wipeWasOn = false;
+    }
+}
+
+// ---- dirty top-screen slices. A signature per 48-row slice hashes everything static the slice shows; a slice whose
+// signature differs from what it last drew is redrawn at once (see gfxFrame). Animation (shimmer, blinks) is not in
+// the signatures: the 15 Hz rotation owns it. Layout changes use the burst instead.
+static u32 topDrawn[4], topSigNow[4];
+static inline u32 hmix(u32 h, u32 v) { return (h ^ v) * 16777619u; }
+static u32 hstr(u32 h, const char *t) { while (*t) h = hmix(h, (u8)*t++); return h; }
+static void topSigs(const Game *g, u32 sig[4])
+{
+    bool play = !menuState(g->state);
+    u32 h0 = 2166136261u, h1 = h0, h2 = h0, h3 = h0;
+    if (!play) {                           // title, options, ledger: the tip card is the only thing that changes by itself
+        h0 = hmix(h0, tipIndex + 1); h1 = hmix(h1, tipIndex + 1); h2 = hmix(h2, tipIndex + 1); h3 = hmix(h3, tipIndex + 1);
+        h0 = hmix(h0, g->state); h1 = hmix(h1, g->state); h2 = hmix(h2, g->state); h3 = hmix(h3, g->state);
+        h0 = hmix(h0, S.language + 1); h2 = hmix(h2, g->clockOk);
+    } else {
+        bool fireNext = fireLow >= 0 && g->burnEvery - g->burnTimer <= 1;
+        h0 = hmix(h0, shownScore); h0 = hmix(h0, g->shelf); h0 = hmix(h0, g->mode); h0 = hmix(h0, g->lives);
+        h0 = hmix(h0, g->twist + (shelfAge < 120 ? 100 : 0)); h0 = hmix(h0, g->practice + g->lockdown * 2 + g->dailyMod * 4);
+        h0 = hmix(h0, fireNext);
+        h1 = hmix(h1, g->passLen);
+        for (int i = 0; i < g->passLen; i++) h1 = hmix(h1, g->found[i] + letterPop[i] * 2);
+        h1 = hmix(h1, fireLow + 2); h2 = hmix(h2, fireLow + 2);
+        h2 = hstr(h2, chainWordNow); h2 = hmix(h2, chainScoreNow); h2 = hmix(h2, chainValidNow); h2 = hmix(h2, invalidTimer);
+        h2 = hstr(h2, g->lastWord); h2 = hmix(h2, g->lastWordScore); h2 = hmix(h2, g->ledgerN);
+        h2 = hmix(h2, g->ledgerN ? g->ledgerPts[ledgerIndex(g, 0)] : 0);
+        h3 = hmix(h3, g->shelf); h3 = hstr(h3, g->msg);
+        h3 = hmix(h3, g->msgTimer > 46); h3 = hmix(h3, g->msgTimer != 0); h3 = hmix(h3, msgAge < 20 ? msgAge + 1 : 0);
+    }
+    topSigNow[0] = sig[0] = h0; topSigNow[1] = sig[1] = h1; topSigNow[2] = sig[2] = h2; topSigNow[3] = sig[3] = h3;
+}
+
+// May slice `sl` (rows 48 sl..48 sl + 47) be drawn right now without the beam seeing it half done? The beam is past
+// every row during vblank; a late flip leaves less of it, and slice 0 is the first the next frame scans.
+#define SLICE_LINES 28                                   // a slice costs at most ~19 scanlines (26k..41k ticks), with margin
+static bool sliceFits(int sl)
+{
+    int v = REG_VCOUNT;
+    int remain = v >= VBLANK_LINE ? LINES_PER_FRAME - v + 48 * sl : 48 * sl - v;   // lines until the beam reaches the slice's first row
+    return remain >= SLICE_LINES;
+}
+
+// ---- late input sampling. The loop used to read the pad right after the flip, then spend the frame drawing; the
+// picture the input produced came out one vblank later and the CPU idled in swiWaitForVBlank. Now the loop waits
+// (gfxLateSample) until just enough of the frame is left for the work it did last frames (logic + draw, in scanlines,
+// with a margin), reads the pad, draws and flips at vblank: the same picture, 5 to 7 ms younger input.
+// A frame that runs past line 192 still flips if it is inside vblank (lines 192..235 leave room for the top slices).
+static int workStart, workCost[8], workIdx, lateLines;
+void gfxLateSample(void)
+{
+    int worst = 0;
+    for (int i = 0; i < 8; i++) if (workCost[i] > worst) worst = workCost[i];
+    int reserve = worst + worst / 4 + 16;
+    int target = VBLANK_LINE - reserve;
+    int pollLine = TOUCH_POLL_LINE + TOUCH_SLACK;       // never before the ARM7 has read the stylus (libnds polls it at line 80)...
+    if (target < pollLine && pollLine + worst + worst / 6 <= LATE_FLIP_MAX - 8) target = pollLine;   // ...unless the frame would then end too late to flip in vblank
+    if (target < 0) target = 0;
+    if (REG_VCOUNT >= VBLANK_LINE) {                   // in vblank: let it finish, then run up to the sample line
+        while (REG_VCOUNT >= VBLANK_LINE) {}
+        while (REG_VCOUNT < target) {}
+    }                                                   // already inside the visible frame: the previous frame ran long, go at once
+    workStart = REG_VCOUNT;
+}
+static void lateNoteCost(void)
+{
+    int c = (int)REG_VCOUNT - workStart; if (c < 0) c += LINES_PER_FRAME;
+    workCost[workIdx++ & 7] = c;
+    lateLines = c;
+}
+// wait for vblank, unless the draw already finished inside it (lines 192..235)
+static void waitFlipPoint(void)
+{
+    int v = REG_VCOUNT;
+    if (v >= VBLANK_LINE && v <= LATE_FLIP_MAX) return;
+    swiWaitForVBlank();
+}
+
 void gfxFrame(const Game *g)
 {
     frame++;
@@ -2841,8 +3020,8 @@ void gfxFrame(const Game *g)
                 guideNavUsed = 1;
                 for (int i = 0; i < 6; i++) spawn(P_SPARK, GD_DOT_C0 + 14 * g->guidePage + (i - 3), GD_NAV_Y + 8, (i - 3) * 3, -(i & 1) * 3 - 4, 12 + (i & 3) * 2, (i & 1) ? WHITE : GOLD_LT);
             }
-            bright = -12;
-            guidePageSeen = g->guidePage; guideBase = frame >> 2; guideAge = 0; topBurst = 2;
+            bright = -8;
+            guidePageSeen = g->guidePage; guideBase = frame >> 2; guideAge = 0; topNeed = 0xF;
         } else if (guideAge < 600) guideAge++;
     } else guidePageSeen = -1;
     if (strcmp(g->msg, lastMsg)) { strcpy(lastMsg, g->msg); msgAge = 0; }    // a new prompt slides in; the same one just settles
@@ -2860,6 +3039,8 @@ void gfxFrame(const Game *g)
     if (pressPause) pressPause--;
     if (submitFlash) submitFlash--;
     if (callout.life) callout.life--;
+    if (scoreGlint) scoreGlint--;
+    if (passGlint) passGlint--;
     if (shelfAge < 1000) shelfAge++;
 
     PROF_START();
@@ -2899,13 +3080,14 @@ void gfxFrame(const Game *g)
     PROF(5);
 
     // fade and shake
-    if (bright < 0) { bright += 2; if (bright > 0) bright = 0; }
+    if (bright < 0) { bright += 4; if (bright > 0) bright = 0; }      // a fade-in is four frames (it was eight)
     else if (bright > 0) { bright -= 2; if (bright < 0) bright = 0; }
     int sx = 0, sy = 0;
     if (shakeFrames > 0) { shakeFrames--; sx = (rand() % 5) - 2; sy = (rand() % 5) - 2; }
 
     PROF_SET(8);
-    swiWaitForVBlank();
+    lateNoteCost();
+    waitFlipPoint();
     PROF_START();
     setBrightness(3, bright);
     bgSetScroll(bgMain, sx, sy);
@@ -2939,6 +3121,7 @@ void gfxFrame(const Game *g)
         REG_DISPCNT &= ~(DISPLAY_WIN0_ON | DISPLAY_WIN1_ON);
         REG_BLDCNT = 0;
     }
+    applyWipe(dimOn);
     PROF(6);
 
     // The top screen HUD is drawn straight into VRAM_C while the beam is in vblank,
@@ -2947,12 +3130,20 @@ void gfxFrame(const Game *g)
     // frame, so the screen updates at once while each vblank stays well under budget.
     cur = vramSub;
     int kind = menuState(g->state) ? (g->state == ST_GUIDE ? 2 : 1) : 0;   // title/options/ledger, the guide, in-game
-    if (kind != lastTopKind) { lastTopKind = kind; topBurst = 2; }
-    int s0 = frame & 3, s1 = s0;
-    if (topBurst) { topBurst--; s0 = topBurst ? 0 : 2; s1 = s0 + 1; }
-    for (int slice = s0; slice <= s1; slice++) {
-        clipY0 = slice * 48; clipY1 = clipY0 + 48;
+    if (kind != lastTopKind) { lastTopKind = kind; topNeed = 0xF; }
+    // Slices whose content changed (the chain word, the score, a callout, the plaque) are drawn this very vblank,
+    // before the 15 Hz rotation: the top screen then shows an event on the same frame as the touch screen. At most
+    // two slices a frame (the budget a layout change already uses); the rotation slice rides along while any is dirty.
+    int list[2], n = 0;
+    u32 sig[4]; topSigs(g, sig);
+    for (int sl = 0; sl < 4; sl++) if (sig[sl] != topDrawn[sl]) topNeed |= 1 << sl;
+    for (int sl = 0; sl < 4 && n < 2; sl++) if ((topNeed & (1 << sl)) && sliceFits(sl)) list[n++] = sl;
+    if (n < 2 && (n || topNeed == 0) && sliceFits(frame & 3) && !(n && list[0] == (frame & 3))) list[n++] = frame & 3;
+    for (int i = 0; i < n; i++) {
+        clipY0 = list[i] * 48; clipY1 = clipY0 + 48;
         drawTop(g);
+        topDrawn[list[i]] = topSigNow[list[i]];
+        topNeed &= ~(1 << list[i]);
     }
     clipY0 = 0; clipY1 = SCREEN_H;
     PROF_SET(7);

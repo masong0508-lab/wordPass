@@ -549,6 +549,11 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
     }
 }
 
+// The results and fail cards ignore taps for their first frames (the stylus that made the last peel is still landing);
+// a tap after CARD_QUEUE_FROM is remembered and applied when the gate opens.
+#define CARD_QUEUE_FROM 10
+static bool cardTapQueued;
+
 int main(void)
 {
     settingsInit();
@@ -575,6 +580,7 @@ int main(void)
     unsigned seedCounter = 0;
 
     while (1) {
+        gfxLateSample();
         scanKeys();
         u32 down = keysDown(), held = keysHeld();
         touchPosition t; touchRead(&t);
@@ -644,7 +650,11 @@ int main(void)
                 break;
             case ST_PASSED:
                 G.stateTimer++;
-                if (G.stateTimer > 30 && (down & (KEY_TOUCH | KEY_START | KEY_A))) {
+                if (G.stateTimer == 1) cardTapQueued = false;
+                // a tap once the card is up but before it takes input is kept and applied the moment it does (never dropped)
+                if (G.stateTimer > CARD_QUEUE_FROM && G.stateTimer <= CARD_GATE_PASSED && (down & (KEY_TOUCH | KEY_START | KEY_A))) cardTapQueued = true;
+                if (G.stateTimer > CARD_GATE_PASSED && ((down & (KEY_TOUCH | KEY_START | KEY_A)) || cardTapQueued)) {
+                    cardTapQueued = false;
                     settingsSave();
                     if (G.mode == MODE_DAILY) { quitToTitle(); break; }
                     G.shelf++;
@@ -654,7 +664,10 @@ int main(void)
                 break;
             case ST_FAIL:
                 G.stateTimer++;
-                if (G.stateTimer > 45 && (down & (KEY_TOUCH | KEY_START | KEY_A))) {
+                if (G.stateTimer == 1) cardTapQueued = false;
+                if (G.stateTimer > CARD_QUEUE_FROM && G.stateTimer <= CARD_GATE_FAIL && (down & (KEY_TOUCH | KEY_START | KEY_A))) cardTapQueued = true;
+                if (G.stateTimer > CARD_GATE_FAIL && ((down & (KEY_TOUCH | KEY_START | KEY_A)) || cardTapQueued)) {
+                    cardTapQueued = false;
                     settingsSave();
                     if (G.mode == MODE_DAILY || G.lives <= 0) { quitToTitle(); break; }   // no bookmark left: the run is over
                     G.score = G.shelfStartScore;

@@ -355,6 +355,13 @@ stars and pops into the plaque on the top screen, burning gems pulse with
 flame tongues and shed sparks, callouts pop in at double size, shelves fade
 in, and a failed run flashes and shakes the screen. The gold frames carry a
 travelling shimmer and the submit gem breathes while a valid word is chained.
+Shelves and the title open with an iris (a hardware window growing from the centre of both screens, nine frames, no CPU cost);
+a word's gems each send a chip flying to the score on the panel, which glows when they land, and a found pass letter
+sends two to the pass tracker; clearing a shelf rains confetti in the theme's colours (more for a perfect pass); the results
+and fail cards slide up on a small spring; the chain rope is five pixels thick, brightens toward the tail and carries a
+spark along its length; peek tints the board frame with the accent, and a flame on row 5 or lower makes the frame pulse
+red on a 2.5 Hz triangle (never faster than 3 Hz), deeper the lower it gets; the title's logo gems twinkle in turn and the
+board dots alternate between the accent and the theme's own tint.
 The title is a gold-ruled band of logo gems over a slow rain of falling gems in
 the theme's colours; the pause menu is a card with the highlighted row boxed (its four rows are
 RESUME, RESTART SHELF, HOW TO PLAY and QUIT TO TITLE).
@@ -493,6 +500,14 @@ listening guide, the credits and the evidence.
   of the PSG, so the music can be heard without a DS.
 
 ## Performance
+
+**Input latency.** The loop waits (`gfxLateSample`) until the work it did over the last eight frames, plus a margin, just
+fits before vblank, reads the pad, draws and flips, so the picture shows input that is 5 to 7 ms old instead of a frame
+old (never before scanline 94, since libnds' ARM7 polls the stylus at line 80); a draw that ends inside vblank flips at
+once. The top screen draws any 48-row slice whose content changed (a per-slice signature of the chain word, score,
+plaque, message and ledger) in the same vblank, at most two slices a frame plus the 15 Hz rotation, and only slices the
+beam cannot reach before they finish; a results or fail card remembers one tap made after its tenth frame and applies it
+when it opens (24 and 36 frames). `tools/emu/latency.py` measures all of it; `docs/PERFORMANCE.md` has the numbers.
 
 Both screens are software rendered straight into VRAM, with no RAM back
 buffer and no per-frame copy. The touch screen uses banks A and B as a full

@@ -2598,5 +2598,47 @@ def _():
     set_hand(False); lang_title(0)
 
 
+@scenario('responsiveness: a tap on the results card before it takes input is queued and applied; the iris opens and leaves no window behind; the top screen shows a chain word within the touch latency')
+def _():
+    from PIL import Image
+    ensure_play(); fresh_shelf(); e.set_tutor(1); e.set_lives(3)
+    g = e.state(); n = g['passLen']
+    for i in range(1, n):
+        e.set_heat(0); e.set_turn(0); e.set_burn(0, 99)
+        g = e.state()
+        for c, r in e.burn_cells(g): e.set_cell(c, r, TILE, 'e')
+        c, r = e.secret_cells(g)[i]; e.peel(c, r)
+    e.set_heat(0); e.set_turn(0); e.set_burn(0, 99)
+    g = e.state()
+    for c, r in e.burn_cells(g): e.set_cell(c, r, TILE, 'e')
+    shelf = g['shelf']; c, r = e.secret_cells(g)[n]
+    e.hold('L', True); e.emu.input.touch_set_pos(*e.center(c, r)); e.run(4); e.emu.input.touch_release(); e.run(3); e.hold('L', False)
+    e.run(4)
+    g = e.state(); assert g['state'] == ST_PASSED, f'last peel: state {g["state"]}'
+    e.run(6)                                   # the card is up (frame ~15) but still inside its tap gate: this tap must be kept
+    e.emu.input.touch_set_pos(e.bx + 100, 100); e.run(3); e.emu.input.touch_release()
+    for _ in range(60):
+        e.run(1)
+        if e.state()['state'] == ST_PLAY: break
+    g = e.state(); assert g['state'] == ST_PLAY and g['shelf'] == shelf + 1, f'queued tap lost: state {g["state"]} shelf {g["shelf"]}'
+    e.run(40)                                  # the iris of the new shelf is over: the strip is lit and the corner of the frame is on screen
+    px = e.pixels()
+    assert e.strip_brightness() > 150, f'strip brightness {e.strip_brightness()} after the iris'
+    assert sum(px[e.bx + 1, 192 + 96]) > 120 and sum(px[e.bx + 173, 192 + 96]) > 120, 'the frame edge is hidden: an iris window was left on'
+    assert sum(px[1, 96]) > 60 or sum(px[254, 96]) > 60 or sum(px[128, 8]) > 60, 'the top screen is hidden: an iris window was left on'
+    # the first chain gem puts its letters on the top screen within three frames of the touch showing
+    g = e.state(); word, path = e.find_words(g)[0]
+    e.run(5); before = e.shot(f'{out}/lat_top_before.png')
+    e.emu.input.touch_set_pos(*e.center(*path[0])); e.emu.input.touch_set_pos(*e.center(*path[0]))
+    seen = None
+    import numpy as np
+    a0 = np.array(Image.open(before).convert('RGB'))[96:140, 40:200]
+    for k in range(1, 9):
+        e.run(1); e.shot(f'{out}/lat_top_{k}.png')
+        if (np.array(Image.open(f'{out}/lat_top_{k}.png').convert('RGB'))[96:140, 40:200] != a0).any(): seen = k; break
+    e.emu.input.touch_release(); e.run(5)
+    assert seen is not None and seen <= 4, f'top screen chain word latency {seen} frames'
+    fps = e.fps(); assert fps == 120, f'fps {fps}'
+
 print('RULES OK' if not fails else f'RULES FAILED: {fails}')
 sys.exit(fails)

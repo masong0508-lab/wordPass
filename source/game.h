@@ -362,6 +362,9 @@ int  dictSpelling(const char *word, int len); // 0 same everywhere, 1 American o
 
 // gfx.c
 void gfxInit(void);
+#define CARD_GATE_PASSED 24   // frames before the results card takes a tap (an earlier one is queued)
+#define CARD_GATE_FAIL 36
+void gfxLateSample(void);   // main loop: wait until the frame's work just fits before vblank, then read the pad
 void gfxFrame(const Game *g);        // draws both screens and flips
 int  gfxCellAt(int px, int py, int *c, int *r);
 bool gfxInSubmit(int px, int py);
