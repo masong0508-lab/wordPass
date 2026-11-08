@@ -3,7 +3,7 @@
 #
 #   tools/lang/fetch.sh RAW_DIR
 #
-# Needs curl, unzip and tar with xz.  About 150 MB.  Layout written (what build_all.py expects):
+# Needs curl, unzip and tar with xz.  About 420 MB with the archives (foma-bin is needed later, for Finnish).  Layout written (what build_all.py expects):
 #   hun/CODE.{dic,aff,license}   Hunspell dictionaries (wooorm/dictionaries; Finnish has none there, see voikko-fi)
 #   freq/CODE.txt, CODE_full.txt OpenSubtitles frequency lists, top 50k and full (hermitdave/FrequencyWords, 2018)
 #   ldnoobw/CODE                 bad-word lists (LDNOOBW)
