@@ -93,6 +93,7 @@ static int firstShelf(bool (*pred)(int))
 }
 static bool isLockdown(int s) { ShelfRules r; boardShelfRules(s, &r); return r.lockdown; }
 static bool isTwinFire(int s) { ShelfRules r; boardShelfRules(s, &r); return r.twinEighths > 0; }
+static bool overtimeAtFloor(int s) { return isLockdown(s) && boardOvertimeFor(s, true) == OVERTIME_TURNS_LOCKDOWN; }
 static bool isTier1(int s) { ShelfRules r; boardShelfRules(s, &r); return r.tier >= 1; }
 
 // The gems of an example word (a UI_EX_* string of the active language): Qu is one gem when the language has the Qu tile.
@@ -277,7 +278,7 @@ static int pageShelves(Page p)
     L(UI_GH_9, pulseOf(lock));
     L(UI_GH_10, tier1, tier2, tier3, twin);
     L(UI_GH_11);
-    L(UI_GH_12, OVERTIME_TURNS + 1, OVERTIME_TURNS_LOCKDOWN + 1);
+    L(UI_GH_12, OVERTIME_TURNS + 1, OVERTIME_TURNS_LOCKDOWN + 1, firstShelf(overtimeAtFloor));
     L(UI_GH_13);
     return n;
 }

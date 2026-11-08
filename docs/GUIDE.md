@@ -692,7 +692,7 @@ The panel previews the cost of the chain you hold on the **HEAT** line (`+2 HEAT
 
 ### 8.2 The meter
 
-The meter's size depends on the shelf (section 9) and shrinks in small steps: **10** on shelves 1 and 2, then 9, 8, 7, 7, 6, 6, 5, 5, 5, and **4** from shelf 12. When the heat reaches the meter's size the shelf **ignites a gem** and the heat goes back to **0**: any extra is lost (except in overtime, section 8.6), and **heat never cools down by itself**. If no gem is left to light, the meter stays one short instead.
+The meter's size depends on the shelf (section 9) and shrinks in small steps: **10** on shelves 1 and 2, then 9, 8, 7, 7, 6, 6, 5, 5, 5, and **4** from shelf 12. The one exception is shelf 6, the first Lockdown shelf, which holds **8** instead of 7 (the Lockdown ramp, section 9.3). When the heat reaches the meter's size the shelf **ignites a gem** and the heat goes back to **0**: any extra is lost (except in overtime, section 8.6), and **heat never cools down by itself**. If no gem is left to light, the meter stays one short instead.
 
 ### 8.3 The FIRE setting
 
@@ -704,7 +704,7 @@ The FIRE option moves two numbers for Classic shelves: how often the fire moves 
 | 1 | 13 / 3 | 10 / 2 | 8 / 1 |
 | 3 | 12 / 3 | 9 / 2 | 7 / 1 |
 | 5 | 10 / 2 | 7 / 1 | 5 / 1 |
-| 6 | 10 / 2 | 7 / 1 | 5 / 1 |
+| 6 | 11 / 2 | 8 / 1 | 6 / 1 |
 | 9 | 8 / 2 | 5 / 1 | 4 / 1 |
 | 12 | 7 / 2 | 4 / 1 | 4 / 1 |
 | 15 | 7 / 2 | 4 / 1 | 4 / 1 |
@@ -737,7 +737,7 @@ So a flame that starts on the top row needs seven steps to reach row 7 and an ei
 
 Spell a word **through** the burning gem and it is cleared: the flame is gone, and the word earns **+30 per letter**. Several flames can be put out with one long word.
 
-**Overtime.** A shelf you camp on will burn. Past **turn 24** (**turn 16** in Lockdown) every turn adds heat of its own: 1 for the first 11 turns of overtime, then 2 for the next 12, then 3, 4... The table reads *turns past the limit*. **Words spelled in overtime score a tenth** (at least 1): without that a player who kept pace with the fire could farm words on a burning shelf for ever (a bot that never peeled reached 37,000 points in 100 turns on a first-rung shelf, against 2,300 for clearing one quickly). In overtime the heat over the meter's line is **kept**, and it lights as many gems as it fills the meter again (before this rule a player who kept pace put out one flame per turn and the shelf could stall for ever, neither won nor lost):
+**Overtime.** A shelf you camp on will burn. Past **turn 24** (**turn 16** in Lockdown from shelf 10; later on the first Lockdown shelves, section 9.3) every turn adds heat of its own: 1 for the first 11 turns of overtime, then 2 for the next 12, then 3, 4... The table reads *turns past the limit*. **Words spelled in overtime score a tenth** (at least 1): without that a player who kept pace with the fire could farm words on a burning shelf for ever (a bot that never peeled reached 37,000 points in 100 turns on a first-rung shelf, against 2,300 for clearing one quickly). In overtime the heat over the meter's line is **kept**, and it lights as many gems as it fills the meter again (before this rule a player who kept pace put out one flame per turn and the shelf could stall for ever, neither won nor lost):
 
 <!-- check:overtime -->
 | Turns past the limit | Extra heat every turn |
@@ -748,7 +748,7 @@ Spell a word **through** the burning gem and it is cleared: the flame is gone, a
 | 36 to 47 | +4 |
 | 48 to 59 | +5 |
 
-The limit is 24 turns in Classic (so turn 25 is the first overtime turn; turn 36 is the first to add +2) and 16 in Lockdown. The turn counter on the panel turns red and the heat label says **OVERTIME**.
+The limit is 24 turns in Classic (so turn 25 is the first overtime turn; turn 36 is the first to add +2) and 16 in Lockdown from shelf 10 on (24, 22, 20 and 18 on shelves 6 to 9). The turn counter on the panel turns red and the heat label says **OVERTIME**.
 
 ![The panel in overtime: the label reads OVERTIME and the TURN counter is red.](img/overtime.png)
 *Past the turn limit: OVERTIME replaces HEAT and the turn counter turns red.*
@@ -817,14 +817,26 @@ From **shelf 6**, the shelf is in **Lockdown**: the music turns to one of the da
 * The fire moves **every turn**.
 * A peel adds **2 heat**, not 1.
 * A **heat pulse** adds 2 heat on every turn that is a multiple of the pulse interval.
-* The pass is buried deeper (section 9.4), and **overtime starts at turn 16**.
+* The pass is buried deeper (section 9.4), and **overtime starts at turn 16** (later on the first four Lockdown shelves, see below).
 * Clearing a Lockdown shelf earns a **bookmark** back.
+
+**The ramp.** A peel starts to cost 2 heat on shelf 6, and a player who peels a lot (the balance bot's *weak* model) used to fall from clearing 61% of shelf 5 to 25% of shelf 6. So Lockdown eases in, in two ways that cost a good player almost nothing:
+
+* the **meter** on shelf 6 is **8**, one step more than its place on the ladder (7);
+* **overtime** starts later on the first four Lockdown shelves: after turn **24** on shelf 6 (as in Classic), then two turns earlier every shelf, until it is back at turn 16 from shelf 10.
+
+<!-- check:lockdown-overtime -->
+| Lockdown shelf | 6 | 7 | 8 | 9 | 10 and up |
+| --- | --- | --- | --- | --- | --- |
+| Overtime heat starts after turn | 24 | 22 | 20 | 18 | 16 |
+
+A competent bot spends 15 to 18 turns on a shelf, a weak one 24, so the weak player gains the most: its clear rate on shelves 5 to 9 goes 61, 25, 26, 20, 10% before and 61, 36, 30, 23, 12% after (English; the worst one-shelf fall, shelf 5 to 6, shrinks from 37 to 25 points), while a competent player's moves by at most 1 point on shelves 6 to 10 in any of the five bot languages, and shelves 1 to 5 are untouched (`docs/BALANCE.md`, "The Lockdown ramp").
 
 Lockdown climbs in **tiers**, every three shelves: the panel reads LOCKDOWN, LOCKDOWN II, III, IV.
 
 | Tier | Shelves | Pulse every | Meter | Notes |
 | --- | --- | --- | --- | --- |
-| I | 6 to 8 | 6 turns | 7, 6, 6 | |
+| I | 6 to 8 | 6 turns | 8, 6, 6 | shelf 6 holds one meter step more than the ladder |
 | II | 9 to 11 | 5 turns | 5 | twin ignitions begin at shelf 11 (1 of 8) |
 | III | 12 to 14 | 4 turns | 4 | 1 to 2 ignitions in eight light **two** columns |
 | IV | 15 and up | 3 turns | 4 | 3 of eight at 15, one more every two shelves, all of them from shelf 25 |
@@ -842,7 +854,7 @@ Lockdown climbs in **tiers**, every three shelves: the panel reads LOCKDOWN, LOC
 | 3 | 9 | 2 | no | - | 3 | 5 | 0 of 8 |
 | 4 | 8 | 1 | no | - | 3 | 5 | 0 of 8 |
 | 5 | 7 | 1 | no | - | 3 | 5 | 0 of 8 |
-| 6 | 7 | 1 | yes | 6 | 4 | 6 | 0 of 8 |
+| 6 | 8 | 1 | yes | 6 | 4 | 6 | 0 of 8 |
 | 7 | 6 | 1 | yes | 6 | 4 | 6 | 0 of 8 |
 | 8 | 6 | 1 | yes | 6 | 4 | 6 | 0 of 8 |
 | 9 | 5 | 1 | yes | 5 | 4 | 7 | 0 of 8 |
@@ -1037,7 +1049,7 @@ A diamond is a free multiplier: any word through it earns half again, and it nev
 
 * With one letter left and one number, count: the number minus the diamonds around it is how many unpeeled neighbours are letters. If the answer is the neighbour count, they are all letters (puzzle 3).
 * With the last cells ambiguous, **peel the cell that cannot scorch** first, then use the new number.
-* **Do not go into overtime**: on turn 25 (17 in Lockdown) every turn adds heat. If the shelf is slow, take a long, free word only if it helps.
+* **Do not go into overtime**: on turn 25 (17 in Lockdown from shelf 10; 25, 23, 21, 19 on shelves 6 to 9) every turn adds heat. If the shelf is slow, take a long, free word only if it helps.
 
 ### 12.7 Lockdown
 
@@ -1071,7 +1083,7 @@ The meter is 5 or 4 and a peel is 2 heat: two peels can light a gem. Long words 
 | **Multiplier** | 3-4 letters x1, 5-6 x2, 7-8 x3, 9+ x4 |
 | **Heat** | 3-letter word 3, 4 letters 2, 5-6 letters 1, 7+ 0; a peel 1 (2 in Lockdown) |
 | **Meter** | 10 (shelves 1-2), 7 (3-5), 5 (6-11), 4 (12+) |
-| **Overtime** | past turn 24 (16 in Lockdown): +1 heat, growing every 24 turns |
+| **Overtime** | past turn 24 (16 in Lockdown from shelf 10, later on shelves 6 to 9): +1 heat, growing every 12 turns |
 | **Pass pays** | 100 per letter x shelf; 1000 x shelf; 25 x shelf per turn under 40; PERFECT 400 x shelf; CLEAN 150 x shelf |
 | **Hole number** | how many of the 6 neighbours hide a pass letter (found letters count) |
 | **Scorch** | peeling a flame or the gem directly under one; a letter there is lost |

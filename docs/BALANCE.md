@@ -47,6 +47,8 @@ how many times the meter filled; **stall** means 100 turns passed with the shelf
 | 10 | Pass placement is not pure guessing: once a number or a diamond is on the board the next letter is found 50 to 60% of peels. Only the first peel or two of a shelf, and the slips, are guesses. | none | |
 | 11 | Letter bags: no language starves vowels or words (table below, every language has at least 13 vowels of 56 and 200 word paths). | none | |
 
+| 12 | The weak bot has a cliff at the first Lockdown shelf: 61% on shelf 5, 25% on shelf 6 (English; 31 to 37 points of fall in every bot language), because a peel starts to cost 2 heat there and the weak bot peels fourteen times a shelf. | The meter on shelf 6 is 8 (the ladder's 7 plus one) and Lockdown's overtime starts at turn 24, 22, 20, 18 on shelves 6 to 9 and 16 from shelf 10, instead of 16 from shelf 6. | GUIDE 8.2, 8.6, 9.3 (new table), 9.4 ladder, 12.7, README, the in-game SHELVES page |
+
 Features added (each with a native test, an emulator scenario, a README and GUIDE paragraph, and strings in all ten languages):
 
 * **Shuffle** (above, finding 6). `SHUFFLES_PER_SHELF` 1, `SHUFFLE_HEAT` 3.
@@ -134,8 +136,9 @@ tables in this summary is the measurement before that change.
 | 24 | 0.0 | 0.3 | 1.0 | 0.3 | 0.0 | 0.0 | 0.3 | 0.0 | 1.3 | 0.3 |
 
 The weak bot clears 92% of shelves 1 and 2 (it is not dead at shelf 1), 60 to 90% on shelves 3 to 5, 5 to 25% on the Lockdown
-shelves 6 to 11, and is gone by shelf 12. It still falls off a ledge at shelf 6 (61% to 21%): the shelf where a peel
-starts to cost 2 heat, and the weak bot peels fourteen times a shelf. That step is part of what Lockdown is, so it was left.
+shelves 6 to 11, and is gone by shelf 12. It fell off a ledge at shelf 6 (61% to 21%): the shelf where a peel
+starts to cost 2 heat, and the weak bot peels fourteen times a shelf. The second pass smooths that step (see "The Lockdown
+ramp" below); the two tables above are the measurement before it.
 
 ### German letter table (item 1 of the second pass)
 
@@ -220,6 +223,52 @@ Other effects (competent, 60 whole runs and 240 dates): a run clears 21.2 shelve
 to 22.5), the Daily modifiers clear 99.6, 100, 100 and 99.6% (weak 63, 62, 58 and 62%, was 55, 52, 55 and 53%), FIRE fails with
 no word through any flame fell from 375 to 224, and OUT OF WORDS fails stay at 0. The guard is a native test:
 `tools/check/board_test.c` counts the 3 to 5 tile word paths of 60 fresh German boards and fails under 300 (it reads 349).
+
+### The Lockdown ramp (item 2 of the second pass)
+
+The first Lockdown shelf asks the weak bot for a lot at once: a peel costs 2 heat instead of 1, a pulse adds 2 heat every
+six turns, overtime starts at turn 16 instead of 24, and the shelf's meter is 7, one step under shelf 5's. The weak bot's
+clear rate falls from 61 to 25% (English) between shelves 5 and 6; a competent player barely notices (98 to 94%).
+
+What was tried (English, 1,000 attempts per shelf, the same seeds before and after, so the differences are paired; "weak 6"
+is the weak bot's clear rate on shelf 6, "strong" the competent bot's change in points on shelves 6 to 10):
+
+| change | weak 6 | strong, worst shelf | verdict |
+| --- | ---: | ---: | --- |
+| none | 24.9 | - | the cliff |
+| fire every other turn on shelf 6 | 50.2 | +2.8 English, +4.4 Spanish, +4.9 German | too much for the strong bot |
+| meter 10 on shelf 6 (+3) | 39.8 | +1.6 English, +3.0 Spanish, +3.8 German | German over the limit |
+| meter 9 on shelf 6 (+2), with the overtime ramp | 40.3 | the same +1.6 / +3.0 / +3.8 | German over the limit |
+| meter +1 on shelf 7 | 36.2 on shelf 7 (26.2) | +3.6 on shelf 7 | over the limit; shelf 7 is a twist shelf and a good player loses 7% of it to fire, so every step there is worth 3 or 4 points |
+| fire every other turn on shelf 6 and 7 | 54.0 on shelf 7 | +4.4 on shelf 7 | over the limit |
+| Lockdown pulse every 9, 7 or never on shelf 7 | 27 to 30 on shelf 7 | +0.7 at most | too small to matter |
+| **overtime later on shelves 6 to 9 (24, 22, 20, 18) and meter 8 on shelf 6** | **36.1** | **+1.0** (+1.2 downward) | **chosen** |
+
+Overtime is the lever with the best ratio: a competent player spends 15 to 18 turns on a Lockdown shelf, the weak bot 24, so
+turns 17 to 24 are almost only ever played by the player who is losing. A meter step on the first shelf is cheap for the
+strong bot at +1 and costs it 1.6 to 3.8 points from +2.
+
+**Weak bot, clear rate (%) by shelf**
+
+| shelf | en before | en after | es before | es after | de before | de after | fr before | fr after | fi before | fi after |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 3 | 85.5 | 85.5 | 80.9 | 80.9 | 78.8 | 78.8 | 80.4 | 80.4 | 78.1 | 78.1 |
+| 4 | 74.7 | 74.7 | 73.1 | 73.1 | 67.4 | 67.4 | 73.7 | 73.7 | 69.9 | 69.9 |
+| 5 | 61.5 | 61.5 | 57.1 | 57.1 | 53.0 | 53.0 | 58.5 | 58.5 | 57.0 | 57.0 |
+| 6 | 24.9 | 36.1 | 26.3 | 36.8 | 22.7 | 30.8 | 25.6 | 33.2 | 26.9 | 32.7 |
+| 7 | 26.2 | 30.2 | 29.5 | 31.9 | 29.3 | 30.5 | 29.4 | 30.8 | 27.9 | 29.6 |
+| 8 | 20.1 | 22.8 | 20.4 | 24.1 | 15.8 | 16.3 | 18.7 | 22.4 | 16.1 | 17.7 |
+| 9 | 10.1 | 11.5 | 10.9 | 14.7 | 8.6 | 9.2 | 10.3 | 12.7 | 9.0 | 11.7 |
+| 10 | 17.8 | 17.8 | 18.1 | 18.1 | 13.4 | 13.4 | 17.2 | 17.2 | 16.4 | 16.4 |
+
+**Competent bot, clear rate (%) by shelf**
+
+Shelves 1 to 5 are identical before and after for both players (the rules do not change there), and shelves 10 and up are
+identical (the ramp ends at shelf 9). The weak bot's worst fall between neighbouring shelves is cut by a quarter to a third
+in every language (German 30 to 22 points, English 37 to 25); the step from shelf 5 to 6 is still the largest, because the
+strong bot's budget (3 points on shelves 6 to 10) is smaller than what would flatten it: the variants that cut the fall to
+16 to 21 points raised the German and Spanish competent bot by 3.0 to 4.9 points on shelf 6. The competent bot's change is
++1.0 or less on every shelf and language (shelf 8 moves by -1.2 in German, which is noise at this sample size).
 
 ### Daily modifiers, before / after
 

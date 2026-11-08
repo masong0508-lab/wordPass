@@ -193,6 +193,8 @@ int  pauseRows(const Game *g, int ids[PAUSE_ROWS_MAX]);   // main.c: the visible
 #define OVERTIME_TURNS            24    // past this many turns on a shelf every turn adds heat of its own
 #define OVERTIME_TURNS_LOCKDOWN   16
 #define LOCKDOWN_FROM_SHELF        6
+#define LOCKDOWN_FIRST_METER       1    // the first Lockdown shelf holds this much more meter than its place on the ladder (it eases Lockdown in) ...
+#define OVERTIME_EASE_STEP         2    // ... and Lockdown overtime starts 24 turns in on that shelf, this many turns earlier each shelf, until 16 on shelf 10
 #define TWIN_FIRE_FROM_SHELF      11    // from this shelf some ignitions light two columns at once ...
 #define TWIN_FIRE_STEP             2    // ... one more ignition in eight every this many shelves, every one from shelf 25
 #define OVERTIME_SCORE_DIV        10    // a word spelled past the turn limit scores this many times less (no farming a burning shelf)
@@ -218,6 +220,7 @@ int  boardTwinEighths(int shelf);                   // of every eight ignitions 
 int  boardPassLenFor(int shelf);                    // the pass length a Classic shelf asks for (4, 5, 6, 7, 8)
 bool boardTwistShelf(int shelf);                    // does a Classic shelf carry a twist (4, 7, 10 ...)
 int  boardPeelHeat(bool lockdown);                  // heat a peel adds: 1, or 2 in Lockdown
+int  boardOvertimeFor(int shelf, bool lockdown);          // turns before overtime heat on this shelf: Classic 24; Lockdown 24, 22, 20, 18 on shelves 6 to 9, then 16
 int  boardOvertimeTurns(bool lockdown);             // turns before overtime heat starts
 int  boardWordPoints(int base, int len, bool burn, int diamonds, bool repeat);   // the scoring curve; base = the gems' letter values added up
 int  boardPassLetterReward(int shelf);              // paid on the spot for every pass letter found

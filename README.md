@@ -57,7 +57,8 @@ against the source and the data files by `tools/check_guide.py`, and every pictu
   shelf (through a flame, if one burns). Ten idle seconds offer one for free.
 - **Shuffle.** A board with no word left is re-dealt once a shelf (+3 heat)
   instead of ending the shelf.
-- **Overtime.** Past turn 24 on a shelf (16 in Lockdown) every turn adds heat
+- **Overtime.** Past turn 24 on a shelf (16 in Lockdown from shelf 10, later on
+  shelves 6 to 9: 24, 22, 20, 18) every turn adds heat
   of its own (1, then 2 after twelve turns, then 3 ...), and in overtime the
   heat over the meter is kept and lights more gems, so a shelf you camp on
   burns instead of stalling. Words spelled in overtime score a tenth, so a burning shelf
@@ -245,7 +246,8 @@ Shelves 1-2 are the gentlest **Classic** ones: the heat meter holds 10, fire
 moves every other turn and the pass can sit anywhere but the top row. The meter
 then shrinks a little every shelf or two (9, 8, 7, 7, 6, 6, 5, 5, 5) to 4 from
 shelf 12; the fire moves every turn from shelf 4. From shelf 6 on it
-is **Lockdown**: a heat pulse every six turns, a peel adds 2 heat, the pass
+is **Lockdown**: a heat pulse every six turns, a peel adds 2 heat (it eases in:
+shelf 6 holds one meter step more, 8, and overtime starts later on shelves 6 to 9), the pass
 buried low, and the music turns to one of the dark songs. Lockdown climbs in tiers
 every three shelves (the panel reads LOCKDOWN, LOCKDOWN II, III, IV): the
 pulse comes faster. From shelf 11 **twin ignitions** begin: one ignition in

@@ -176,7 +176,10 @@ int boardTwinEighths(int shelf)
     return k > 8 ? 8 : k;
 }
 
-// The meter by shelf: it shrinks by one every one or two shelves until it holds 4 from shelf 12 on.
+// The meter by shelf: it shrinks by one every one or two shelves until it holds 4 from shelf 12 on. The first Lockdown
+// shelf holds LOCKDOWN_FIRST_METER more than its place on the ladder, and Lockdown's overtime starts later on its first
+// shelves (boardOvertimeFor): a peel starts to cost 2 heat on shelf 6, and without the ramp a player who peels a lot (the
+// weak bot: 61% on shelf 5, 25% on shelf 6) fell off a ledge (docs/BALANCE.md, "The Lockdown ramp").
 static const u8 METER[12] = { 10, 10, 9, 8, 7, 7, 6, 6, 5, 5, 5, 4 };
 
 void boardShelfRules(int shelf, ShelfRules *out)
@@ -185,7 +188,7 @@ void boardShelfRules(int shelf, ShelfRules *out)
     // Lockdown tiers: shelves 6-8, 9-11, 12-14, 15+ tighten the pulse
     out->tier = out->lockdown ? (shelf - LOCKDOWN_FROM_SHELF) / 3 : 0;
     if (out->tier > 3) out->tier = 3;
-    out->threshold = METER[(shelf < 1 ? 1 : shelf > 12 ? 12 : shelf) - 1];
+    out->threshold = METER[(shelf < 1 ? 1 : shelf > 12 ? 12 : shelf) - 1] + (shelf == LOCKDOWN_FROM_SHELF ? LOCKDOWN_FIRST_METER : 0);
     out->burnEvery = (shelf <= 3) ? 2 : 1;
     out->pulseEvery = 6 - out->tier;
     if (out->pulseEvery < 3) out->pulseEvery = 3;
@@ -208,6 +211,16 @@ void boardDailyRules(int mod, ShelfRules *out)
 
 int boardPeelHeat(bool lockdown) { return lockdown ? 2 : 1; }
 int boardOvertimeTurns(bool lockdown) { return lockdown ? OVERTIME_TURNS_LOCKDOWN : OVERTIME_TURNS; }
+// Overtime in Lockdown starts at turn 16, but not on its first shelves: 24 on shelf 6 (as in Classic), then two turns earlier
+// every shelf (22, 20, 18) until it reaches 16 on shelf 10. The strong bot spends 15 to 18 turns on a shelf and the weak one 24,
+// so this lifts the weak bot's clear rate without touching the strong one's.
+int boardOvertimeFor(int shelf, bool lockdown)
+{
+    if (!lockdown) return OVERTIME_TURNS;
+    if (shelf < LOCKDOWN_FROM_SHELF) return OVERTIME_TURNS_LOCKDOWN;      // a hand-made Lockdown state (tests): the plain Lockdown limit
+    int t = OVERTIME_TURNS - OVERTIME_EASE_STEP * (shelf - LOCKDOWN_FROM_SHELF);
+    return t < OVERTIME_TURNS_LOCKDOWN ? OVERTIME_TURNS_LOCKDOWN : t;
+}
 int boardPassLetterReward(int shelf) { return PASS_LETTER_PER_SHELF * shelf; }
 int boardShelfBonus(int shelf) { return SHELF_BONUS_PER_SHELF * shelf; }
 int boardSpeedBonus(int shelf, int turn) { int left = SPEED_TURNS - turn; return SPEED_PER_SHELF_TURN * shelf * (left > 0 ? left : 0); }
@@ -641,7 +654,7 @@ int boardTurnHeat(const Game *g, int baseHeat)
 {
     int turn = g->turn + 1, heat = baseHeat;
     if (g->lockdown && g->pulseEvery > 0 && (turn % g->pulseEvery) == 0) heat += 2;   // Lockdown pulse
-    int over = turn - boardOvertimeTurns(g->lockdown);                                // shelf overtime
+    int over = turn - boardOvertimeFor(g->shelf, g->lockdown);                                // shelf overtime
     if (over > 0) heat += 1 + over / OVERTIME_HEAT_STEP;
     return heat;
 }
@@ -688,7 +701,7 @@ static void endTurn(Game *g, int heatAdd)
     int add = boardTurnHeat(g, heatAdd);
     g->turn++;
     g->heat += add;
-    g->overtime = g->turn > boardOvertimeTurns(g->lockdown);
+    g->overtime = g->turn > boardOvertimeFor(g->shelf, g->lockdown);
 
     int spawned = applyGravity(g);
     g->burnTimer++;
@@ -812,7 +825,7 @@ static int chainScoreDetail(const Game *g, char *w, int *lenOut, int *tierOut, i
     int repeat = ledgerHas(g, w) ? 1 : 0;
     int gained = boardWordPoints(base, len, usedBurn != 0, diamonds, repeat != 0);
     gained += gained * boardComboPct(g->combo) / 100;      // a streak of words without a peel pays more
-    if (g->turn + 1 > boardOvertimeTurns(g->lockdown)) { gained /= OVERTIME_SCORE_DIV; if (gained < 1) gained = 1; }   // past the limit a word pays a tenth
+    if (g->turn + 1 > boardOvertimeFor(g->shelf, g->lockdown)) { gained /= OVERTIME_SCORE_DIV; if (gained < 1) gained = 1; }   // past the limit a word pays a tenth
     *lenOut = len; *tierOut = tier; *diamondsOut = diamonds; *burnOut = usedBurn; *repeatOut = repeat;
     return gained;
 }

@@ -1101,22 +1101,32 @@ int main(int argc, char **argv)
     g.shelf = 4; boardNewShelf(&g);   // shelf 4 is a twist shelf: DAMP slows the fire and lowers the meter
     bool s4 = (g.twist == TWIST_DAMP ? (g.heatThreshold == 6 && g.burnEvery == 2) : (g.heatThreshold == 8 && g.burnEvery == 1)) && !g.lockdown;
     g.shelf = 6; boardNewShelf(&g);
-    bool s6 = g.heatThreshold == 7 && g.lockdown && g.lockTier == 0 && g.pulseEvery == 6 && g.twinEighths == 0;
+    bool s6 = g.heatThreshold == 8 && g.burnEvery == 1 && g.lockdown && g.lockTier == 0 && g.pulseEvery == 6 && g.twinEighths == 0;   // the first Lockdown shelf: the ladder's 7 plus one
     g.shelf = 12; boardNewShelf(&g);
     bool s12 = g.heatThreshold == 4 && g.lockTier == 2 && g.pulseEvery == 4 && g.twinEighths == 1;
     g.shelf = 20; boardNewShelf(&g);
     bool s20 = g.heatThreshold == 4 && g.lockTier == 3 && g.pulseEvery == 3 && g.twinEighths == 5;
     CHECK("shelf thresholds 1/4/6/12/20", s1 && s4 && s6 && s12 && s20);
     {
-        static const int want[12] = { 10, 10, 9, 8, 7, 7, 6, 6, 5, 5, 5, 4 };
+        static const int want[12] = { 10, 10, 9, 8, 7, 8, 6, 6, 5, 5, 5, 4 };   // shelf 6 holds one more than the ladder's 7 (the Lockdown ramp)
         bool meter = true, mono = true; int prevT = 99;
         for (int sh = 1; sh <= 30; sh++) {
             ShelfRules r; boardShelfRules(sh, &r);
             if (r.threshold != want[sh > 12 ? 11 : sh - 1]) meter = false;
-            if (r.threshold > prevT) mono = false;
+            if (r.threshold > prevT && sh != LOCKDOWN_FROM_SHELF) mono = false;       // never growing, but for the first Lockdown shelf's extra step
             prevT = r.threshold;
         }
-        CHECK("the meter by shelf: 10 10 9 8 7 7 6 6 5 5 5 then 4, never growing", meter && mono);
+        CHECK("the meter by shelf: 10 10 9 8 7 8 6 6 5 5 5 then 4, never growing but for the first Lockdown shelf", meter && mono);
+        // the Lockdown ramp's second half: overtime starts at turn 24 on shelf 6, 22, 20, 18, then 16 for good; Classic stays 24
+        bool ot = boardOvertimeFor(1, false) == 24 && boardOvertimeFor(30, false) == 24 && boardOvertimeFor(6, true) == 24 && boardOvertimeFor(7, true) == 22 &&
+                  boardOvertimeFor(8, true) == 20 && boardOvertimeFor(9, true) == 18 && boardOvertimeFor(10, true) == 16 && boardOvertimeFor(40, true) == 16 && boardOvertimeFor(1, true) == 16;
+        CHECK("Lockdown overtime starts at turn 24, 22, 20, 18 on shelves 6 to 9 and 16 from shelf 10; Classic 24", ot && boardOvertimeTurns(true) == 16 && boardOvertimeTurns(false) == 24);
+        Game o2; memset(&o2, 0, sizeof o2); o2.lockdown = true; o2.pulseEvery = 0; o2.shelf = 6; o2.turn = 20;
+        bool early = boardTurnHeat(&o2, 0) == 0;                                       // turn 21 on shelf 6: still inside the limit
+        o2.turn = 24; bool late6 = boardTurnHeat(&o2, 0) == 1;                          // turn 25: the first overtime turn
+        o2.shelf = 10; o2.turn = 16; bool at10 = boardTurnHeat(&o2, 0) == 1;            // shelf 10 and up: turn 17
+        o2.shelf = 8; o2.turn = 19; bool at8 = boardTurnHeat(&o2, 0) == 0; o2.turn = 20; at8 = at8 && boardTurnHeat(&o2, 0) == 1;
+        CHECK("overtime heat follows the shelf's own limit in Lockdown (shelf 6 turn 25, shelf 8 turn 21, shelf 10 turn 17)", early && late6 && at10 && at8);
     }
     int stdDay = 20260101;
     while (boardDailyMod(stdDay) != DAILYMOD_STANDARD) stdDay++;       // a STANDARD date: the base Daily rules
@@ -1124,8 +1134,8 @@ int main(int argc, char **argv)
     CHECK("Daily: threshold 6, fire every other turn, not Lockdown", g.heatThreshold == 6 && g.burnEvery == 2 && !g.lockdown);
     g.mode = MODE_CLASSIC; S.fire = FIRE_FAST; g.shelf = 1; boardNewShelf(&g);
     bool fast = g.heatThreshold == 8 && g.burnEvery == 1;
-    S.fire = FIRE_RELAXED; g.shelf = 6; boardNewShelf(&g);
-    bool relaxed = g.heatThreshold == 10 && g.burnEvery == 2;
+    S.fire = FIRE_RELAXED; g.shelf = 5; boardNewShelf(&g);
+    bool relaxed = g.heatThreshold == 10 && g.burnEvery == 2;      // shelf 5: the meter 7 + 3 and the fire one turn slower
     S.fire = FIRE_NORMAL;
     CHECK("FAST and RELAXED adjust the thresholds", fast && relaxed);
 
@@ -1530,7 +1540,7 @@ int main(int argc, char **argv)
         CHECK("guide SHELVES: bookmarks, twists, Lockdown tiers, overtime from the rules",
               strstr(all[5], "3 BOOKMARKS START A RUN") && strstr(all[5], "SHELF 4, 7, 10") && strstr(all[5], "INK SPILL: 3 HOLES") && strstr(all[5], "METER -2") && strstr(all[5], "PASS +1 LONGER") &&
               strstr(all[5], "LOCKDOWN FROM SHELF 6") && strstr(all[5], "EVERY 6 TURNS") && strstr(all[5], "SHELF 9, 12, 15") && strstr(all[5], "FROM 11") &&
-              strstr(all[5], "AT TURN 25 (17 IN LOCKDOWN)") && boardTwistShelf(4) && boardTwistShelf(7) && !boardTwistShelf(5) && !boardTwistShelf(3));
+              strstr(all[5], "TURN 25 (17 FROM SHELF 10)") && boardTwistShelf(4) && boardTwistShelf(7) && !boardTwistShelf(5) && !boardTwistShelf(3));
         CHECK("guide FIRE: the three fail screens are named by the game", strstr(all[4], boardFailName(FAIL_FIRE)) && strstr(all[4], boardFailName(FAIL_SCORCH)) && strstr(all[4], boardFailName(FAIL_WORDS)) &&
               !strcmp(boardLockdownName(0), "LOCKDOWN") && !strcmp(boardLockdownName(3), "LOCKDOWN IV") && strstr(all[4], "SHELF 1-3") != NULL);
         CHECK("guide MODES names the four Daily modifiers", strstr(all[6], "STANDARD, EMBER, DEEP, LONG") != NULL);

@@ -77,6 +77,7 @@ int main(int argc, char **argv)
     printf("\"peelheat\": [%d,%d],\n", boardPeelHeat(false), boardPeelHeat(true));
     printf("\"combo\": ["); for (int n = 0; n <= 7; n++) printf("%s%d", n ? "," : "", boardComboPct(n)); printf("],\n");
     printf("\"overtime\": [%d,%d],\n", boardOvertimeTurns(false), boardOvertimeTurns(true));
+    printf("\"lockovertime\": ["); for (int sh = LOCKDOWN_FROM_SHELF; sh <= LOCKDOWN_FROM_SHELF + 6; sh++) printf("%s%d", sh > LOCKDOWN_FROM_SHELF ? "," : "", boardOvertimeFor(sh, true)); printf("],\n");   // the Lockdown overtime limit on shelves 6 to 12
     // heat a turn adds on top of the move's own, by turn number: overtime alone (no pulse), and a Lockdown pulse alone
     for (int lock = 0; lock < 2; lock++) {
         emptyBoard(&g, 'e'); g.lockdown = lock; g.pulseEvery = 0;
@@ -375,6 +376,15 @@ def main():
         if F['overtime'] != [D['OVERTIME_TURNS'], D['OVERTIME_TURNS_LOCKDOWN']]: fail('overtime limits differ from game.h')
         if F['pulse'] != 2: fail(f'the Lockdown pulse is {F["pulse"]}, the guide says 2')
         if F['peelheat'] != [1, 2]: fail(f'peel heat {F["peelheat"]}, the guide says 1 and 2')
+    t = need('lockdown-overtime') # | Lockdown shelf | 6 | 7 | 8 | 9 | 10 and up |  then the turn after which overtime heat starts
+    if t:
+        row = next((r for r in t if r[0].lower().startswith('overtime')), None)
+        if not row: fail('lockdown-overtime table needs an Overtime row')
+        else:
+            for i in range(1, 6):
+                if num(row[i]) != F['lockovertime'][i - 1]: fail(f'Lockdown overtime on shelf {i + 5}: guide {row[i]}, game {F["lockovertime"][i - 1]}')
+            if any(v != F['overtime'][1] for v in F['lockovertime'][4:]): fail('Lockdown overtime is not back at OVERTIME_TURNS_LOCKDOWN from shelf 10')
+            if F['lockovertime'][0] != D['OVERTIME_TURNS']: fail('Lockdown shelf 6 does not start overtime at the Classic limit')
     t = need('combo')             # | Words in the streak | 1 | 2 | ... | 6 and more |   the bonus of the Nth word is boardComboPct(N - 1)
     if t:
         head = t[0] if t else []
