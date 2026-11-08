@@ -150,6 +150,18 @@ typedef struct {
     int  idleFrames;          // frames without a touch or a key while the guide waits for a word
     int  hintLen;             // gems in hintC/hintR: a real, common word on the real board (0 = none)
     u8   hintC[8], hintR[8];
+    // ---- fire fairness and the shuffle (balance pass)
+    int  ignitions;           // times the meter has lit this shelf (the twin rule counts them)
+    int  twinEighths;         // of every eight ignitions this many light two columns (0 on early shelves and in the Daily)
+    int  shuffles;            // re-deals left on this shelf when the board has no word
+    int  shuffled;            // the board was just re-dealt (main.c announces it and clears this)
+    // ---- combo and hints
+    int  combo;               // words spelled in a row without a peel on this shelf
+    int  bestCombo;           // the longest such run this shelf
+    int  hints;               // hints left on this shelf
+    int  hintReq;             // a hint is on show (the ghost drag traces it until the player touches the board)
+    int  hintIdle;            // frames the player has done nothing this shelf (the idle offer)
+    int  hintOffered;         // the idle offer has been shown on this shelf
 } Game;
 enum { CUE_NONE = 0, CUE_GHOST, CUE_TAIL, CUE_PEEKBTN, CUE_ARMED };   // ghost drag, tail gem of a valid chain, the PEEK button, the armed cell
 #define GHOST_IDLE_FRAMES 180   // idle this long before the ghost drag traces a word
@@ -181,7 +193,16 @@ int  pauseRows(const Game *g, int ids[PAUSE_ROWS_MAX]);   // main.c: the visible
 #define OVERTIME_TURNS            24    // past this many turns on a shelf every turn adds heat of its own
 #define OVERTIME_TURNS_LOCKDOWN   16
 #define LOCKDOWN_FROM_SHELF        6
-#define LOCKDOWN_TWIN_FIRE_TIER    2    // from this Lockdown tier every ignition lights two columns
+#define TWIN_FIRE_FROM_SHELF      11    // from this shelf some ignitions light two columns at once ...
+#define TWIN_FIRE_STEP             2    // ... one more ignition in eight every this many shelves, every one from shelf 25
+#define OVERTIME_SCORE_DIV        10    // a word spelled past the turn limit scores this many times less (no farming a burning shelf)
+#define OVERTIME_HEAT_STEP        12    // overtime heat is 1, plus 1 more every this many turns past the limit
+#define SHUFFLES_PER_SHELF         1    // a board with no word left is re-dealt this many times a shelf before the shelf is lost
+#define SHUFFLE_HEAT               3    // the re-deal costs this much heat, like a three-letter word
+#define COMBO_PCT_PER_WORD        10    // each word of a streak without a peel scores this much more percent than the one before ...
+#define COMBO_CAP_PCT             50    // ... up to this bonus (the sixth word of a streak)
+#define HINTS_PER_SHELF            2    // SELECT shows a word on the board this many times a shelf
+#define HINT_IDLE_FRAMES         600    // idle this long (ten seconds) with hints left and the game offers one
 #define INK_SPILL_HOLES            3
 #define TWIST_DAMP_SLOWER          1    // DAMP: the fire creeps this many turns slower ...
 #define TWIST_DAMP_METER           2    // ... but the meter is this much shorter
@@ -189,9 +210,11 @@ int  pauseRows(const Game *g, int ids[PAUSE_ROWS_MAX]);   // main.c: the visible
 #define TWIST_BURIED_ROW           5    // ... and lies in this row and below
 #define DAILY_LONG_LEN             7    // the Daily modifier LONG asks for this pass length
 
-typedef struct { bool lockdown; int tier, threshold, burnEvery, pulseEvery, minRow; } ShelfRules;
+typedef struct { bool lockdown; int tier, threshold, burnEvery, pulseEvery, minRow, twinEighths; } ShelfRules;
 void boardShelfRules(int shelf, ShelfRules *out);   // a Classic shelf on FIRE NORMAL with no twist: Lockdown, tier, meter, fire speed, pulse, shallowest pass row
 void boardDailyRules(int mod, ShelfRules *out);     // the same for a Daily with modifier DAILYMOD_*
+int  boardComboPct(int combo);                       // the bonus percent the next word scores after `combo` words in a row without a peel
+int  boardTwinEighths(int shelf);                   // of every eight ignitions on this Classic shelf, how many light two columns (0 before shelf 11)
 int  boardPassLenFor(int shelf);                    // the pass length a Classic shelf asks for (4, 5, 6, 7, 8)
 bool boardTwistShelf(int shelf);                    // does a Classic shelf carry a twist (4, 7, 10 ...)
 int  boardPeelHeat(bool lockdown);                  // heat a peel adds: 1, or 2 in Lockdown

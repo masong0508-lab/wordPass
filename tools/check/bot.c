@@ -100,10 +100,13 @@ typedef struct {
     int    flameLook;         // reacts to a flame once it has this many turns left (0 = never looks)
     double flameAttention;    // chance per turn it checks the flames at all
     int    emergencyPeel;     // may peel a burning gem that no word reaches, as a last resort
+    double lapse;             // chance per turn of a slip: a peel on a random gem (a misread number, a mis-tap)
 } Player;
 
-static const Player COMPETENT = { "competent", 9, 0.95, 0.70, 0.10, 0.92, 2.2, 1.6, 2, 0.30, 0.90, 3, 0.90, 1 };
-static const Player WEAK      = { "weak",       5, 0.55, 0.20, 0.00, 0.40, 0.2, 0.0, 1, 0.50, 0.25, 2, 0.60, 0 };
+static const Player COMPETENT = { "competent", 9, 0.95, 0.70, 0.10, 0.92, 2.2, 1.6, 2, 0.30, 0.90, 3, 0.90, 1, 0.05 };
+// the competent player who plays for score: it peels only when a cell is likely and spells a word on every other turn
+static const Player SCORER    = { "scorer",     12, 0.95, 0.85, 0.10, 0.92, 2.2, 1.6, 2, 0.60, 0.12, 3, 0.90, 1, 0.05 };
+static const Player WEAK      = { "weak",       5, 0.55, 0.20, 0.00, 0.40, 0.2, 0.0, 1, 0.50, 0.25, 2, 0.60, 0, 0.0 };
 
 // ---------------------------------------------------------------------------------------------- candidate words
 
@@ -221,7 +224,7 @@ static int regionMinRow(void)
 
 static void computeOdds(Odds *o, int level)
 {
-    const int minRow = level >= 2 ? regionMinRow() : 2;
+    const int minRow = level >= 2 ? regionMinRow() : 1;      // the naive player only knows the top row is never a pass letter
     const int left = passLeft();
     int free = 0;
     for (int c = 0; c < COLS; c++)
@@ -340,6 +343,7 @@ typedef struct {
     double flamesLit, ignitions, fireUnreach, wordsAtFail, chainable, heatSum;
     long fireFailUnreach;
     long outWordsHoles; double outWordsCells;
+    double comboPts, bestCombo, shuffles;
 } Stat;
 
 typedef struct { int outcome; int fail; } Outcome;
@@ -374,6 +378,7 @@ static int playShelf(const Player *pl, Stat *st, bool verbose)
     int nled = 0;
     int words = 0, wordLen = 0, hits = 0, guesses = 0, ignitions = 0;
     int result = FAILX_TIMEOUT;
+    double comboPts = 0;
     bool lastFlameReach = true;
     int lastFlameDanger = 0;
     int prevHeat = G.heat;
@@ -429,6 +434,11 @@ static int playShelf(const Player *pl, Stat *st, bool verbose)
                 if (o.p[fc][fr] == 0.0 || (G.cell[fc][fr].state == CELL_BURN && o.p[fc][fr] < 0)) { pc = fc; prr = fr; pp = 0; doPeel = true; }
             }
         }
+        if (pl->lapse > 0 && !boardPassComplete(&G) && rnd01() < pl->lapse) {
+            int tries = 0;
+            do { pc = (int)(rnd() % COLS); prr = (int)(rnd() % ROWS); } while (G.cell[pc][prr].state != CELL_TILE && ++tries < 200);
+            if (tries < 200) { doPeel = true; pp = 0.5; gs = true; }
+        }
         if (pl->solver == 0) {     // never used by the shipped players; kept for the random model
             doPeel = !boardPassComplete(&G) && rnd01() < pl->explore;
             if (doPeel) { do { pc = (int)(rnd() % COLS); prr = (int)(rnd() % ROWS); } while (!(G.cell[pc][prr].state == CELL_TILE)); }
@@ -460,7 +470,13 @@ static int playShelf(const Player *pl, Stat *st, bool verbose)
             char w[WORD_BUF]; candWord(k, w);
             G.chainLen = k->n;
             for (int i = 0; i < k->n; i++) { G.chainC[i] = k->c[i]; G.chainR[i] = k->r[i]; }
+#ifndef BOT_OLD_RULES
+            int pctBefore = boardComboPct(G.combo);
+#endif
             int gained = boardSubmit(&G);
+#ifndef BOT_OLD_RULES
+            if (gained > 0) comboPts += gained - gained * 100 / (100 + pctBefore);
+#endif
             if (getenv("BOTTRACE") && G.turn > 90) printf("word %s len %d flames %d minT %d urgent %d nothingToPeel %d\n", w, k->letters, k->flames, k->minTurns, urgent, nothingToPeel);
             if (gained <= 0) { G.chainLen = 0; continue; }       // the trie and the rules disagree: skip
             if (nled < LEDGER_N + 8) { strcpy(led[nled++], w); }
@@ -489,6 +505,9 @@ static int playShelf(const Player *pl, Stat *st, bool verbose)
         }
     }
     st->attempts++;
+#ifndef BOT_OLD_RULES
+    st->comboPts += comboPts; st->bestCombo += G.bestCombo; st->shuffles += SHUFFLES_PER_SHELF - G.shuffles;
+#endif
     st->fails[result]++;
     st->turns += G.turn;
     st->peels += G.peels;
@@ -698,6 +717,22 @@ int main(int argc, char **argv)
         rowHeader();
         for (int sh = 1; sh <= shelves; sh++) rowPrint(sh, &weak->shelf[sh]);
         printf("\n");
+    }
+    // the score-seeking player: what the combo pays and what it costs
+    if (weakToo) {
+        Table *sc = calloc(1, sizeof *sc);
+        playTable(&SCORER, sc, shelves, n, 3000);
+        printf("**Competent against score-seeking** (the score-seeking bot peels only when a cell is likely, so it spells more words; `combo pts` is what the combo bonus added per attempt, `best combo` the longest streak)\n\n");
+        printf("| shelf | competent clear %% | competent score | competent combo pts | scorer clear %% | scorer score | scorer combo pts | scorer best combo | shuffles used |\n| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n");
+        static const int SH[] = { 1, 3, 5, 8, 10, 12, 15, 18, 20, 24 };
+        for (unsigned i = 0; i < sizeof SH / sizeof SH[0]; i++) {
+            int k = SH[i]; if (k > shelves) break;
+            const Stat *a = &comp->shelf[k], *b = &sc->shelf[k];
+            double na = a->attempts ? a->attempts : 1, nb = b->attempts ? b->attempts : 1;
+            printf("| %d | %.1f | %.0f | %.0f | %.1f | %.0f | %.0f | %.1f | %.3f |\n", k, 100.0 * a->clears / na, a->score / na, a->comboPts / na, 100.0 * b->clears / nb, b->score / nb, b->comboPts / nb, b->bestCombo / nb, (a->shuffles + b->shuffles) / (na + nb));
+        }
+        printf("\n");
+        free(sc);
     }
     // runs
     {

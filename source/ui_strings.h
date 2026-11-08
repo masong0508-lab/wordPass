@@ -361,6 +361,14 @@ enum {
     UI_EX_F4,
     UI_G_KEY_START,
     UI_G_KEY_SELECT,
+    UI_MS_SHUFFLE,
+    UI_CO_SHUFFLE,
+    UI_P_COMBO,
+    UI_CO_COMBO,
+    UI_MS_HINT,
+    UI_MS_NOHINT,
+    UI_MS_NOHINTWORD,
+    UI_MS_HINTIDLE,
     UI_COUNT
 };
 #endif

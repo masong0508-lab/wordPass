@@ -781,6 +781,34 @@ int main(int argc, char **argv)
     boardOf('x');
     res = boardPeel(&g, 2, 2);
     CHECK("peel on an all-x board is OUT OF WORDS", res == 1 && g.fail == FAIL_WORDS && st(2, 2) == CELL_HOLE);
+    // ---- the shuffle: a dead board is re-dealt once a shelf (and costs heat) before the shelf is lost
+    {
+        boardOf('x'); g.shuffles = SHUFFLES_PER_SHELF; g.heatThreshold = 10;
+        set(0, 0, CELL_SECRET, 'b'); set(1, 0, CELL_HOLE, 0); set(4, 4, CELL_BURN, 'x');
+        boardBagReset(); boardSeed(12345);
+        res = boardPeel(&g, 2, 2);
+        CHECK("a dead board is re-dealt, not lost: words again, one shuffle used", res == 1 && g.fail == FAIL_NONE && g.shuffled == 1 && g.shuffles == 0 && boardHasWords(&g));
+        CHECK("the re-deal keeps diamonds, holes and flames where they were and costs the heat of a short word", st(0, 0) == CELL_SECRET && g.cell[0][0].letter == 'b' - 'a' && st(1, 0) == CELL_HOLE && st(2, 2) == CELL_HOLE && st(4, 4) == CELL_BURN &&
+              g.heat == boardPeelHeat(false) + SHUFFLE_HEAT);
+        bool changed = false;
+        for (int c = 0; c < COLS; c++) for (int r = 0; r < ROWS; r++) if (st(c, r) == CELL_TILE && g.cell[c][r].letter != 'x' - 'a') changed = true;
+        CHECK("the re-deal gives the plain gems new letters", changed);
+        // a second dead board on the same shelf ends it
+        for (int c = 0; c < COLS; c++) for (int r = 0; r < ROWS; r++) if (st(c, r) == CELL_TILE) set(c, r, CELL_TILE, 'x');
+        g.shuffled = 0; g.heat = 0;
+        res = boardPeel(&g, 3, 3);
+        CHECK("the second dead board on a shelf is OUT OF WORDS", g.fail == FAIL_WORDS && g.shuffled == 0);
+        // the re-deal's own heat can light the fire
+        boardOf('x'); g.shuffles = 1; g.heatThreshold = 4; g.heat = 1; g.twinEighths = 0;
+        boardPeel(&g, 2, 2);
+        CHECK("the shuffle heat can fill the meter and light a flame", g.shuffled == 1 && countState(CELL_BURN) == 1 && g.heat == 0);
+        // dead board that no re-deal can fix: three tries, then the shelf is lost (every letter is a diamond but one gem)
+        boardOf('x'); g.shuffles = 1;
+        for (int c = 0; c < COLS; c++) for (int r = 0; r < ROWS; r++) set(c, r, CELL_SECRET, 'x');
+        set(3, 3, CELL_TILE, 'x'); set(3, 4, CELL_TILE, 'x'); set(3, 2, CELL_TILE, 'x');
+        boardPeel(&g, 3, 3);
+        CHECK("a board that cannot be re-dealt into a word still ends the shelf (and the shuffle is spent)", g.fail == FAIL_WORDS && g.shuffles == 0);
+    }
     boardOf('e');
     CHECK("boardHasWords finds nothing on an all-e board", !boardHasWords(&g));
     set(1, 1, CELL_TILE, 'b'); set(1, 2, CELL_TILE, 'e'); set(1, 3, CELL_TILE, 'd');
@@ -818,7 +846,8 @@ int main(int argc, char **argv)
     set(0, 1, CELL_TILE, 'b'); set(0, 2, CELL_TILE, 'e'); set(0, 3, CELL_TILE, 'd');
     boardTryAddToChain(&g, 0, 1); boardTryAddToChain(&g, 0, 2); boardTryAddToChain(&g, 0, 3);
     preview = boardChainScore(&g); gained = boardSubmit(&g);
-    CHECK("repeated word scores half", preview == gained && gained == first / 2 && g.lastWordRepeat == 1 && g.ledgerN == 2 && g.uniqueWords == 1 && g.wordsThisShelf == 2);
+    // the second word of a streak also carries the combo bonus (+10%): half of the first, then a tenth more
+    CHECK("repeated word scores half (plus the second-word combo bonus)", preview == gained && gained == first / 2 + (first / 2) * 10 / 100 && g.lastWordRepeat == 1 && g.ledgerN == 2 && g.uniqueWords == 1 && g.wordsThisShelf == 2);
     boardOf('e'); plantWord();
     strcpy(g.ledger[0], "BED"); g.ledgerN = 1; g.ledgerHead = 1;   // an uppercase ledger entry still counts as the same word
     set(0, 1, CELL_TILE, 'b'); set(0, 2, CELL_TILE, 'e'); set(0, 3, CELL_TILE, 'd');
@@ -939,13 +968,106 @@ int main(int argc, char **argv)
           gained > 0 && g.heat == 0 && countState(CELL_BURN) == 1 && rowOneFlame && countState(CELL_HOLE) == COLS &&
           g.fireN == 1 && g.fireR[0] == 1 && st(g.fireC[0], 1) == CELL_BURN);
 
-    // ---- Lockdown tier 2 lights two columns
+    // ---- combo: words in a row without a peel score 10% more each, up to +50%; a peel breaks the streak
+    {
+        bool pct = boardComboPct(0) == 0 && boardComboPct(1) == 10 && boardComboPct(5) == 50 && boardComboPct(6) == 50 && boardComboPct(99) == 50 && boardComboPct(-3) == 0;
+        CHECK("combo bonus: 0, 10, 20, 30, 40, 50 then capped", pct && boardComboPct(2) == 20 && boardComboPct(3) == 30 && boardComboPct(4) == 40);
+        boardOf('e'); plantWord();
+        int plain = 0, got[8] = {0}, prevs[8] = {0};
+        for (int k = 0; k < 8; k++) {
+            set(0, 1, CELL_TILE, 'b'); set(0, 2, CELL_TILE, 'e'); set(0, 3, CELL_TILE, 'd');
+            g.ledgerN = 0; g.ledgerHead = 0;                    // no repeat penalty muddying the numbers
+            boardTryAddToChain(&g, 0, 1); boardTryAddToChain(&g, 0, 2); boardTryAddToChain(&g, 0, 3);
+            prevs[k] = boardChainScore(&g); got[k] = boardSubmit(&g);
+            if (k == 0) plain = got[0];
+        }
+        bool streakOk = true;
+        for (int k = 0; k < 8; k++) if (got[k] != plain + plain * boardComboPct(k) / 100 || prevs[k] != got[k]) streakOk = false;
+        CHECK("a streak of eight words pays 100, 110 ... 150, 150, 150 percent, and the panel preview says the same", streakOk && g.combo == 8 && g.bestCombo == 8);
+        boardPeel(&g, 3, 3);
+        CHECK("a peel resets the combo (the best of the shelf stays)", g.combo == 0 && g.bestCombo == 8);
+        set(0, 1, CELL_TILE, 'b'); set(0, 2, CELL_TILE, 'e'); set(0, 3, CELL_TILE, 'd'); g.ledgerN = 0; g.ledgerHead = 0;
+        boardTryAddToChain(&g, 0, 1); boardTryAddToChain(&g, 0, 2); boardTryAddToChain(&g, 0, 3);
+        CHECK("after the peel the next word is back to the plain score", boardSubmit(&g) == plain && g.combo == 1);
+        memset(&g, 0, sizeof g); g.mode = MODE_CLASSIC; g.shelf = 3; g.combo = 4; g.bestCombo = 4; boardNewShelf(&g);
+        CHECK("a new shelf starts with no combo", g.combo == 0 && g.bestCombo == 0 && g.hints == HINTS_PER_SHELF && g.shuffles == SHUFFLES_PER_SHELF);
+    }
+    // ---- a word past the turn limit pays a tenth (a burning shelf cannot be farmed)
+    {
+        boardOf('e'); plantWord();
+        set(0, 1, CELL_TILE, 'b'); set(0, 2, CELL_TILE, 'e'); set(0, 3, CELL_TILE, 'd');
+        boardTryAddToChain(&g, 0, 1); boardTryAddToChain(&g, 0, 2); boardTryAddToChain(&g, 0, 3);
+        int normal = boardChainScore(&g);
+        g.turn = OVERTIME_TURNS - 1;                          // this is turn 24, the last one inside the limit
+        int atLimit = boardChainScore(&g);
+        g.turn = OVERTIME_TURNS;                              // turn 25 is the first overtime turn
+        int late = boardChainScore(&g), paid = boardSubmit(&g);
+        CHECK("words past the turn limit pay a tenth, and the panel preview says so", normal >= 50 && atLimit == normal && late == normal / OVERTIME_SCORE_DIV && paid == late && late >= 1);
+        boardOf('e'); plantWord(); g.lockdown = true; g.pulseEvery = 99; g.turn = OVERTIME_TURNS_LOCKDOWN;
+        set(0, 1, CELL_TILE, 'b'); set(0, 2, CELL_TILE, 'e'); set(0, 3, CELL_TILE, 'd');
+        boardTryAddToChain(&g, 0, 1); boardTryAddToChain(&g, 0, 2); boardTryAddToChain(&g, 0, 3);
+        CHECK("the same in Lockdown from turn 17", boardChainScore(&g) == normal / OVERTIME_SCORE_DIV);
+    }
+    // ---- the twin rule: of every eight ignitions twinEighths light two columns, the first ones of each eight
     boardOf('e'); plantWord();
     set(0, 1, CELL_TILE, 'b'); set(0, 2, CELL_TILE, 'e'); set(0, 3, CELL_TILE, 'd');
-    g.heatThreshold = 3; g.heat = 2; g.lockdown = true; g.lockTier = 2; g.pulseEvery = 4;
+    g.heatThreshold = 3; g.heat = 2; g.lockdown = true; g.lockTier = 2; g.pulseEvery = 4; g.twinEighths = 8;
     boardTryAddToChain(&g, 0, 1); boardTryAddToChain(&g, 0, 2); boardTryAddToChain(&g, 0, 3);
     boardSubmit(&g);
-    CHECK("Lockdown tier 2 ignites two different columns", countState(CELL_BURN) == 2 && g.fireN == 2 && g.fireC[0] != g.fireC[1] && g.fireR[0] == 0 && g.fireR[1] == 0);
+    CHECK("twin ignition (eight in eight) lights two different columns", countState(CELL_BURN) == 2 && g.fireN == 2 && g.fireC[0] != g.fireC[1] && g.fireR[0] == 0 && g.fireR[1] == 0 && g.ignitions == 1);
+    {
+        int pattern = 0;      // which of the first eight ignitions of a shelf with twinEighths 3 lit two flames
+        for (int k = 0; k < 8; k++) {
+            boardOf('e'); plantWord();
+            g.heatThreshold = 3; g.heat = 3; g.twinEighths = 3; g.ignitions = k;
+            int before = countState(CELL_BURN);
+            boardPeel(&g, 2, 2);
+            if (countState(CELL_BURN) - before == 2) pattern |= 1 << k;
+        }
+        CHECK("twinEighths 3: ignitions 1, 2 and 3 of each eight are twins", pattern == 0x07);
+        boardOf('e'); plantWord(); g.heatThreshold = 3; g.heat = 3; g.twinEighths = 0;
+        boardPeel(&g, 2, 2);
+        CHECK("twinEighths 0: a single flame", countState(CELL_BURN) == 1);
+        bool ramp = true; int prev = 0;
+        for (int sh = 1; sh <= 40; sh++) { int k = boardTwinEighths(sh); if (k < prev || k > 8 || (sh < TWIN_FIRE_FROM_SHELF && k) || (sh == TWIN_FIRE_FROM_SHELF && k != 1)) ramp = false; prev = k; }
+        CHECK("the twin share only rises: none before shelf 11, one in eight at 11, all eight from shelf 25", ramp && boardTwinEighths(10) == 0 && boardTwinEighths(11) == 1 && boardTwinEighths(24) == 7 && boardTwinEighths(25) == 8 && boardTwinEighths(60) == 8);
+    }
+    // ---- fair ignition: a column with no flame is lit before one that already burns
+    {
+        int stacked = 0;
+        for (int k = 0; k < 60; k++) {
+            boardOf('e'); plantWord();
+            boardSeed(100 + k);
+            for (int c = 0; c < COLS - 1; c++) set(c, 3, CELL_BURN, 'e');      // six columns burn; column 6 is clear
+            g.heatThreshold = 3; g.heat = 3; g.twinEighths = 0;
+            boardPeel(&g, 6, 3);
+            int flames6 = 0; for (int r = 0; r < ROWS; r++) if (st(6, r) == CELL_BURN) flames6++;
+            int total = countState(CELL_BURN);
+            if (flames6 != 1 || total < 7) stacked++;
+        }
+        CHECK("a new flame goes to a column that has none (no stacks while one is free)", stacked == 0);
+        boardOf('e'); plantWord();
+        for (int c = 0; c < COLS; c++) if (c != 6) set(c, 4, CELL_BURN, 'e');
+        for (int r = 0; r < 3; r++) set(6, r, CELL_BURN, 'e');
+        g.heatThreshold = 3; g.heat = 3; g.twinEighths = 0;
+        boardPeel(&g, 3, 2);
+        CHECK("with every column burning a second flame still lights (no dead ends)", countState(CELL_BURN) >= 10);
+    }
+    // ---- overtime keeps the heat over the line and lights as many gems as it fills the meter
+    {
+        boardOf('e'); plantWord();
+        g.turn = 40; g.overtime = true; g.heatThreshold = 3; g.heat = 7; g.twinEighths = 0;     // peel: +1 peel +1 overtime(+1 + 16/12) -> 7 + 1 + 2 = 10
+        boardPeel(&g, 2, 2);
+        int expect = (7 + boardPeelHeat(false) + 1 + (g.turn - boardOvertimeTurns(false)) / OVERTIME_HEAT_STEP);
+        CHECK("overtime: three flames from heat 10 on a meter of 3, one heat left over", expect == 10 && countState(CELL_BURN) == 3 && g.heat == 1);
+        boardOf('e'); plantWord();
+        g.turn = 3; g.heatThreshold = 3; g.heat = 4; g.twinEighths = 0;
+        boardPeel(&g, 2, 2);
+        CHECK("outside overtime the extra heat is still lost", countState(CELL_BURN) == 1 && g.heat == 0);
+        bool ot = boardOvertimeTurns(false) == OVERTIME_TURNS;
+        Game o; memset(&o, 0, sizeof o); o.turn = OVERTIME_TURNS + OVERTIME_HEAT_STEP;     // the turn after next is 1 + 1 heat past the step
+        CHECK("overtime heat: +1 for the first twelve turns past the limit, then +2", ot && boardTurnHeat(&o, 0) == 1 + (OVERTIME_HEAT_STEP + 1) / OVERTIME_HEAT_STEP && boardTurnHeat(&(Game){ .turn = OVERTIME_TURNS }, 0) == 1);
+    }
 
     // ---- heat clamps to threshold-1 when nothing can burn (all diamonds)
     boardOf('e');
@@ -977,22 +1099,33 @@ int main(int argc, char **argv)
     g.shelf = 1; boardNewShelf(&g);
     bool s1 = g.heatThreshold == 10 && g.burnEvery == 2 && !g.lockdown && g.lockTier == 0;
     g.shelf = 4; boardNewShelf(&g);   // shelf 4 is a twist shelf: DAMP slows the fire and lowers the meter
-    bool s4 = (g.twist == TWIST_DAMP ? (g.heatThreshold == 5 && g.burnEvery == 2) : (g.heatThreshold == 7 && g.burnEvery == 1)) && !g.lockdown;
+    bool s4 = (g.twist == TWIST_DAMP ? (g.heatThreshold == 6 && g.burnEvery == 2) : (g.heatThreshold == 8 && g.burnEvery == 1)) && !g.lockdown;
     g.shelf = 6; boardNewShelf(&g);
-    bool s6 = g.heatThreshold == 5 && g.lockdown && g.lockTier == 0 && g.pulseEvery == 6;
+    bool s6 = g.heatThreshold == 7 && g.lockdown && g.lockTier == 0 && g.pulseEvery == 6 && g.twinEighths == 0;
     g.shelf = 12; boardNewShelf(&g);
-    bool s12 = g.heatThreshold == 4 && g.lockTier == 2 && g.pulseEvery == 4;
+    bool s12 = g.heatThreshold == 4 && g.lockTier == 2 && g.pulseEvery == 4 && g.twinEighths == 1;
     g.shelf = 20; boardNewShelf(&g);
-    bool s20 = g.heatThreshold == 4 && g.lockTier == 3 && g.pulseEvery == 3;
+    bool s20 = g.heatThreshold == 4 && g.lockTier == 3 && g.pulseEvery == 3 && g.twinEighths == 5;
     CHECK("shelf thresholds 1/4/6/12/20", s1 && s4 && s6 && s12 && s20);
+    {
+        static const int want[12] = { 10, 10, 9, 8, 7, 7, 6, 6, 5, 5, 5, 4 };
+        bool meter = true, mono = true; int prevT = 99;
+        for (int sh = 1; sh <= 30; sh++) {
+            ShelfRules r; boardShelfRules(sh, &r);
+            if (r.threshold != want[sh > 12 ? 11 : sh - 1]) meter = false;
+            if (r.threshold > prevT) mono = false;
+            prevT = r.threshold;
+        }
+        CHECK("the meter by shelf: 10 10 9 8 7 7 6 6 5 5 5 then 4, never growing", meter && mono);
+    }
     int stdDay = 20260101;
     while (boardDailyMod(stdDay) != DAILYMOD_STANDARD) stdDay++;       // a STANDARD date: the base Daily rules
     g.mode = MODE_DAILY; g.dailySeed = stdDay; g.shelf = 1; boardNewShelf(&g);
-    CHECK("Daily: threshold 7, fire every other turn, not Lockdown", g.heatThreshold == 7 && g.burnEvery == 2 && !g.lockdown);
+    CHECK("Daily: threshold 6, fire every other turn, not Lockdown", g.heatThreshold == 6 && g.burnEvery == 2 && !g.lockdown);
     g.mode = MODE_CLASSIC; S.fire = FIRE_FAST; g.shelf = 1; boardNewShelf(&g);
     bool fast = g.heatThreshold == 8 && g.burnEvery == 1;
     S.fire = FIRE_RELAXED; g.shelf = 6; boardNewShelf(&g);
-    bool relaxed = g.heatThreshold == 8 && g.burnEvery == 2;
+    bool relaxed = g.heatThreshold == 10 && g.burnEvery == 2;
     S.fire = FIRE_NORMAL;
     CHECK("FAST and RELAXED adjust the thresholds", fast && relaxed);
 
@@ -1193,7 +1326,8 @@ int main(int argc, char **argv)
             if (g.twist == TWIST_DAMP) {
                 Game plain; memset(&plain, 0, sizeof(plain)); plain.mode = MODE_CLASSIC; plain.shelf = g.shelf + 1; boardNewShelf(&plain);
                 int baseEvery = g.shelf <= 3 ? 2 : 1;
-                int baseThr = g.shelf <= 2 ? 10 : g.shelf <= 5 ? 7 : 5 - g.lockTier / 2; if (baseThr < 3) baseThr = 3;
+                ShelfRules br; boardShelfRules(g.shelf, &br);
+                int baseThr = br.threshold;
                 int wantThr = baseThr - 2; if (wantThr < 3) wantThr = 3;
                 if (g.burnEvery != baseEvery + 1 || g.heatThreshold != wantThr) dampBad++;
             }
@@ -1239,9 +1373,11 @@ int main(int argc, char **argv)
             if (a.twist != TWIST_NONE || a.lockdown) bad++;
             int minRow = ROWS;
             for (int c = 0; c < COLS; c++) for (int r = 0; r < ROWS; r++) if (a.back[c][r] && r < minRow) minRow = r;
-            if (m == DAILYMOD_STANDARD && (a.heatThreshold != 7 || a.burnEvery != 2 || minRow < 3)) stdBad++;
-            if (m == DAILYMOD_EMBER && (a.heatThreshold != 8 || a.burnEvery != 1)) emberBad++;
-            if (m == DAILYMOD_DEEP && (minRow < 5 || a.heatThreshold != 7 || a.burnEvery != 2)) deepBad++;
+            if (m == DAILYMOD_STANDARD && (a.heatThreshold != 6 || a.burnEvery != 2 || minRow < 3)) stdBad++;
+            if (m == DAILYMOD_EMBER && (a.heatThreshold != 9 || a.burnEvery != 1)) emberBad++;
+            if (m == DAILYMOD_DEEP && (minRow < 5 || a.heatThreshold != 9 || a.burnEvery != 1)) deepBad++;
+            if (m == DAILYMOD_LONG && (a.heatThreshold != 8 || a.burnEvery != 2)) longBad++;
+            if (a.twinEighths != 0) bad++;
             if (m == DAILYMOD_LONG && (poolCount(a.passTheme, 7) ? a.passLen != 7 : (a.passLen < 6 || a.passLen > 8))) longBad++;
             if (m != DAILYMOD_LONG && a.passLen == 7 && poolCount(a.passTheme, 5) && poolCount(a.passTheme, 6)) longBad++;   // 5 or 6 unless the pool lacks both
             if (!boardDailyModName(m)[0]) nameBad++;
@@ -1249,10 +1385,10 @@ int main(int argc, char **argv)
         CHECK("Daily modifier: every date has one, all four occur, the board stores it", bad == 0 && seedBad == 0 && seen[0] && seen[1] && seen[2] && seen[3]);
         CHECK("Daily modifier names", !strcmp(boardDailyModName(0), "STANDARD") && !strcmp(boardDailyModName(1), "EMBER") &&
               !strcmp(boardDailyModName(2), "DEEP") && !strcmp(boardDailyModName(3), "LONG") && nameBad == 0);
-        CHECK("Daily STANDARD: meter 7, fire every other turn, pass from row 3", stdBad == 0);
-        CHECK("Daily EMBER: meter 8 and the fire moves every turn", emberBad == 0);
-        CHECK("Daily DEEP: every pass letter in rows 5..7", deepBad == 0);
-        CHECK("Daily LONG: a seven-letter pass (the nearest length when the pool lacks one)", longBad == 0);
+        CHECK("Daily STANDARD: meter 6, fire every other turn, pass from row 3", stdBad == 0);
+        CHECK("Daily EMBER: meter 9 and the fire moves every turn", emberBad == 0);
+        CHECK("Daily DEEP: every pass letter in rows 5..7, meter 9, fire every turn", deepBad == 0);
+        CHECK("Daily LONG: a seven-letter pass (the nearest length when the pool lacks one), meter 8", longBad == 0);
         CHECK("Daily with a modifier is still one board for everyone (same date, same board)", sameBad == 0);
     }
 
@@ -1393,7 +1529,7 @@ int main(int argc, char **argv)
         strcpy(want, "BOOKMARKS START A RUN");
         CHECK("guide SHELVES: bookmarks, twists, Lockdown tiers, overtime from the rules",
               strstr(all[5], "3 BOOKMARKS START A RUN") && strstr(all[5], "SHELF 4, 7, 10") && strstr(all[5], "INK SPILL: 3 HOLES") && strstr(all[5], "METER -2") && strstr(all[5], "PASS +1 LONGER") &&
-              strstr(all[5], "LOCKDOWN FROM SHELF 6") && strstr(all[5], "EVERY 6 TURNS") && strstr(all[5], "SHELF 9, 12, 15") && strstr(all[5], "FROM 12") &&
+              strstr(all[5], "LOCKDOWN FROM SHELF 6") && strstr(all[5], "EVERY 6 TURNS") && strstr(all[5], "SHELF 9, 12, 15") && strstr(all[5], "FROM 11") &&
               strstr(all[5], "AT TURN 25 (17 IN LOCKDOWN)") && boardTwistShelf(4) && boardTwistShelf(7) && !boardTwistShelf(5) && !boardTwistShelf(3));
         CHECK("guide FIRE: the three fail screens are named by the game", strstr(all[4], boardFailName(FAIL_FIRE)) && strstr(all[4], boardFailName(FAIL_SCORCH)) && strstr(all[4], boardFailName(FAIL_WORDS)) &&
               !strcmp(boardLockdownName(0), "LOCKDOWN") && !strcmp(boardLockdownName(3), "LOCKDOWN IV") && strstr(all[4], "SHELF 1-3") != NULL);
@@ -1478,6 +1614,24 @@ int main(int argc, char **argv)
             if (dictLookup(hw, wl) != 1 || !boardWordOk(hw, wl)) { hok = false; printf("   hint %s is not a common word\n", hw); }
         }
         CHECK("boardHintChain: a common word on touching cells on 30 first shelves", hok && found >= 25);
+    }
+    // ---- the SELECT hint prefers a word through a flame, and the shelf has HINTS_PER_SHELF of them
+    {
+        boardOf('x');
+        // "bed" down column 0 (rows 1..3), "cat" down column 4 (rows 1..3); the flame is the 'a' of cat
+        set(0, 1, CELL_TILE, 'b'); set(0, 2, CELL_TILE, 'e'); set(0, 3, CELL_TILE, 'd');
+        set(4, 1, CELL_TILE, 'c'); set(4, 2, CELL_BURN, 'a'); set(4, 3, CELL_TILE, 't');
+        u8 hc[8], hr[8];
+        int n = boardHintChain(&g, hc, hr, 5);
+        bool thru = false; for (int i = 0; i < n; i++) if (st(hc[i], hr[i]) == CELL_BURN) thru = true;
+        CHECK("the hint goes through the flame when a word does", n >= 3 && thru);
+        set(4, 2, CELL_TILE, 'a');                          // no flame: the first word found is a plain one
+        n = boardHintChain(&g, hc, hr, 5);
+        CHECK("with no flame the hint is just a common word", n == 3);
+        boardOf('x');
+        CHECK("no word, no hint", boardHintChain(&g, hc, hr, 5) == 0);
+        memset(&g, 0, sizeof g); g.mode = MODE_CLASSIC; g.shelf = 2; boardNewShelf(&g);
+        CHECK("a new shelf has two hints, a hint is not on show", g.hints == HINTS_PER_SHELF && HINTS_PER_SHELF == 2 && !g.hintReq && g.hintIdle == 0 && !g.hintOffered);
     }
 
     // ---- languages (item 21): the runtime half. langload.c reads data/lang/<code>/ the way the ROM reads nitro:/lang/<code>/

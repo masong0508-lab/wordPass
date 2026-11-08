@@ -92,7 +92,7 @@ static int firstShelf(bool (*pred)(int))
     return 0;
 }
 static bool isLockdown(int s) { ShelfRules r; boardShelfRules(s, &r); return r.lockdown; }
-static bool isTwinFire(int s) { ShelfRules r; boardShelfRules(s, &r); return r.tier >= LOCKDOWN_TWIN_FIRE_TIER; }
+static bool isTwinFire(int s) { ShelfRules r; boardShelfRules(s, &r); return r.twinEighths > 0; }
 static bool isTier1(int s) { ShelfRules r; boardShelfRules(s, &r); return r.tier >= 1; }
 
 // The gems of an example word (a UI_EX_* string of the active language): Qu is one gem when the language has the Qu tile.

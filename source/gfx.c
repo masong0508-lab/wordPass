@@ -1174,6 +1174,9 @@ static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
             int mult = boardLenMult((int)strlen(chainWordNow));
             if (mult > 1) { s[0] = 'X'; s[1] = (char)('0' + mult); s[2] = 0; drawText(PANEL_X + 76 - textWidth(s, 1), 84, s, ACCENT, 1); }
         } else drawText(PANEL_X, 84, "...", DIM_TEXT, 1);
+    } else if (g->combo >= 2 && !peek) {      // the streak of words without a peel: gold once the bonus is at its cap
+        char cb[24]; uiFmt(cb, sizeof cb, UI_P_COMBO, g->combo);
+        drawText(PANEL_X, 84, cb, boardComboPct(g->combo) >= COMBO_CAP_PCT ? GOLD_LT : ACCENT, 1);
     }
 
     // heat: OVERTIME replaces the label past the shelf's turn budget, and a valid chain previews its cost
@@ -1888,7 +1891,7 @@ static void gdShelves(int t)
         fmtInt(v, sh); strcat(v, "+"); drawTextCenter(HXS[0], y, v, on ? WHITE : INK, 1);
         fmtInt(v, r.threshold); drawTextCenter(HXS[1], y, v, on ? WHITE : INK, 1);
         fmtInt(v, r.pulseEvery); drawTextCenter(HXS[2], y, v, on ? WHITE : INK, 1);
-        fmtInt(v, r.tier >= LOCKDOWN_TWIN_FIRE_TIER ? 2 : 1); drawTextCenter(HXS[3], y, v, r.tier >= LOCKDOWN_TWIN_FIRE_TIER ? FIRE2 : (on ? WHITE : INK), 1);
+        fmtInt(v, 1); if (r.twinEighths) strcat(v, "+"); drawTextCenter(HXS[3], y, v, r.twinEighths ? FIRE2 : (on ? WHITE : INK), 1);   // 1+: some ignitions light two columns
     }
     gCaption(ui(UI_G_TIER), INK);
 }

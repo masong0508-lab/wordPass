@@ -290,6 +290,32 @@ static void burstNewFlames(void)
     G.fireN = 0;
 }
 
+// The board was just re-dealt because no word was left (board.c reshuffle): say so on the message line and the board
+static void announceShuffle(void)
+{
+    if (!G.shuffled) return;
+    G.shuffled = 0;
+    char m[MSG_LEN]; uiFmt(m, sizeof m, UI_MS_SHUFFLE, SHUFFLE_HEAT);
+    setMsg(m, 120);
+    gfxCallout(ui(UI_CO_SHUFFLE), CALLOUT_ACCENT);
+    gfxShake(6);
+}
+
+// SELECT in play: the ghost drag traces a common word on the real board (a hint). Each shelf has HINTS_PER_SHELF; the
+// hint prefers a word through a flame when one burns. It stops at the first touch of the board.
+static void useHint(void)
+{
+    if (G.hints <= 0) { setMsg(ui(UI_MS_NOHINT), 60); return; }
+    boardClearChain(&G);
+    G.hintLen = boardHintChain(&G, G.hintC, G.hintR, 5);
+    if (!G.hintLen) { setMsg(ui(UI_MS_NOHINTWORD), 60); return; }
+    G.hints--;
+    G.hintReq = 1; G.hintIdle = 0;
+    char m[MSG_LEN]; uiFmt(m, sizeof m, UI_MS_HINT, G.hints);
+    setMsg(m, 90);
+    musicSfx(SFX_MENU, 0);
+}
+
 // Submit the current chain: score it, shatter the gems (in the colours they had), callouts.
 static void submitChain(void)
 {
@@ -318,11 +344,16 @@ static void submitChain(void)
             gfxPopup(cc[d], cr[d], ui(UI_POP_LINK), 1);
             setMsg(ui(UI_CO_LINK), 60); gfxCallout(ui(UI_CO_LINK), CALLOUT_ACCENT);
         }
+        else if (G.combo >= 3) {            // three words in a row without a peel: the streak is worth a callout of its own
+            char cb[MSG_LEN]; uiFmt(cb, sizeof cb, UI_CO_COMBO, G.combo);
+            setMsg(cb, 60); gfxCallout(cb, CALLOUT_ACCENT);
+        }
         else if (G.lastWordLen >= 7) { setMsg(ui(UI_CO_EXCELLENT), 60); gfxCallout(ui(UI_CO_EXCELLENT), CALLOUT_GOLD); }
         else if (G.lastWordLen >= 5) { setMsg(ui(UI_CO_GOOD), 60); gfxCallout(ui(UI_CO_GOOD), CALLOUT_GOLD); }
         else if (G.lastWordRepeat) { setMsg(ui(UI_CO_AGAIN), 45); gfxCallout(ui(UI_CO_AGAIN), CALLOUT_ACCENT); }
         else if (G.lastWordTier == 2) { setMsg(ui(UI_CO_RARE), 60); gfxCallout(ui(UI_CO_RARE), CALLOUT_GOLD); }
         burstNewFlames();
+        if (!G.fail) announceShuffle();
         if (G.fail) enterFail();
     } else if (G.chainLen >= 3) {
         char w[WORD_BUF]; boardChainWord(&G, w);
@@ -393,14 +424,18 @@ static void updateCue(u32 held)
             else if (!G.peekHeld) want = CUE_PEEKBTN;
         } else if (G.tutorStep == TUTOR_PEEK && G.armed) want = CUE_ARMED;
     } else G.idleFrames = 0;
-    if (want == CUE_GHOST && G.cue != CUE_GHOST) {
+    if (G.hintReq) {             // a hint: the same ghost drag, on request, until the player touches the board
+        if (G.state != ST_PLAY || touching || G.chainLen > 0 || G.fail) G.hintReq = 0;
+        else want = CUE_GHOST;
+    }
+    if (want == CUE_GHOST && G.cue != CUE_GHOST && !G.hintReq) {
         G.hintLen = boardHintChain(&G, G.hintC, G.hintR, 5);
         G.ghostDone = 1;                         // shown once: whatever happens next
         if (!G.hintLen) want = CUE_NONE;
     }
     if (want != G.cue) { G.cue = want; G.cueAge = 0; }
     else G.cueAge++;
-    if (G.cue == CUE_GHOST && G.cueAge > G.hintLen * GHOST_GEM_FRAMES + 30) { G.cue = CUE_NONE; G.cueAge = 0; }
+    if (G.cue == CUE_GHOST && G.cueAge > G.hintLen * GHOST_GEM_FRAMES + 30) { G.cue = CUE_NONE; G.cueAge = 0; G.hintReq = 0; }
 }
 
 // The chain grew or shrank this frame: a rising pentatonic tap or a short step back. A submit or a clear
@@ -422,6 +457,10 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
     if (!peekNow) G.armed = 0;
 
     if (down & KEY_START) { enterPause(); return; }
+    if (down & KEY_SELECT) useHint();
+    // the idle offer: ten seconds of nothing with hints in hand, once a shelf (the guided shelf has its own ghost)
+    if ((held & (KEY_TOUCH | KEY_A | KEY_B | KEY_X | KEY_Y | KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT | KEY_L | KEY_R)) || G.chainLen > 0) G.hintIdle = 0;
+    else if (++G.hintIdle == HINT_IDLE_FRAMES && G.hints > 0 && !G.hintOffered && !tutorOn()) { G.hintOffered = 1; setMsg(ui(UI_MS_HINTIDLE), 150); }
     int chainBefore = G.chainLen;
     // B steps the chain back one gem, held for 20 frames it clears it; Y clears at once
     static int bHeld;
@@ -469,6 +508,7 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
             } else if (res == 1) { musicSfx(SFX_PEEL, 0); musicReveal(false); }
             else if (res == 3 || res == -1) { musicSfx(SFX_SCORCH, 0); setMsg(ui(UI_CO_SCORCHED), 60); gfxCallout(ui(UI_CO_SCORCHED), CALLOUT_FIRE); gfxBurst(c, r, BURST_SCORCH, letter); gfxShake(6); }
             burstNewFlames();
+            if (!G.fail) announceShuffle();
             if (res >= 1 && !G.fail && !boardPassComplete(&G)) tutorPeel(res, c, r);   // after the gameplay messages, so the guide's line wins
             // the peel that completes the pass wins the shelf even if its turn ended badly
             if (G.fail && !boardPassComplete(&G)) { enterFail(); return; }

@@ -169,27 +169,40 @@ bool boardTwistShelf(int shelf) { return shelf >= 4 && shelf % 3 == 1; }
 
 // What a Classic shelf is on FIRE NORMAL with no twist, and what a Daily modifier makes of it. boardNewShelf
 // starts from these and then applies the FIRE setting and the twist; the guide prints them.
+int boardTwinEighths(int shelf)
+{
+    if (shelf < TWIN_FIRE_FROM_SHELF) return 0;
+    int k = (shelf - (TWIN_FIRE_FROM_SHELF - TWIN_FIRE_STEP)) / TWIN_FIRE_STEP;
+    return k > 8 ? 8 : k;
+}
+
+// The meter by shelf: it shrinks by one every one or two shelves until it holds 4 from shelf 12 on.
+static const u8 METER[12] = { 10, 10, 9, 8, 7, 7, 6, 6, 5, 5, 5, 4 };
+
 void boardShelfRules(int shelf, ShelfRules *out)
 {
     out->lockdown = shelf >= LOCKDOWN_FROM_SHELF;
-    // Lockdown tiers: shelves 6-8, 9-11, 12-14, 15+ tighten the threshold and the pulse
+    // Lockdown tiers: shelves 6-8, 9-11, 12-14, 15+ tighten the pulse
     out->tier = out->lockdown ? (shelf - LOCKDOWN_FROM_SHELF) / 3 : 0;
     if (out->tier > 3) out->tier = 3;
-    out->threshold = (shelf <= 2) ? 10 : (shelf <= 5) ? 7 : 5 - out->tier / 2;
-    if (out->threshold < 3) out->threshold = 3;
+    out->threshold = METER[(shelf < 1 ? 1 : shelf > 12 ? 12 : shelf) - 1];
     out->burnEvery = (shelf <= 3) ? 2 : 1;
     out->pulseEvery = 6 - out->tier;
     if (out->pulseEvery < 3) out->pulseEvery = 3;
     // deeper shelves bury the pass lower in the board
     out->minRow = (shelf <= 2) ? 1 : (shelf <= 5) ? 3 : (shelf <= 11) ? 4 : 5;
+    out->twinEighths = boardTwinEighths(shelf);
 }
 
-// One fixed shelf for everyone today: medium pressure, pass buried mid-board
+// One fixed shelf for everyone today: medium pressure, pass buried mid-board. The four modifiers are balanced to be
+// about as hard as each other (tools/check/bot.c, docs/BALANCE.md): STANDARD a meter of 6 with the fire every other
+// turn; EMBER a meter of 9 with the fire every turn; DEEP a meter of 9 and the fire every turn with the pass buried in
+// the bottom three rows; LONG a meter of 8 and a seven-letter pass.
 void boardDailyRules(int mod, ShelfRules *out)
 {
-    out->lockdown = false; out->tier = 0; out->pulseEvery = 6;
-    out->threshold = mod == DAILYMOD_EMBER ? 8 : 7;
-    out->burnEvery = mod == DAILYMOD_EMBER ? 1 : 2;
+    out->lockdown = false; out->tier = 0; out->pulseEvery = 6; out->twinEighths = 0;
+    out->threshold = mod == DAILYMOD_STANDARD ? 6 : mod == DAILYMOD_LONG ? 8 : 9;
+    out->burnEvery = (mod == DAILYMOD_EMBER || mod == DAILYMOD_DEEP) ? 1 : 2;
     out->minRow = mod == DAILYMOD_DEEP ? 5 : 3;
 }
 
@@ -330,6 +343,10 @@ void boardNewShelf(Game *g)
     g->heatThreshold = rules.threshold;
     g->burnEvery = rules.burnEvery;
     g->pulseEvery = rules.pulseEvery;
+    g->twinEighths = rules.twinEighths;
+    g->ignitions = 0;
+    g->shuffles = SHUFFLES_PER_SHELF; g->shuffled = 0;
+    g->combo = 0; g->bestCombo = 0; g->hints = HINTS_PER_SHELF; g->hintReq = 0; g->hintIdle = 0; g->hintOffered = 0;
     g->burnTimer = 0;
     g->fail = FAIL_NONE;
     g->wordsThisShelf = 0;
@@ -508,33 +525,46 @@ static int applyGravity(Game *g)
     return spawned;
 }
 
-// Ignite the topmost gem of a random column (holes and diamonds above it are skipped),
-// trying every column from a random start. Returns false when no gem is left to light.
-static bool igniteColumn(Game *g, int avoid)
+static bool columnHasFlame(const Game *g, int c)
 {
-    int start = boardRand() % COLS;
-    for (int k = 0; k < COLS; k++) {
-        int c = (start + k) % COLS;
-        if (c == avoid) continue;
-        for (int r = 0; r < ROWS; r++) {
-            if (g->cell[c][r].state != CELL_TILE) continue;
-            g->cell[c][r].state = CELL_BURN;
-            g->cell[c][r].yoff = 0;
-            g->cell[c][r].yv = 0;
-            if (g->fireN < 2) { g->fireC[g->fireN] = c; g->fireR[g->fireN] = r; g->fireN++; }
-            return true;
-        }
-    }
+    for (int r = 0; r < ROWS; r++) if (g->cell[c][r].state == CELL_BURN) return true;
     return false;
 }
 
-// One new flame (two from Lockdown tier 2). The ignition cells are left in fireC/fireR
-// for main.c's burst. Returns whether anything caught fire.
+// Ignite the topmost gem of a random column (holes and diamonds above it are skipped), trying every column from a
+// random start. Columns with no flame in them are lit first, so flames do not stack up in one column (a stack parked
+// on a firebreak can sit on top of an unfound pass letter for good); only when every column burns does a second flame
+// join a column. Returns false when no gem is left to light.
+static bool igniteColumn(Game *g, int avoid, int *litColumn)
+{
+    int start = boardRand() % COLS;
+    for (int pass = 0; pass < 2; pass++)
+        for (int k = 0; k < COLS; k++) {
+            int c = (start + k) % COLS;
+            if (c == avoid) continue;
+            if (pass == 0 && columnHasFlame(g, c)) continue;
+            for (int r = 0; r < ROWS; r++) {
+                if (g->cell[c][r].state != CELL_TILE) continue;
+                g->cell[c][r].state = CELL_BURN;
+                g->cell[c][r].yoff = 0;
+                g->cell[c][r].yv = 0;
+                if (g->fireN < 2) { g->fireC[g->fireN] = c; g->fireR[g->fireN] = r; g->fireN++; }
+                if (litColumn) *litColumn = c;
+                return true;
+            }
+        }
+    return false;
+}
+
+// One new flame, or two on the ignitions the shelf's twin share picks (twinEighths of every eight, counted from the
+// first). The ignition cells are left in fireC/fireR for main.c's burst. Returns whether anything caught fire.
 static bool spawnFire(Game *g)
 {
-    g->fireN = 0;
-    if (!igniteColumn(g, -1)) return false;
-    if (g->lockTier >= LOCKDOWN_TWIN_FIRE_TIER) igniteColumn(g, g->fireC[0]);
+    int c0 = -1;
+    if (!igniteColumn(g, -1, &c0)) return false;
+    bool twin = (g->ignitions % 8) < g->twinEighths;
+    g->ignitions++;
+    if (twin) igniteColumn(g, c0, NULL);
     musicSfx(SFX_IGNITE, 0);
     return true;
 }
@@ -612,8 +642,41 @@ int boardTurnHeat(const Game *g, int baseHeat)
     int turn = g->turn + 1, heat = baseHeat;
     if (g->lockdown && g->pulseEvery > 0 && (turn % g->pulseEvery) == 0) heat += 2;   // Lockdown pulse
     int over = turn - boardOvertimeTurns(g->lockdown);                                // shelf overtime
-    if (over > 0) heat += 1 + over / 24;
+    if (over > 0) heat += 1 + over / OVERTIME_HEAT_STEP;
     return heat;
+}
+
+// When the heat reaches the meter a gem (two, on a twin ignition) lights and the meter empties. Heat over the line is
+// lost, except in overtime, where it is kept and lights as many more gems as it fills the meter again (so a shelf that
+// is camped on cannot stall: it burns).
+static void meterCheck(Game *g)
+{
+    if (g->fail != FAIL_NONE || g->heat < g->heatThreshold) return;
+    bool lit = spawnFire(g);
+    if (lit) g->heat = g->overtime ? g->heat - g->heatThreshold : 0;
+    while (lit && g->overtime && g->heat >= g->heatThreshold) {
+        lit = spawnFire(g);
+        if (lit) g->heat -= g->heatThreshold;
+    }
+    if (!lit) g->heat = g->heatThreshold - 1;   // nothing left to light: stay on the brink
+}
+
+// A board with no 3- to 5-letter word left is re-dealt once a shelf (SHUFFLES_PER_SHELF) instead of ending the shelf:
+// every plain gem and flame gets a new letter from the bag (diamonds, holes and flame positions stay), it is tried up to
+// ten times until a word exists, and the re-deal costs SHUFFLE_HEAT like a short word. A second dead board loses the shelf.
+static void reshuffle(Game *g)
+{
+    for (int attempt = 0; attempt < 10; attempt++) {
+        for (int c = 0; c < COLS; c++)
+            for (int r = 0; r < ROWS; r++)
+                if (g->cell[c][r].state == CELL_TILE || g->cell[c][r].state == CELL_BURN) { g->cell[c][r].letter = randomLetter(); g->cell[c][r].flash = 8; }
+        if (boardHasWords(g)) break;
+    }
+    g->shuffles--;
+    g->shuffled = 1;
+    g->chainLen = 0;
+    g->heat += SHUFFLE_HEAT;
+    meterCheck(g);
 }
 
 // Every word and every peel is a turn. Order matters: the cells the turn vacated are
@@ -634,12 +697,12 @@ static void endTurn(Game *g, int heatAdd)
         fireStep(g);
         spawned += applyGravity(g);
     }
-    if (g->fail == FAIL_NONE && g->heat >= g->heatThreshold) {
-        if (spawnFire(g)) g->heat = 0;
-        else g->heat = g->heatThreshold - 1;   // nothing left to light: stay on the brink
-    }
+    meterCheck(g);
     if (spawned >= 4) musicCascade(spawned);
-    if (g->fail == FAIL_NONE && !boardHasWords(g)) g->fail = FAIL_WORDS;
+    if (g->fail == FAIL_NONE && !boardHasWords(g)) {
+        if (g->shuffles > 0) { reshuffle(g); if (g->fail == FAIL_NONE && !boardHasWords(g)) g->fail = FAIL_WORDS; }
+        else g->fail = FAIL_WORDS;
+    }
 }
 
 // A word counts if the dictionary knows it, the LIBRARY setting allows its tier and the
@@ -715,6 +778,12 @@ void boardTallySplit(int tally, int shelfBonus, int speedBonus, int peelBonus, i
 
 // The length multiplier of a word: x1 up to four letters, x2 for five and six, x3 for seven and
 // eight, x4 beyond.
+int boardComboPct(int combo)
+{
+    int p = combo * COMBO_PCT_PER_WORD;
+    return p < 0 ? 0 : p > COMBO_CAP_PCT ? COMBO_CAP_PCT : p;
+}
+
 int boardLenMult(int len)
 {
     return (len <= 4) ? 1 : (len <= 6) ? 2 : (len <= 8) ? 3 : 4;
@@ -742,6 +811,8 @@ static int chainScoreDetail(const Game *g, char *w, int *lenOut, int *tierOut, i
     if (diamonds > DIAMOND_CAP) diamonds = DIAMOND_CAP;
     int repeat = ledgerHas(g, w) ? 1 : 0;
     int gained = boardWordPoints(base, len, usedBurn != 0, diamonds, repeat != 0);
+    gained += gained * boardComboPct(g->combo) / 100;      // a streak of words without a peel pays more
+    if (g->turn + 1 > boardOvertimeTurns(g->lockdown)) { gained /= OVERTIME_SCORE_DIV; if (gained < 1) gained = 1; }   // past the limit a word pays a tenth
     *lenOut = len; *tierOut = tier; *diamondsOut = diamonds; *burnOut = usedBurn; *repeatOut = repeat;
     return gained;
 }
@@ -782,6 +853,8 @@ int boardSubmit(Game *g)
     if (!repeat) g->uniqueWords++;
     g->score += gained;
     g->wordsThisShelf++;
+    g->combo++;
+    if (g->combo > g->bestCombo) g->bestCombo = g->combo;
     if (!g->practice) {            // lifetime stats: a Daily replay leaves no trace
         S.wordsSpelled++;
         if (tier == 2) S.rareWords++;
@@ -799,6 +872,7 @@ int boardPeel(Game *g, int c, int r)
     if (cl->state != CELL_TILE && cl->state != CELL_BURN) return 0;
     bool scorch = (cl->state == CELL_BURN) || (r > 0 && g->cell[c][r - 1].state == CELL_BURN);
     g->peels++;
+    g->combo = 0;                    // a peel breaks the streak of words
     if (!g->practice) S.peels++;
     // drop a chained tile from the chain
     g->chainLen = 0;
@@ -882,39 +956,47 @@ static bool dfsWords(const Game *g, int c, int r, char *w, int n, bool used[COLS
     return false;
 }
 
-// A path that spells a common (not obscure) word, shortest first, for the guide's ghost drag.
-static bool hintDfs(const Game *g, int c, int r, char *w, int n, int maxLen, int depth, u8 *pc, u8 *pr, bool used[COLS][ROWS])
+// A path that spells a common (not obscure) word, shortest first, for the guide's ghost drag and the SELECT hint.
+// needBurn asks for a path through at least one flame.
+static bool hintDfs(const Game *g, int c, int r, char *w, int n, int maxLen, int depth, u8 *pc, u8 *pr, bool used[COLS][ROWS], bool needBurn, bool burnSeen)
 {
     int l = g->cell[c][r].letter;
     w[n++] = 'a' + l;
     if (l == 'q' - 'a' && langQuTile()) w[n++] = 'u';
     pc[depth] = (u8)c; pr[depth] = (u8)r;
     depth++;
-    if (depth >= 3 && depth == maxLen && dictLookup(w, n) == 1 && wordAccepted(w, n)) return true;
+    if (g->cell[c][r].state == CELL_BURN) burnSeen = true;
+    if (depth >= 3 && depth == maxLen && (!needBurn || burnSeen) && dictLookup(w, n) == 1 && wordAccepted(w, n)) return true;
     if (depth >= maxLen) return false;
     used[c][r] = true;
     int nc[6], nr[6], k = boardNeighbors(c, r, nc, nr);
     for (int i = 0; i < k; i++) {
         if (used[nc[i]][nr[i]] || !boardIsChainable(g, nc[i], nr[i])) continue;
-        if (hintDfs(g, nc[i], nr[i], w, n, maxLen, depth, pc, pr, used)) { used[c][r] = false; return true; }
+        if (hintDfs(g, nc[i], nr[i], w, n, maxLen, depth, pc, pr, used, needBurn, burnSeen)) { used[c][r] = false; return true; }
     }
     used[c][r] = false;
     return false;
 }
 
+// A common word of 3 to 5 letters on the board, shortest first. With a flame on the board a word through a flame is
+// looked for first (a hint that puts a flame out is worth more than one that does not).
 int boardHintChain(const Game *g, u8 *outC, u8 *outR, int max)
 {
     char w[16];
     u8 pc[8], pr[8];
-    for (int len = 3; len <= 5 && len <= max; len++) {
-        bool used[COLS][ROWS] = {{false}};
-        for (int c = 0; c < COLS; c++)
-            for (int r = 0; r < ROWS; r++)
-                if (g->cell[c][r].state == CELL_TILE && hintDfs(g, c, r, w, 0, len, 0, pc, pr, used)) {
-                    for (int i = 0; i < len; i++) { outC[i] = pc[i]; outR[i] = pr[i]; }
-                    return len;
-                }
-    }
+    bool anyFlame = false;
+    for (int c = 0; c < COLS; c++) for (int r = 0; r < ROWS; r++) if (g->cell[c][r].state == CELL_BURN) anyFlame = true;
+    for (int pass = anyFlame ? 0 : 1; pass < 2; pass++)
+        for (int len = 3; len <= 5 && len <= max; len++) {
+            bool used[COLS][ROWS] = {{false}};
+            for (int c = 0; c < COLS; c++)
+                for (int r = 0; r < ROWS; r++)
+                    if ((g->cell[c][r].state == CELL_TILE || g->cell[c][r].state == CELL_BURN) &&
+                        hintDfs(g, c, r, w, 0, len, 0, pc, pr, used, pass == 0, false)) {
+                        for (int i = 0; i < len; i++) { outC[i] = pc[i]; outR[i] = pr[i]; }
+                        return len;
+                    }
+        }
     return 0;
 }
 
