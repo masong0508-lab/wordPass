@@ -13,6 +13,8 @@
 #   freedict/*.tei               FreeDict bilingual dictionaries between a language and English
 #   odenet/odenet-1.4            Open German WordNet 1.4 (release archive)
 #   ili-map-pwn30.tab            Collaborative Interlingual Index to WordNet 3.0 offsets (globalwordnet/cili)
+#   voikko-fi/                   the sources of the Finnish Voikko morphology (corevoikko/voikko-fi, GPL-2+): the
+#                                vocabulary, the generators and the lexc grammar; tools/lang/voikko_fi.py compiles them
 set -e
 RAW=${1:?usage: fetch.sh RAW_DIR}
 mkdir -p "$RAW"/hun "$RAW"/freq "$RAW"/ldnoobw "$RAW"/wn "$RAW"/omw "$RAW"/odenet "$RAW"/wikt "$RAW"/freedict
@@ -39,5 +41,16 @@ for l in spa fra deu ita por nld swe pol dan fin nob nno; do
 done
 for p in spa-eng fra-eng eng-fra por-eng eng-por nld-eng eng-nld swe-eng dan-eng eng-dan; do
   curl -fsS -o freedict/$p.tei $GH/freedict/fd-dictionaries/master/$p/$p.tei
+done
+# Voikko, the Finnish morphology: sources of voikko-fi (tools/lang/voikko_fi.py builds the transducer from them)
+V=$GH/voikko/corevoikko/master/voikko-fi
+mkdir -p voikko-fi/common voikko-fi/vvfst voikko-fi/vocabulary/autocorrect
+for f in Makefile COPYING CONTRIBUTORS common/voikkoutils.py common/hfconv.py common/generate_lex_common.py \
+         vocabulary/flags.txt vocabulary/joukahainen.xml vocabulary/autocorrect/autocorrect.dtd vocabulary/autocorrect/fi.xml \
+         vvfst/generate_lex.py vvfst/generate_taivutuskaavat.py vvfst/root.lexc vvfst/taivutuskaavat.lexc.in vvfst/index.txt.in \
+         vvfst/filter_lexc.py vvfst/autocorrect_to_lexc.py vvfst/autocorrect.foma.in vvfst/main.foma.in \
+         vvfst/suomi.lexc vvfst/olla-ei.lexc vvfst/poikkeavat.lexc vvfst/lukusanat.lexc vvfst/asemosanat.lexc \
+         vvfst/seikkasanat.lexc vvfst/suhdesanat.lexc vvfst/generate_sukija.py vvfst/poikkeavat-sukija.lexc; do
+  curl -fsS -o voikko-fi/$f $V/$f
 done
 echo "done: $RAW"
