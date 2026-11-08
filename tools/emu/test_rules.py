@@ -197,6 +197,7 @@ def _():
 @scenario('OUT OF WORDS: all-x board, one plain peel gives fail 3')
 def _():
     ensure_play()
+    e.set_features(shuffles=0)                 # no re-deal left: a dead board ends the shelf (the next scenarios test the re-deal)
     for c in range(COLS):
         for r in range(ROWS): e.set_cell(c, r, TILE, 'x')
     g = e.state()
@@ -207,6 +208,117 @@ def _():
     assert g['state'] == ST_FAIL
     assert all(g['cell'][cc][rr][0] == 23 for cc in range(COLS) for rr in range(ROWS) if (cc, rr) != (c, r)), 'letters refilled'
     e.shot(f'{out}/rules_outofwords.png')
+
+@scenario('SHUFFLE: a dead board is re-dealt once a shelf (+3 heat), the second dead board ends the shelf')
+def _():
+    ensure_play()
+    e.set_features(shuffles=1, hints=2)
+    g = e.state(); thr = g['heatThreshold']
+    for c in range(COLS):
+        for r in range(ROWS): e.set_cell(c, r, TILE, 'x')
+    g = e.state()
+    plain = [(c, r) for c in range(COLS) for r in range(ROWS) if not g['back'][c][r]]
+    c, r = plain[len(plain) // 2]
+    e.peel(c, r); g = e.state()
+    assert g['state'] == ST_PLAY and g['fail'] == 0, f'the first dead board ended the shelf: state {g["state"]} fail {g["fail"]}'
+    assert g['shuffles'] == 0, f'shuffles left {g["shuffles"]}'
+    assert g['heat'] == min(1 + 3, thr - 1) or g['heat'] < 4, f'heat {g["heat"]}: a peel (1) and the shuffle (3) should show'
+    letters = {g['cell'][cc][rr][0] for cc in range(COLS) for rr in range(ROWS) if g['cell'][cc][rr][1] == TILE}
+    assert len(letters) > 3, f'the gems were not re-dealt: letters {sorted(letters)}'
+    assert g['cell'][c][r][1] == HOLE, 'the peeled cell is still a hole'
+    assert g['msg'].startswith('NO WORDS: GEMS SHUFFLED'), f'message {g["msg"]!r}'
+    assert g['callout'] == 'SHUFFLE!', f'callout {g["callout"]!r}'
+    assert e.find_words(g), 'the re-deal left no word on the board'
+    e.shot(f'{out}/rules_shuffle.png')
+    e.run(20)
+    for cc in range(COLS):
+        for rr in range(ROWS):
+            if e.state()['cell'][cc][rr][1] == TILE: e.set_cell(cc, rr, TILE, 'x')
+    g = e.state()
+    plain = [(cc, rr) for cc in range(COLS) for rr in range(ROWS) if g['cell'][cc][rr][1] == TILE and not g['back'][cc][rr]]
+    e.peel(*plain[len(plain) // 2]); g = e.state()
+    assert g['state'] == ST_FAIL and g['fail'] == FAIL_WORDS, f'the second dead board: state {g["state"]} fail {g["fail"]}'
+    e.run(60)
+
+@scenario('COMBO: words in a row without a peel pay +10% more each (to +50%), the panel and callout show it, a peel resets it')
+def _():
+    ensure_play()
+    e.set_features(shuffles=1, hints=2, combo=0)
+    scores = []
+    for k in range(4):
+        e.set_cell(C, 1, TILE, 'b'); e.set_cell(C, 2, TILE, 'e'); e.set_cell(C, 3, TILE, 'd')
+        e.set_cell(C, 5, TILE, 'e'); e.set_cell(C, 6, TILE, 'e'); e.set_cell(C, 7, TILE, 'e')
+        e.set_heat(0); e.set_burn(0, 99); e.set_turn(0)
+        g = e.state()
+        e.chain([(C, 1), (C, 2), (C, 3)])
+        g = e.state(); preview = g['chainScore']
+        before = g['score']
+        e.press('A'); g = e.state()
+        assert g['lastWord'] == 'bed', f'{g["lastWord"]!r}'
+        gained = g['score'] - before
+        want = e.word_score('bed', repeat=(k > 0), combo=k)
+        assert gained == want == preview, f'word {k + 1}: gained {gained} preview {preview} want {want}'
+        scores.append(gained); assert g['combo'] == k + 1, f'combo {g["combo"]}'
+        if k == 2: assert g['callout'] == 'COMBO X3!', f'callout {g["callout"]!r}'
+        e.run(10)
+    def lit_in_row():
+        px = e.pixels(); X0 = 4 if e.bx else 176
+        return sum(1 for y in range(192 + 84, 192 + 92) for x in range(X0, X0 + 76) if sum(px[x, y]) > 120)
+    e.set_features(shuffles=1, hints=2, combo=0); e.run(3)
+    quiet = lit_in_row()
+    e.set_features(shuffles=1, hints=2, combo=6)
+    e.run(3); e.shot(f'{out}/rules_combo_panel.png')
+    g = e.state(); assert g['combo'] == 6
+    marked = lit_in_row()
+    assert quiet < 5 and marked > 25, f'the COMBO X6 marker is not on the panel (lit pixels {quiet} -> {marked})'
+    peel_c, peel_r = next((c, r) for c in range(COLS) for r in range(ROWS) if e.state()['cell'][c][r][1] == TILE and not e.state()['back'][c][r])
+    e.peel(peel_c, peel_r); g = e.state()
+    assert g['combo'] == 0 and g['bestCombo'] >= 4, f'after a peel: combo {g["combo"]} best {g["bestCombo"]}'
+
+@scenario('HINT: SELECT shows a word with the ghost drag, costs one of two hints a shelf, stops at the first touch')
+def _():
+    ensure_play()
+    e.set_features(shuffles=1, hints=2)
+    e.press('SELECT', settle=4); g = e.state()
+    assert g['hints'] == 1 and g['hintReq'] == 1 and g['cue'] == 1 and g['hintLen'] >= 3, f'hints {g["hints"]} req {g["hintReq"]} cue {g["cue"]} len {g["hintLen"]}'
+    assert g['msg'] == 'HINT: 1 LEFT', f'msg {g["msg"]!r}'
+    e.run(40); e.shot(f'{out}/rules_hint.png')
+    e.tap(e.bx + 100, 100); e.run(4)           # touching the board hides it
+    g = e.state(); assert g['hintReq'] == 0 and g['cue'] == 0, f'after a touch: req {g["hintReq"]} cue {g["cue"]}'
+    e.press('Y', settle=4)
+    e.press('SELECT', settle=4); g = e.state(); assert g['hints'] == 0, f'second hint: {g["hints"]}'
+    e.run(200); g = e.state(); assert g['hintReq'] == 0 and g['cue'] == 0, 'the hint plays once and ends'
+    e.press('SELECT', settle=4); g = e.state()
+    assert g['hints'] == 0 and g['msg'] == 'NO HINTS LEFT' and g['cue'] == 0, f'no hints left: {g["hints"]} {g["msg"]!r}'
+    # a fresh shelf has two again
+    fresh_shelf(); g = e.state(); assert g['hints'] == 2 and g['shuffles'] == 1, f'fresh shelf: hints {g["hints"]} shuffles {g["shuffles"]}'
+
+@scenario('HINT: ten idle seconds offer one (once a shelf), and the offer costs nothing')
+def _():
+    ensure_play()
+    e.set_features(shuffles=1, hints=2)
+    e.run(620); g = e.state()
+    assert g['msg'] == 'STUCK? PRESS SELECT FOR A HINT', f'idle offer {g["msg"]!r}'
+    assert g['hints'] == 2, f'the offer cost a hint: {g["hints"]}'
+    e.run(200)
+    g = e.state(); assert g['state'] == ST_PLAY
+
+@scenario('twin ignition: with all eight in eight a spawn lights two columns, with none one')
+def _():
+    ensure_play()
+    for tw, want in ((8, 2), (0, 1)):
+        e.set_features(shuffles=1, hints=2, combo=0, twin=tw)
+        for c in range(COLS):
+            for r in range(ROWS):
+                if e.state()['cell'][c][r][1] == BURN: e.set_cell(c, r, TILE, 'e')
+        for c in range(COLS): e.set_cell(c, 0, HOLE)
+        e.set_cell(C, 1, TILE, 'b'); e.set_cell(C, 2, TILE, 'e'); e.set_cell(C, 3, TILE, 'd')
+        g = e.state(); e.set_heat(g['heatThreshold'] - 1); e.set_burn(0, 99)
+        e.chain([(C, 1), (C, 2), (C, 3)]); e.press('A'); g = e.state()
+        burns = e.burn_cells(g)
+        assert len(burns) == want and all(r == 1 for _, r in burns), f'twin {tw}: flames {burns} (want {want} in row 1)'
+        for c in range(COLS): e.set_cell(c, 0, TILE, 'e')
+        for c, r in burns: e.set_cell(c, r, TILE, 'e')
 
 @scenario('Qu + I + Z scores quiz')
 def _():
@@ -284,7 +396,7 @@ def _():
     e.chain([(C, 1), (C, 2), (C, 3)]); e.press('A'); g = e.state()
     assert g['lastWord'] == 'bed' and g['state'] == ST_PLAY, f'{g["lastWord"]!r} state {g["state"]} fail {g["fail"]}'
     burns = e.burn_cells(g)
-    want = 2 if g['lockTier'] >= 2 else 1
+    want = 2 if g['twinEighths'] >= 1 and g['ignitions'] == 0 else 1     # the first ignition of a shelf is a twin whenever the shelf has any twin share
     assert len(burns) == want and all(r == 1 for _, r in burns), f'flames {burns} (want {want} in row 1)'
     assert g['heat'] == 0, f'heat {g["heat"]} after the spawn'
     assert all(g['cell'][c][0][1] == HOLE for c in range(COLS)), 'a hole was overwritten'
@@ -419,7 +531,7 @@ def _():
         word, path = ws[0]
         burn = any(g['cell'][c][r][1] == BURN for c, r in path)
         diamonds = sum(g['cell'][c][r][1] == SECRET for c, r in path)
-        want = e.word_score(word, burn=burn, diamonds=diamonds, repeat=word in spelled[-8:])
+        want = e.word_score(word, burn=burn, diamonds=diamonds, repeat=word in spelled[-8:], combo=i)     # the i-th word in a row without a peel carries the combo bonus
         preview, gain, g1 = spell(path)
         assert g1['lastWord'] == word, f'{word} did not score: {g1["lastWord"]!r}'
         assert preview == gain == want, f'{word}: preview {preview} gain {gain} want {want} (burn {burn} diamonds {diamonds})'
@@ -466,7 +578,7 @@ def _():
     e.run(5)
     p2, gain2, g2 = spell([(C, 1), (C, 2), (C, 3)], settle=10)
     assert g2['msg'] == 'AGAIN', f'msg {g2["msg"]!r}'
-    assert p2 == gain2 == gain1 // 2, f'second bed: preview {p2} gain {gain2}, first {gain1}'
+    assert p2 == gain2 == e.word_score('bed', repeat=True, combo=1) and e.word_score('bed', repeat=True) == gain1 // 2, f'second bed: preview {p2} gain {gain2}, first {gain1}'      # exactly half, plus the second word's combo bonus
     assert g2['ledgerN'] == 2
     e.run(40)
 
@@ -566,7 +678,7 @@ def _():
         assert min(secret_rows(g)) >= 5 and g['passLen'] == 6, f'BURIED rows {secret_rows(g)} len {g["passLen"]}'
         assert not holes
     else:
-        assert g['burnEvery'] == 2 and g['heatThreshold'] == 5 and g['passLen'] == 5 and not holes, f'DAMP {g["burnEvery"]} {g["heatThreshold"]}'
+        assert g['burnEvery'] == 2 and g['heatThreshold'] == 6 and g['passLen'] == 5 and not holes, f'DAMP {g["burnEvery"]} {g["heatThreshold"]}'
     e.run(140); g = e.state()
     assert g['msg'] == f'TALES: FIND THE {g["passLen"]} LETTER PASS', f'queued intro {g["msg"]!r}'
     print('   shelf 4:', name, g['pass'])
@@ -598,6 +710,7 @@ def _():
     games0 = e.state()['statGames']
     for want in (2, 1, 0):
         g = e.state(); assert g['state'] == ST_PLAY and g['shelf'] == 1 and g['lives'] == want + 1
+        e.set_features(shuffles=0)
         for c in range(COLS):
             for r in range(ROWS): e.set_cell(c, r, TILE, 'x')
         g = e.state()
@@ -621,7 +734,8 @@ def date_with_mod(mod, start=20270401):
     return d
 
 def force_fail():
-    """Every gem an x and one plain peel: OUT OF WORDS, deterministically."""
+    """Every gem an x and one plain peel: OUT OF WORDS, deterministically (the shelf's re-deal is spent first)."""
+    e.set_features(shuffles=0)
     for c in range(COLS):
         for r in range(ROWS): e.set_cell(c, r, TILE, 'x')
     g = e.state()
@@ -765,9 +879,9 @@ def _():
         tap_daily()
         g = e.state()
         assert g['state'] == ST_PLAY and g['practice'] == 1 and g['dailyMod'] == mod, f'{MODS[mod]}: state {g["state"]} mod {g["dailyMod"]}'
-        if mod == 0: assert g['heatThreshold'] == 7 and g['burnEvery'] == 2, f'STANDARD: {g["heatThreshold"]}/{g["burnEvery"]}'
-        if mod == 1: assert g['heatThreshold'] == 8 and g['burnEvery'] == 1, f'EMBER: {g["heatThreshold"]}/{g["burnEvery"]}'
-        if mod == 2: assert min(secret_rows(g)) >= 5 and g['heatThreshold'] == 7, f'DEEP rows {secret_rows(g)}'
+        if mod == 0: assert g['heatThreshold'] == 6 and g['burnEvery'] == 2, f'STANDARD: {g["heatThreshold"]}/{g["burnEvery"]}'
+        if mod == 1: assert g['heatThreshold'] == 9 and g['burnEvery'] == 1, f'EMBER: {g["heatThreshold"]}/{g["burnEvery"]}'
+        if mod == 2: assert min(secret_rows(g)) >= 5 and g['heatThreshold'] == 9 and g['burnEvery'] == 1, f'DEEP rows {secret_rows(g)}'
         if mod == 3: assert 6 <= g['passLen'] <= 8, f'LONG pass {g["pass"]!r}'
         print(f'   {day} {MODS[mod]}: {g["pass"]} theme {g["passTheme"]} len {g["passLen"]}')
         e.run(40); e.shot(f'{out}/rules_daily_mod_{MODS[mod].lower()}_play.png')

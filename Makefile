@@ -4,7 +4,7 @@
 .SUFFIXES:
 
 # `make check` (native rule tests) and `make dict` run without devkitARM
-NATIVE_GOALS := check dict pools variants guide guide-check songs music-render
+NATIVE_GOALS := check dict pools variants guide guide-check songs music-render bot bot-run
 ifneq ($(MAKECMDGOALS),)
 ifeq ($(filter-out $(NATIVE_GOALS),$(MAKECMDGOALS)),)
 NATIVE := 1
@@ -72,7 +72,7 @@ ifneq (,$(findstring icon.bmp,$(icons)))
   export GAME_ICON := $(CURDIR)/icon.bmp
 endif
 
-.PHONY: $(BUILD) clean dict pools variants check guide guide-check songs music-render
+.PHONY: $(BUILD) clean dict pools variants check guide guide-check songs music-render bot bot-run
 
 # The ROM filesystem (NitroFS): the ten languages, lang/<code>/{dict,pools,letters}.bin, copied from data/lang so the
 # source of truth stays in data/ (the copy is not committed). English is compiled in and not in it.
@@ -117,8 +117,22 @@ check:
 	$(BUILD)/ui_check
 	gcc -std=gnu11 -Wall -Wextra -Wshadow -I tools/check/stub -I source $(CHECK_SRC) -o $(BUILD)/check
 	$(BUILD)/check
+	gcc -std=gnu11 -O1 -Wall -Wextra -Wshadow -I tools/check/stub -I source $(BOT_SRC) -lm -o $(BUILD)/bot_check
+	$(BUILD)/bot_check --selftest
 	python3 tools/music/build_songs.py --check || (echo 'source/songs.c is not what tools/music/songs_src.py generates: run make songs'; exit 1)
 	python3 tools/music/render.py --stats > /dev/null
+
+# The balance bot (tools/check/bot.c): plays the real rules code headlessly with a competent and a weak player model and
+# prints per-shelf tables (docs/BALANCE.md). `make bot` builds build/bot; `make bot-run` runs English and the other
+# languages in parallel into build/bot-<code>.md (about ten minutes). `make check` only runs its --selftest.
+BOT_SRC := tools/check/bot.c tools/check/stubs.c source/board.c source/dict.c source/pools.c source/lang.c source/langload.c source/music.c source/songs.c source/ui.c source/ui_strings.c
+BOT_LANGS ?= en es de fr fi
+bot:
+	@mkdir -p $(BUILD)
+	gcc -std=gnu11 -O2 -Wall -Wextra -Wshadow -I tools/check/stub -I source $(BOT_SRC) -lm -o $(BUILD)/bot
+
+bot-run: bot
+	@for l in $(BOT_LANGS); do ( $(BUILD)/bot --lang $$l $(BOT_ARGS) > $(BUILD)/bot-$$l.md ) & done; wait; cat $(addprefix $(BUILD)/bot-,$(addsuffix .md,$(BOT_LANGS)))
 
 # The written guide (docs/GUIDE.md). `make guide` retakes every picture in docs/img by driving the ROM in the headless
 # emulator (tools/emu/screens.py: needs py-desmume, Pillow and the toolchain image for the symbol lookup, not devkitARM

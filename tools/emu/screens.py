@@ -522,6 +522,7 @@ def pass_by_peeling(e, keep_turn=False):
     return g
 
 def force_fail_words(e):
+    e.set_features(shuffles=0)          # the shelf's one re-deal is spent, so a dead board ends it
     for c in range(COLS):
         for r in range(ROWS): e.set_cell(c, r, TILE, 'x')
     g = e.state()

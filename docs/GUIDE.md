@@ -129,7 +129,7 @@ That is the whole game. The rest of this guide explains every rule exactly, then
 | **PEEK button** | play | the same latch as X |
 | **START** | play | pause |
 | **II button** | play | pause |
-| **SELECT** | play | nothing (it starts the Daily on the title only) |
+| **SELECT** | play | a **hint**: the ghost drag traces a common word on the board (two a shelf, section 5.6); on the title it starts the Daily |
 | **Stylus tap on a menu row** | pause | tap a row to light it, tap the lit row to pick it |
 | **D-pad up and down** | pause | move the highlight; **A** picks it; RESTART and QUIT ask for a second pick within 90 frames |
 | **START or B** | pause | resume |
@@ -488,6 +488,19 @@ Worked, for that card: the words scored 100 (STONE: 5 × 2 × 10), 160 (GARDEN: 
 <!-- check:bonus shelf=1 turn=7 peels=4 len=4 reward=100 shelfb=1000 speed=825 peel=400 kind=2 -->
 <!-- check:bonus shelf=3 turn=8 peels=5 len=5 reward=300 shelfb=3000 speed=2400 peel=1200 kind=2 -->
 
+### 5.6 Combos and hints
+
+**Combo.** Every word you spell after another word, with no peel between them, pays **10% more** than the word before it, up to **+50%** from the sixth word of a streak. The bonus is added after everything else in section 5.1 (including the repeat penalty), rounded down, and the panel's chain value already includes it. The first word after a peel is back at the plain score. The panel shows `COMBO X3` (in the accent colour, gold once the bonus is capped) in the row where the chain value goes when no chain is held, and the third word of a streak calls out **COMBO X3!**.
+
+<!-- check:combo -->
+| Words in the streak | 1 | 2 | 3 | 4 | 5 | 6 and more |
+| --- | --- | --- | --- | --- | --- | --- |
+| Bonus | +0% | +10% | +20% | +30% | +40% | +50% |
+
+A peel breaks the streak, so combos and peeling pull in opposite directions: the shelf is won by peeling, the score is made by words. The balance bot shows peeling alone wins most shelves, so the combo is a score reward, not a way to win (it does not change a shelf's clear rate).
+
+**Hints.** Press **SELECT** in play and the ghost drag traces a common word of three to five letters on the real board (the same breathing outline and trail the guided first shelf uses). When a flame burns, the hint looks first for a word through a flame. A shelf has **two hints**; the message line says how many are left. The hint hides at the first touch of the board. Ten seconds with no input and hints in hand make the game offer one (`STUCK? PRESS SELECT FOR A HINT`), once a shelf; the offer is free.
+
 ---
 
 ## 6. Peeking, the heart of the game
@@ -679,7 +692,7 @@ The panel previews the cost of the chain you hold on the **HEAT** line (`+2 HEAT
 
 ### 8.2 The meter
 
-The meter's size depends on the shelf (section 9): **10** on shelves 1 and 2, **7** on shelves 3 to 5, **5** from shelf 6, then **4** from shelf 12. When the heat reaches the meter's size the shelf **ignites a gem** and the heat goes back to **0**: any extra is lost, and **heat never cools down by itself**. If no gem is left to light, the meter stays one short instead.
+The meter's size depends on the shelf (section 9) and shrinks in small steps: **10** on shelves 1 and 2, then 9, 8, 7, 7, 6, 6, 5, 5, 5, and **4** from shelf 12. When the heat reaches the meter's size the shelf **ignites a gem** and the heat goes back to **0**: any extra is lost (except in overtime, section 8.6), and **heat never cools down by itself**. If no gem is left to light, the meter stays one short instead.
 
 ### 8.3 The FIRE setting
 
@@ -689,9 +702,9 @@ The FIRE option moves two numbers for Classic shelves: how often the fire moves 
 | Shelf | RELAXED | NORMAL | FAST |
 | --- | --- | --- | --- |
 | 1 | 13 / 3 | 10 / 2 | 8 / 1 |
-| 3 | 10 / 3 | 7 / 2 | 5 / 1 |
+| 3 | 12 / 3 | 9 / 2 | 7 / 1 |
 | 5 | 10 / 2 | 7 / 1 | 5 / 1 |
-| 6 | 8 / 2 | 5 / 1 | 4 / 1 |
+| 6 | 10 / 2 | 7 / 1 | 5 / 1 |
 | 9 | 8 / 2 | 5 / 1 | 4 / 1 |
 | 12 | 7 / 2 | 4 / 1 | 4 / 1 |
 | 15 | 7 / 2 | 4 / 1 | 4 / 1 |
@@ -700,7 +713,7 @@ RELAXED adds one turn to the fire clock and **3** to the meter; FAST makes the f
 
 ### 8.4 How a flame is born
 
-When the heat reaches the meter, the game picks a **random column**, then lights the **topmost plain gem** of that column (holes, diamonds and empty cells above it are skipped). A column with no plain gem is skipped and the next one is tried. From **Lockdown tier 2** (shelf 12) every ignition lights **two different columns**. The new flame appears **after** that turn's fire step, so it always sits for at least one full step before it moves.
+When the heat reaches the meter, the game picks a **random column**, then lights the **topmost plain gem** of that column (holes, diamonds and empty cells above it are skipped). A column with no plain gem is skipped and the next one is tried. **Columns with no flame in them are lit first**: a second flame joins a column that already burns only when every column does, so flames do not stack up in one column (a stack parked on a diamond used to be able to sit on top of an unfound pass letter for good). **Twin ignitions:** from **shelf 11** some ignitions light **two different columns**: of every eight ignitions on a shelf, the first 1 are twins on shelves 11 and 12, the first 2 on shelves 13 and 14, and so on, one more every two shelves, until every ignition is a twin from shelf 25 (the ladder in section 9.4 has the column). The ignitions are counted per shelf, from the first. The new flame appears **after** that turn's fire step, so it always sits for at least one full step before it moves.
 
 ### 8.5 How a flame moves
 
@@ -724,17 +737,18 @@ So a flame that starts on the top row needs seven steps to reach row 7 and an ei
 
 Spell a word **through** the burning gem and it is cleared: the flame is gone, and the word earns **+30 per letter**. Several flames can be put out with one long word.
 
-**Overtime.** A shelf you camp on will burn. Past **turn 24** (**turn 16** in Lockdown) every turn adds heat of its own: 1 for the first 23 turns of overtime, then 2 for the next 24, then 3, 4... The table reads *turns past the limit*:
+**Overtime.** A shelf you camp on will burn. Past **turn 24** (**turn 16** in Lockdown) every turn adds heat of its own: 1 for the first 11 turns of overtime, then 2 for the next 12, then 3, 4... The table reads *turns past the limit*. **Words spelled in overtime score a tenth** (at least 1): without that a player who kept pace with the fire could farm words on a burning shelf for ever (a bot that never peeled reached 37,000 points in 100 turns on a first-rung shelf, against 2,300 for clearing one quickly). In overtime the heat over the meter's line is **kept**, and it lights as many gems as it fills the meter again (before this rule a player who kept pace put out one flame per turn and the shelf could stall for ever, neither won nor lost):
 
 <!-- check:overtime -->
 | Turns past the limit | Extra heat every turn |
 | --- | --- |
-| 1 to 23 | +1 |
-| 24 to 47 | +2 |
-| 48 to 71 | +3 |
-| 72 to 95 | +4 |
+| 1 to 11 | +1 |
+| 12 to 23 | +2 |
+| 24 to 35 | +3 |
+| 36 to 47 | +4 |
+| 48 to 59 | +5 |
 
-The limit is 24 turns in Classic (so turn 25 is the first overtime turn; turn 48 is the first to add +2) and 16 in Lockdown. The turn counter on the panel turns red and the heat label says **OVERTIME**.
+The limit is 24 turns in Classic (so turn 25 is the first overtime turn; turn 36 is the first to add +2) and 16 in Lockdown. The turn counter on the panel turns red and the heat label says **OVERTIME**.
 
 ![The panel in overtime: the label reads OVERTIME and the TURN counter is red.](img/overtime.png)
 *Past the turn limit: OVERTIME replaces HEAT and the turn counter turns red.*
@@ -748,10 +762,16 @@ The limit is 24 turns in Classic (so turn 25 is the first overtime turn; turn 48
 | `PASS DESTROYED` | you scorched a cell that hid a pass letter (section 6.7) |
 | `OUT OF WORDS` | no word of 3 to 5 letters can be spelled from the gems left |
 
-OUT OF WORDS is checked after every turn by searching the board for any accepted word of 3 to 5 letters through gems, diamonds and flames: so the LIBRARY and SPELLING options matter (COMMON is stricter).
+OUT OF WORDS is checked after every turn by searching the board for any accepted word of 3 to 5 letters through gems, diamonds and flames: so the LIBRARY and SPELLING options matter (COMMON is stricter). **The first time a shelf runs dry it is not lost: the gems are shuffled** (section 8.8). The card appears only when a shelf runs dry a second time.
 
 ![The three fail cards: LIBRARY LOST, PASS DESTROYED, OUT OF WORDS, each with the pass revealed and the retry cost.](img/fail_cards.png)
 *The fail cards. Each shows why, the pass (the letters you had found stay lit, the others are shown red), your words, best word, peels and turns, and what the retry costs: the score the shelf started with, and the bookmarks left. The last card is a run over: no bookmark remained.*
+
+### 8.8 The shuffle
+
+A shelf that has no word of 3 to 5 letters left (the OUT OF WORDS test of section 8.7) is **re-dealt once** instead of lost: every plain gem and every flame gets a new letter from the bag (diamonds, holes and the flames' places stay as they were), up to ten tries until a word exists, and the top screen says `NO WORDS: GEMS SHUFFLED, +3 HEAT` with a **SHUFFLE!** callout. The re-deal costs **3 heat**, like a three-letter word, and can light a flame. There is one re-deal per shelf (`SHUFFLES_PER_SHELF`); a second dead board loses the shelf, and a board that cannot be re-dealt into a word still does.
+
+Why: the bot (`docs/BALANCE.md`) played 7,200 shelves per language and never met a dead board, so the rule is a safety net, not a mechanic: a player can no longer lose a long run to a freak deal.
 
 ---
 
@@ -775,8 +795,8 @@ Classic shelves **4, 7, 10, 13 ...** (every third shelf from the fourth) carry o
 <!-- check:twists -->
 | Shelf | INK SPILL | DAMP | BURIED |
 | --- | --- | --- | --- |
-| 4 | 7 / 1 / 5 | 5 / 2 / 5 | 7 / 1 / 6 |
-| 7 | 5 / 1 / 6 | 3 / 2 / 6 | 5 / 1 / 7 |
+| 4 | 8 / 1 / 5 | 6 / 2 / 5 | 8 / 1 / 6 |
+| 7 | 6 / 1 / 6 | 4 / 2 / 6 | 6 / 1 / 7 |
 | 10 | 5 / 1 / 7 | 3 / 2 / 7 | 5 / 1 / 8 |
 | 13 | 4 / 1 / 8 | 3 / 2 / 8 | 4 / 1 / 9 |
 | 16 | 4 / 1 / 8 | 3 / 2 / 8 | 4 / 1 / 9 |
@@ -804,10 +824,10 @@ Lockdown climbs in **tiers**, every three shelves: the panel reads LOCKDOWN, LOC
 
 | Tier | Shelves | Pulse every | Meter | Notes |
 | --- | --- | --- | --- | --- |
-| I | 6 to 8 | 6 turns | 5 | |
-| II | 9 to 11 | 5 turns | 5 | |
-| III | 12 to 14 | 4 turns | 4 | every ignition lights **two** columns |
-| IV | 15 and up | 3 turns | 4 | every ignition lights two columns |
+| I | 6 to 8 | 6 turns | 7, 6, 6 | |
+| II | 9 to 11 | 5 turns | 5 | twin ignitions begin at shelf 11 (1 of 8) |
+| III | 12 to 14 | 4 turns | 4 | 1 to 2 ignitions in eight light **two** columns |
+| IV | 15 and up | 3 turns | 4 | 3 of eight at 15, one more every two shelves, all of them from shelf 25 |
 
 ![A Lockdown shelf: LOCKDOWN in red under the logo, a minor-key music cue, a flame about to step.](img/lockdown_shelf.png)
 *Shelf 6, LOCKDOWN. The mode label is red, the six-letter pass is buried in the lower rows, a flame stands on the top row and the pips say NEXT: the fire moves every turn.*
@@ -815,29 +835,39 @@ Lockdown climbs in **tiers**, every three shelves: the panel reads LOCKDOWN, LOC
 ### 9.4 The difficulty ladder
 
 <!-- check:ladder -->
-| Shelf | Meter | Fire every | Lockdown | Pulse | First pass row | Pass length |
-| --- | --- | --- | --- | --- | --- | --- |
-| 1 | 10 | 2 | no | - | 1 | 4 |
-| 2 | 10 | 2 | no | - | 1 | 4 |
-| 3 | 7 | 2 | no | - | 3 | 5 |
-| 4 | 7 | 1 | no | - | 3 | 5 |
-| 5 | 7 | 1 | no | - | 3 | 5 |
-| 6 | 5 | 1 | yes | 6 | 4 | 6 |
-| 7 | 5 | 1 | yes | 6 | 4 | 6 |
-| 8 | 5 | 1 | yes | 6 | 4 | 6 |
-| 9 | 5 | 1 | yes | 5 | 4 | 7 |
-| 10 | 5 | 1 | yes | 5 | 4 | 7 |
-| 11 | 5 | 1 | yes | 5 | 4 | 7 |
-| 12 | 4 | 1 | yes | 4 | 5 | 7 |
-| 13 | 4 | 1 | yes | 4 | 5 | 8 |
-| 14 | 4 | 1 | yes | 4 | 5 | 8 |
-| 15 | 4 | 1 | yes | 3 | 5 | 8 |
-| 16 | 4 | 1 | yes | 3 | 5 | 8 |
-| 17 and up | 4 | 1 | yes | 3 | 5 | 8 |
+| Shelf | Meter | Fire every | Lockdown | Pulse | First pass row | Pass length | Twin ignitions |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 10 | 2 | no | - | 1 | 4 | 0 of 8 |
+| 2 | 10 | 2 | no | - | 1 | 4 | 0 of 8 |
+| 3 | 9 | 2 | no | - | 3 | 5 | 0 of 8 |
+| 4 | 8 | 1 | no | - | 3 | 5 | 0 of 8 |
+| 5 | 7 | 1 | no | - | 3 | 5 | 0 of 8 |
+| 6 | 7 | 1 | yes | 6 | 4 | 6 | 0 of 8 |
+| 7 | 6 | 1 | yes | 6 | 4 | 6 | 0 of 8 |
+| 8 | 6 | 1 | yes | 6 | 4 | 6 | 0 of 8 |
+| 9 | 5 | 1 | yes | 5 | 4 | 7 | 0 of 8 |
+| 10 | 5 | 1 | yes | 5 | 4 | 7 | 0 of 8 |
+| 11 | 5 | 1 | yes | 5 | 4 | 7 | 1 of 8 |
+| 12 | 4 | 1 | yes | 4 | 5 | 7 | 1 of 8 |
+| 13 | 4 | 1 | yes | 4 | 5 | 8 | 2 of 8 |
+| 14 | 4 | 1 | yes | 4 | 5 | 8 | 2 of 8 |
+| 15 | 4 | 1 | yes | 3 | 5 | 8 | 3 of 8 |
+| 16 | 4 | 1 | yes | 3 | 5 | 8 | 3 of 8 |
+| 17 | 4 | 1 | yes | 3 | 5 | 8 | 4 of 8 |
+| 18 | 4 | 1 | yes | 3 | 5 | 8 | 4 of 8 |
+| 19 | 4 | 1 | yes | 3 | 5 | 8 | 5 of 8 |
+| 20 | 4 | 1 | yes | 3 | 5 | 8 | 5 of 8 |
+| 21 | 4 | 1 | yes | 3 | 5 | 8 | 6 of 8 |
+| 22 | 4 | 1 | yes | 3 | 5 | 8 | 6 of 8 |
+| 23 | 4 | 1 | yes | 3 | 5 | 8 | 7 of 8 |
+| 24 | 4 | 1 | yes | 3 | 5 | 8 | 7 of 8 |
+| 25 and up | 4 | 1 | yes | 3 | 5 | 8 | 8 of 8 |
 
 The ladder is for FIRE NORMAL with no twist. *First pass row* is the shallowest row that can hold a pass letter (the top row is row 0): on shelf 1 and 2 the pass can be anywhere but the top row, on shelves 3 to 5 only rows 3 to 7, in Lockdown rows 4 to 7 and from shelf 12 only the bottom three rows 5 to 7. **The top row never holds a pass letter on any shelf.**
 
-Pass depth is the other clock: the lower the pass, the more of the board you must peel through, and the longer a flame has to find your peels.
+Pass depth is not a clock: measured with the bot (`docs/BALANCE.md`) a deeper pass is a little *easier* to find, because the pass is one connected cluster and a smaller area is a smaller search. What climbs the ladder is the meter, the pulse, the pass length and the twin ignitions; the pass depth only decides how many flames pass over the cells you are peeling.
+
+**Twin ignitions** are the main thing that rises after shelf 10: the last column of the table is how many of every eight ignitions on the shelf light two columns.
 
 ---
 
@@ -864,12 +894,12 @@ A Daily is **one shelf, shelf 1**: a pass clears it and a tap on the card goes b
 <!-- check:daily-mods -->
 | Modifier | Meter | Fire every | First pass row | Pass length |
 | --- | --- | --- | --- | --- |
-| **STANDARD** | 7 | 2 | 3 | 5 or 6 |
-| **EMBER** | 8 | 1 | 3 | 5 or 6 |
-| **DEEP** | 7 | 2 | 5 | 5 or 6 |
-| **LONG** | 7 | 2 | 3 | 7 (or the nearest the theme has) |
+| **STANDARD** | 6 | 2 | 3 | 5 or 6 |
+| **EMBER** | 9 | 1 | 3 | 5 or 6 |
+| **DEEP** | 9 | 1 | 5 | 5 or 6 |
+| **LONG** | 8 | 2 | 3 | 7 (or the nearest the theme has) |
 
-STANDARD is the plain shelf. **EMBER**: the fire moves every turn (the meter is 8). **DEEP**: the pass is buried in the bottom three rows. **LONG**: a seven-letter pass.
+STANDARD is the plain shelf (a meter of 6, the fire every other turn). **EMBER**: the fire moves every turn (the meter is 9). **DEEP**: the pass is buried in the bottom three rows, the meter is 9 and the fire moves every turn. **LONG**: a seven-letter pass, and a meter of 8. The four were balanced against each other with the bot in `docs/BALANCE.md`: a weak player clears them 64 to 71% of the time in English and 53 to 56% in German (before the balancing DEEP was 78% against EMBER's 60%, because a pass buried in three rows is a smaller area to search, so DEEP, meant to be the harder shelf, was the easiest).
 
 ### 10.4 The streak
 
@@ -1011,14 +1041,14 @@ A diamond is a free multiplier: any word through it earns half again, and it nev
 
 ### 12.7 Lockdown
 
-The meter is 5 or 4 and a peel is 2 heat: two peels can light a gem. Long words through flames are the best move in the game: they put the flame out and add no heat. Keep gems that spell long words together. On tier III and IV each ignition lights two columns, so two flames at once is normal: kill the lower one first.
+The meter is 5 or 4 and a peel is 2 heat: two peels can light a gem. Long words through flames are the best move in the game: they put the flame out and add no heat. Keep gems that spell long words together. From shelf 11 some ignitions light two columns (more of them every two shelves), so two flames at once is normal: kill the lower one first.
 
 ### 12.8 The Daily modifiers
 
-* **STANDARD:** meter 7, the fire moves every second turn, a five- or six-letter pass in rows 3 to 7.
-* **EMBER:** the fire moves every turn: a flame on row 0 reaches the floor in eight turns. Clear flames early.
-* **DEEP:** the pass is in rows 5 to 7. Peel low from the start; the top five rows are free.
-* **LONG:** a seven-letter pass means seven peels at least: keep the heat low and do not waste a peel.
+* **STANDARD:** meter 6, the fire moves every second turn, a five- or six-letter pass in rows 3 to 7.
+* **EMBER:** meter 9 but the fire moves every turn: a flame on row 0 reaches the floor in eight turns. Clear flames early.
+* **DEEP:** the pass is in rows 5 to 7, the meter is 9 and the fire moves every turn. Peel low from the start; the top five rows are free.
+* **LONG:** a seven-letter pass means seven peels at least, on a meter of 8: keep the heat low and do not waste a peel.
 
 ### 12.9 Ten common mistakes
 
@@ -1268,7 +1298,16 @@ The dictionary holds **183,419** words of 3 to 20 letters, **159,922** of them i
 | `OVERTIME_TURNS` | 24 | turns before overtime heat, Classic |
 | `OVERTIME_TURNS_LOCKDOWN` | 16 | the same in Lockdown |
 | `LOCKDOWN_FROM_SHELF` | 6 | the first Lockdown shelf |
-| `LOCKDOWN_TWIN_FIRE_TIER` | 2 | from this Lockdown tier every ignition lights two columns |
+| `TWIN_FIRE_FROM_SHELF` | 11 | from this shelf some ignitions light two columns |
+| `TWIN_FIRE_STEP` | 2 | one more ignition in eight is a twin every this many shelves |
+| `OVERTIME_SCORE_DIV` | 10 | a word spelled in overtime scores this many times less |
+| `OVERTIME_HEAT_STEP` | 12 | overtime heat is 1, plus 1 more every this many turns past the limit |
+| `SHUFFLES_PER_SHELF` | 1 | re-deals of a board with no word left, per shelf |
+| `SHUFFLE_HEAT` | 3 | heat a re-deal costs |
+| `COMBO_PCT_PER_WORD` | 10 | each word of a streak without a peel scores this much more percent than the one before |
+| `COMBO_CAP_PCT` | 50 | the streak bonus stops here |
+| `HINTS_PER_SHELF` | 2 | hints (SELECT) a shelf has |
+| `HINT_IDLE_FRAMES` | 600 | idle frames before the game offers a hint |
 | `INK_SPILL_HOLES` | 3 | holes an INK SPILL opens with |
 | `TWIST_DAMP_SLOWER` | 1 | DAMP: the fire creeps this many turns slower |
 | `TWIST_DAMP_METER` | 2 | DAMP: the meter is this much shorter |

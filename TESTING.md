@@ -111,6 +111,20 @@ completion) for exact score assertions.
 - `debugSync()` in `source/debug.c` must be kept in sync if you add state the tests need.
 - Commit after each verified change with a descriptive message.
 
+## Balance bot
+
+`tools/check/bot.c` plays the real rules code (board.c, the dictionaries, the pools) headlessly with a competent and a weak
+player model. `make bot` builds `build/bot`; `make bot-run` runs English and four other languages in parallel (a minute or
+two); `build/bot --lang de --n 300` runs one. `python3 tools/check/balance_md.py DIR` lays the output out as the tables of
+`docs/BALANCE.md`. `make check` builds it too and runs `--selftest` (a few seconds: it plays a dozen shelves and checks the
+bot is deterministic). A rule change that moves a number the guide quotes needs `python3 tools/check_guide.py --tables`, the
+tables pasted under their markers, and a bot run before and after.
+
+New rule tests: the twin share (`twinEighths`), fair ignition, overtime heat carry-over, the shuffle, the combo and the hint
+are in `tools/check/board_test.c`; the emulator scenarios `SHUFFLE`, `COMBO`, `HINT` (two) and `twin ignition` in
+`tools/emu/test_rules.py` drive them through `Emu.set_features(shuffles, hints, combo, twin)` (poke 16). A test that wants a
+dead board (every gem an `x`) must spend the shelf's re-deal first with `e.set_features(shuffles=0)`.
+
 ## Long words and spelling
 
 `make check` covers words of 11 to 20 letters, a 20-gem chain that spells a 20-letter word, and the SPELLING setting (BOTH, AMERICAN, BRITISH, the shared and -ize/-ise words, `boardWordSpelling`). The emulator suite cycles the SPELLING row on the options screen and uses `POKE_SPELL`. The check binary loads `data/variants.bin` as its fourth argument, after dict, pools and variants default to `data/`.

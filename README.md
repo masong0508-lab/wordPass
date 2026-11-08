@@ -50,8 +50,18 @@ against the source and the data files by `tools/check_guide.py`, and every pictu
   turn on early shelves). Put it out by spelling a word through it. A flame
   hangs where it is when the gems under it are cleared. Holes are chimneys:
   fire falls straight through them. Diamonds are firebreaks.
+- **Combo.** Words in a row without a peel each score 10% more than the one
+  before, up to +50% from the sixth. A peel breaks the streak. The panel shows
+  COMBO Xn and the third word of a streak calls it out.
+- **Hint.** SELECT shows a common word on the board with the ghost drag, twice a
+  shelf (through a flame, if one burns). Ten idle seconds offer one for free.
+- **Shuffle.** A board with no word left is re-dealt once a shelf (+3 heat)
+  instead of ending the shelf.
 - **Overtime.** Past turn 24 on a shelf (16 in Lockdown) every turn adds heat
-  of its own, so a shelf you camp on eventually burns.
+  of its own (1, then 2 after twelve turns, then 3 ...), and in overtime the
+  heat over the meter is kept and lights more gems, so a shelf you camp on
+  burns instead of stalling. Words spelled in overtime score a tenth, so a burning shelf
+  cannot be farmed for points.
 - **Scorching.** Peel a burning gem, or the gem directly under one, and the
   flame hits the back layer. If a pass letter was hiding there, it is gone.
 
@@ -82,7 +92,7 @@ numbers.
 | --- | --- |
 | LIBRARY LOST | a flame was still on the bottom row when the fire advanced |
 | PASS DESTROYED | you scorched a cell that held a pass letter |
-| OUT OF WORDS | no 3- to 5-letter word is left on the board |
+| OUT OF WORDS | no 3- to 5-letter word is left on the board, a second time on the shelf (the first time the gems are shuffled) |
 
 ### Modes
 
@@ -101,9 +111,11 @@ numbers.
   (not the score, the streak, or the lifetime stats). The title button reads
   PRACTICE with your score. The pause menu has no RESTART row in Daily.
 - **Modifier of the day.** The date picks one, and the title button names it:
-  STANDARD (as before), EMBER (the meter holds 8 and the fire moves every
-  turn), DEEP (the pass is buried in the bottom three rows) or LONG (a
-  seven-letter pass, or the nearest length the theme has). Everyone still gets
+  STANDARD (a meter of 6, the fire every other turn), EMBER (the meter holds 9
+  and the fire moves every turn), DEEP (the pass is buried in the bottom three
+  rows, the meter holds 9 and the fire moves every turn) or LONG (a
+  seven-letter pass, or the nearest length the theme has, and a meter of 8).
+  The four are balanced against each other (docs/BALANCE.md). Everyone still gets
   the same board.
 - **Streak.** A scored Daily on the day after your last one adds to your
   streak; a missed day starts it over. The title shows STREAK n from 2 days.
@@ -230,14 +242,18 @@ stream from the sparks and shakes, so two players on the same date see the
 same board, the same refills and the same fire.
 
 Shelves 1-2 are the gentlest **Classic** ones: the heat meter holds 10, fire
-moves every other turn and the pass can sit anywhere but the top row. Shelf 3
-keeps the slow fire but cuts the meter to 7 (it stays 7 through shelf 5, where
-the fire moves every turn). From shelf 6 on it
-is **Lockdown**: fire every turn, a heat pulse every six turns, the pass
+moves every other turn and the pass can sit anywhere but the top row. The meter
+then shrinks a little every shelf or two (9, 8, 7, 7, 6, 6, 5, 5, 5) to 4 from
+shelf 12; the fire moves every turn from shelf 4. From shelf 6 on it
+is **Lockdown**: a heat pulse every six turns, a peel adds 2 heat, the pass
 buried low, and the music turns to one of the dark songs. Lockdown climbs in tiers
 every three shelves (the panel reads LOCKDOWN, LOCKDOWN II, III, IV): the
-pulse comes faster, the meter shrinks, and from LOCKDOWN III (shelf 12) every
-ignition lights two columns at once.
+pulse comes faster. From shelf 11 **twin ignitions** begin: one ignition in
+eight lights two columns at once, one more in eight every two shelves, every
+ignition from shelf 25. New flames go to a column that has no flame, so flames
+do not stack up on a diamond. The ladder was tuned with the balance bot (see
+`docs/BALANCE.md`) so a competent player's clear rate falls steadily with the
+shelf instead of in cliffs.
 
 From shelf 4, every third shelf (4, 7, 10 ...) has a **twist**, announced as
 you arrive and never the same one twice running:
@@ -267,6 +283,7 @@ three. Daily Pass has no bookmarks: one attempt.
 | CLEAR button / Y | clear chain |
 | D-pad | move the hex cursor (see below) |
 | Hold L or R | peek mode (touch a gem to arm it, lift to peel it; slide away to cancel) |
+| SELECT | a hint: the ghost drag traces a word on the board (two a shelf) |
 | X / PEEK button | latch peek on for one peel (press again to cancel); with the cursor shown, A then peels the gem under it |
 | START / the II button on the panel | pause menu: RESUME, RESTART SHELF (costs a bookmark), HOW TO PLAY and QUIT TO TITLE. Up and down move the highlight, A or a tap on the lit row picks it (a tap on another row lights it first); RESTART and QUIT ask for a second pick within 90 frames. START or B resumes |
 | LEFT / RIGHT or L / R (title) | flip the tip cards on the top screen |

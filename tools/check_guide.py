@@ -75,6 +75,7 @@ int main(int argc, char **argv)
     printf("\"heat\": ["); for (int n = 1; n <= 20; n++) printf("%s%d", n > 1 ? "," : "", boardHeatFor(n)); printf("],\n");
     printf("\"values\": ["); for (int l = 0; l < 26; l++) printf("%s%d", l ? "," : "", letterValue(l)); printf("],\n");
     printf("\"peelheat\": [%d,%d],\n", boardPeelHeat(false), boardPeelHeat(true));
+    printf("\"combo\": ["); for (int n = 0; n <= 7; n++) printf("%s%d", n ? "," : "", boardComboPct(n)); printf("],\n");
     printf("\"overtime\": [%d,%d],\n", boardOvertimeTurns(false), boardOvertimeTurns(true));
     // heat a turn adds on top of the move's own, by turn number: overtime alone (no pulse), and a Lockdown pulse alone
     for (int lock = 0; lock < 2; lock++) {
@@ -93,8 +94,8 @@ int main(int argc, char **argv)
     printf("\"ladder\": [\n");
     for (int shelf = 1; shelf <= 30; shelf++) {
         ShelfRules rules; boardShelfRules(shelf, &rules);
-        printf("  {\"shelf\": %d, \"lockdown\": %d, \"tier\": %d, \"rule_threshold\": %d, \"rule_every\": %d, \"rule_pulse\": %d, \"minrow\": %d, \"passlen\": %d, \"twistshelf\": %d, \"theme\": %d",
-               shelf, rules.lockdown, rules.tier, rules.threshold, rules.burnEvery, rules.pulseEvery, rules.minRow, boardPassLenFor(shelf), boardTwistShelf(shelf), (shelf - 1) % poolThemeCount());
+        printf("  {\"shelf\": %d, \"lockdown\": %d, \"tier\": %d, \"rule_threshold\": %d, \"rule_every\": %d, \"rule_pulse\": %d, \"minrow\": %d, \"passlen\": %d, \"twistshelf\": %d, \"theme\": %d, \"rule_twin\": %d",
+               shelf, rules.lockdown, rules.tier, rules.threshold, rules.burnEvery, rules.pulseEvery, rules.minRow, boardPassLenFor(shelf), boardTwistShelf(shelf), (shelf - 1) % poolThemeCount(), rules.twinEighths);
         for (int fire = 0; fire < 3; fire++) {
             S.fire = fire;
             int thr = -1, every = -1, len = -1;
@@ -374,6 +375,17 @@ def main():
         if F['overtime'] != [D['OVERTIME_TURNS'], D['OVERTIME_TURNS_LOCKDOWN']]: fail('overtime limits differ from game.h')
         if F['pulse'] != 2: fail(f'the Lockdown pulse is {F["pulse"]}, the guide says 2')
         if F['peelheat'] != [1, 2]: fail(f'peel heat {F["peelheat"]}, the guide says 1 and 2')
+    t = need('combo')             # | Words in the streak | 1 | 2 | ... | 6 and more |   the bonus of the Nth word is boardComboPct(N - 1)
+    if t:
+        head = t[0] if t else []
+        bonus = None
+        for r in t:
+            if r[0].lower().startswith('bonus'): bonus = r
+        if not bonus: fail('combo table needs a Bonus row')
+        else:
+            for i in range(1, 7):
+                if num(bonus[i].replace('%', '')) != F['combo'][i - 1]: fail(f'combo bonus of word {i}: guide {bonus[i]}, game {F["combo"][i - 1]}')
+            if F['combo'][5] != F['combo'][7] or F['combo'][5] != D['COMBO_CAP_PCT']: fail('the combo bonus is not capped at COMBO_CAP_PCT from the sixth word')
     t = need('bonuses')           # | Bonus | Per shelf number |
     if t:
         b = F['bonus']
@@ -388,16 +400,16 @@ def main():
 
     # ---- the ladder, fire settings, twists, Daily modifiers, neighbours
     L = {x['shelf']: x for x in F['ladder']}
-    t = need('ladder')            # | Shelf | Meter | Fire every | Lockdown | Pulse | First pass row | Pass length |
+    t = need('ladder')            # | Shelf | Meter | Fire every | Lockdown | Pulse | First pass row | Pass length | Twin ignitions |
     if t:
         for r in t:
             lo, hi = rng(r[0], 30)
             for shelf in range(lo, hi + 1):
                 x = L[shelf]
-                got = [r[1], r[2], r[3].lower(), r[4], r[5], r[6]]
-                want = [str(x['rule_threshold']), str(x['rule_every']), 'yes' if x['lockdown'] else 'no', str(x['rule_pulse']) if x['lockdown'] else '-', str(x['minrow']), str(x['passlen'])]
+                got = [r[1], r[2], r[3].lower(), r[4], r[5], r[6], r[7].replace(' ', '')]
+                want = [str(x['rule_threshold']), str(x['rule_every']), 'yes' if x['lockdown'] else 'no', str(x['rule_pulse']) if x['lockdown'] else '-', str(x['minrow']), str(x['passlen']), f"{x['rule_twin']}of8"]
                 if got != want: fail(f'ladder shelf {shelf}: guide {got}, game {want}')
-        if sorted({rng(r[0], 30)[0] for r in t}) != list(range(1, 17)) + [17]: fail('the ladder table must list shelves 1 to 16 and a row for 17 and up')
+        if sorted({rng(r[0], 30)[0] for r in t}) != list(range(1, 25)) + [25]: fail('the ladder table must list shelves 1 to 24 and a row for 25 and up')
     t = need('fire-settings')     # | Shelf | RELAXED | NORMAL | FAST |   "meter / every"
     if t:
         for r in t:
@@ -677,11 +689,11 @@ def emit_tables():
     print('\n<!-- check:dict-counts -->\n| Letters | Words | Rare tier |\n| --- | --- | --- |')
     for i, L in enumerate(range(3, 21)): print(f'| {L} | {counts[i]} | {rare[i]} |')
     print(f'\ntotal {sum(counts)} rare {sum(rare)}')
-    print('\n<!-- check:ladder -->\n| Shelf | Meter | Fire every | Lockdown | Pulse | First pass row | Pass length |\n| --- | --- | --- | --- | --- | --- | --- |')
-    for x in F['ladder'][:16]:
-        print(f'| {x["shelf"]} | {x["rule_threshold"]} | {x["rule_every"]} | {"yes" if x["lockdown"] else "no"} | {x["rule_pulse"] if x["lockdown"] else "-"} | {x["minrow"]} | {x["passlen"]} |')
-    x = F['ladder'][15]
-    print(f'| 17 and up | {x["rule_threshold"]} | {x["rule_every"]} | yes | {x["rule_pulse"]} | {x["minrow"]} | {x["passlen"]} |')
+    print('\n<!-- check:ladder -->\n| Shelf | Meter | Fire every | Lockdown | Pulse | First pass row | Pass length | Twin ignitions |\n| --- | --- | --- | --- | --- | --- | --- | --- |')
+    for x in F['ladder'][:24]:
+        print(f'| {x["shelf"]} | {x["rule_threshold"]} | {x["rule_every"]} | {"yes" if x["lockdown"] else "no"} | {x["rule_pulse"] if x["lockdown"] else "-"} | {x["minrow"]} | {x["passlen"]} | {x["rule_twin"]} of 8 |')
+    x = F['ladder'][24]
+    print(f'| 25 and up | {x["rule_threshold"]} | {x["rule_every"]} | yes | {x["rule_pulse"]} | {x["minrow"]} | {x["passlen"]} | {x["rule_twin"]} of 8 |')
     print('\n<!-- check:fire-settings -->\n| Shelf | RELAXED | NORMAL | FAST |\n| --- | --- | --- | --- |')
     for s in (1, 3, 5, 6, 9, 12, 15):
         x = F['ladder'][s - 1]; print(f'| {s} | {x["f0"][0]} / {x["f0"][1]} | {x["f1"][0]} / {x["f1"][1]} | {x["f2"][0]} / {x["f2"][1]} |')
