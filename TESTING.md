@@ -132,7 +132,12 @@ tile weight at 25). The pass-letter streak (`hitStreak`, `lastStreakBonus`, `boa
 and the emulator scenario `STREAK`, which pokes it with `Emu.set_streak(n)` (poke 17; the DBG mirror gained `hitStreak`,
 `bestHitStreak` and `lastStreakBonus` at offsets 740 to 748, 752 bytes in all). `build/bot --lang en --streak --n 400` prints what
 the reward pays a competent, a score-seeking, a weak, a never-peeling and a random-peeling player (`docs/BALANCE.md`, "The
-streak reward"). Compiling the bot's sources with `-DSTREAK_PER_SHELF=0` (the command line of `make bot` plus the flag) builds it without the reward, to show it changes no clear rate.
+streak reward"). The six scenarios `combo, hint, shuffle and streak in the right-hand / left-hand layout, en / fi / pl` check the
+combo marker at x6, the combo callout, the hint (the ghost drag and `HINT: n LEFT`), the shuffle (message and callout) and the
+streak (pips, marker, callout) in both hands and in English, Finnish and Polish (the longest strings): the text rows read the
+screenshot (`lit_rect`, `lit_extent`, `lit_outside_panel`) and the strings come from `tools/lang/ui_strings.tsv` itself
+(`ui_text`), so a clipped, overlapping or mistranslated line fails; they save `rules_feat_<lang>_<hand>_*.png` and 2x crops
+(`_touch2x`, `_top2x`) for reading. Compiling the bot's sources with `-DSTREAK_PER_SHELF=0` (the command line of `make bot` plus the flag) builds it without the reward, to show it changes no clear rate.
 
 ## Long words and spelling
 

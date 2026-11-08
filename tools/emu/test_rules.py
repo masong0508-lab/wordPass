@@ -2793,5 +2793,142 @@ def _():
     assert seen is not None and seen <= 4, f'top screen chain word latency {seen} frames'
     fps = e.fps(); assert fps == 120, f'fps {fps}'
 
+# ---- combo, hint, shuffle and the pass-letter streak, in both hands and the longest languages (second balance pass) -------
+UI_ROWS = None
+def ui_text(code, row_id, *args):
+    """The string `row_id` of tools/lang/ui_strings.tsv in language `code`, with its %d slots filled (the colour codes of the guide
+    are stripped): what the ROM must show."""
+    global UI_ROWS
+    if UI_ROWS is None:
+        UI_ROWS = {}
+        for line in open(os.path.join(REPO, 'tools', 'lang', 'ui_strings.tsv'), encoding='utf-8'):
+            if line.startswith('#') or not line.strip(): continue
+            p = line.rstrip('\n').split('\t'); UI_ROWS[p[0]] = p[4:]
+    s = UI_ROWS[row_id][LANG_CODES.index(code)]
+    for a in args: s = s.replace('%d', str(a), 1)
+    return s
+
+def lit_rect(px, x0, y0, x1, y1, thr=250):
+    return sum(1 for y in range(y0, y1) for x in range(x0, x1) if sum(px[x, y]) > thr)
+
+def lit_extent(px, x0, y0, x1, y1, thr=250):
+    """(leftmost, rightmost) x of the lit pixels in the rectangle, or None."""
+    xs = [x for y in range(y0, y1) for x in range(x0, x1) if sum(px[x, y]) > thr]
+    return (min(xs), max(xs)) if xs else None
+
+def enlarged(path):
+    """Writes <path>_touch2x.png (the touch screen at 2x) and <path>_top2x.png next to a shot, for reading it."""
+    from PIL import Image
+    im = Image.open(path)
+    im.crop((0, 192, 256, 384)).resize((512, 384), Image.NEAREST).save(path.replace('.png', '_touch2x.png'))
+    im.crop((0, 0, 256, 192)).resize((512, 384), Image.NEAREST).save(path.replace('.png', '_top2x.png'))
+
+def feature_checks(left, idx):
+    """The combo marker, its callout, the hint (ghost drag and text), the shuffle (message and callout) and the streak (pips, marker,
+    callout) in one hand and one language: every one is on screen, inside its space, and collides with nothing."""
+    code = LANG_CODES[idx]; hand = 'left' if left else 'right'; tag = f'{code}_{hand}'
+    word = 'bed' if idx == 0 else LANG_WORDS[code]
+    lang_title(idx); e.start_classic(); calm(); e.set_tutor(1)
+    X0 = panel_x()
+    # 1. the combo marker at x6 (the longest it gets): in the panel's row 84, inside x X0..X0+75, nothing in the margins
+    e.set_features(shuffles=1, hints=2, combo=0); e.run(3)
+    quiet = lit_rect(e.pixels(), X0, 192 + 84, X0 + 76, 192 + 92)
+    e.set_features(shuffles=1, hints=2, combo=6); e.run(3); shot = e.shot(f'{out}/rules_feat_{tag}_combo6.png'); enlarged(shot)
+    px = e.pixels()
+    marked = lit_rect(px, X0, 192 + 84, X0 + 76, 192 + 92); ext = lit_extent(px, X0, 192 + 84, X0 + 76, 192 + 92)
+    assert quiet < 5 and marked > 25, f'{tag}: the combo marker is not in its row (lit {quiet} -> {marked})'
+    assert ext[1] <= X0 + 74, f'{tag}: the combo marker {ui_text(code, "P_COMBO", 6)!r} reaches x {ext[1]} (panel ends at {X0 + 75})'
+    assert not lit_outside_panel(px, 192 + 84, 192 + 92), f'{tag}: the combo marker spills into the margin'
+    # 2. the combo callout: the third word in a row says COMBO X3!, centred on the board, wholly inside its frame
+    e.set_features(shuffles=1, hints=2, combo=2); e.set_heat(0); e.set_turn(0)
+    spell_cells(word, c=C, r0=1)
+    path = [(C, 1 + i) for i in range(len(word))]
+    e.chain(path); e.press('A', settle=3); g = e.state()
+    want = ui_text(code, 'CO_COMBO', 3)
+    assert g['combo'] == 3 and g['callout'] == want, f'{tag}: combo {g["combo"]} callout {g["callout"]!r}, wanted {want!r}'
+    e.run(4); shot = e.shot(f'{out}/rules_feat_{tag}_combo_callout.png'); enlarged(shot); px = e.pixels()
+    tw = len(want) * 12 - 2                                       # the 2x width the callout settles at (it never exceeds 166 px)
+    assert tw <= 166 or len(want) * 6 - 1 <= 166, f'{tag}: callout {want!r} is {tw} px at 2x'
+    sc = 3 if len(want) * 18 - 3 <= 160 else (2 if tw <= 166 else 1)
+    cw = len(want) * 6 * sc - sc
+    x_lo = e.bx + 86 - cw // 2 - 4; x_hi = e.bx + 86 - cw // 2 + cw + 4
+    assert x_lo >= e.bx + 2 and x_hi <= e.bx + 170, f'{tag}: the callout plate {x_lo}..{x_hi} leaves the board strip {e.bx}..{e.bx + 172}'
+    assert lit_rect(px, max(e.bx + 4, x_lo), 192 + 84 - 10, min(e.bx + 168, x_hi), 192 + 84 + 10, thr=200) > 40, f'{tag}: the combo callout is not drawn'
+    # 3. the hint: the ghost drag over the board and HINT: n LEFT on the top screen, centred and inside the 256 px
+    e.press('Y', settle=5); e.set_heat(0); e.set_turn(0); e.set_features(shuffles=1, hints=2, combo=0)
+    e.press('SELECT', settle=4); g = e.state()
+    want = ui_text(code, 'MS_HINT', 1)
+    assert g['hints'] == 1 and g['hintReq'] == 1 and g['cue'] == 1 and g['hintLen'] >= 3 and g['msg'] == want[:31], f'{tag}: hint state {g["hints"]} {g["hintReq"]} {g["cue"]} {g["hintLen"]} msg {g["msg"]!r} wanted {want!r}'
+    e.run(36); shot = e.shot(f'{out}/rules_feat_{tag}_hint.png'); enlarged(shot); px = e.pixels()
+    ext = lit_extent(px, 0, 160, 256, 176)
+    assert ext and 6 <= ext[0] and ext[1] <= 249, f'{tag}: the hint text {want!r} runs {ext} on the top screen'
+    withg = e.pixels(); e.tap(e.bx + 100, 100); e.run(4)           # a touch ends the ghost
+    # the ghost drag moves a pointer and a ring over the board: the board with it differs from the same board after it ended
+    import numpy as np
+    from PIL import Image
+    after = np.array(Image.open(shot).convert('RGB'))[192:384, e.bx:e.bx + 173].astype(int)
+    now = np.array(e.emu.screenshot().convert('RGB'))[192:384, e.bx:e.bx + 173].astype(int)
+    diff = int((abs(after - now).sum(axis=2) > 90).sum())
+    assert diff > 60, f'{tag}: the ghost drag draws nothing over the board ({diff} px differ)'
+    e.press('Y', settle=5)
+    # 4. the shuffle: a dead board is re-dealt, the message names the heat and the callout pops
+    e.set_features(shuffles=1, hints=2, combo=0); e.set_heat(0)
+    for c in range(COLS):
+        for r in range(ROWS): e.set_cell(c, r, TILE, 'x')
+    g = e.state(); plain = [(c, r) for c in range(COLS) for r in range(ROWS) if not g['back'][c][r]]
+    e.peel(*plain[len(plain) // 2]); e.run(3); g = e.state()
+    want = ui_text(code, 'MS_SHUFFLE', 3); wantc = ui_text(code, 'CO_SHUFFLE')
+    assert g['shuffles'] == 0 and g['msg'] == want[:31] and g['callout'] == wantc, f'{tag}: shuffle msg {g["msg"]!r} callout {g["callout"]!r}, wanted {want!r} {wantc!r}'
+    shot = e.shot(f'{out}/rules_feat_{tag}_shuffle.png'); enlarged(shot); px = e.pixels()
+    ext = lit_extent(px, 0, 160, 256, 176)
+    assert ext and 4 <= ext[0] and ext[1] <= 251, f'{tag}: the shuffle message {want!r} runs {ext} on the top screen'
+    cw = len(wantc) * 12 - 2
+    assert e.bx + 86 - cw // 2 - 4 >= e.bx + 2 and e.bx + 86 + cw // 2 + 4 <= e.bx + 170, f'{tag}: the shuffle callout is wider than the board strip'
+    e.run(60)
+    # 5. the streak: two pass letters in a row pay a step, show two pips, STREAK X2 under the chain row and the callout; a hole ends it
+    g = fresh_shelf(); e.set_heat(0); e.set_burn(0, 99); e.set_turn(0); e.set_score(999999); e.run(40)
+    px = e.pixels()
+    assert lit_rect(px, X0, 192 + 37, X0 + 76, 192 + 42) == 0, f'{tag}: the pip row is not empty without a streak'
+    secrets = e.secret_cells(e.state()); shelf = g['shelf']
+    e.peel(*secrets[1]); e.set_heat(0); g = e.state(); s0 = g['score']
+    assert g['hitStreak'] == 1 and g['lastStreakBonus'] == 0, f'{tag}: first letter streak {g["hitStreak"]} bonus {g["lastStreakBonus"]}'
+    e.hold('L', True); e.tap(*e.center(*secrets[2]), hold=5, settle=1); e.hold('L', False); e.run(2); g = e.state()      # a quick peel: the callout is still big on the board
+    wantc = ui_text(code, 'CO_STREAK', 2); bonus = boardStreak(shelf, 2)
+    assert g['calloutLife'] > 8, f'{tag}: the streak callout is already fading ({g["calloutLife"]})'
+    assert g['hitStreak'] == 2 and g['lastStreakBonus'] == bonus and g['callout'] == wantc, f'{tag}: streak {g["hitStreak"]} bonus {g["lastStreakBonus"]} callout {g["callout"]!r}, wanted {bonus} {wantc!r}'
+    assert g['msg'] == ui_text(code, 'MS_STREAK', bonus, 2)[:31], f'{tag}: streak message {g["msg"]!r}'
+    shot = e.shot(f'{out}/rules_feat_{tag}_streak2.png'); enlarged(shot); px = e.pixels()
+    sc = 3 if len(wantc) * 18 - 3 <= 160 else (2 if len(wantc) * 12 - 2 <= 166 else 1); cw = len(wantc) * 6 * sc - sc
+    x_lo = e.bx + 86 - cw // 2 - 4; x_hi = e.bx + 86 - cw // 2 + cw + 4
+    assert x_lo >= e.bx + 2 and x_hi <= e.bx + 170, f'{tag}: the streak callout plate {x_lo}..{x_hi} leaves the board strip'
+    assert lit_rect(px, max(e.bx + 4, x_lo), 192 + 84 - 10, min(e.bx + 168, x_hi), 192 + 84 + 10, thr=200) > 40, f'{tag}: the streak callout is not drawn'
+    pip = lambda i: lit_rect(px, X0 + i * 8, 192 + 38, X0 + i * 8 + 6, 192 + 41, thr=300)
+    assert pip(0) >= 15 and pip(1) >= 15 and pip(2) == 0 and pip(3) == 0, f'{tag}: pips lit {[pip(i) for i in range(4)]}, wanted two of four'
+    assert lit_rect(px, X0, 192 + 37, X0 + 76, 192 + 38) == 0 and lit_rect(px, X0, 192 + 41, X0 + 76, 192 + 42) == 0, f'{tag}: the pips touch the score or the pass slots'
+    marked = lit_rect(px, X0, 192 + 84, X0 + 76, 192 + 92); ext = lit_extent(px, X0, 192 + 84, X0 + 76, 192 + 92)
+    assert marked > 25 and ext[1] <= X0 + 74, f'{tag}: the streak marker {ui_text(code, "P_STREAK", 2)!r}: lit {marked} extent {ext}'
+    assert not lit_outside_panel(px, 192 + 37, 192 + 92), f'{tag}: the streak display spills into the margin'
+    e.set_streak(4); e.run(3); shot = e.shot(f'{out}/rules_feat_{tag}_streak4.png'); enlarged(shot); px = e.pixels()
+    assert all(pip(i) >= 15 for i in range(4)), f'{tag}: four pips {[pip(i) for i in range(4)]}'
+    assert lit_extent(px, X0, 192 + 84, X0 + 76, 192 + 92)[1] <= X0 + 74, f'{tag}: STREAK X4 is too wide'
+    # a six-digit score is drawn at 2x (the tallest it gets, rows 22..36 with its shadow): the pips below it still touch nothing
+    e.set_score(654321); e.run(60); shot = e.shot(f'{out}/rules_feat_{tag}_streak4_score6.png'); px = e.pixels()
+    assert lit_rect(px, X0, 192 + 22, X0 + 76, 192 + 36) > 40, f'{tag}: the six-digit score is not drawn at 2x'
+    assert lit_rect(px, X0, 192 + 37, X0 + 76, 192 + 38) == 0 and lit_rect(px, X0, 192 + 41, X0 + 76, 192 + 42) == 0, f'{tag}: a 2x score and the pips touch'
+    assert all(pip(i) >= 15 for i in range(4)), f'{tag}: pips under a six-digit score {[pip(i) for i in range(4)]}'
+    plain = next((c, r) for c in range(COLS) for r in range(ROWS) if e.state()['cell'][c][r][1] == TILE and not e.state()['back'][c][r])
+    e.peel(*plain); e.run(3); g = e.state(); px = e.pixels()
+    assert g['hitStreak'] == 0 and g['lastStreakBonus'] == 0, f'{tag}: a hole should end the streak ({g["hitStreak"]})'
+    assert lit_rect(px, X0, 192 + 37, X0 + 76, 192 + 42) == 0, f'{tag}: the pips stayed after the streak ended'
+
+def boardStreak(shelf, n): return 100 * shelf * max(0, min(n - 1, 3))
+
+for _idx in (0, 10, 8):                      # English, Finnish and Polish: the longest strings
+    for _left in (False, True):
+        @scenario(f'combo, hint, shuffle and streak in the {"left" if _left else "right"}-hand layout, {LANG_CODES[_idx]}: marker, callouts, ghost drag and messages inside their space')
+        def _(left=_left, idx=_idx):
+            set_hand(left); feature_checks(left, idx)
+lang_title(0); set_hand(False)
+
 print('RULES OK' if not fails else f'RULES FAILED: {fails}')
 sys.exit(fails)
