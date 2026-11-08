@@ -5,6 +5,7 @@
     python3 tools/music/render.py --only chips    # one song
     python3 tools/music/render.py --midi-only     # skip the WAVs (fast)
     python3 tools/music/render.py --stats         # print each song's measured loudness and density, write nothing
+    python3 tools/music/render.py --hq --out DIR  # stereo 44.1 kHz band-limited renders (peak-normalised), not for the repo (about 5 MB a second... see below)
 
 What it models (the ROM's sequencer in source/music.c, ported frame for frame for the music voices): the hook, the
 pulse arpeggio, the bass riff, the pad and the drums (kick and snare on the noise channel, hats on the second noise
@@ -254,51 +255,130 @@ def render_frames(song_def, built, passes=4, menu=False):
 
 
 class Synth:
-    """The six voices as square (duty) and noise (15-bit LFSR) generators, summed to mono."""
+    """The six voices as square (duty) and noise (15-bit LFSR) generators, summed to mono (or, with pans, to stereo)."""
 
-    def __init__(self):
+    def __init__(self, rate=None):
+        self.rate = rate or RATE
         self.phase = [0.0] * 6
         self.lfsr = [0x7FFF] * 6
         self.nacc = [0.0] * 6
         self.nval = [1.0] * 6
         self.carry = 0.0
 
-    def frame(self, voices):
-        n = int(RATE / FPS + self.carry)
-        self.carry = RATE / FPS + self.carry - n
-        mix = [0.0] * n if np is None else np.zeros(n)
-        for i, (kind, freq, duty, level) in enumerate(voices):
-            if level <= 0:
-                self.phase[i] = (self.phase[i] + freq * n / RATE) % 1.0
-                continue
-            amp = level * GAIN
-            if kind == "s":
-                ph = self.phase[i]
-                step = freq / RATE
-                if np is not None:
-                    p = (ph + step * np.arange(n)) % 1.0
-                    mix += np.where(p < duty / 100.0, amp, -amp)
-                else:
-                    dd = duty / 100.0
-                    for k in range(n):
-                        mix[k] += amp if ph < dd else -amp
-                        ph += step
-                        if ph >= 1.0:
-                            ph -= 1.0
-                self.phase[i] = (ph + step * n) % 1.0 if np is not None else ph
+    def voice(self, i, kind, freq, duty, level, n):
+        """One voice for n samples."""
+        rate = self.rate
+        sig = [0.0] * n if np is None else np.zeros(n)
+        if level <= 0:
+            self.phase[i] = (self.phase[i] + freq * n / rate) % 1.0
+            return sig
+        amp = level * GAIN
+        if kind == "s":
+            ph = self.phase[i]
+            step = freq / rate
+            if np is not None:
+                p = (ph + step * np.arange(n)) % 1.0
+                sig = np.where(p < duty / 100.0, amp, -amp)
             else:
-                clock = min(freq, RATE * 1.0) / RATE * 2.0          # LFSR clocks per output sample
-                acc, val, lf = self.nacc[i], self.nval[i], self.lfsr[i]
+                dd = duty / 100.0
                 for k in range(n):
-                    acc += clock
-                    while acc >= 1.0:
-                        acc -= 1.0
-                        bit = (lf ^ (lf >> 1)) & 1
-                        lf = (lf >> 1) | (bit << 14)
-                        val = 1.0 if (lf & 1) else -1.0
-                    mix[k] += amp * val
-                self.nacc[i], self.nval[i], self.lfsr[i] = acc, val, lf
-        return mix
+                    sig[k] = amp if ph < dd else -amp
+                    ph += step
+                    if ph >= 1.0:
+                        ph -= 1.0
+            self.phase[i] = (ph + step * n) % 1.0 if np is not None else ph
+        else:
+            clock = min(freq, rate * 1.0) / rate * 2.0          # LFSR clocks per output sample
+            acc, val, lf = self.nacc[i], self.nval[i], self.lfsr[i]
+            for k in range(n):
+                acc += clock
+                while acc >= 1.0:
+                    acc -= 1.0
+                    bit = (lf ^ (lf >> 1)) & 1
+                    lf = (lf >> 1) | (bit << 14)
+                    val = 1.0 if (lf & 1) else -1.0
+                sig[k] = amp * val
+            self.nacc[i], self.nval[i], self.lfsr[i] = acc, val, lf
+        return sig
+
+    def frame(self, voices, pans=None):
+        n = int(self.rate / FPS + self.carry)
+        self.carry = self.rate / FPS + self.carry - n
+        mix = [0.0] * n if np is None else np.zeros(n)
+        left = right = None
+        if pans is not None:
+            left, right = np.zeros(n), np.zeros(n)
+        for i, (kind, freq, duty, level) in enumerate(voices):
+            sig = self.voice(i, kind, freq, duty, level, n)
+            if pans is None:
+                if np is not None:
+                    mix += sig
+                else:
+                    for k in range(n):
+                        mix[k] += sig[k]
+            else:
+                ang = (pans[i] / 127.0) * (3.141592653589793 / 2)     # equal power: pan 0 left, 127 right
+                left += sig * np.cos(ang)
+                right += sig * np.sin(ang)
+        return mix if pans is None else (left, right)
+
+
+# ---------------------------------------------------------------- HQ: stereo, 44.1 kHz, band-limited
+HQ_RATE = 44100
+HQ_OVER = 4                                    # the PSG is synthesised at 4x and filtered down: no aliasing
+PAN = [64, 64, 64, 72, 60, 92]                 # hook, pulse, bass, pad, drum, noise2 (source/music.c pan table)
+PULSE_PAN = (44, 84)                           # the arpeggio ping-pongs across the field, note by note
+
+
+def lowpass_fir(over, cutoff_hz, rate_hz, taps=255):
+    """Windowed-sinc low-pass (Blackman) for the decimation."""
+    fc = cutoff_hz / rate_hz
+    k = np.arange(taps) - (taps - 1) / 2
+    h = np.sinc(2 * fc * k) * 2 * fc * np.blackman(taps)
+    return h / h.sum()
+
+
+def write_wav_hq(path, built, song_def, menu, target_peak=0.89):
+    """Stereo 44.1 kHz 16-bit, peak-normalised so every song is comfortably loud (loudness between songs is
+    therefore NOT comparable here: --stats and the standard render keep the fixed gain)."""
+    if np is None:
+        raise SystemExit("the HQ render needs numpy")
+    syn = Synth(HQ_RATE * HQ_OVER)
+    L, R = [], []
+    last_hz, side = 0, 0
+    for voices, _V in render_frames(song_def, built, 8, menu):       # two full A A B A cycles
+        pans = list(PAN)
+        hz = voices[V_PULSE][1] if voices[V_PULSE][3] > 0 else 0
+        if hz and hz != last_hz:
+            side ^= 1
+        if hz:
+            last_hz = hz
+        pans[V_PULSE] = PULSE_PAN[side]
+        l, r = syn.frame(voices, pans)
+        L.append(l)
+        R.append(r)
+    L, R = np.concatenate(L), np.concatenate(R)
+    h = lowpass_fir(HQ_OVER, 18000, HQ_RATE * HQ_OVER)
+    def down(x):
+        y = np.convolve(x, h, mode="same")
+        return y[::HQ_OVER]
+    L, R = down(L), down(R)
+    # a gentle fade in and out, then a peak normalisation with 3 dB of headroom under full scale
+    fade = int(0.01 * HQ_RATE)
+    ramp = np.linspace(0, 1, fade)
+    for x in (L, R):
+        x[:fade] *= ramp
+        x[-fade:] *= ramp[::-1]
+    peak = max(np.abs(L).max(), np.abs(R).max(), 1e-9)
+    g = target_peak / peak
+    pcm = np.stack([np.clip(L * g, -1, 1), np.clip(R * g, -1, 1)], axis=1)
+    data = (pcm * 32767).astype("<i2").tobytes()
+    with wave.open(path, "wb") as w:
+        w.setnchannels(2)
+        w.setsampwidth(2)
+        w.setframerate(HQ_RATE)
+        w.writeframes(data)
+    return len(L) / HQ_RATE
 
 
 def write_wav(path, built, song_def, menu):
@@ -438,6 +518,8 @@ def main():
     only = args[args.index("--only") + 1].split(",") if "--only" in args else None
     midi_only = "--midi-only" in args
     stats_only = "--stats" in args
+    hq = "--hq" in args
+    out_dir = args[args.index("--out") + 1] if "--out" in args else OUT
     defs = songs_src.SONGS
     built = build_songs.build(defs)
     here_text = build_songs.emit(built)
@@ -445,13 +527,18 @@ def main():
     if not os.path.exists(out_c) or open(out_c, encoding="utf-8").read() != here_text:
         print("warning: source/songs.c is not what songs_src.py generates; run `make songs` (rendering the definitions)", file=sys.stderr)
     if not stats_only:
-        os.makedirs(OUT, exist_ok=True)
+        os.makedirs(out_dir, exist_ok=True)
     total = 0
     for d, b in zip(defs, built):
         if only and d["id"] not in only:
             continue
         menu = d["role"] == "menu"
-        wav = None if (midi_only or stats_only) else os.path.join(OUT, d["id"] + ".wav")
+        if hq:
+            path = os.path.join(out_dir, d["id"] + "_hq.wav")
+            secs = write_wav_hq(path, b, d, menu)
+            print("%-20s %5.1f s  stereo 44.1 kHz -> %s (%.1f MB)" % (d["name"], secs, path, os.path.getsize(path) / 1e6))
+            continue
+        wav = None if (midi_only or stats_only) else os.path.join(out_dir, d["id"] + ".wav")
         if stats_only or not midi_only:
             st = write_wav(wav, b, d, menu)
             secs = st["frames"] / FPS
@@ -461,7 +548,7 @@ def main():
             if wav:
                 total += os.path.getsize(wav)
         if not stats_only:
-            mid = os.path.join(OUT, d["id"] + ".mid")
+            mid = os.path.join(out_dir, d["id"] + ".mid")
             with open(mid, "wb") as f:
                 f.write(midi_for(d, b, menu))
     if total:
