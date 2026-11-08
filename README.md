@@ -407,33 +407,50 @@ chained word is worth under the big letters.
 ## Music
 
 No samples: the soundtrack is sequenced live on the DS PSG channels so stems
-can be mixed by game state.
+can be mixed by game state. It is **ten songs**, distilled from the songs of
+the author's other game (bore-gba): `tools/music/analyze_xm.py` read the 24
+songs of that game's jukebox, found each one's tempo, key and mode, lead motif,
+bass riff and drum groove, and grouped them into ten families; each family
+became one wordPass song built from its real material. `docs/MUSIC.md` is the
+listening guide, the credits and the evidence.
 
-- A fixed **hook** that never stops, in the form **A A B A**: the four-bar
-  tune plays twice, then a four-bar answer phrase over a different chord
-  walk (vi IV I V), then the tune again. Each shelf transposes it to a new
-  key; Lockdown shelves play it in minor, with the raised seventh on the V
-  chord (harmonic minor) so the turn home still pulls.
-- **Pulse** arpeggio always on, plucked and ping-ponging between the
-  speakers. **Bass** plays a riff of eighths (root, fifth, octave) while you
-  keep spelling and fades after three quiet bars. **Pad** sits an octave
-  under the lead and swells one chord tone per pass letter found.
-- **Drums** layer up by word length and decay back. Level 1 is a closed hat
-  on the off-beats; level 2 adds kick and snare (and a ghost kick before bars
-  two and four); level 3 runs sixteenth hats with accents, an open hat at the
-  top of every loop and a snare fill into the last beat of the fourth bar.
+- **The menu song** plays on the title, options, ledger, guide, language chooser
+  and first-boot chooser: *Morning Music Box*, a slow (90 BPM), warm C
+  mixolydian ditty built on Nursery Time's music-box tune: about five bell
+  notes a bar, a soft pulse arpeggio, a quiet pad, one very soft hat and
+  nothing else, at 70 percent of a game song's level so it sits behind the
+  screens.
+- **Classic** shelves rotate through five songs by shelf (`(shelf - 1) % 5`:
+  Sunny Chips, Patio House, Meadow House, Stage Lights, Purdie Walk).
+  **Lockdown** plays a dark song by tier (Desert Fire, Acid Alarm, Night Train,
+  tiers 0 to 3), a Classic shelf on **FIRE: FAST** borrows the dark songs, and
+  the **Daily Pass** has its own, Two Step Daily. Resetting a shelf keeps its song.
+- Every song is the form **A A B A**: a four-bar **hook** twice, a four-bar
+  answer phrase over a different chord walk, then the hook again, sixteen bars,
+  with bar 4 never a copy of bar 1. Each has its own key and mode, tempo (5 to
+  12 frames to a sixteenth step, 180 to 75 BPM), instruments (duty, vibrato,
+  envelope per voice), bass riff, chord walk and three drum levels.
+- **Pulse** arpeggio always on, plucked and ping-ponging between the speakers.
+  **Bass** plays the song's riff while you keep spelling and fades after three
+  quiet bars. **Pad** sits an octave under the lead and swells one chord tone
+  per pass letter found.
+- **Drums** layer up by word length and decay back, in the song's own groove.
+  Level 1 is a closed hat; level 2 adds kick and snare (and a ghost kick before
+  bars two and four); level 3 runs the full groove with accented hats, an open
+  hat at the top of every loop and a snare fill into the last beat of the
+  fourth bar.
 - **Alarm**: a pulsed two-tone blip that comes faster and louder the lower the
-  fire has burned (every eighth step on the top rows, every step near the
-  bottom). While a flame is on row 3 or lower the whole tune speeds up, and on
-  row 5 or lower faster still; it relaxes one bar after the shelf is fire-free.
-- **Word chimes** climb the chord with the length of the word: one note for
-  three letters, two for four, three for five or six, four for seven (the last
-  held with vibrato) and a six-note run for eight and up, which also lifts the
-  pad for a moment. A word worth 500 or more rings louder, and a word that went
-  through a flame hisses like steam.
+  fire has burned. While a flame is on row 3 or lower the whole tune speeds up by
+  one frame a step, and on row 5 or lower by two (never faster than 5 frames);
+  it relaxes one bar after the shelf is fire-free.
+- **Word chimes** climb the chord of the current song's scale with the length of
+  the word: one note for three letters, two for four, three for five or six, four
+  for seven (the last held with vibrato) and a six-note run for eight and up,
+  which also lifts the pad for a moment. A word worth 500 or more rings louder,
+  and a word that went through a flame hisses like steam.
 - **Peek** ducks everything but the chimes and the alarm to a fifth and thins
   the pulse to a slow heartbeat an octave down; each reveal plays the next note
-  of the hook, so peeling a path plays the tune.
+  of the current song's hook, so peeling a path plays the tune.
 - **Pausing** pulls the music down to a quarter (the alarm to half) and drops
   the pulse an octave; resuming brings it back with a short swell.
 - **Finishing a pass** lands a fanfare on the next beat (a rising chord run on
@@ -445,36 +462,30 @@ can be mixed by game state.
   lets the hook sigh down four notes with no alarm. All three settle into a
   quiet bed (one low pad note and a slow bass toll) that never restarts the
   tune.
-- **A new shelf** fades the old one out over a quarter second and comes in on
-  the new key with one bar of bass and pulse alone, so starting a shelf from
-  the title is an audible drop: the title plays the fuller attract mix (bass
-  and hats always in, a steady pad and the hook at 60 on a mellow pulse).
+- **A new shelf** fades the old song out over a quarter second and comes in on
+  the new one with one bar of bass and pulse alone, so starting a shelf from the
+  title is an audible change.
 - Eight voices (six pulse waves and two noise channels), each with its own
-  instrument: the hook starts on a thin 12.5% pulse and fills out to 50%
-  with a late vibrato, the pulse is plucked, the bass is round and the pad
-  swells in. The lead sits an octave lower in the high keys (E, F, G, A), so
-  the tune stays in a singable range in every key.
-- **Stereo**: hook, bass and pulse in the middle, the pad a little right, the
-  drums a little left, the chimes right, the hiss and noise effects far right,
-  and the alarm far left.
+  instrument. **Stereo**: hook, bass and pulse in the middle, the pad a little
+  right, the drums a little left, the chimes right, the hiss and noise effects
+  far right, and the alarm far left.
 - **Sound effects** run on their own small sequencer with priorities, so a
   small sound never cuts a bigger one: a rising pentatonic tap for each gem you
-  chain (it climbs with the chain length and tops out at ten gems), a short
-  step back when you drop one, a buzzing pair of notes for a refused word, a
-  rush of air for a peel that finds nothing, a falling hiss and a sliding
-  chime for a scorch, a rising flare when a flame is lit, a low crackle when
-  the fire creeps, and a soft blip on every menu move.
-
-- A fixed four-bar **hook** that never stops. Each shelf transposes it to a
-  new key; Lockdown shelves play it in minor.
-- **Pulse** arpeggio always on. **Bass** enters while you keep spelling and
-  fades after three quiet bars. **Drums** layer up by word length and decay
-  back. **Pad** swells one chord tone per pass letter found.
-- **Alarm**: a clashing tone that climbs as the fire descends.
-- **Peek** ducks everything but the pulse; each reveal plays the next note of
-  the hook, so peeling a path plays the tune.
-- Word chimes climb in pitch with the score. Finishing a pass hands the hook to a
-  bright octave-up voice for one loop. Failing cuts to the alarm sliding down.
+  chain (it climbs with the chain length and tops out at ten gems; minor
+  pentatonic in the minor songs), a short step back when you drop one, a
+  buzzing pair of notes for a refused word, a rush of air for a peel that finds
+  nothing, a falling hiss and a sliding chime for a scorch, a rising flare when
+  a flame is lit, a low crackle when the fire creeps, and a soft blip on every
+  menu move.
+- **MUSIC: OFF** mutes everything, sound effects included. Every value written
+  to the sound hardware is change-guarded (no redundant writes), and noise and
+  effect lengths are frame counted.
+- **The songs are data.** `source/songs.c` is generated (`make songs`) from the
+  analysis JSON in `tools/music/analysis/` and the readable per-song definitions
+  in `tools/music/songs_src.py` by `tools/music/build_songs.py`; `music.c` plays
+  whichever `Song` is current. `make music-render` (`tools/music/render.py`)
+  writes a WAV and a MIDI file of every song to `docs/music/`, a software model
+  of the PSG, so the music can be heard without a DS.
 
 ## Performance
 
@@ -594,6 +605,8 @@ source/lang.c    the active language's letter tables (weights, values, vowels, Q
 source/langload.c  reads a language from the ROM filesystem (NitroFS, with a fast raw card path), LOADING
 source/gfx.c     software renderer for both screens
 source/music.c   PSG sequencer and adaptive stems
+source/songs.c   the ten songs as tables (generated: make songs); source/songs.h the Song struct
+tools/music/     XM analysis, song building, the PSG model and MIDI export (docs/MUSIC.md, docs/music/)
 source/font.c    5x7 bitmap font
 source/guide.c   the eight HOW TO PLAY pages, built from the rules' own tables
 source/settings.c options, records, stats, checksummed FAT save, Daily clock and streak

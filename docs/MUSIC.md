@@ -146,3 +146,277 @@ Curated families (what the game uses; songs_src.py takes its sources from here):
 
 Every analysed song feeds exactly one family: 24 analysed, 24 assigned.
 <!-- families:end -->
+
+## 4. Listening guide
+
+Every song is rendered to `docs/music/<id>.wav` (mono, 16-bit, 22050 Hz, one full A A B A cycle, 13 MB in all) and
+exported to `docs/music/<id>.mid` (tempo, hook, pulse, bass, pad and drum tracks; open it in any MIDI player for a
+General MIDI approximation). Regenerate with `make music-render` (`python3 tools/music/render.py`; numpy makes it
+faster but is not required). The WAVs come from `render.py`, a software model of the PSG that plays the same song tables
+as the ROM: it is a model, not a recording of a DS, so judge the tunes and the balance with it, not the exact timbre.
+In the renders the game songs play as a shelf does when the player keeps spelling words (a bar of bass and pulse, then the
+hook; the drums climb a level each pass: 1, 2, 3, 3), and the menu song plays the title's mix.
+
+| Song | Where it plays | BPM | Key and mode | Listen for | Files |
+|------|----------------|-----|--------------|------------|-------|
+| MORNING MUSIC BOX | the title, options, ledger, guide, language chooser, first-boot chooser | 90 | C mixolydian | the five-note bell tune, the soft arpeggio under it, one barely-there hat | [wav](music/morning.wav) [mid](music/morning.mid) |
+| SUNNY CHIPS | Classic shelves 1, 6, 11 ... | 112 | D lydian | the octave-bouncing bass, the sparkle of the raised fourth | [wav](music/chips.wav) [mid](music/chips.mid) |
+| PATIO HOUSE | Classic shelves 2, 7, 12 ... | 129 | G major | the syncopated call, answered a step up; the off-beat snare | [wav](music/patio.wav) [mid](music/patio.mid) |
+| MEADOW HOUSE | Classic shelves 3, 8, 13 ... | 129 | A major | the rhodes line over the off-beat bass | [wav](music/meadow.wav) [mid](music/meadow.mid) |
+| STAGE LIGHTS | Classic shelves 4, 9, 14 ... | 129 | F dorian | the sung motif and its sequence over the rolling 16th bass | [wav](music/stage.wav) [mid](music/stage.mid) |
+| PURDIE WALK | Classic shelves 5, 10, 15 ... | 150 (75 feel) | C dorian | the whistle, the single snare on the third beat | [wav](music/shuffle.wav) [mid](music/shuffle.mid) |
+| TWO STEP DAILY | the Daily Pass | 129 | C minor | the skipping kick and the syncopated hook | [wav](music/twostep.wav) [mid](music/twostep.mid) |
+| DESERT FIRE | Lockdown tier 0; FIRE FAST | 150 (75 feel) | F hijaz | the augmented second in the oud line, the droning bass | [wav](music/desert.wav) [mid](music/desert.mid) |
+| ACID ALARM | Lockdown tier 1; FIRE FAST | 129 | A minor | the descending acid riff and its sequence | [wav](music/acid.wav) [mid](music/acid.mid) |
+| NIGHT TRAIN | Lockdown tiers 2 and 3; FIRE FAST | 180 | D harmonic minor | the rising four-note run, the raised seventh on the V chord | [wav](music/night.wav) [mid](music/night.mid) |
+
+The tempi are the nearest the engine can play to the sources (a sixteenth step is 5 to 12 frames at 60 fps, 180 down to
+75 BPM): the menu song 94 -> 90, the chips family 100..125 -> 112, the house songs 124..133 -> 129, the shuffle and the
+hijaz song 150 on the sixteenth grid (a 75 BPM half-time feel, snare on the third beat only), drum and bass 172..180 ->
+180. Under fire every song lifts one frame a step from flame row 3 and two from row 5, never past 180 BPM.
+
+### The songs, one by one
+
+Generated from `tools/music/songs_src.py` (`python3 tools/music/build_songs.py --docs`): the source songs that fed each
+one, its key, and hook A bar by bar as scale degrees.
+
+<!-- songs:begin -->
+### 1. MORNING MUSIC BOX
+
+- Family `morning`, plays: title, options, ledger, guide, language chooser and first-boot chooser.
+- Fed by: NURSERY TIME (the music-box motif: contour and rhythm of bar 1, C mixolydian, 94 BPM), THE MAGIC ACT (the 94 BPM mixolydian tempo and the rising/falling plucked arpeggio colour), AN ODE TO THE SPANISH FLEXICODE (soft marimba pulse, sparse hats, the bass on the one and the three).
+- C mixolydian, 90 BPM (10 frames to a 16th step), lead from C5 up, level 70%.
+- Chords A: 1 7 4 1, B: 4 6 7 1 (scale degrees).
+- Hook A, bar by bar (degrees; `.` hold, `-` rest):
+
+```
+1 . . . 3 . . . 4 . 1 . . . 5 .
+4 . . . 7 . . . 6 . 4 . . . 2 .
+6 . . . 4 . . . 6 . 8 . . . 6 .
+5 . . . 3 . . . 2 . 3 . . . 1 .
+```
+
+- Menu song. The hook is Nursery Time's music-box ditty at half speed; the pulse is a quiet arpeggio, the pad holds a chord tone, the only percussion is a very soft hat on steps 6 and 14.
+
+### 2. SUNNY CHIPS
+
+- Family `chips`, plays: Classic shelves 1, 6, 11 ....
+- Fed by: SUNMAN SUNRISE (the rising chord-tone motif 1 3 5 3 and the four-on-the-floor bed), AMIGA MUSIC (the run up and down the scale, mixolydian/lydian colour at 120 BPM), THE DIPPER MAN (the bouncing octave bass, 125 BPM), EARTH AND THE SPACE CITIZENS (the half-time snare in the quiet bars).
+- D lydian, 112 BPM (8 frames to a 16th step), lead from D4 up, level 100%.
+- Chords A: 1 2 1 5, B: 6 2 5 1 (scale degrees).
+- Hook A, bar by bar (degrees; `.` hold, `-` rest):
+
+```
+1 . 3 . 5 . 3 . 5 . 6 . 5 . 3 .
+2 . 4 . 6 . 4 . 6 . 7 . 6 . 4 .
+1 . 3 . 5 . 8 . 7 . 5 . 3 . 5 .
+5 . 7 . 9 . 7 . 5 . 4 . 2 . - .
+```
+
+- A bright tracker ditty: an arpeggio-and-answer hook in D lydian, an octave-bouncing bass.
+
+### 3. PATIO HOUSE
+
+- Family `patio`, plays: Classic shelves 2, 7, 12 ....
+- Fed by: MI CORA ZONE (the call-and-answer lead: contour and syncopated rhythm of its motif, G major, 133 BPM), THE TICKING BOMB (the claves-style snare on 4, 7, 12, 15 and the off-beat hats, 124 BPM), GOTTCHO BARRACHO (the descending answer phrase and the tumbao bass).
+- G major, 129 BPM (7 frames to a 16th step), lead from G3 up, level 100%.
+- Chords A: 1 5 6 4, B: 6 4 1 5 (scale degrees).
+- Hook A, bar by bar (degrees; `.` hold, `-` rest):
+
+```
+8 . 7 . 4 . 5 8 . 7 . 4 . 4 . .
+9 . 8 . 5 . 6 9 . 8 . 5 . 5 . .
+10 . 9 . 6 . 7 10 . 9 . 6 . 6 . .
+4 . 6 . 8 . 6 11 . 8 . 6 . 8 . .
+```
+
+- Latin house: the hook is Mi Cora Zone's syncopated phrase, answered up a step and up a third, then arpeggiated in section B.
+
+### 4. MEADOW HOUSE
+
+- Family `meadow`, plays: Classic shelves 3, 8, 13 ....
+- Fed by: TREE-AGE IN ACTION (FAST) (the piano/rhodes lead: contour and rhythm of its motif, A major, 126 BPM), EXCUSES (the four-on-the-floor kick, clap on 2 and 4 and the 124 BPM house bed), MELTDOWN IN MARS (the off-beat bass pulses and the stepwise answer).
+- A major, 129 BPM (7 frames to a 16th step), lead from A4 up, level 100%.
+- Chords A: 1 5 6 4, B: 6 4 1 5 (scale degrees).
+- Hook A, bar by bar (degrees; `.` hold, `-` rest):
+
+```
+1 . 5 . 8 . 5 . 3 . 8 . 9 . 8 .
+5 . 9 . 7 . 9 . 10 . 9 . 7 . 5 .
+6 . 8 . 10 . 8 . 6 . 10 . 11 . 10 .
+8 . 6 . 4 . 6 . 8 . 6 . 5 . 3 .
+```
+
+- Warm house: a rhodes arpeggio-melody over an off-beat bass; the lead sits in A major.
+
+### 5. STAGE LIGHTS
+
+- Family `stage`, plays: Classic shelves 4, 9, 14 ....
+- Fed by: OVER MY VOICE (the sing-song lead: contour and rhythm of its motif, hi-NRG, 128 BPM), STAGED THE FULL PERFORMANCE (the rolling 16th bass, straight kick and off-beat hats, G dorian, 130 BPM).
+- F dorian, 129 BPM (7 frames to a 16th step), lead from F4 up, level 100%.
+- Chords A: 1 4 1 7, B: 4 7 1 5 (scale degrees).
+- Hook A, bar by bar (degrees; `.` hold, `-` rest):
+
+```
+1 2 3 2 4 . . 3 . . 3 . . . . .
+4 5 6 5 7 . . 6 . . 6 . . . . .
+5 4 3 4 2 . . 3 . . 3 . . . . .
+11 . 9 . 7 . 9 . 11 . 9 . 7 . - .
+```
+
+- Hi-NRG: a sung motif and its sequence and inversion over a rolling 16th bass in F dorian.
+
+### 6. PURDIE WALK
+
+- Family `shuffle`, plays: Classic shelves 5, 10, 15 ....
+- Fed by: WHISTLER MAN (the whistled phrase and the half-time shuffle: kick on 1 and the 3-and, snare on 3, ghost snares; C dorian, 75 BPM feel, 150 on the 16th grid).
+- C dorian, 150 BPM (6 frames to a 16th step), lead from C4 up, level 100%.
+- Chords A: 1 4 7 1, B: 1 7 4 5 (scale degrees).
+- Hook A, bar by bar (degrees; `.` hold, `-` rest):
+
+```
+8 . . . . . 5 . 4 . . . 11 . . .
+6 . . . . . 4 . 3 . . . 8 . . .
+9 . . . . . 7 . 5 . . . 11 . . .
+8 . . 7 . . 5 . . . . . 3 . - .
+```
+
+- Half-time: a snare only on the third beat (75 BPM feel on a 150 BPM grid), a whistle lead.
+
+### 7. TWO STEP DAILY
+
+- Family `twostep`, plays: the Daily Pass.
+- Fed by: CONDENSED MUSIC (the skipping garage motif: contour and rhythm, C minor, 132 BPM; the 2-step kick on 1 and the 3-and and the snare on 2, the shuffled ghost, 4-and and 4-the-last).
+- C minor, 129 BPM (7 frames to a 16th step), lead from C4 up, level 100%.
+- Chords A: 1 6 3 7, B: 6 7 1 1 (scale degrees).
+- Hook A, bar by bar (degrees; `.` hold, `-` rest):
+
+```
+8 . . 8 . 7 8 9 5 . . 5 . . . .
+6 . . 6 . 5 6 7 3 . . 3 . . . .
+10 . . 10 . 9 10 11 7 . . 7 . . . .
+9 . . 9 . 7 9 11 9 . . 7 . . - .
+```
+
+- UK garage 2-step: a syncopated hook over i VI III VII.
+
+### 8. DESERT FIRE
+
+- Family `desert`, plays: Lockdown tier 0; FIRE FAST shelves 1, 4 ....
+- Fed by: AIM AND SHOOT (F hijaz, the half-time groove with a single snare on the 3, the plucked oud line), MISTER QUICKBULLET (the half-time downgroove and the droning sub bass, Ab minor, 129 BPM).
+- F hijaz, 150 BPM (6 frames to a 16th step), lead from F4 up, level 96%.
+- Chords A: 1 2 1 5, B: 4 2 1 5 (scale degrees).
+- Hook A, bar by bar (degrees; `.` hold, `-` rest):
+
+```
+5 . . 6 5 . 4 . 3 . . . 2 . 3 .
+6 . . 7 6 . 4 . 2 . . . 4 . 2 .
+8 . . 9 8 . 7 . 6 . . . 5 . 3 .
+5 . 7 . 9 . 7 . 5 . 4 . 3 . 2 .
+```
+
+- Half-time hijaz: an oud-like descent from the fifth around the augmented second.
+
+### 9. ACID ALARM
+
+- Family `acid`, plays: Lockdown tier 1; FIRE FAST shelves 2, 5 ....
+- Fed by: HOT DAMN (the descending acid riff 8 7 6 5, the breakbeat kick, 135 BPM), EMERGENCY ON THE DANCE FLOOR (the minor arpeggio chords and the 16th hat, C minor).
+- A minor, 129 BPM (7 frames to a 16th step), lead from A3 up, level 94%.
+- Chords A: 1 6 7 1, B: 1 6 7 1 (scale degrees).
+- Hook A, bar by bar (degrees; `.` hold, `-` rest):
+
+```
+8 7 6 5 . . 5 . 8 . 7 . 6 . 5 .
+10 9 8 7 . . 7 . 10 . 9 . 8 . 6 .
+11 10 9 8 . . 8 . 11 . 10 . 9 . 7 .
+10 . 8 . 7 . 5 . 8 . 7 . 5 . - .
+```
+
+- Rave: a descending acid riff in A minor and its sequence over i VI VII i.
+
+### 10. NIGHT TRAIN
+
+- Family `night`, plays: Lockdown tiers 2 and 3; FIRE FAST shelves 3, 6 ....
+- Fed by: OHIO HOE (the four-note rising run 1 2 3 5, 172 BPM), THE CYNICAL SYNDICATION (the two-step breakbeat and the rolling sub, 172 BPM), COCAINE COLA (the harmonic-minor colour and the 180 BPM drive).
+- D harmonic minor, 180 BPM (5 frames to a 16th step), lead from D4 up, level 92%.
+- Chords A: 1 6 4 5, B: 1 4 6 5 (scale degrees).
+- Hook A, bar by bar (degrees; `.` hold, `-` rest):
+
+```
+1 2 3 5 . . . . 6 . 5 . 3 . 2 .
+6 4 6 8 . . . . 10 . 8 . 6 . 4 .
+4 5 6 8 . . . . 9 . 8 . 6 . 4 .
+9 . 7 . 5 . 7 . 9 . 10 . 9 . - .
+```
+
+- Drum and bass at 180 BPM (5 frames to a step): a rising run, a V chord with the raised seventh.
+
+<!-- songs:end -->
+
+## 5. The menu song
+
+The old title played the shelf-1 tune in attract mode: C major at 112.5 BPM, the hook flat at level 60 on a 50% pulse with
+a vibrato, about seven notes a bar, the full bass riff and a hat under it, a 16th-note pulse arpeggio, a peak music sum of
+187 on the 0..127 volume scale. The user's report was that this put them off playing. The replacement, *Morning Music
+Box*, is built from the opposite end of the jukebox: Nursery Time's music-box ditty (its tune's contour and rhythm,
+stretched to half speed), the 94 BPM mixolydian colour of The Magic Act and the soft marimba pulse and sparse hats of An
+Ode to the Spanish Flexicode.
+
+| Property | Morning Music Box | The old title loop | How it is measured |
+|----------|-------------------|--------------------|--------------------|
+| Tempo | 90 BPM (10 frames a step) | 112.5 BPM | `songs.c` (the test asserts at most 100) |
+| Mode | C mixolydian (the flat seventh softens the V and the cadence; the chords are I, bVII, IV, I and IV, vi, bVII, I) | C major | table |
+| Hook notes per bar | 4.9 on average (20 in the A pass, 19 in B; no bar above 8) | 6.75 | table, asserted at most 5 on average and 8 in any bar |
+| Lead register | C5 to C6 (523 to 1047 Hz), no shrill top | C5 to D6 (A section) | table, asserted G4 to D6 |
+| Largest leap in the tune | a fifth | a major sixth | table, asserted at most a minor sixth (8 semitones; the real maximum is 7) |
+| Hook sound | a bell: onset 46, ringing at 15, no vibrato, 12.5% then 25% duty | flat 60, 50% duty, vibrato | instrument table, asserted no vibrato and a sustain under a third of the onset |
+| Pulse | a soft arpeggio, level 18 falling to 9 (12 and 6 after the song's 70% gain) | level 26 falling to 14 | asserted at most 16 |
+| Bass | one note on the one and one on the three (the root, then the fifth), 50% duty | a riff of eighths | table |
+| Pad | a held chord tone, level 20 (14 after the song's 70% gain), 50% duty | 36 | asserted at most 20 |
+| Percussion | one hat, level 6 (4 after the gain), on steps 6 and 14, no kick, no snare, at every drum level | hat plus the groove | asserted: hats only, at most 2 steps a bar, level at most 8, the drum voice silent |
+| Voices sounding at once | at most 5 (hook, pulse, bass, pad, hat) | 6 | `make check` loudness run |
+| Peak music sum | 87 (46% of the old 187) | 187 | `make check` loudness run; the renderer's own model reads 84 |
+| Level against a game song | 70% | 100% | `gain` in the table, asserted through the mirror in the ROM scenarios |
+| Form | A A B A, 16 bars, 43 seconds a cycle, B a new phrase over F, Am, Bb, C | | table |
+
+Why these numbers should sound pleasant, and how that is argued without ears: a slow tempo and a half-speed tune leave
+a rest after almost every phrase, so nothing is dense (about one hook note a beat, against two a beat in the game
+songs); a bell envelope decays to a faint ring, so there is no sustained buzz on a 50% pulse; the
+intervals never leap more than a fifth, the register stays at or below C6, and every note but three of the 39 is a tone of
+the chord under it or a stepwise neighbour (the three are a G over A minor and over B flat major, the seventh and the sixth,
+which colour a chord and do not clash with it; the notation above shows the notes); the only percussion is a hat at about a third of the old hat's level, so there
+is no beat to be nagged by; and the whole song is at 70% of a game song with the loudest sum at 46% of the old title's, so
+it sits behind the menus instead of competing with them. The pickup bar (bass and pulse alone) means the tune enters
+gently, and the cross-fade is a quarter of a second.
+
+What was **not** verified: that it sounds good. Everything above is a measurement of a table or of what the sequencer
+sends to the hardware (`make check`, the ROM scenarios and the renderer's port); no one has listened to it on a DS or in
+an emulator with sound, and the PSG's timbre (a harsher square than the model's) may change how warm it feels. The WAV
+and MIDI renders exist so the author can listen before accepting it; the numbers to adjust, if it needs to be softer
+or sparser, are in `tools/music/songs_src.py` (`gain`, `att`, the `bell` and `soft` instruments, the hook bars) and
+`make songs` rebuilds the tables.
+
+## 6. What is and is not verified
+
+- Verified by tests (`make check`, `tools/emu/test_rules.py`): every song's table is well formed, every hook, bass and drum
+  note reaches the PSG at the pitch and level the table says, the form A A B A and its loop, the tempo under fire, which song plays
+  where (title and menus, Classic shelves 1..12, Lockdown tiers, FIRE FAST, Daily), 60 fps with the music running, the
+  loudness cap against the old tune's own peak, the menu song's properties above, no hardware value written twice, MUSIC off.
+- Measured, not heard: the balance between voices (each voice's peak level and the sum), the register of every lead, the
+  density of every hook, the claim that the menu song is gentle. The guesses an ear would settle are the swing of the
+  shuffle on a 16th grid (a true shuffle needs triplets, which the 16-step bar cannot hold; PURDIE WALK keeps the
+  half-time feel and the ghost snare instead), whether the dark songs are hard enough in tier 3, and whether a short
+  hook repeated four times (A A B A) tires: bar 4 and section B vary from bar 1 by construction, which is checked, not
+  heard.
+- Not modelled in the renders: the sound effects, the chimes, the alarm, the pass fanfare and the fail stingers (they
+  are unchanged and tested in `make check`).
+- How much of each song is mechanically derived from the analysis and how much is written by hand: the first bar of the
+  hook is the source motif's contour and rhythm mapped onto the song's scale (`build_songs.py`, the `seed` recipe) for
+  MORNING MUSIC BOX (Nursery Time, at half speed), PATIO HOUSE (Mi Cora Zone), MEADOW HOUSE (Tree-age in Action (Fast)),
+  STAGE LIGHTS (Over My Voice), PURDIE WALK (Whistler Man) and TWO STEP DAILY (Condensed Music). SUNNY CHIPS, ACID ALARM,
+  NIGHT TRAIN and DESERT FIRE take their first bar from the motif lists by hand (Sunman Sunrise's 1 3 5 3, Hot Damn's
+  8 7 6 5, Ohio Hoe's 1 2 3 5, Aim and Shoot's descent from the fifth), because a mechanical map of a hijaz or pulse
+  figure loses its character. The answer bars are sequences and inversions of that bar where the song says so
+  (`seq`, `inv`) and written by hand otherwise; every B section and every bar 4 is written by hand. The bass riffs,
+  chord walks and drum grooves are the sources' (analysis JSON) thinned into the engine's one-bar, 16-step form and
+  tuned by hand; they are not transcriptions.

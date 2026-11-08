@@ -117,6 +117,8 @@ check:
 	$(BUILD)/ui_check
 	gcc -std=gnu11 -Wall -Wextra -Wshadow -I tools/check/stub -I source $(CHECK_SRC) -o $(BUILD)/check
 	$(BUILD)/check
+	python3 tools/music/build_songs.py --check || (echo 'source/songs.c is not what tools/music/songs_src.py generates: run make songs'; exit 1)
+	python3 tools/music/render.py --stats > /dev/null
 
 # The written guide (docs/GUIDE.md). `make guide` retakes every picture in docs/img by driving the ROM in the headless
 # emulator (tools/emu/screens.py: needs py-desmume, Pillow and the toolchain image for the symbol lookup, not devkitARM
