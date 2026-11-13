@@ -3227,7 +3227,7 @@ def feature_checks(left, idx):
     marked = lit_rect(px, X0, 192 + 84, X0 + 76, 192 + 92); ext = lit_extent(px, X0, 192 + 84, X0 + 76, 192 + 92)
     assert marked > 25 and ext[1] <= X0 + 74, f'{tag}: the streak marker {ui_text(code, "P_STREAK", 2)!r}: lit {marked} extent {ext}'
     assert not lit_outside_panel(px, 192 + 37, 192 + 92), f'{tag}: the streak display spills into the margin'
-    e.set_streak(4); e.run(3); shot = e.shot(f'{out}/rules_feat_{tag}_streak4.png'); enlarged(shot); px = e.pixels()
+    e.set_streak(4); e.run(14); shot = e.shot(f'{out}/rules_feat_{tag}_streak4.png'); enlarged(shot); px = e.pixels()
     assert all(pip(i) >= 15 for i in range(4)), f'{tag}: four pips {[pip(i) for i in range(4)]}'
     assert lit_extent(px, X0, 192 + 84, X0 + 76, 192 + 92)[1] <= X0 + 74, f'{tag}: STREAK X4 is too wide'
     # a six-digit score is drawn at 2x (the tallest it gets, rows 22..36 with its shadow): the pips below it still touch nothing
