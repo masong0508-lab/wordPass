@@ -189,6 +189,7 @@ def _():
     e.hold('L', False)
     assert seen, 'peel did not end the run'
     assert seen['fail'] == FAIL_SCORCH, f'fail {seen["fail"]}'
+    assert seen['peels'] >= 1 and seen['turn'] == 1, f'the fatal peel is a turn: peels {seen["peels"]} turns {seen["turn"]}'
     assert seen['msg'] == 'SCORCHED', f'msg {seen["msg"]!r} on the fail frame'
     assert seen['cell'][C][1][1] == HOLE and seen['scorched'][C][1] == 1
     e.run(40); e.shot(f'{out}/rules_scorched.png')
@@ -829,7 +830,7 @@ def _():
     assert g['state'] == ST_PLAY and g['mode'] == 1 and g['practice'] == 0 and g['dailySeed'] == day, f'daily start: {g["state"]} practice {g["practice"]}'
     assert g['dailyPlayed'] == day, f'the attempt is spent at once: dailyPlayed {g["dailyPlayed"]}'
     assert g['dailyMod'] == daily_mod(day), f'modifier {g["dailyMod"]} want {daily_mod(day)}'
-    assert g['msg'] == f'DAILY: {MODS[daily_mod(day)]}', f'start msg {g["msg"]!r}'
+    assert g['msg'] == f'ONE TRY TODAY: {MODS[daily_mod(day)]}', f'start msg {g["msg"]!r}'
     e.run(120)
     r = play_turn(shortest); assert r, 'no word to spell'
     g = e.state(); assert g['statWords'] == words0 + 1, f'scored Daily word counted: {g["statWords"]} (was {words0})'
@@ -883,9 +884,15 @@ def _():
     # two days missed
     daily_title(d4, played=d2, last=d2, streak=2); tap_daily(); force_fail(); leave_result()
     g = e.state(); assert g['streak'] == 1 and g['dailyLast'] == d4, f'missed days: streak {g["streak"]} last {g["dailyLast"]}'
-    # the clock moves back before the last scored date: the streak counts as broken
-    daily_title(d1, played=d2, last=d4, streak=5); tap_daily(); force_fail(); leave_result()
-    g = e.state(); assert g['streak'] == 1 and g['dailyLast'] == d1, f'date in the past: streak {g["streak"]} last {g["dailyLast"]}'
+    # the clock moves back before the last scored date: that date is behind the record, so it is practice and records nothing
+    daily_title(d1, played=d2, last=d4, streak=5); tap_daily()
+    g = e.state(); assert g['practice'] == 1, f'a date before the last scored one must be practice: {g["practice"]}'
+    force_fail(); leave_result()
+    g = e.state(); assert g['streak'] == 5 and g['dailyLast'] == d4, f'clock set back: streak {g["streak"]} last {g["dailyLast"]} (nothing recorded)'
+    # the clock set back and forward again does not re-open a played date
+    daily_title(d4, played=d1, last=d4, streak=5); tap_daily()
+    g = e.state(); assert g['practice'] == 1, f'the last scored date must stay played after the clock was set back: {g["practice"]}'
+    pause_do('QUIT')
     # walking away from a scored Daily forfeits it: the score so far stands and the attempt stays spent
     daily_title(d2, played=d1, last=d1, streak=1); tap_daily()
     assert e.state()['practice'] == 0

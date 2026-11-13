@@ -908,9 +908,10 @@ A Daily is **one shelf, shelf 1**: a pass clears it and a tap on the card goes b
 
 ### 10.2 One scored attempt, then practice
 
-* **The first Daily you start on a date is the scored one.** Starting it **spends the attempt**, even if you quit from the pause menu (the score so far stands).
+* **The first Daily you start on a date is the scored one.** Starting it **spends the attempt**, even if you quit from the pause menu (the score so far stands). The game says so: the start message reads `ONE TRY TODAY: <modifier>` and the QUIT row of a scored Daily reads `AGAIN: DAILY ENDS` when you arm it.
+* A date at or before the date of your last scored Daily is **always practice**, so setting the DS clock back never re-opens a Daily that was already played.
 * Every later start that day is **PRACTICE**: the same board, announced as `PRACTICE RUN: NOT SCORED`, and nothing from it is recorded: not the score, not the streak, not the lifetime statistics.
-* The title button shows the state: the date and the day's modifier before the attempt, `PRACTICE` with your score after it, `SET CLOCK` when the clock is unreadable.
+* The title button shows the state: the date and the day's modifier before the attempt, `PRACTICE` after it (with your score when the scored attempt ended today, otherwise the modifier), `SET CLOCK` when the clock is unreadable.
 * The pause menu has no RESTART row in the Daily.
 
 ![The Daily button in each state: a fresh day under each of the four modifiers, PRACTICE once the attempt is spent, a STREAK, and SET CLOCK.](img/title_daily_states.png)
@@ -930,7 +931,7 @@ STANDARD is the plain shelf (a meter of 6, the fire every other turn). **EMBER**
 
 ### 10.4 The streak
 
-* A scored Daily on the **day after your last one** adds to your streak. A missed day starts it over at 1. Two scored Dailies on the same date cannot happen (the second is practice).
+* A scored Daily on the **day after your last one** adds to your streak. A missed day starts it over at 1. Two scored Dailies on the same date cannot happen (the second is practice, and so is any earlier date).
 * The title shows `STREAK n` from **2 days**, while the streak is *alive*: your last scored Daily was today or yesterday. Once a day is missed it reads nothing, and the next scored Daily starts at 1.
 
 ### 10.5 The clock requirement

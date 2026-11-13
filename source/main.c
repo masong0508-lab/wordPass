@@ -139,7 +139,7 @@ static bool newGame(int mode)
         refreshClock();
         if (!G.clockOk) { setMsg(ui(UI_MS_CLOCK), 120); return false; }
         // one scored attempt a day: the second and later runs are practice (nothing recorded)
-        G.practice = (S.dailyPlayedDate == G.dailySeed);
+        G.practice = (G.dailySeed <= S.dailyPlayedDate || G.dailySeed <= S.dailyLastDate);   // also a clock set back: a date already behind the last scored one is never scored again
         if (!G.practice) { S.dailyPlayedDate = G.dailySeed; settingsSave(); }
         dailyRecorded = false;
         srand(G.dailySeed);
@@ -157,7 +157,7 @@ static bool newGame(int mode)
     if (mode == MODE_DAILY) {
         char t[MSG_LEN];
         if (G.practice) strcpy(t, ui(UI_MS_PRACTICE));
-        else uiFmt(t, sizeof t, UI_MS_DAILYMOD, boardDailyModName(G.dailyMod));
+        else uiFmt(t, sizeof t, UI_MS_DAILYONE, boardDailyModName(G.dailyMod));
         queueMsg(G.msg, G.msgTimer);       // the shelf intro follows
         setMsg(t, 150);
     }

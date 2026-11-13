@@ -2388,7 +2388,7 @@ static void drawTitle(const Game *g)
     roundRect(BX(20), TB_Y, 64, 22, blink ? GOLD : GOLD_DK);
     drawTextCenter(BX(52), TB_Y + 7, ui(UI_T_CLASSIC), BLACK, 1);
     // DAILY: two 1x lines inside the 22 px button (nothing reaches y 157, where OPTIONS starts)
-    bool played = g->clockOk && S.dailyPlayedDate == g->dailySeed;
+    bool played = g->clockOk && (g->dailySeed <= S.dailyPlayedDate || g->dailySeed <= S.dailyLastDate);
     roundRect(BX(88), TB_Y, 64, 22, g->clockOk ? DIM : BLACK);
     rectOutline(BX(88), TB_Y, 64, 22, g->clockOk ? GOLD_DK : DIM2);
     char d1[24], d2[24];
@@ -2399,7 +2399,8 @@ static void drawTitle(const Game *g)
         drawTextCenter(BX(120), TB_Y + 3, ui(UI_T_PRACTICE), ACCENT, 1);
         uiFmt(d2, sizeof d2, UI_T_DONE, S.dailyLastScore);
         if (textWidth(d2, 1) > 58) siprintf(d2, "%d", S.dailyLastScore);
-        drawTextCenter(BX(120), TB_Y + 12, d2, INK, 1);
+        if (S.dailyLastDate == g->dailySeed) drawTextCenter(BX(120), TB_Y + 12, d2, INK, 1);   // a score only when it is today's
+        else drawTextCenter(BX(120), TB_Y + 12, boardDailyModName(g->dailyMod), INK, 1);
     } else {
         uiFmt(d1, sizeof d1, UI_T_DAILYDATE, g->dailySeed / 100 % 100, g->dailySeed % 100);
         drawTextCenter(BX(120), TB_Y + 3, d1, GOLD_LT, 1);
@@ -2753,7 +2754,7 @@ static void drawPauseCard(const Game *g)
         u16 col = sel ? WHITE : INK;
         if (id == PAUSE_RESTART && g->mode == MODE_CLASSIC && g->lives <= 1) {      // the last bookmark cannot be spent
             label = ui(refused ? UI_MS_LASTBOOK : UI_PA_RESTART); col = refused ? FIRE2 : DIM_TEXT;
-        } else if (armed) { label = ui(id == PAUSE_QUIT ? UI_PA_AGAINQ : UI_PA_AGAINR); col = FIRE2; }
+        } else if (armed) { label = ui(id == PAUSE_QUIT ? (g->mode == MODE_DAILY && !g->practice ? UI_PA_AGAINQD : UI_PA_AGAINQ) : UI_PA_AGAINR); col = FIRE2; }
         if (sel) { fillRect(BX(PAUSE_X0 + 2), y, PAUSE_W - 4, 15, lerp15(BLACK, ACCENT, 4)); rectOutline(BX(PAUSE_X0 + 2), y, PAUSE_W - 4, 15, ACCENT); }
         drawTextCenter(BX(86), y + 4, label, col, 1);
     }

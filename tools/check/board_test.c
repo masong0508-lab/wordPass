@@ -780,6 +780,7 @@ int main(int argc, char **argv)
     set(0, 1, CELL_BURN, 'a'); g.back[0][2] = 1;
     res = boardPeel(&g, 0, 2);
     CHECK("peel under a flame destroys a pass letter", res == -1 && g.fail == FAIL_SCORCH && st(0, 2) == CELL_HOLE);
+    CHECK("... and the fatal peel counts as a turn (the card reads PEELS 1, TURNS 1) without advancing the fire", g.peels == 1 && g.turn == 1 && g.burnTimer == 0);
     boardOf('e'); plantWord();
     g.back[3][3] = 2;
     res = boardPeel(&g, 3, 3);

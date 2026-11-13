@@ -931,7 +931,7 @@ int boardPeel(Game *g, int c, int r)
         g->scorched[c][r] = 1;
         cl->state = CELL_HOLE;
         cl->flash = 10;
-        if (secret) { g->fail = FAIL_SCORCH; return -1; }
+        if (secret) { g->fail = FAIL_SCORCH; g->turn++; return -1; }   // the fatal peel is a turn too (endTurn would advance the fire on a lost shelf)
         endTurn(g, peelHeat);
         return 3;
     }
