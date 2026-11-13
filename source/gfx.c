@@ -2897,7 +2897,10 @@ void gfxInit(void)
 static bool wipeWasOn;
 static void applyWipe(bool dim)
 {
-    if (dim) { wipeT = 0; wipeWasOn = false; return; }
+    if (dim) {                                  // a card dims the shelf: the iris is abandoned, and the top screen's window with it
+        if (wipeWasOn) REG_DISPCNT_SUB_ &= ~DISPLAY_WIN0_ON;   // (the main engine's window belongs to the dim itself)
+        wipeT = 0; wipeWasOn = false; return;
+    }
     if (wipeT > 0) {
         int p = WIPE_FRAMES - wipeT + 1;                       // 1..WIPE_FRAMES
         int r = 256 - 256 * p / WIPE_FRAMES;                   // 256 -> 0

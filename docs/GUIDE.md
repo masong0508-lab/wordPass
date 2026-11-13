@@ -501,7 +501,7 @@ Worked, for that card: the words scored 100 (STONE: 5 × 2 × 10), 160 (GARDEN: 
 
 A peel breaks the streak, so combos and peeling pull in opposite directions: the shelf is won by peeling, the score is made by words. The balance bot shows peeling alone wins most shelves, so the combo is a score reward, not a way to win (it does not change a shelf's clear rate).
 
-**Hints.** Press **SELECT** in play and the ghost drag traces a common word of three to five letters on the real board (the same breathing outline and trail the guided first shelf uses). When a flame burns, the hint looks first for a word through a flame. A shelf has **two hints**; the message line says how many are left. The hint hides at the first touch of the board. Ten seconds with no input and hints in hand make the game offer one (`STUCK? PRESS SELECT FOR A HINT`), once a shelf; the offer is free.
+**Hints.** Press **SELECT** in play and the ghost drag traces a common word of three to five letters on the real board (the same breathing outline and trail the guided first shelf uses). When a flame burns, the hint looks first for a word through a flame. A shelf has **two hints**; the message line says how many are left. The hint hides at the first touch of the board, so SELECT does nothing (and costs no hint) while the stylus is down. Ten seconds with no input and hints in hand make the game offer one (`STUCK? PRESS SELECT FOR A HINT`), once a shelf; the offer is free.
 
 ### 5.7 Pass-letter streaks
 

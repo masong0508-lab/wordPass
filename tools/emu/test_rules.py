@@ -222,7 +222,7 @@ def _():
     e.peel(c, r); g = e.state()
     assert g['state'] == ST_PLAY and g['fail'] == 0, f'the first dead board ended the shelf: state {g["state"]} fail {g["fail"]}'
     assert g['shuffles'] == 0, f'shuffles left {g["shuffles"]}'
-    assert g['heat'] == min(1 + 3, thr - 1) or g['heat'] < 4, f'heat {g["heat"]}: a peel (1) and the shuffle (3) should show'
+    assert thr > 4 and g['heat'] == 1 + 3, f'heat {g["heat"]} (meter {thr}): a peel (1) and the shuffle (3) must both show, exactly'
     letters = {g['cell'][cc][rr][0] for cc in range(COLS) for rr in range(ROWS) if g['cell'][cc][rr][1] == TILE}
     assert len(letters) > 3, f'the gems were not re-dealt: letters {sorted(letters)}'
     assert g['cell'][c][r][1] == HOLE, 'the peeled cell is still a hole'
@@ -893,6 +893,42 @@ def _():
     g = e.state(); assert g['state'] == ST_TITLE and g['dailyPlayed'] == d2 and g['dailyLast'] == d2 and g['streak'] == 2, \
         f'quit Daily: {g["state"]} played {g["dailyPlayed"]} last {g["dailyLast"]} streak {g["streak"]}'
 
+@scenario('records: the best Daily is one all-time record (a later, lower Daily changes neither it nor NEW BEST), a failed shelf with a bookmark left records nothing')
+def _():
+    to_title()
+    dA, dB, dC = 20270320, 20270321, 20270322
+    def scored_daily(day, score, last):
+        daily_title(day, played=last, last=last, streak=1); tap_daily(30)
+        g = e.state(); assert g['state'] == ST_PLAY and g['practice'] == 0, f'scored Daily {day}: state {g["state"]} practice {g["practice"]}'
+        e.run(120); e.set_score(score)
+        g = force_fail(); r = e.records(); leave_result()
+        return g, r
+    g, r = scored_daily(dA, 3775, 0)
+    assert r['bestDaily'] >= 3775 and g['newBest'] == 1, f'first Daily: best {r["bestDaily"]} newBest {g["newBest"]}'
+    base = r['bestDaily']; baseDate = r['bestDailyDate']
+    g, r = scored_daily(dB, 100, dA)
+    assert r['bestDaily'] == base and r['bestDailyDate'] == baseDate, f'a lower Daily overwrote the record: {r["bestDaily"]} on {r["bestDailyDate"]} (was {base} on {baseDate})'
+    assert g['newBest'] == 0, 'a lower Daily flashed NEW BEST'
+    assert r['dailyLastScore'] == 100, f'the last score is still kept: {r["dailyLastScore"]}'
+    g, r = scored_daily(dC, 0, dB)
+    assert r['bestDaily'] == base and r['bestDailyDate'] == baseDate and g['newBest'] == 0, f'a zero-point Daily changed the record: {r}'
+    g, r = scored_daily(dC + 1, base + 500, dC)
+    assert r['bestDaily'] == base + 500 and r['bestDailyDate'] == dC + 1 and g['newBest'] == 1, f'a better Daily must take the record and its date: {r} newBest {g["newBest"]}'
+    # Classic: a shelf failed with a bookmark left is retried from its start score, so it records nothing
+    ensure_play(); fresh_shelf(); e.set_lives(3)
+    bc0 = e.records()['bestClassic']
+    e.set_score(bc0 + 5000)
+    g = force_fail()
+    assert g['lives'] == 2, f'the failed shelf costs a bookmark: lives {g["lives"]}'
+    assert e.records()['bestClassic'] == bc0 and g['newBest'] == 0, f'a rolled-back fail credited the record: {e.records()["bestClassic"]} (was {bc0}) newBest {g["newBest"]}'
+    e.tap(e.bx + 100, 100); e.run(150)
+    g = e.state(); assert g['state'] == ST_PLAY and g['score'] < bc0 + 5000, f'retry: state {g["state"]} score {g["score"]}'
+    # the last bookmark: the run is over and the score counts
+    e.set_lives(1); e.set_score(bc0 + 5000)
+    g = force_fail()
+    assert e.records()['bestClassic'] == bc0 + 5000 and g['newBest'] == 1, f'the last-bookmark fail must record: {e.records()["bestClassic"]} newBest {g["newBest"]}'
+    e.tap(e.bx + 100, 100); e.run(150)
+
 @scenario('Daily needs a real clock: tap and SELECT are ignored with SET THE DS CLOCK FOR DAILY')
 def _():
     to_title()
@@ -913,7 +949,7 @@ def _():
     e.set_clock(0); e.run(70)
     assert e.state()['clockOk'] == 1, 'the real clock should be accepted again'
 
-@scenario('Daily modifiers: STANDARD, EMBER (meter 8, fire every turn), DEEP (pass in rows 5..7), LONG (7-letter pass)')
+@scenario('Daily modifiers: STANDARD, EMBER (meter 9, fire every turn), DEEP (pass in rows 5..7), LONG (7-letter pass)')
 def _():
     to_title()
     for mod in range(4):
@@ -927,7 +963,7 @@ def _():
         if mod == 0: assert g['heatThreshold'] == 6 and g['burnEvery'] == 2, f'STANDARD: {g["heatThreshold"]}/{g["burnEvery"]}'
         if mod == 1: assert g['heatThreshold'] == 9 and g['burnEvery'] == 1, f'EMBER: {g["heatThreshold"]}/{g["burnEvery"]}'
         if mod == 2: assert min(secret_rows(g)) >= 5 and g['heatThreshold'] == 9 and g['burnEvery'] == 1, f'DEEP rows {secret_rows(g)}'
-        if mod == 3: assert 6 <= g['passLen'] <= 8, f'LONG pass {g["pass"]!r}'
+        if mod == 3: assert 6 <= g['passLen'] <= 8 and g['heatThreshold'] == 8 and g['burnEvery'] == 2, f'LONG: pass {g["pass"]!r} meter {g["heatThreshold"]} every {g["burnEvery"]}'
         print(f'   {day} {MODS[mod]}: {g["pass"]} theme {g["passTheme"]} len {g["passLen"]}')
         e.run(40); e.shot(f'{out}/rules_daily_mod_{MODS[mod].lower()}_play.png')
         to_title()
@@ -2756,6 +2792,59 @@ def _():
             e.tap(*guide_back(left), settle=15); g = e.state(); assert g['state'] == ST_TITLE, f'{code} {tag}: BACK did not return to the title: {g["state"]}'
     set_hand(False); lang_title(0)
 
+
+@scenario('input state: a stylus stroke does not survive a pause (the RESUME tap starts no chain), and SELECT with the stylus down spends no hint')
+def _():
+    ensure_play(); fresh_shelf(); e.set_lives(3); e.set_tutor(1)
+    x = e.bx + 86
+    e.press('Y', settle=5)
+    e.emu.input.touch_set_pos(*e.center(C, 3)); e.run(6)
+    assert e.state()['chainLen'] == 1, 'the stroke did not start a chain'
+    e.hold('START', True); e.run(2); e.hold('START', False); e.run(5)     # START while the stylus is still down on a gem
+    assert e.state()['state'] == ST_PAUSE, 'START did not pause'
+    e.emu.input.touch_release(); e.run(5)
+    e.tap(x, pause_row_y(0), settle=12)
+    g = e.state()
+    assert g['state'] == ST_PLAY and g['chainLen'] == 0, f'the RESUME tap left a chain of {g["chainLen"]} gem(s): {g["chain"]}'
+    # SELECT while the stylus is down: no hint spent, and the stylus's chain is not wiped by a restart under it
+    e.press('Y', settle=5); e.set_features(hints=2)
+    word, path = e.find_words(e.state())[0]
+    e.chain(path[:2], release=False)
+    e.hold('SELECT', True); e.run(2); e.hold('SELECT', False); e.run(4)
+    g = e.state(); assert g['hints'] == 2, f'SELECT with the stylus down spent a hint: {g["hints"]}'
+    e.emu.input.touch_release(); e.run(10)
+    e.press('Y', settle=5)
+    e.press('SELECT', settle=6); g = e.state()
+    assert g['hints'] == 1 and g['hintReq'] == 1, f'SELECT with the stylus up still works: hints {g["hints"]} req {g["hintReq"]}'
+    # B held for 20 frames and Y clear the chain while the stylus is down: the stylus does not start a new chain under itself
+    e.press('Y', settle=5)
+    e.chain(path[:2], release=False); assert e.state()['chainLen'] == 2
+    e.hold('Y', True); e.run(2); e.hold('Y', False); e.run(8)
+    g = e.state(); assert g['chainLen'] == 0, f'Y with the stylus down: the chain restarted under it ({g["chainLen"]})'
+    e.emu.input.touch_release(); e.run(8)
+
+@scenario('shelf-start iris: pausing during the nine frames of the iris leaves no window on the top screen')
+def _():
+    ensure_play(); e.set_tutor(1)
+    def left_edge():
+        px = e.pixels()
+        return sum(1 for y in range(0, 192) for x in range(0, 14) if sum(px[x, y]) > 30)
+    def pause_resume(early):
+        to_title(); e.run(200)
+        e.emu.input.touch_set_pos(e.bx + 52, 147)
+        e.run(2 if early else 60)
+        e.emu.input.touch_release()
+        e.hold('START', True); e.run(2); e.hold('START', False); e.run(30)
+        assert e.state()['state'] == ST_PAUSE, 'START did not pause'
+        e.hold('START', True); e.run(2); e.hold('START', False); e.run(200)
+        assert e.state()['state'] == ST_PLAY
+        return left_edge()
+    control = pause_resume(False)
+    e.shot(f'{out}/rules_iris_control.png')
+    early = pause_resume(True)
+    e.shot(f'{out}/rules_iris_pause.png')
+    assert control > 20, f'the control top screen has no left-edge content ({control})'
+    assert early >= control * 0.8, f'the top screen is clipped after a pause during the iris: {early} lit edge pixels against {control}'
 
 @scenario('responsiveness: a tap on the results card before it takes input is queued and applied; the iris opens and leaves no window behind; the top screen shows a chain word within the touch latency')
 def _():

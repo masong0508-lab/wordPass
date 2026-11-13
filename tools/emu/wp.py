@@ -109,7 +109,8 @@ class Emu:
         self.emu = DeSmuME(); self.emu.open(rom)
         self.emu.input.keypad_update(0); self.emu.input.touch_release(); self.emu.volume_set(0)
         self.mem = self.emu.memory
-        self.dbg = dbg_addr or symbol(elf or rom.replace('.nds', '.elf'), 'DBG')
+        self.rom_elf = elf or rom.replace('.nds', '.elf')
+        self.dbg = dbg_addr or symbol(self.rom_elf, 'DBG')
         self.bx = 82 if left_hand else 0          # left-hand layout shifts the board right
         self.words = None
         self.run(10)
@@ -201,6 +202,12 @@ class Emu:
     def set_daily(self, played=0, last=0, streak=0):
         """Daily records: the date of the attempt already used, of the last scored Daily, and the streak."""
         self.poke(POKE_DAILY, played, last, streak)
+    def records(self):
+        """The saved records (Settings S, read from the ROM's memory): bestClassic, bestClassicShelf, bestDaily, bestDailyDate,
+        dailyPlayedDate, dailyLastScore. Not part of the DBG mirror, so its pinned layout is untouched."""
+        if not hasattr(self, '_sAddr'): self._sAddr = symbol(self.rom_elf, 'S')
+        raw = bytes(self.mem.unsigned[self._sAddr + 20:self._sAddr + 44])
+        return dict(zip(['bestClassic', 'bestClassicShelf', 'bestDaily', 'bestDailyDate', 'dailyPlayedDate', 'dailyLastScore'], struct.unpack('<6i', raw)))
     def set_pass(self, n, found=0):
         """Layout checks: the pass becomes the first n letters of the alphabet (1..9), `found` is a bitmask of the
         letters shown as found. The back layer is left alone, so do not peel after this."""

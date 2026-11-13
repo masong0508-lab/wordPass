@@ -94,8 +94,15 @@ static void clearSticky(void)
     if (G.msgTimer < 0) { G.msg[0] = 0; G.msgTimer = 0; }
 }
 
+// The stylus stroke tracker of the play screen. A stroke that was down when play was left (pause, fail, pass, a hint, a
+// clear, a peek) must not carry over: the first play frame that finds the stylus still down without a fresh press
+// reads it as a stylus that came down elsewhere and ignores it until it lifts.
+static bool wasTouching, ignoreStroke;
+static void dropStroke(void) { wasTouching = false; ignoreStroke = false; }
+
 static void startShelf(void)
 {
+    dropStroke();
     G.armed = 0; G.peekLatch = 0;
     G.cue = CUE_NONE; G.cueAge = 0; G.ghostDone = 0; G.idleFrames = 0; G.hintLen = 0;
     boardNewShelf(&G);
@@ -159,7 +166,7 @@ static bool newGame(int mode)
 }
 
 // Fold a finished run into the saved records. A Daily replay (practice) or a Daily without a
-// readable clock records nothing; a scored Daily updates the last score, the best, the
+// readable clock records nothing; a scored Daily updates the last score, the best (a higher score only; it keeps its own date), the
 // streak and the games played exactly once.
 static void recordScore(void)
 {
@@ -268,6 +275,7 @@ static void quitToTitle(void)
 static void enterFail(void)
 {
     clearSticky();
+    dropStroke();
     G.state = ST_FAIL;
     boardClearChain(&G);
     if (G.mode == MODE_CLASSIC) {
@@ -309,6 +317,7 @@ static void useHint(void)
 {
     if (G.hints <= 0) { setMsg(ui(UI_MS_NOHINT), 60); return; }
     boardClearChain(&G);
+    dropStroke();                      // a stylus still down must not restart a chain and cancel the ghost
     G.hintLen = boardHintChain(&G, G.hintC, G.hintR, 5);
     if (!G.hintLen) { setMsg(ui(UI_MS_NOHINTWORD), 60); return; }
     G.hints--;
@@ -373,6 +382,7 @@ static void submitChain(void)
 static void enterPause(void)
 {
     gfxPress(PRESS_PAUSE);
+    dropStroke();
     boardClearChain(&G);
     G.armed = 0; G.peekLatch = 0; G.peekHeld = 0; musicPeek(false);
     G.pauseRow = 0; G.pauseArm = 0;
@@ -459,16 +469,16 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
     if (!peekNow) G.armed = 0;
 
     if (down & KEY_START) { enterPause(); return; }
-    if (down & KEY_SELECT) useHint();
+    if ((down & KEY_SELECT) && !(held & KEY_TOUCH)) useHint();      // with the stylus down the hint would hide at once (it hides at the first touch): not spent
     // the idle offer: ten seconds of nothing with hints in hand, once a shelf (the guided shelf has its own ghost)
     if ((held & (KEY_TOUCH | KEY_A | KEY_B | KEY_X | KEY_Y | KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT | KEY_L | KEY_R)) || G.chainLen > 0) G.hintIdle = 0;
     else if (++G.hintIdle == HINT_IDLE_FRAMES && G.hints > 0 && !G.hintOffered && !tutorOn()) { G.hintOffered = 1; setMsg(ui(UI_MS_HINTIDLE), 150); }
     int chainBefore = G.chainLen;
     // B steps the chain back one gem, held for 20 frames it clears it; Y clears at once
     static int bHeld;
-    if (held & KEY_B) { if (++bHeld == 20) boardClearChain(&G); } else bHeld = 0;
+    if (held & KEY_B) { if (++bHeld == 20) { boardClearChain(&G); dropStroke(); } } else bHeld = 0;
     if ((down & KEY_B) && G.chainLen > 0) G.chainLen--;
-    if (down & KEY_Y) { boardClearChain(&G); gfxPress(PRESS_CLEAR); }
+    if (down & KEY_Y) { boardClearChain(&G); dropStroke(); gfxPress(PRESS_CLEAR); }
 
     // the d-pad moves a hex cursor; a real touch hands control back to the stylus
     if (down & (KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT)) {
@@ -485,6 +495,7 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
     if (touching && t->px == 0 && t->py == 0) touching = false;
 
     if (G.peekHeld) {
+        dropStroke();                          // a stylus used for peeling is not a chain stroke when the peek ends
         // peel on release: a touch arms the gem under it, sliding off (or onto another gem) disarms,
         // lifting the stylus on the armed gem peels it. A latched peek is one-shot.
         bool peel = false;
@@ -521,6 +532,7 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
             if (G.fail && !boardPassComplete(&G)) { enterFail(); return; }
             if (boardPassComplete(&G)) {
                 G.state = ST_PASSED; G.stateTimer = 0; G.fail = FAIL_NONE;
+                dropStroke();
                 if (G.shelf == 1) tutorFinish();       // the first shelf is cleared: the guide has done its job
                 clearSticky();
                 boardClearChain(&G);
@@ -545,7 +557,6 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
     // Chain input. Between two samples a fast stylus can skip gems: walk the segment and feed every
     // gem it crosses that touches the tail as a drag (never a restart), then the final point.
     static int lastTx, lastTy;
-    static bool wasTouching, ignoreStroke;
     if (!touching) { wasTouching = false; ignoreStroke = false; }
     else if (!wasTouching && !(down & KEY_TOUCH)) ignoreStroke = true;   // the stylus came down on another screen (a title button): not a chain
     else if (ignoreStroke) { lastTx = t->px; lastTy = t->py; }      // a submit tap's stylus is still down
