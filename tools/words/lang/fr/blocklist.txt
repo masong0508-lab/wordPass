@@ -57,3 +57,34 @@ violer
 youpin
 putain*
 nazi* viols violee violees erection violation violations sexuel* sexes sexe* pederaste forniquer salopard* emmerde* pedes
+# slur: ethnic, national, religious, sexual-orientation or gender slurs (owner's rule: the only content class removed)
+=dyke =esquimau =gays =gitan =meteque =mulatre =pouf =pygmee
+=sodomite =tzigane
+# junk: not a word a native speaker accepts (name, fragment, foreign word, misspelling)
+=aida =aj =alderman =alien =anima =aves =axis =baby
+=beat =beer =benoit =bibi =bill =black =bloom =body
+=bosco =boston =boys =bresil =brick =bull =bush =caroline
+=cary =casa =cate =cesar =chimera =chum =clean =coach
+=computer =cooker =corporal =cross =cuba =da =daphne =dark
+=diane =dora =doris =esquire =fantasy =folk =freestyle =french
+=full =gate =gaule =gaza =girl =girls =gone =good
+=gray =green =hajj =hans =hard =harper =have =hello
+=here =high =hola =home =house =inde =item =japon
+=java =jenny =jesus =jojo =joseph =jules =kick =kicker
+=kiki =king =kremlin =lady =land =levis =light =lima
+=lise =live =londres =loser =love =luis =made =maia
+=mails =manda =maria =mark =marks =marshall =maya =meat
+=mens =mess =mimi =mina =miro =miss =moore =more
+=motel =musa =nerd =nope =omnibu =open =oscar =oxford
+=pal =paris =phone =plot =pope =porto =post =queen
+=real =reels =richard =river =robert =robin =rosie =round
+=runabout =same =scat =short =shot =slam =soft =soudan
+=soul =spencer =stars =street =strix =taira =tara =tell
+=thrace =tommy =toto =trip =trust =valentin =valentine =vespa
+=victoria =yack
+# off-theme: clearly wrong for its theme (removed from the pools; still valid in the dictionary)
+=aboyer =accueil =aucun =auto =avant =baignade =biens =camion
+=comment =concombre =criquet =curry =ecrou =femme =fille =freinage
+=friandise =frite =fumeur =grillon =homme =insecte =jeep =malgre
+=match =mesange =orteil =pomme =reste =sans =saucisse =scooter
+=tank =taxi =tout =tram =velo

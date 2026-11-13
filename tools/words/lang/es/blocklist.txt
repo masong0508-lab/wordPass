@@ -73,3 +73,67 @@ zorra
 zorras
 puta*
 sexual* sexuales erecc* testicul* paja violada violadas orgia*
+# slur: ethnic, national, religious, sexual-orientation or gender slurs (owner's rule: the only content class removed)
+=gitano =marimacho =mestizo =moro =negra =negras =payo =sarraceno
+=yanqui
+# junk: not a word a native speaker accepts (name, fragment, foreign word, misspelling)
+=adan =africa =alien =anti =arlo =aron =asia =atta
+=avda =brasil =bree =bren =bretana =bruce =bruno =canada
+=carla =carmen =carolina =catalina =celia =charles =claudia =corea
+=cristina =dallas =dante =dean =delia =diego =dpto =enrique
+=escocia =file =fine =francisco =garcia =geom =gilbert =gral
+=grand =grant =gray =green =guido =hall =helena =henry
+=home =hope =irlanda =james =jane =japon =java =jordan
+=jorge =juan =jupiter =lady =light =lose =luis =luisa
+=lulu =mali =margo =maria =marte =martin =mateo =maura
+=merlin =milan =miranda =moya =name =napoleon =olive =oreo
+=paris =paul =paula =paulo =pedro =pepe =pops =prof
+=rafa =rain =ramon =rene =rice =rita =roma =roman
+=romeo =rose =rosen =rule =santiago =satanas =simon =sras
+=sres =srta =stas =tell =teresa =time =times =toad
+=trad =troy =true =univ =veer =victor =virginia =voila
+=yago
+# off-theme: clearly wrong for its theme (removed from the pools; still valid in the dictionary)
+=abandonar =acampar =aclamar =actual =acuoso =adulterar =aerosol =agente
+=agotar =aguantar =ahogado =alambrada =aleacion =alegre =alemana =alfombra
+=alguien =alguno =alquilar =alquimia =anillo =aplastar =apostar =ardia
+=arrojar =arruinar =arsenal =aseo =atar =atontado =atrapar =auge
+=aullar =aumentar =aumento =automotor =automovil =auxilio =avalancha =averiguar
+=azar =bajar =balistica =balon =barbaro =batallon =berrear =borra
+=botin =botones =brutal =burro =buscar =cablear =cacareo =calcular
+=calidad =camion =camioneta =cancelar =cantidad =caravana =cazar =cepillo
+=ceramica =cerca =chaqueta =charlar =chicle =chillar =chocolate =cilindro
+=cinco =cincuenta =cirugia =citara =clavicula =coincidir =colirio =colmillo
+=comenzar =conducir =conexion =contagiar =coraje =corazon =corazones =corbata
+=corral =corredera =correo =cortina =costear =crujir =cuantia =damisela
+=dato =decir =decision =dedo =dejar =delantero =dentadura =dentista
+=depresion =derrochar =derrotar =descansar =despecho =destrozar =destruir =diagonal
+=diez =digerir =dinar =direccion =disfrazar =divan =ducha =duro
+=echar =efecto =electron =elegante =elevador =embarrado =emplear =encaje
+=encia =encuentro =enterrar =entrenar =envolver =equipar =escenario =escoba
+=espalda =esponja =esquina =esquivar =estallido =estropear =estudio =excluir
+=expirar =explosion =extrano =fajin =fajo =fallecer =falsear =familia
+=fastidiar =fianza =filete =finalidad =fingir =forzar =fosa =fregadero
+=fresco =galleta =ganar =garantia =genial =gerente =gritar =guardar
+=guarida =guino =hablador =hacer =hormigueo =horquilla =humano =impacto
+=imposible =individuo =intentar =internar =irse =jalar =jornada =jungla
+=juzgado =lechera =leno =libertad =liderazgo =ligamento =ligero =liso
+=llevar =logro =lucro =maldad =maniobrar =manipular =maraca =mariposa
+=marzo =matorral =mella =merodear =mezquita =miau =ministro =mister
+=mochila =monetaria =monton =morir =mortal =moto =multar =natalidad
+=neutrino =neutron =ninfa =noroeste =novel =nuevo =obtencion =ocho
+=ocuparse =orbita =pagar =palco =palo =panaderia =parecer =pareja
+=parra =partido =patente =pelar =pellejo =pelota =penalizar =perecer
+=personal =pescar =pesimismo =picadillo =piedra =pila =plano =pleito
+=poder =polen =poquer =porque =potable =presa =pretender =primavera
+=primero =proposito =provocar =puertas =pupila =quejarse =raro =recibidor
+=recogedor =recuerdo =recular =reductor =rellenar =reloj =remendar =restante
+=resto =retardo =robot =roca =roer =rondar =sagrado =salar
+=saltar =semilla =senor =servicio =severo =sien =silenciar =sinapsis
+=soltero =sonido =soportar =sotano =sucumbir =sudeste =sudoeste =suerte
+=sufrir =suroeste =tachar =tanque =taxi =taza =teatro =tendero
+=tension =terraza =tiron =tiza =tolerar =topadora =tractor =trailer
+=trata =tribu =tribunal =triciclo =tronco =tropezar =trucos =tuerca
+=turismo =turno =usar =utilizar =vacilar =vara =vehiculo =veinte
+=veintidos =velocidad =vencer =ventaja =ventana =vestibulo =viga =vigente
+=viola =vitorear =votar =vuelo =zanahoria
