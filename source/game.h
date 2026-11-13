@@ -317,6 +317,7 @@ int  settingsToday(void);                         // YYYYMMDD from the DS clock 
 bool settingsClockOk(int ymd);                    // a plausible date: 2025-01-01 .. 2099-12-31
 int  settingsDayNumber(int ymd);                  // days since 1970-01-01 (civil calendar), for streaks
 int  settingsNextStreak(int lastDate, int streak, int today);   // the streak after a scored Daily on `today`
+bool settingsRecordDaily(int score, int date);     // fold a scored Daily into the best Daily (higher score only); true = new record
 int  settingsLiveStreak(int today);               // the streak still alive on `today` (0 once a day was missed)
 void settingsDebugClock(int ymd);                 // test channel: pretend the clock reads ymd (0 = the real clock)
 

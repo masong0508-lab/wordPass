@@ -165,6 +165,13 @@ int main(void)
     CHECK("streak: a missed day starts over", settingsNextStreak(20260301, 6, 20260303) == 1 && settingsNextStreak(20260301, 6, 20260401) == 1);
     CHECK("streak: a last date in the future counts as broken", settingsNextStreak(20260310, 6, 20260301) == 1);
     CHECK("streak is capped at 9999", settingsNextStreak(20260301, 9999, 20260302) == 9999);
+    settingsDefaults();
+    CHECK("best Daily: the first scored Daily with points is a record, a zero is not",
+          !settingsRecordDaily(0, 20260301) && S.bestDaily == 0 && settingsRecordDaily(3775, 20260310) && S.bestDaily == 3775 && S.bestDailyDate == 20260310);
+    CHECK("best Daily: a later, lower Daily changes nothing (neither score, date nor NEW BEST)",
+          !settingsRecordDaily(100, 20260311) && !settingsRecordDaily(3775, 20260312) && S.bestDaily == 3775 && S.bestDailyDate == 20260310);
+    CHECK("best Daily: a higher one takes the record and its own date", settingsRecordDaily(4000, 20260320) && S.bestDaily == 4000 && S.bestDailyDate == 20260320);
+    CHECK("best Daily: a zero-point Daily does not blank the record", !settingsRecordDaily(0, 20260321) && S.bestDaily == 4000 && S.bestDailyDate == 20260320);
     settingsDefaults(); S.dailyLastDate = 20260301; S.dailyStreak = 4;
     CHECK("the live streak survives today and tomorrow, then dies",
           settingsLiveStreak(20260301) == 4 && settingsLiveStreak(20260302) == 4 && settingsLiveStreak(20260303) == 0 && settingsLiveStreak(20260228) == 0);

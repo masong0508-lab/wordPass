@@ -138,7 +138,7 @@ numbers.
 Press **X** on the title, or tap the BEST line under OPTIONS, for **THE
 LEDGER**: games played, shelves cleared, words spelled, perfect passes, rare
 words, peek accuracy (peels that found a pass letter), the daily streak, the
-Daily best of its day, and your longest word and best-scoring word. A Classic
+best scored Daily and its date, and your longest word and best-scoring word. A Classic
 run counts as a game when it ends on its last bookmark, a Daily when its
 scored attempt ends. B, X or any tap closes it.
 

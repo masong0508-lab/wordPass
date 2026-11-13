@@ -168,7 +168,7 @@ static void recordScore(void)
         if (G.practice || !G.clockOk || dailyRecorded) return;
         dailyRecorded = true;
         S.dailyLastScore = G.score;
-        if (G.dailySeed != S.bestDailyDate || G.score > S.bestDaily) { S.bestDaily = G.score; S.bestDailyDate = G.dailySeed; best = true; }
+        best = settingsRecordDaily(G.score, G.dailySeed);
         S.dailyStreak = settingsNextStreak(S.dailyLastDate, S.dailyStreak, G.dailySeed);
         S.dailyLastDate = G.dailySeed;
         S.gamesPlayed++;
@@ -274,7 +274,9 @@ static void enterFail(void)
         if (G.lives > 0) G.lives--;   // a failed shelf costs a bookmark
         if (G.lives == 0) S.gamesPlayed++;   // the last bookmark: the run is over
     }
-    recordScore();
+    // a failed shelf with a bookmark left is retried from its start score: those points are not the player's, so they
+    // record nothing (the run's score is recorded when it ends)
+    if (G.mode != MODE_CLASSIC || G.lives == 0) recordScore();
     gfxShake(14);
     gfxFlash();
     G.peekHeld = 0; G.armed = 0; G.peekLatch = 0;

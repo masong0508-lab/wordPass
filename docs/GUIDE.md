@@ -479,7 +479,7 @@ Multiply each by the **shelf number**. On shelf 3: 300 per letter, 3000 for the 
 | PERFECT PASS / CLEAN PASS / PEEL BONUS | the peel bonus, or a dash |
 | SHELF n OPEN | the next shelf (the Daily says FINAL and your score) |
 
-The score on the panel counts up from the score before the bonuses, filling the three bonus rows in order (shelf, speed, peel). A tap skips to the end. A blinking **NEW BEST** says the run beat a saved record.
+The score on the panel counts up from the score before the bonuses, filling the three bonus rows in order (shelf, speed, peel). A tap skips to the end. A blinking **NEW BEST** says the run beat a saved record (a Daily beats your best Daily; a Classic shelf that fails with a bookmark left records nothing, because the retry starts again from the score the shelf began with).
 
 Worked, for that card: the words scored 100 (STONE: 5 × 2 × 10), 160 (GARDEN: 8 × 2 × 10) and 470 (PLANETS: 9 × 3 × 10 + 200), and as the second and third word in a row (no peel between them) the last two carry the combo bonus, +10% and +20%: 176 and 564, a total of 840. The four pass letters paid 4 × 100 = 400 as they were found, and finding them in a row added a streak bonus of 0 + 100 + 200 + 300 = 600 (section 5.7). Then 1000 for the shelf, 25 × 1 × (40 − 7) = 825 for speed and 400 × 1 for a perfect pass: 840 + 400 + 600 + 1000 + 825 + 400 = **4065**, the number on the panel.
 
@@ -952,7 +952,7 @@ Press **X** on the title (or tap the BEST line) for **THE LEDGER**: your lifetim
 | RARE WORDS | accepted words of the rare tier |
 | PEEK ACCURACY | peels that found a pass letter, as a percentage of all peels (scorched peels count as misses) |
 | DAILY STREAK | the live streak (0 once a day is missed) |
-| DAILY BEST | your best scored Daily and its date |
+| DAILY BEST | your best scored Daily and its date (one all-time record: a later Daily replaces it only with a higher score) |
 | LONGEST | your longest word, with its length |
 | BEST WORD | your highest-scoring word and its points |
 

@@ -245,6 +245,16 @@ int settingsNextStreak(int lastDate, int streak, int today)
     return 1;
 }
 
+// The Daily record is one all-time best: a scored Daily replaces it only with a higher score, and the date that goes
+// with it is the day that score was made.
+bool settingsRecordDaily(int score, int date)
+{
+    if (score <= S.bestDaily) return false;
+    S.bestDaily = clampInt(score, 0, 999999999);
+    S.bestDailyDate = date;
+    return true;
+}
+
 int settingsLiveStreak(int today)
 {
     if (!settingsClockOk(S.dailyLastDate) || !settingsClockOk(today)) return 0;
