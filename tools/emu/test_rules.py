@@ -719,6 +719,9 @@ def _():
     else:
         assert g['burnEvery'] == 2 and g['heatThreshold'] == 6 and g['passLen'] == 5 and not holes, f'DAMP {g["burnEvery"]} {g["heatThreshold"]}'
     e.run(140); g = e.state()
+    expl = {1: 'HOLES ON THE BOARD, WORK AROUND THEM', 2: 'SLOWER FIRE, BUT A SHORTER METER', 3: 'ONE LETTER LONGER, LOW DOWN'}[g['twist']][:31]
+    assert g['msg'] == expl, f'the twist explanation follows the banner: {g["msg"]!r}'
+    e.run(150); g = e.state()
     assert g['msg'] == f'TALES: FIND THE {g["passLen"]} LETTER PASS', f'queued intro {g["msg"]!r}'
     print('   shelf 4:', name, g['pass'])
     twists = {}
@@ -1718,8 +1721,8 @@ def check_tutor(tag):
     peek = 'HOLD R OR TAP PEEK' if left else 'HOLD L OR TAP PEEK'
     e.set_tutor(0); e.start_classic(); e.set_lives(3)
     e.run(260)                                              # the shelf intro (180 frames) runs out, then the prompt stays
-    g = e.state(); assert g['tutorStep'] == 0 and g['msgTimer'] == -1 and g['msg'].startswith('DRAG 3 TOUCHING GEMS'), f'{tag}: step 0: {g["tutorStep"]} {g["msgTimer"]} {g["msg"]!r}'
-    e.run(300); assert msg_of('DRAG 3 TOUCHING GEMS') and e.state()['msgTimer'] == -1, f'{tag}: the prompt must be sticky'
+    g = e.state(); assert g['tutorStep'] == 0 and g['msgTimer'] == -1 and g['msg'].startswith('DRAG 3+ TOUCHING GEMS'), f'{tag}: step 0: {g["tutorStep"]} {g["msgTimer"]} {g["msg"]!r}'
+    e.run(300); assert msg_of('DRAG 3+ TOUCHING GEMS') and e.state()['msgTimer'] == -1, f'{tag}: the prompt must be sticky'
     e.shot(f'{out}/rules_tutor_0_{tag}.png')
     e.set_heat(0); e.set_burn(0, 99); e.set_turn(0)
     path = spell_cells('bed'); e.chain(path); e.press('A', settle=10)

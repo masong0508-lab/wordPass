@@ -49,7 +49,7 @@ button (it pulses until you have finished your first guided shelf), 5 the BEST /
 screen tell you what to do next, and a ghost stylus shows a real word on your real board if you wait three seconds.
 
 ![Three snapshots of the guided first shelf: the first prompt, the ghost stylus tracing a word, and the peek prompt after the first word.](img/guided_first_shelf.png)
-*The guided first shelf. Left: "DRAG 3 TOUCHING GEMS, TAP THE LAST". Middle: after three idle seconds a ghost stylus traces a real word. Right: after your first word the prompt asks you to peek, and the PEEK button gets a ring.*
+*The guided first shelf. Left: "DRAG 3+ TOUCHING GEMS, TAP LAST ONE". Middle: after three idle seconds a ghost stylus traces a real word. Right: after your first word the prompt asks you to peek, and the PEEK button gets a ring.*
 
 **2. Read the screen.** The top screen says what you are looking for: `PASS - BINDERY`, and four empty slots. The pass is a four-letter
 word from the BINDERY theme (book words) and every slot will fill with a diamond as you find its letter. The touch screen is the
