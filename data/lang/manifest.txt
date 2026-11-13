@@ -1,8 +1,8 @@
 # wordPass languages: written by tools/lang/build_all.py, read by tools/check/lang_test.c.
 # code<TAB>native name<TAB>English name<TAB>words<TAB>themes<TAB>pool words<TAB>qu<TAB>dict bytes<TAB>pools bytes<TAB>letters bytes
 # en is built into the ROM; its three files are the ones in data/ and their sha256 pins them (sha256 dict pools variants).
-en	ENGLISH	English	-	40	-	1	1206266	122045	-
-#sha256 en 2b4566ab4ee06d69d600a525b2fcd0033cea56ec0740526f2c92eb18549a43eb dd50eba73ba3cbb1938fdb0080d981d1bb9b9d835c505e6c960dec718301bdb2 b28dace4695e6bda508140affe052659667f283095d130e5b7c0f173963c37c6
+en	ENGLISH	English	-	40	-	1	1206266	120684	-
+#sha256 en 2b4566ab4ee06d69d600a525b2fcd0033cea56ec0740526f2c92eb18549a43eb 505e595fbdce81bae0568e5a5437d9c006f671c078ff6ba13e1e63b0327d56bc b28dace4695e6bda508140affe052659667f283095d130e5b7c0f173963c37c6
 es	ESPANOL	Spanish	188926	40	13731	1	1257867	93369	68
 fr	FRANCAIS	French	146690	40	16023	1	979870	109697	68
 de	DEUTSCH	German	167158	40	14293	1	1278177	99715	68

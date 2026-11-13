@@ -1705,7 +1705,8 @@ int main(int argc, char **argv)
                 for (int c = 0; c < COLS; c++) for (int r = 0; r < ROWS; r++) { h = (h ^ g.cell[c][r].letter) * 16777619u; h = (h ^ g.back[c][r]) * 16777619u; }
                 for (int i = 0; i < g.passLen; i++) h = (h ^ (u8)g.pass[i]) * 16777619u;
             }
-            CHECK("English first boards and passes on shelves 1..60 are byte-identical to before", h == 2177031000u);
+            // re-pinned when the audit removed slurs, junk and off-theme words from the English pools (passes of some dates changed)
+            CHECK("English first boards and passes on shelves 1..60 are byte-identical to before", h == 519593877u);
         }
         CHECK("English is the active language and its tables are the old ones", langCur() == LANG_EN && letterValue(16) == 10 && letterValue(0) == 1 && langWeight(4) == 12 && langQuTile() && langIsVowel(20) && !langIsVowel(24));
         CHECK("nothing is loadable before langInit (no filesystem): English stays", !langAvailable(LANG_ES) && !langLoad(LANG_ES) && langCur() == LANG_EN && boardWordOk("book", 4));
