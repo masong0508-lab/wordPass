@@ -474,6 +474,7 @@ void gameSetLanguage(int idx);                // main.c: from the title or the o
 
 // music.c
 void musicInit(void);
+void musicHush(void);                 // silence every channel before a blocking stretch (a language load); the next tick brings the music back
 void musicTick(const Game *g);       // once per vblank
 void musicNewShelf(int shelf, bool lockdown);   // a Classic shelf with no fire pressure (tests); the game uses musicPlayShelf
 void musicPlayShelf(const Game *g);   // a new shelf of the running game: the song comes from its mode, tier and the FIRE setting

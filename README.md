@@ -455,7 +455,7 @@ became one wordPass song built from its real material. `docs/MUSIC.md` is the
 listening guide, the credits and the evidence.
 
 - **The menu song** plays on the title, options, ledger, guide, language chooser
-  and first-boot chooser: *Morning Music Box*, a slow (90 BPM), warm C
+  and first-boot chooser (the guide opened from the pause menu keeps the shelf's song in the quiet pause mix): *Morning Music Box*, a slow (90 BPM), warm C
   mixolydian ditty built on Nursery Time's music-box tune: about five bell
   notes a bar, a soft pulse arpeggio, a quiet pad, one very soft hat and
   nothing else, at 70 percent of a game song's level so it sits behind the
@@ -511,8 +511,8 @@ listening guide, the credits and the evidence.
   far right, and the alarm far left.
 - **Sound effects** run on their own small sequencer with priorities, so a
   small sound never cuts a bigger one: a rising pentatonic tap for each gem you
-  chain (it climbs with the chain length and tops out at ten gems; minor
-  pentatonic in the minor songs), a short step back when you drop one, a
+  chain (it climbs with the chain length and tops out at ten gems; the
+  five notes come from the playing song's own scale), a short step back when you drop one, a
   buzzing pair of notes for a refused word, a rush of air for a peel that finds
   nothing, a falling hiss and a sliding chime for a scorch, a rising flare when
   a flame is lit, a low crackle when the fire creeps, and a soft blip on every

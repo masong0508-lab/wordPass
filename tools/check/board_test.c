@@ -566,6 +566,20 @@ static void musicTests(void)
         while (mdbg().step != 19) mrun(1);
         CHECK("resume: the pulse is plucked again", mdbg().duty[1] == DutyCycle_12 && mdbg().vol[1] == 26);
 
+        // the guide opened from the pause menu keeps the shelf's song in the pause mix (no attract drums or bass, no change
+        // of drum level for the shelf it returns to); opened from the title it is the attract (menu) mix
+        g.state = ST_PLAY; musicNewShelf(1, false);
+        while (mdbg().step != 16) mrun(1);
+        int drums0 = mdbg().drumLevel;
+        g.state = ST_PAUSE; mrun(20);
+        g.state = ST_GUIDE; g.guideFrom = ST_PAUSE; mrun(100);
+        CHECK("the guide opened from the pause menu stays in the pause mix: quiet hook, no drums or bass added, drum level unchanged", mdbg().mix == 2 && mdbg().drumLevel == drums0 && mdbg().vol[0] <= 16);
+        g.state = ST_PAUSE; mrun(10); g.state = ST_PLAY; mrun(30);
+        CHECK("... and the shelf comes back as it was (play mix, drum level unchanged)", mdbg().mix == 0 && mdbg().drumLevel == drums0);
+        g.state = ST_GUIDE; g.guideFrom = ST_TITLE; mrun(2);
+        CHECK("the guide opened from the title is the attract mix", mdbg().mix == 1);
+        g.state = ST_PLAY; musicNewShelf(1, false);
+
         g.cell[3][4].state = CELL_BURN;
         g.state = ST_PAUSE; musicNewShelf(1, false);
         capture(sn, 40, 0);
@@ -2028,6 +2042,8 @@ int main(int argc, char **argv)
 
     musicTests();
     pitchTests();
+    tapScaleTests();
+    hushTests();
     songTests();
 
     printf("%s: %d failure(s)\n", fails ? "CHECK FAILED" : "CHECK OK", fails);

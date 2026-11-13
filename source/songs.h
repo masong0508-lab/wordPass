@@ -32,7 +32,7 @@ typedef struct {
 typedef struct {
     const char *name;
     u8  role, root, mode, harm;       // SR_*; MIDI tonic; MODE_*; 1 = the V chord raises the 7th (harmonic minor pull)
-    u8  stepFrames, leadOct, gain, tap;   // frames per 16th step (5..12); octave of the lead over the root; level of the music voices (percent); 1 = minor pentatonic taps
+    u8  stepFrames, leadOct, gain, tap;   // frames per 16th step (5..12); octave of the lead over the root; level of the music voices (percent); unused: the tap notes come from the mode (music.c tapSemi)
     u8  attVol, attDuty, attPad;      // the menu mix (the title): hook level, hook duty (percent) and pad level
     u8  kickVol, snareVol, ghostVol, openVol;
     u16 kickHz, snareHz, hatHz, openHz;

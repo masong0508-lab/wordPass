@@ -1133,7 +1133,7 @@ A step is a sixteenth note of **5 to 12 frames** depending on the song (180 down
 
 **Tempo.** While a flame is on row 3 or lower the whole tune speeds up by one frame a step, on row 5 or lower by two (never faster than 5 frames a step), and it relaxes one bar after the shelf is fire-free.
 
-**Which song.** The **title, options, ledger, guide, language chooser and first-boot chooser** all play one dedicated **menu song**, a slow, warm music box. **Classic** shelves rotate through five songs by shelf (shelf 1 the first, shelf 6 the first again); **Lockdown** plays a dark, hard song by tier (tier 0 the slowest, tiers 2 and 3 the hardest); a Classic shelf on **FIRE: FAST** borrows the dark songs by shelf; the **Daily Pass** has its own song. Pausing, peeking, results, failing and the sound effects work the same on top of whichever song plays.
+**Which song.** The **title, options, ledger, guide, language chooser and first-boot chooser** all play one dedicated **menu song**, a slow, warm music box (the guide opened from the pause menu keeps the shelf's own song in its quiet pause mix instead, so the shelf comes back exactly as it was left). **Classic** shelves rotate through five songs by shelf (shelf 1 the first, shelf 6 the first again); **Lockdown** plays a dark, hard song by tier (tier 0 the slowest, tiers 2 and 3 the hardest); a Classic shelf on **FIRE: FAST** borrows the dark songs by shelf; the **Daily Pass** has its own song. Pausing, peeking, results, failing and the sound effects work the same on top of whichever song plays.
 
 **Reactions.**
 
@@ -1146,7 +1146,7 @@ A step is a sixteenth note of **5 to 12 frames** depending on the song (180 down
 
 **Stereo.** Hook, bass and pulse in the middle; the pad a little right; the drums a little left; the chimes right; the hiss and noise effects far right; the alarm far left.
 
-**Sound effects** run on their own small sequencer with priorities, so a small sound never cuts a bigger one: a rising pentatonic tap for each gem you chain (it climbs with the chain length and tops out at ten gems), a short step back when you drop one, a buzzing pair of notes for a refused word, a rush of air for a peel that finds nothing, a falling hiss and a sliding chime for a scorch, a rising flare when a flame is lit, a low crackle when the fire creeps, and a soft blip on every menu move.
+**Sound effects** run on their own small sequencer with priorities, so a small sound never cuts a bigger one: a rising pentatonic tap for each gem you chain (it climbs with the chain length and tops out at ten gems, and its five notes come from the playing song's own scale), a short step back when you drop one, a buzzing pair of notes for a refused word, a rush of air for a peel that finds nothing, a falling hiss and a sliding chime for a scorch, a rising flare when a flame is lit, a low crackle when the fire creeps, and a soft blip on every menu move.
 
 The songs (generated from `tools/music/songs_src.py`; the checker compares this table with `source/songs.c`):
 

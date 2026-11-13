@@ -248,6 +248,7 @@ bool langLoad(int idx)
     loadFailed = false;
     if (idx == LANG_EN) return true;
     if (!langAvailable(idx)) return false;
+    musicHush();                      // the load blocks for 0.2 s to 7 s with no musicTick: no frozen chord meanwhile
     gfxLoading(langName(idx));
 #ifdef ARM9
     cpuStartTiming(0);

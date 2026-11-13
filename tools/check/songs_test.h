@@ -76,6 +76,64 @@ static void pitchWatch(void)
 }
 static void pitchRun(int n) { for (int i = 0; i < n; i++) { musicTick(&g); pitchWatch(); } }
 
+// The tap and untap notes belong to the song's scale: for every song and chain length 1..10 the chime's pitch class
+// over the song's tonic is one of the mode's seven, the notes climb with the chain, and a chain of 3 in a minor-third
+// mode is never a major third (the old tap table clashed with the two Dorian songs and the Hijaz song)
+static void tapScaleTests(void)
+{
+    u16 nhz[128];
+    musicBuildNotes(nhz);
+    int outOfKey = 0, notClimbing = 0, majorThirdInMinor = 0, checked = 0;
+    for (int i = 0; i < NSONGS; i++) {
+        const Song *sg = &SONGS[i];
+        musicForceSong(sg);
+        g.state = ST_PLAY;
+        musicNewShelf(1, false);
+        mrun(40);
+        bool minorThird = T_SCALE[sg->mode][2] == 3;
+        int prev = -1;
+        for (int id = SFX_TAP; id <= SFX_UNTAP; id++) {
+            prev = -1;
+            for (int k = 1; k <= 10; k++) {
+                musicSfx(id, k); mrun(1);
+                int hz = mdbg().hz[5], note = -1;
+                for (int n = 0; n < 128; n++) if (nhz[n] == hz) { note = n; break; }
+                int pc = ((note - sg->root) % 12 + 12) % 12;
+                bool in = false;
+                for (int d = 0; d < 7; d++) if (T_SCALE[sg->mode][d] == pc) in = true;
+                if (note < 0 || !in) outOfKey++;
+                if (note <= prev) notClimbing++;
+                if (k == 3 && minorThird && pc == 4) majorThirdInMinor++;
+                prev = note; checked++;
+                mrun(40);
+            }
+        }
+    }
+    musicForceSong(NULL);
+    CHECK("every tap and untap note of every song is in the song's own scale", outOfKey == 0 && checked == NSONGS * 20);
+    CHECK("... and climbs with the chain length", notClimbing == 0);
+    CHECK("... a chain of three never plays a major third in a minor-third song (STAGE LIGHTS, PURDIE WALK, the minor songs)", majorThirdInMinor == 0);
+}
+
+// A language load blocks with no musicTick: the chord must not hold through it (musicHush), and the music must come back
+static void hushTests(void)
+{
+    memset(&S, 0, sizeof(S)); S.music = 1;
+    musicForceSong(&SONGS[3]);
+    g.state = ST_PLAY; musicNewShelf(1, false);
+    for (int f = 0; f < 400; f++) { mrun(1); if (f % 40 == 0) musicWord(5, 0, false); }
+    int before = 0;
+    for (int v = 0; v < 8; v++) before += stubVol[v];
+    CHECK("music is sounding before the load", before > 0);
+    CHECK("langLoad (a blocking read with no frames) leaves every channel silent, not holding the chord", langLoad(LANG_ES) && ({ int sum = 0; for (int v = 0; v < 8; v++) sum += stubVol[v]; sum == 0; }));
+    int back = 0;
+    for (int f = 0; f < 60; f++) { mrun(1); }
+    for (int v = 0; v < 8; v++) back += stubVol[v];
+    CHECK("... and the next ticks bring the music back", back > 0);
+    CHECK("langLoad back to English", langLoad(LANG_EN));
+    musicForceSong(NULL);
+}
+
 static void pitchTests(void)
 {
     boardOf('a'); g.passLen = 0;
