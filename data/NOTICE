@@ -1,0 +1,18 @@
+Licence of the files in data/
+
+These binary word lists are DERIVED DATA. They are not covered by the repository's MIT licence alone: each
+carries the licences of the sources it was compiled from. Complete table, licence texts and the attribution
+required of a distributor: docs/THIRD-PARTY.md and LICENSES/ at the repository root. The languages are in
+data/lang/NOTICE.
+
+  dict.bin      ENABLE (public domain); Princeton WordNet lemmas (WordNet licence, LICENSES/WordNet-3.0.txt);
+                dwyl/english-words (Unlicense); the common-word tier comes from FrequencyWords 2018 (hermitdave,
+                CC BY-SA 4.0, https://creativecommons.org/licenses/by-sa/4.0/) and google-10000-english.
+                Changes made: filtered, merged, truncated and packed into the WPD3 binary format.
+  pools.bin     hand-written lists; Princeton WordNet lexical categories (WordNet licence); ordering and filtering
+                by FrequencyWords (CC BY-SA 4.0); blocklist from LDNOOBW (CC BY 4.0), google-profanity-words
+                and zacanger/profane-words (MIT).
+  variants.bin  wooorm/dictionaries en and en-GB Hunspell dictionaries (SCOWL, permissive licences).
+
+WordNet 3.0 Copyright 2006 by Princeton University. All rights reserved. The full licence text is in
+LICENSES/WordNet-3.0.txt and applies to every copy of the derived data.

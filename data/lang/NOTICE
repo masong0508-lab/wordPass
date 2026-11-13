@@ -1,0 +1,17 @@
+Licence of the files in data/lang/<code>/ (dict.bin, pools.bin, letters.bin; es fr de it pt nl sv pl da fi)
+
+Derived data, built by tools/lang from the sources below; each source's licence applies to what was taken
+from it. Complete table with links: docs/THIRD-PARTY.md; licence texts: LICENSES/ at the repository root.
+Changes made: word forms expanded, filtered, normalised to A-Z, ranked and packed into binary formats.
+
+  Dictionaries   Hunspell dictionaries of wooorm/dictionaries (es GPL-3.0/LGPL-3.0/MPL-1.1; fr MPL-2.0;
+                 de GPL-2.0/GPL-3.0; it GPL-3.0; pt LGPL-3.0/MPL-2.0; nl BSD-3-Clause/CC BY 3.0; sv LGPL-3.0;
+                 pl GPL-3.0/LGPL-3.0/MPL-2.0; da GPL-2.0/LGPL-2.1/MPL-1.1); only derived word lists.
+  Frequency      FrequencyWords 2018, hermitdave, from OpenSubtitles: CC BY-SA 4.0.
+  fi/dict.bin    Voikko morphology (corevoikko/voikko-fi, GPL-2.0 or later) and the Universal Dependencies
+                 Finnish treebanks (CC BY-SA 3.0/4.0; FTB CC BY 4.0).
+  pools.bin      Open Multilingual Wordnet and the wordnets MCR, WOLF, MultiWordNet, OpenWN-PT (CC BY-SA 3.0),
+                 Open Dutch WordNet (CC BY-SA 4.0), SALDO, plWordNet, DanNet, Norwegian Wordnet, FinnWordNet,
+                 OdeNet (CC BY-SA 4.0) with CILI, Wiktionary-derived wordnets (CC BY-SA 3.0), Princeton WordNet
+                 3.0 (LICENSES/WordNet-3.0.txt), FreeDict dictionaries (GPL-2.0 or later; sv da es fr pt nl),
+                 LDNOOBW blocklists (CC BY 4.0).

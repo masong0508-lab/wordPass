@@ -1,0 +1,17 @@
+wordPass: notices
+
+The program source (source/, the scripts in tools/, build files, the text in docs/) is MIT licensed: see LICENSE.
+
+The DATA in this repository and inside wordPass.nds is NOT covered by that MIT grant alone. The files in data/
+are word lists compiled from third-party sources, each under its own licence (some share-alike, some copyleft).
+docs/THIRD-PARTY.md lists every input, its licence, what derived data ships and where, the attributions those
+licences require, and the decisions that only the owner can make. LICENSES/ holds the licence texts that have
+to travel with the data (Princeton WordNet, GPL-2.0).
+
+Short form:
+  - The English and all other language dictionaries and pass-word pools derive from Princeton WordNet (licence
+    text in LICENSES/WordNet-3.0.txt, which must accompany them), the ENABLE list (public domain), the
+    FrequencyWords OpenSubtitles lists (CC BY-SA 4.0), Hunspell and SCOWL dictionaries (various), wordnets
+    (CC BY, CC BY-SA, own licences), the Voikko morphology and FreeDict dictionaries (GPL-2.0 or later) and
+    profanity lists (CC BY 4.0, MIT).
+  - data/NOTICE and data/lang/NOTICE repeat this next to the files.

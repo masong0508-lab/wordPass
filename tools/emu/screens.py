@@ -37,9 +37,17 @@ CFG = {'rom': os.path.join(REPO, 'wordPass.nds')}
 # registry
 # ---------------------------------------------------------------------------------------------
 SHOTS = {}          # function name -> (files, function)
+ROOTED = set()      # shots whose files go to the repository root (the README's pictures), not docs/img
 def shot(*files):
     def deco(fn):
         SHOTS[fn.__name__] = (files, fn)
+        return fn
+    return deco
+def readme_shot(*files):
+    """Like @shot, for the pictures at the top of README.md (screenshot*.png in the repository root). Not read by
+    tools/check_guide.py, which only knows the guide's pictures in docs/img."""
+    def deco(fn):
+        SHOTS[fn.__name__] = (files, fn); ROOTED.add(fn.__name__)
         return fn
     return deco
 
@@ -57,6 +65,11 @@ def _font(size, bold=True):
 def grab(e):
     """The 256x384 screenshot (top screen above, touch screen below) as an RGB image."""
     return e.emu.screenshot().convert('RGB')
+
+def save_root(img, name):
+    """A full-colour-reduced PNG in the repository root (README pictures), 256 x 384 as the DS shows it."""
+    q = img.convert('RGB').quantize(colors=256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
+    q.save(os.path.join(REPO, name), optimize=True)
 
 def top(img): return img.crop((0, 0, 256, 192))
 def touch(img): return img.crop((0, 192, 256, 384))
@@ -921,8 +934,43 @@ def run_one(name):
     t = time.time()
     fn()
     for f in files:
-        assert os.path.exists(os.path.join(OUT, f)), f'{name} did not write {f}'
+        assert os.path.exists(os.path.join(REPO if name in ROOTED else OUT, f)), f'{name} did not write {f}'
     return time.time() - t
+
+@readme_shot('screenshot.png')
+def readme_play():
+    """README: a shelf in play, a five-letter chain held for the panel to price, one pass letter found."""
+    e = boot(); to_play(e); calm(e)
+    craft(e, LAYOUT_BOARD)
+    path = hit_path(e, 'stone', 3, 2); e.chain(path); e.press('A', settle=30)
+    craft(e, LAYOUT_BOARD); calm(e)
+    c, r = e.secret_cells(e.state())[1]; e.peel(c, r); calm(e)
+    e.set_heat(4); e.set_turn(7); e.run(260)
+    w = [(1, 0), (1, 1), (1, 2), (1, 3), (1, 4)]
+    for (cc, rr), ch in zip(w, 'blame'): e.set_cell(cc, rr, TILE, ch)
+    e.run(30); hold_chain(e, w)
+    save_root(grab(e), 'screenshot.png')
+
+@readme_shot('screenshot-fire.png')
+def readme_fire():
+    """README: a shelf with two flames, the meter half full and the fire two turns from its next step."""
+    e = boot(); to_play(e); calm(e)
+    craft(e, LAYOUT_BOARD, back={})
+    e.set_cell(2, 0, BURN, 'o'); e.set_cell(5, 2, BURN, 'a')
+    e.set_burn(1, 2); e.set_heat(5); e.set_turn(9); e.run(260)
+    save_root(grab(e), 'screenshot-fire.png')
+
+@readme_shot('screenshot-results.png')
+def readme_results():
+    """README: the results card of a perfect pass, after the tally has finished."""
+    e = boot(); to_play(e); calm(e)
+    craft(e, LAYOUT_BOARD)
+    for word, c0 in (('stone', 3), ('garden', 0), ('planets', 6)):
+        path = hit_path(e, word, c0, 0)
+        e.chain(path); e.press('A', settle=40); e.set_heat(0); e.set_burn(0, 99)
+        craft(e, LAYOUT_BOARD)
+    pass_by_peeling(e, keep_turn=True); e.run(110)
+    save_root(grab(e), 'screenshot-results.png')
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)

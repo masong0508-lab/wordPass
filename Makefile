@@ -4,7 +4,7 @@
 .SUFFIXES:
 
 # `make check` (native rule tests) and `make dict` run without devkitARM
-NATIVE_GOALS := check dict pools variants guide guide-check songs music-render bot bot-run
+NATIVE_GOALS := check dict pools variants guide guide-check songs music-render music-check bot bot-run
 ifneq ($(MAKECMDGOALS),)
 ifeq ($(filter-out $(NATIVE_GOALS),$(MAKECMDGOALS)),)
 NATIVE := 1
@@ -72,7 +72,7 @@ ifneq (,$(findstring icon.bmp,$(icons)))
   export GAME_ICON := $(CURDIR)/icon.bmp
 endif
 
-.PHONY: $(BUILD) clean dict pools variants check guide guide-check songs music-render bot bot-run
+.PHONY: $(BUILD) clean dict pools variants check guide guide-check songs music-render music-check bot bot-run
 
 # The ROM filesystem (NitroFS): the ten languages, lang/<code>/{dict,pools,letters}.bin, copied from data/lang so the
 # source of truth stays in data/ (the copy is not committed). English is compiled in and not in it.
@@ -82,7 +82,7 @@ endif
 
 $(BUILD):
 	@mkdir -p $@
-	@if [ -n "$(strip $(NITRO))" ]; then mkdir -p $(NITRO)/lang && cp -ru data/lang/. $(NITRO)/lang/ && rm -f $(NITRO)/lang/manifest.txt; fi
+	@if [ -n "$(strip $(NITRO))" ]; then rm -rf $(NITRO)/lang && mkdir -p $(NITRO)/lang && cp -r data/lang/. $(NITRO)/lang/ && rm -f $(NITRO)/lang/manifest.txt $(NITRO)/lang/NOTICE; fi
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
 # Regenerate the dictionary from a word list, marking COMMON words as the common tier:
@@ -121,6 +121,8 @@ check:
 	$(BUILD)/bot_check --selftest
 	python3 tools/music/build_songs.py --check || (echo 'source/songs.c is not what tools/music/songs_src.py generates: run make songs'; exit 1)
 	python3 tools/music/render.py --stats > /dev/null
+	python3 tools/check/save_sites.py
+	python3 tools/lang/gen_ui.py --check || (echo 'source/ui_strings.[ch] are not what tools/lang/gen_ui.py generates from ui_strings.tsv: run python3 tools/lang/gen_ui.py'; exit 1)
 
 # The balance bot (tools/check/bot.c): plays the real rules code headlessly with a competent and a weak player model and
 # prints per-shelf tables (docs/BALANCE.md). `make bot` builds build/bot; `make bot-run` runs English and the other
@@ -153,6 +155,10 @@ songs:
 # docs/music/*.wav and *.mid: a software render of the same song tables (no DS needed to listen)
 music-render:
 	python3 tools/music/render.py
+
+# docs/music is tracked (about 13 MB, deterministic, two seconds to render): this fails when it differs from a fresh render.
+music-check:
+	python3 tools/music/render_check.py
 
 clean:
 	@echo clean ...

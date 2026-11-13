@@ -20,10 +20,13 @@ OPT_BACK_Y = 161
 
 ONLY = [k for k in os.environ.get('WP_ONLY', '').split('|') if k]   # development filter: run scenarios whose name has one of these
 
+ran = 0         # scenarios executed: a filter that matches nothing must not read as a pass
+
 def scenario(name):
     def deco(fn):
-        global fails
+        global fails, ran
         if ONLY and not any(k in name for k in ONLY): return
+        ran += 1
         try:
             fn(); print('PASS', name)
         except Exception as ex:
@@ -1276,6 +1279,11 @@ def _():
     check_dpad('right')
 
 # ---- panel and HUD (item 12) ------------------------------------------------------------
+def lit_extent(px, x0, y0, x1, y1, thr=250):
+    """(leftmost, rightmost) x of the lit pixels in the rectangle, or None."""
+    xs = [x for y in range(y0, y1) for x in range(x0, x1) if sum(px[x, y]) > thr]
+    return (min(xs), max(xs)) if xs else None
+
 def px5(px, x, y): return tuple(v >> 3 for v in px[x, y])
 def count_color(px, x0, y0, x1, y1, rgb, tol=2):
     """Pixels of the screenshot rectangle within `tol` (5-bit units) of the colour `rgb`."""
@@ -1303,10 +1311,18 @@ def check_panel(tag):
     e.tap(X + 50, 12, settle=10); assert e.state()['state'] == ST_PLAY, f'{tag}: a tap beside the pause button paused'
     e.tap(X + 70, 12, settle=10); g = e.state(); assert g['state'] == ST_PAUSE, f'{tag}: the pause button did not pause: {g["state"]}'
     e.press('START', settle=20); assert e.state()['state'] == ST_PLAY
+    # the 12 x 12 box answers to two more pixels on every side (its corners at X+62..X+77 by 4..19; the touch reads a pixel loose at the far edge), and not to a third
+    for (tx, ty) in ((X + 62, 4), (X + 76, 18), (X + 62, 18), (X + 76, 4)):
+        e.tap(tx, ty, settle=10); assert e.state()['state'] == ST_PAUSE, f'{tag}: the pause margin ({tx},{ty}) did not pause'
+        e.press('START', settle=20); assert e.state()['state'] == ST_PLAY
+    for (tx, ty) in ((X + 60, 12), (X + 70, 2), (X + 70, 22)):
+        e.tap(tx, ty, settle=10); assert e.state()['state'] == ST_PLAY, f'{tag}: ({tx},{ty}) is outside the pause button and paused'
     # worst-case text: a six-digit score, a nine-letter pass with some letters found, a long turn count
     e.set_score(999999); e.set_pass(9, 0b101010101); e.set_turn(150); e.run(10)
     e.shot(f'{out}/rules_panel_worst_{tag}.png'); px = e.pixels()
     bad = lit_outside_panel(px); assert not bad, f'{tag}: panel text reaches the margin: {len(bad)} lit px, first {bad[:3]}'
+    ext = lit_extent(px, 165, 27, 256, 37)         # the top screen's HUD score: drawn at x 170 (its leftmost lit pixel; the rest of the row holds the fire meter)
+    assert ext and ext[0] == 170, f'{tag}: the HUD score spans x {ext}, expected to start at 170'
     # the tracker: found slots are filled diamonds (white), the others gold outlines
     found_px = count_color(px, X, 192 + 42, X + 72, 192 + 52, (31, 31, 31), 1)
     outline_px = count_color(px, X, 192 + 42, X + 72, 192 + 52, (16, 11, 2), 1)
@@ -1357,6 +1373,13 @@ def check_panel(tag):
     e.press('Y', settle=5); e.set_turn(0)
     # pressed buttons look pressed, then let go
     e.tap(X + 38, 130, hold=4, settle=0); assert e.state()['pressBits'] & 1, f'{tag}: SUBMIT not pressed'
+    e.run(12)
+    for (tx, ty) in ((X + 1, 120), (X + 74, 120), (X + 3, 141), (X + 72, 141), (X + 38, 141)):    # the whole 76 x 24 button answers: its top and bottom rows (the board's wide hit circles own the bottom corners)
+        e.tap(tx, ty, hold=4, settle=0); assert e.state()['pressBits'] & 1, f'{tag}: SUBMIT not pressed at ({tx},{ty})'
+        e.run(12)
+    for (tx, ty) in ((X + 38, 118), (X + 38, 145)):                    # just outside it (the gap above CLEAR at y 150)
+        e.tap(tx, ty, hold=4, settle=0); assert not e.state()['pressBits'] & 1, f'{tag}: SUBMIT pressed outside it at ({tx},{ty})'
+        e.run(12)
     e.run(12); e.tap(X + 38, 158, hold=4, settle=0); assert e.state()['pressBits'] & 2, f'{tag}: CLEAR not pressed'
     e.run(12); e.tap(X + 38, 182, hold=4, settle=0); assert e.state()['pressBits'] & 4, f'{tag}: PEEK not pressed'
     e.run(12); e.tap(X + 38, 182, settle=0)  # unlatch the peek again
@@ -2914,11 +2937,6 @@ def ui_text(code, row_id, *args):
 def lit_rect(px, x0, y0, x1, y1, thr=250):
     return sum(1 for y in range(y0, y1) for x in range(x0, x1) if sum(px[x, y]) > thr)
 
-def lit_extent(px, x0, y0, x1, y1, thr=250):
-    """(leftmost, rightmost) x of the lit pixels in the rectangle, or None."""
-    xs = [x for y in range(y0, y1) for x in range(x0, x1) if sum(px[x, y]) > thr]
-    return (min(xs), max(xs)) if xs else None
-
 def enlarged(path):
     """Writes <path>_touch2x.png (the touch screen at 2x) and <path>_top2x.png next to a shot, for reading it."""
     from PIL import Image
@@ -3033,5 +3051,9 @@ for _idx in (0, 10, 8):                      # English, Finnish and Polish: the 
             set_hand(left); feature_checks(left, idx)
 lang_title(0); set_hand(False)
 
+if ran == 0:
+    print(f'RULES FAILED: no scenario ran (WP_ONLY={os.environ.get("WP_ONLY", "")!r} matches none)')
+    sys.exit(1)
+print(f'{ran} scenario(s) run')
 print('RULES OK' if not fails else f'RULES FAILED: {fails}')
 sys.exit(fails)

@@ -633,8 +633,13 @@ and `make variants` rebuilds it. Rebuild the dictionary from any word lists
 mark common:
 
 ```bash
-make dict WORDS=tools/enable1.txt COMMON=tools/common_words.txt
+make dict          # the shipped dictionary: WORDS defaults to tools/enable1.txt,tools/words/extra.txt,tools/words/more_open.txt
+make dict WORDS=tools/enable1.txt,tools/words/extra.txt,tools/words/more_open.txt COMMON=tools/common_words.txt   # the same, spelled out
 ```
+
+Giving `WORDS` fewer lists (ENABLE alone, say) builds a smaller dictionary than the shipped one (about 173,000 words
+instead of 183,000), without the British spellings, modern words and mild curses of `extra.txt` or the WordNet
+additions of `more_open.txt`.
 
 `make dict` runs `gen_dict.py --verify` afterwards, which re-reads the binary
 with a Python port of the device lookup and checks every input word (with its
@@ -648,36 +653,58 @@ list (hermitdave, CC-BY-SA 4.0) or in
 ## Layout
 
 ```
-source/main.c    state machine, input
-source/board.c   hex grid, chaining, scoring, gravity, fire, peeling
-source/dict.c    packed dictionary lookup
-source/lang.c    the active language's letter tables (weights, values, vowels, Qu, rare letters)
+source/main.c      state machine, input
+source/board.c     hex grid, chaining, scoring, gravity, fire, peeling
+source/dict.c      packed dictionary lookup
+source/pools.c     the pass-word library (WPP1)
+source/lang.c      the active language's letter tables (weights, values, vowels, Qu, rare letters)
 source/langload.c  reads a language from the ROM filesystem (NitroFS, with a fast raw card path), LOADING
-source/gfx.c     software renderer for both screens
-source/music.c   PSG sequencer and adaptive stems
-source/songs.c   the ten songs as tables (generated: make songs); source/songs.h the Song struct
-tools/music/     XM analysis, song building, the PSG model and MIDI export (docs/MUSIC.md, docs/music/)
-source/font.c    5x7 bitmap font
-source/guide.c   the eight HOW TO PLAY pages, built from the rules' own tables
-source/settings.c options, records, stats, checksummed FAT save, Daily clock and streak
-source/debug.c   fixed-layout state mirror and poke channel for the test harness
-tools/gen_dict.py  WPD2 dictionary builder and --verify round trip
-tools/lang/      ten-language data pipeline (Hunspell expander, word, letter and pool builders, fetch.sh)
-
-tools/gen_dict.py  WPD3 dictionary builder and --verify round trip
-tools/check/     native rule tests: make check (gcc, no toolchain)
-tools/emu/       headless DeSmuME harness, smoke.py and test_rules.py (see TESTING.md)
-tools/emu/screens.py   regenerates every picture of the written guide (make guide)
+source/gfx.c       software renderer for both screens
+source/ui.c        interface text: formatter, per-language lookup and fitting
+source/ui_strings.c/.h  every interface string in eleven languages (generated: python3 tools/lang/gen_ui.py)
+source/music.c     PSG sequencer and adaptive stems
+source/songs.c     the ten songs as tables (generated: make songs); source/songs.h the Song struct
+source/font.c      5x7 bitmap font
+source/guide.c     the eight HOW TO PLAY pages, built from the rules' own tables
+source/settings.c  options, records, stats, checksummed FAT save, Daily clock and streak
+source/debug.c     fixed-layout state mirror and poke channel for the test harness
+data/              English dictionary, pass-word library and spelling variants (dict.bin, pools.bin, variants.bin);
+                   data/lang/<code>/ the ten other languages; NOTICE files give the licences of this derived data
+tools/gen_dict.py  WPD3 dictionary builder and --verify round trip (also the spelling variants)
+tools/gen_pools.py builds data/pools.bin from tools/words/pools
+tools/derive_extra.py, derive_variants.py, unmunch.py   derive the extra word lists and spelling variants
+tools/common_words.txt  the common tier (top of the FrequencyWords list, CC BY-SA 4.0, filtered to ENABLE words)
+tools/enable1.txt  the ENABLE word list the dictionary starts from
+tools/words/       word sources, blocklists and SOURCES.md (what each list is and its licence)
+tools/lang/        ten-language data pipeline (Hunspell expander, word, letter and pool builders, fetch.sh,
+                   ui_strings.tsv and gen_ui.py)
+tools/music/       XM analysis, song building, the PSG model and MIDI export (docs/MUSIC.md, docs/music/)
+tools/check/       native rule tests: make check (gcc, no toolchain)
+tools/emu/         headless DeSmuME harness, smoke.py and test_rules.py (see TESTING.md)
+tools/emu/screens.py   regenerates every picture of the written guide and the README (make guide)
 tools/check_guide.py   checks docs/GUIDE.md against the source and the data files
-docs/GUIDE.md    the complete written guide; docs/img/ its pictures
-tools/common_words.txt
-data/dict.bin
+docs/GUIDE.md      the complete written guide; docs/img/ its pictures
+docs/THIRD-PARTY.md, NOTICE, LICENSES/   every third-party input, its licence and the notices that must travel with the data
 ```
 
 ## License
 
-MIT. Word list: ENABLE, public domain. Common-word tier derived from
-hermitdave/FrequencyWords (CC-BY-SA 4.0) and first20hours/google-10000-english.
+The code is MIT (`LICENSE`): `source/`, the scripts in `tools/`, the build files and the text of `docs/`.
+
+**The files in `data/` (and the copies in `wordPass.nds`) are not MIT-only.** They are word lists compiled
+from third-party sources and each carries the licences of its sources, among them Princeton WordNet (the
+WordNet licence, text in `LICENSES/WordNet-3.0.txt`), the public-domain ENABLE list, hermitdave/FrequencyWords
+(CC BY-SA 4.0), Hunspell dictionaries (GPL, LGPL, MPL and others), wordnets (CC BY, CC BY-SA), the Voikko
+morphology and FreeDict dictionaries (GPL-2.0 or later) and bad-word lists (CC BY 4.0, MIT). `NOTICE`,
+`data/NOTICE`, `data/lang/NOTICE` and `docs/THIRD-PARTY.md` list every input, what was derived from it, the
+notices required and the licensing questions that are still open. `tools/words/SOURCES.md` has the details.
+
+English data: ENABLE (public domain); Princeton WordNet 3.1 and dwyl/english-words (Unlicense) for
+`more_open.txt` and the `wn_*.txt` pools; wooorm/dictionaries en and en-GB (SCOWL) for the spelling variants;
+the common-word tier from hermitdave/FrequencyWords (CC BY-SA 4.0, filtered and truncated) and
+first20hours/google-10000-english; blocklists from LDNOOBW (CC BY 4.0), google-profanity-words and
+zacanger/profane-words (MIT). The music is derived from the author's other game, bore-gba; see `docs/MUSIC.md`
+and `docs/THIRD-PARTY.md` for what is and is not stated about those songs.
 
 Language data credits (details and licences in `tools/words/SOURCES.md`): Hunspell dictionaries from
 wooorm/dictionaries (Spanish, French, German, Italian, Portuguese, Dutch, Swedish, Polish, Danish);
