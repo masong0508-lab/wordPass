@@ -11,10 +11,10 @@
 | `pools/wn_<theme>.txt` | pass words derived from WordNet lexical categories | Princeton WordNet 3.1 (WordNet licence), words in the top 50k of the frequency list or tagged in SemCor, ordered familiar first |
 | `blocklist.txt` | words that never become a pass word | LDNOOBW (CC BY 4.0), google-profanity-words, zacanger/profane-words (MIT), plus this project's own additions |
 
-Library size: 40 themes, about 17,900 pass words in 122 KB (`data/pools.bin`).
+Library size: 40 themes, about 17,700 pass words in 121 KB (`data/pools.bin`).
 
 Content ceiling: the strongest words the library will use are *holy*, *damn*, *crappola* and *moobs*.
-Anything harsher is on the blocklist and is never picked as a pass word.
+Anything harsher is on the blocklist and is never picked as a pass word. The content audit's removals (slurs, junk, off-theme words) are on it too, see `docs/language-audit/README.md`.
 
 ## Regenerating
 

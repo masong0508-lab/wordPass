@@ -622,45 +622,45 @@ The pass words are checked against the dictionary, and the word library never go
 | 1 | **BINDERY** | 156 | book, spine, jacket, binding, endpaper, signature |
 | 2 | **INK** | 120 | font, quill, scribe, cursive, charcoal, parchment |
 | 3 | **VERSE** | 113 | poem, rhyme, sonnet, epigram, limerick, interlude |
-| 4 | **TALES** | 152 | myth, fable, legend, romance, thriller, biography |
-| 5 | **ATLAS** | 478 | pole, atlas, tropic, compass, meridian, gazetteer |
+| 4 | **TALES** | 151 | myth, fable, legend, romance, thriller, biography |
+| 5 | **ATLAS** | 463 | pole, atlas, tropic, compass, meridian, gazetteer |
 | 6 | **ARCHIVE** | 82 | roll, vault, ledger, lexicon, register, chronicle |
 | 7 | **LAMP** | 84 | lamp, ember, candle, lantern, twilight, fireplace |
 | 8 | **STUDY** | 128 | sofa, study, alcove, lectern, armchair, chemistry |
-| 9 | **BEASTS** | 362 | down, human, entire, mankind, elephant, butterfly |
+| 9 | **BEASTS** | 358 | down, human, entire, mankind, elephant, butterfly |
 | 10 | **MUSIC** | 148 | tune, music, melody, harmony, baritone, xylophone |
 | 11 | **HERBAL** | 323 | glad, shoot, simple, heather, veronica, pineapple |
 | 12 | **VOYAGE** | 150 | ship, yacht, vessel, galleon, schooner, starboard |
-| 13 | **COOKERY** | 419 | wine, drink, dinner, chicken, sandwich, breakfast |
+| 13 | **COOKERY** | 415 | wine, drink, dinner, chicken, sandwich, breakfast |
 | 14 | **MYTH** | 121 | ares, hades, apollo, cyclops, basilisk, leviathan |
-| 15 | **ANATOMY** | 298 | back, blood, behind, breathe, shoulder, permanent |
-| 16 | **PLAY** | 189 | game, score, sprint, stadium, marathon, badminton |
-| 17 | **ALCHEMY** | 406 | till, water, silver, plastic, material, crackling |
-| 18 | **WEATHER** | 134 | rain, sleet, clouds, thunder, blizzard, lightning |
-| 19 | **GUILD** | 337 | more, chief, doctor, general, director, president |
-| 20 | **SMITHY** | 372 | mike, watch, weapon, machine, computer, automatic |
+| 15 | **ANATOMY** | 292 | back, blood, behind, breathe, shoulder, permanent |
+| 16 | **PLAY** | 182 | game, score, sprint, stadium, marathon, badminton |
+| 17 | **ALCHEMY** | 405 | till, water, silver, plastic, material, crackling |
+| 18 | **WEATHER** | 107 | rain, sleet, clouds, thunder, blizzard, lightning |
+| 19 | **GUILD** | 328 | boss, chief, doctor, general, director, president |
+| 20 | **SMITHY** | 370 | mike, watch, weapon, machine, computer, automatic |
 | 21 | **ATTIRE** | 148 | suit, dress, turtle, clothes, necklace, underwear |
-| 22 | **HOUSE** | 215 | safe, truck, bottle, kitchen, bathroom, ambulance |
-| 23 | **MOODS** | 233 | love, enjoy, please, passion, surprise, surrender |
-| 24 | **CURSES** | 64 | holy, moobs, damned, hogwash, crappola, poppycock |
-| 25 | **WORDS** | 1050 | okay, thank, thanks, talking, speaking, screaming |
-| 26 | **DEEDS** | 1271 | help, going, coming, getting, watching, listening |
+| 22 | **HOUSE** | 177 | safe, empty, bottle, kitchen, bathroom, furniture |
+| 23 | **MOODS** | 232 | love, enjoy, please, passion, surprise, surrender |
+| 24 | **CURSES** | 66 | holy, moobs, damned, hogwash, crappola, poppycock |
+| 25 | **WORDS** | 1048 | okay, thank, thanks, talking, speaking, screaming |
+| 26 | **DEEDS** | 1267 | help, going, coming, getting, watching, listening |
 | 27 | **MOTION** | 126 | come, bring, follow, descend, withdraw, replicate |
-| 28 | **TRAITS** | 3967 | just, right, better, through, together, beautiful |
-| 29 | **CLANS** | 310 | dead, party, people, company, military, following |
-| 30 | **MINDS** | 562 | know, whole, listen, believe, remember, attention |
-| 31 | **FOLK** | 1274 | have, great, father, brother, daughter, detective |
-| 32 | **TIMES** | 179 | then, years, second, morning, tomorrow, yesterday |
-| 33 | **MAKING** | 227 | shut, dirty, create, imagine, activate, improvise |
-| 34 | **WARES** | 976 | well, still, office, working, hospital, apartment |
-| 35 | **SHAPES** | 342 | much, first, little, nothing, thousand, relations |
-| 36 | **CHANGE** | 239 | slow, sober, happen, correct, complete, disappear |
-| 37 | **TRADE** | 261 | take, money, things, letting, property, insurance |
-| 38 | **STATES** | 646 | want, thing, chance, problem, security, situation |
-| 39 | **EVENTS** | 454 | time, start, change, wedding, accident, happening |
-| 40 | **LEXICON** | 787 | looks, really, friends, happened, sometimes |
+| 28 | **TRAITS** | 3948 | just, right, better, alright, together, beautiful |
+| 29 | **CLANS** | 290 | army, party, people, company, military, following |
+| 30 | **MINDS** | 555 | know, whole, listen, believe, remember, attention |
+| 31 | **FOLK** | 1253 | girl, great, father, brother, daughter, detective |
+| 32 | **TIMES** | 170 | then, years, second, morning, tomorrow, yesterday |
+| 33 | **MAKING** | 224 | shut, dirty, create, imagine, activate, improvise |
+| 34 | **WARES** | 974 | well, still, office, working, hospital, apartment |
+| 35 | **FIGURES** | 329 | much, first, little, nothing, thousand, perimeter |
+| 36 | **CHANGE** | 237 | slow, sober, happen, correct, complete, disappear |
+| 37 | **TRADE** | 260 | take, money, things, letting, property, insurance |
+| 38 | **STATES** | 644 | want, thing, chance, problem, security, situation |
+| 39 | **EVENTS** | 453 | time, start, change, wedding, accident, happening |
+| 40 | **LEXICON** | 785 | looks, really, friends, happened, sometimes |
 
-The library holds **17,903 pass words** in 40 themes. The table lists each theme's examples at each length from 4 to 9 letters, most familiar first (LEXICON has no four-letter words). The eight bookish themes of shelves 1 to 8 are the original ones. The number of words at each length varies; here is the split for the first eight themes:
+The library holds **17,682 pass words** in 40 themes. The table lists each theme's examples at each length from 4 to 9 letters, most familiar first (LEXICON has no four-letter words). The eight bookish themes of shelves 1 to 8 are the original ones. The number of words at each length varies; here is the split for the first eight themes:
 
 <!-- check:pool-lengths -->
 | Theme | 4 | 5 | 6 | 7 | 8 | 9 |
@@ -668,8 +668,8 @@ The library holds **17,903 pass words** in 40 themes. The table lists each theme
 | BINDERY | 19 | 28 | 33 | 25 | 34 | 17 |
 | INK | 23 | 23 | 30 | 18 | 16 | 10 |
 | VERSE | 11 | 20 | 24 | 26 | 19 | 13 |
-| TALES | 17 | 31 | 38 | 34 | 20 | 12 |
-| ATLAS | 76 | 94 | 92 | 79 | 86 | 51 |
+| TALES | 17 | 31 | 38 | 34 | 20 | 11 |
+| ATLAS | 75 | 93 | 91 | 76 | 79 | 49 |
 | ARCHIVE | 10 | 13 | 20 | 23 | 9 | 7 |
 | LAMP | 17 | 21 | 14 | 13 | 11 | 8 |
 | STUDY | 11 | 19 | 25 | 33 | 25 | 15 |
@@ -1357,7 +1357,7 @@ The dictionary holds **183,419** words of 3 to 20 letters, **159,922** of them i
 | File | Format | Size in bytes | What it is |
 | --- | --- | --- | --- |
 | `data/dict.bin` | WPD3 | 1,206,266 | the dictionary: magic, eighteen `u32` counts for lengths 3 to 20, then sorted fixed-width records per length |
-| `data/pools.bin` | WPP1 | 122,045 | the pass words: magic, a theme count, per theme a name and six counts for lengths 4 to 9, then the words |
+| `data/pools.bin` | WPP1 | 120,684 | the pass words: magic, a theme count, per theme a name and six counts for lengths 4 to 9, then the words |
 | `data/variants.bin` | WPV1 | 16,077 | the words spelled one way only, in the dictionary's layout |
 | `wordPass.cfg` (on the card) | WPS2 | 136 | settings, records, the Daily state and the Ledger, with a CRC-16 |
 

@@ -218,7 +218,8 @@ def load_target(code, raw):
 def read_blocklist(code, raw, here):
     """(exact words, prefixes).  LDNOOBW entries count when they are a single word (a phrase is not
     a word); this project's own list (tools/words/lang/CODE/blocklist.txt) blocks every word that starts
-    with an entry of 5+ letters, and with any entry written with a trailing *."""
+    with an entry of 5+ letters, and with any entry written with a trailing *; an entry written
+    with a leading = blocks that exact word only; a # starts a comment."""
     exact, prefix = set(), set()
     p = os.path.join(raw, "ldnoobw", code)
     if os.path.exists(p):
@@ -227,12 +228,13 @@ def read_blocklist(code, raw, here):
                 exact.add(norm(l.strip()))
     p = os.path.join(here, "words", "lang", code, "blocklist.txt")
     for l in open(p, encoding="utf-8"):
-        for tok in l.split():
+        for tok in l.split("#")[0].split():          # a # starts a comment
+            only = tok.startswith("=")               # =word blocks that exact word only (no prefix match)
             star = tok.endswith("*")
-            w = norm(tok.rstrip("*"))
+            w = norm(tok.strip("=").rstrip("*"))
             if w:
                 exact.add(w)
-                if star or len(w) >= 5:
+                if not only and (star or len(w) >= 5):
                     prefix.add(w)
     return exact, prefix
 

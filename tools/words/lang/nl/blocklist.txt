@@ -51,3 +51,32 @@ zelfmoord
 moord*
 sperma* penis* erectie seks* hoer* kutwijf lul* gelul neuk* geneukt verneukt verkracht* nazi* piemel* pikt pikte
 droplul boerenlul manhoer
+# slur: ethnic, national, religious, sexual-orientation or gender slurs (owner's rule: the only content class removed)
+=kaaskop =mietjes =moffen =smerissen =zigeuner =zigeuners
+# junk: not a word a native speaker accepts (name, fragment, foreign word, misspelling)
+=adam =advocate =airport =amanda =ante =area =armstrong =autocue
+=avenue =back =bama =barbara =beauty =bebe =beethoven =benjamin
+=black =board =bobo =boston =cache =caesar =captain =cara
+=carter =chester =chocomel =chris =city =clark =claus =comic
+=daisy =decaf =disc =doctor =doeg =donna =drive =duitsland
+=earl =ebay =eddy =editor =facebook =farm =figaro =folk
+=frankrijk =freak =gate =gays =gloria =gray =green =hannes
+=hans =happy =hehe =hercules =hoho =hole =holland =home
+=ierland =instagram =ipad =ipod =jaap =jack =jaeger =jank
+=jantje =joel =joke =jonathan =joop =karen =kelly =king
+=kits =kwets =lady =lord =lori =madeleine =madison =madonna
+=mara =michelle =miep =mimi =mistletoe =mobile =moefti =napoleon
+=nederland =nelson =nero =nick =normandie =outcast =paddy =page
+=piet =pietje =poeet =pope =portland =rachel =range =rapunzel
+=rectrix =recu =rembrandt =rolling =roosevelt =rusland =russell =sara
+=schotland =sharon =shop =site =smith =spam =spencer =stick
+=stockholm =thomas =tiffany =token =tommy =tori =troela =troop
+=vincent =wakefield =weirdo =white =whitehall =world =wout =yankees
+=yolo =yuko
+# off-theme: clearly wrong for its theme (removed from the pools; still valid in the dictionary)
+=acht =afgrond =alkoof =auto =barkruk =buggy =canape =drie
+=drone =eikenboom =evenaar =fiets =gordijn =kauwgom =kruk =kussen
+=legerkamp =limo =limonade =maart =misdaad =nachtrust =oplader =peer
+=personeel =slak =sofa =tandvlees =tank =tapijt =taxi =tram
+=truck =twee =vector =vier =vijf =vinger =virus =woonkamer
+=zeehond =zolder

@@ -46,3 +46,14 @@ hora*
 horor*
 ragata gigolo mulatt hanrej horunge kuksug* sexuell* sexig* javlig* sexpack
 mongol*
+# slur: ethnic, national, religious, sexual-orientation or gender slurs (owner's rule: the only content class removed)
+=eskima =tattare
+# junk: not a word a native speaker accepts (name, fragment, foreign word, misspelling)
+=ankling =boom =cape =chuck =cool =dager =dansos =doing
+=eagle =enkat =evergreen =gate =hakte =heat =hook =inpa
+=ipod =jajaman =kallkod =kassako =knaboja =kolvatten =krop =kvalite
+=lassmed =lillta =nevo =oakting =omsa =raskinn =ryan =skov
+=smaaktig =sotma =spotlight =stra =tidspunkt =tvaan =tyskland =vava
+# off-theme: clearly wrong for its theme (removed from the pools; still valid in the dictionary)
+=abborre =alligator =blomma =diamant =forbjuda =hade =kvantitet =over
+=sparvagn =tank =utesluta =utom

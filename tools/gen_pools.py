@@ -70,7 +70,7 @@ THEMES = [
     ("TIMES",   [], ["noun.time"], None),
     ("MAKING",  [], ["verb.creation", "verb.contact"], None),
     ("WARES",   [], ["noun.artifact"], None),
-    ("SHAPES",  [], ["noun.shape", "noun.quantity", "noun.relation"], None),
+    ("FIGURES", [], ["noun.shape", "noun.quantity", "noun.relation"], None),
     ("CHANGE",  [], ["verb.change"], None),
     ("TRADE",   [], ["verb.possession", "noun.possession"], None),
     ("STATES",  [], ["noun.state", "verb.stative"], None),
@@ -93,7 +93,7 @@ def derive_wordnet(wn, freq_path, block_path, dictdata):
         rank.setdefault(line.split()[0], i)
     block = set()
     if block_path:
-        block = {l.strip().lower() for l in open(block_path, encoding="utf-8") if l.strip()}
+        block = {l.split("#")[0].strip().lower() for l in open(block_path, encoding="utf-8") if l.split("#")[0].strip()}
     names = {}
     for l in open(os.path.join(wn, "lexnames")):
         p = l.split()
@@ -177,7 +177,7 @@ def build(block_path):
     dictdata = open(os.path.join(HERE, "..", "data", "dict.bin"), "rb").read()
     block = set()
     if block_path and os.path.exists(block_path):
-        block = {l.strip().lower() for l in open(block_path, encoding="utf-8") if l.strip()}
+        block = {l.split("#")[0].strip().lower() for l in open(block_path, encoding="utf-8") if l.split("#")[0].strip()}
     variants = {w for f in ("us_only.txt", "uk_only.txt") for w in open(os.path.join(HERE, "words", f)).read().split()}
     def ok(w):
         return (w.isalpha() and w.isascii() and MIN_LEN <= len(w) <= MAX_LEN and w not in block and w not in variants   # no pass word is spelled differently in the two dialects

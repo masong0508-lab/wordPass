@@ -42,3 +42,22 @@ vittu
 vitun
 vitut
 perse* mulatti seksi* vitun* homoa homoilla homoksi
+# slur: ethnic, national, religious, sexual-orientation or gender slurs (owner's rule: the only content class removed)
+=eskimo =jepari =kommari =saraseeni
+# junk: not a word a native speaker accepts (name, fragment, foreign word, misspelling)
+=adhd =atrain =baby =brien =diana =emmi =erin =haamottaa
+=hantaluu =hapy =harveli =hokotys =is =ivan =jamit =jana
+=janne =jayna =karryt =kerttu =kyni =lady =lahetysto =massailla
+=megan =olka =omii =paatahti =polkkypaa =ryntaat =saadyton =stop
+=tait =toni =toniminen =uuno =ylsi =yoni =ytya
+# off-theme: clearly wrong for its theme (removed from the pools; still valid in the dictionary)
+=aidat =aidin =aitiys =alue =ampua =arabian =arvosana =asema
+=auto =estaa =haaskata =hakata =hyva =ikkuna =iloinen =inkojen
+=internet =jakelu =jeeppi =jousi =julistaa =kaden =kalat =keino
+=keppi =kesan =kiva =kodin =kohde =kolme =kreikan =kuitti
+=kurdien =kurpitsa =lapsen =latinan =liero =lintsata =lukko =luola
+=maapera =maksaa =matto =meren =mieliala =mies =naisen =osuus
+=pakko =paniikki =papin =pohko =pojan =rekka =rippeet =ruotsin
+=seuraus =siisti =silma =skottien =sohva =sopia =sormi =soveltaa
+=summa =taksi =tankki =tanko =traktori =tsaarin =tuomarit =tyhja
+=tyyppi =upea =varmuus =vastata =veren =vieda =vintti =ylistaa

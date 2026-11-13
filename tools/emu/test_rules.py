@@ -723,7 +723,7 @@ def _():
     else:
         assert g['burnEvery'] == 2 and g['heatThreshold'] == 6 and g['passLen'] == 5 and not holes, f'DAMP {g["burnEvery"]} {g["heatThreshold"]}'
     e.run(140); g = e.state()
-    assert g['msg'] == f'TALES: FIND THE {g["passLen"]} LETTER PASS', f'queued intro {g["msg"]!r}'
+    assert g['msg'] == f'TALES: FIND THE {g["passLen"]}-LETTER PASS', f'queued intro {g["msg"]!r}'
     print('   shelf 4:', name, g['pass'])
     twists = {}
     while g['shelf'] < 12:
@@ -1887,8 +1887,8 @@ def _():
         e.shot(f'{out}/rules_hint_{"left" if left else "right"}.png')
         to_title(); e.run(20); e.shot(f'{out}/rules_title_hint_{"left" if left else "right"}.png')
         px = e.pixels()
-        # "DRAG SPELLS. L PEEKS": the L or R is the 14th character, at x BX(86 - 59 + 78); R has a pixel in the right column of its second row, L none
-        lit = sum(px[e.bx + 109, 192 + 112 + 1]) > 100
+        # "DRAG TO SPELL. L PEEKS": the L or R is the 16th character, at x BX(86 - 65 + 90); R has a pixel in the right column of its second row, L none
+        lit = sum(px[e.bx + 115, 192 + 112 + 1]) > 100
         assert lit == left, f'title tagline for the {"left" if left else "right"} hand: lit={lit}'
     set_hand(False)
 

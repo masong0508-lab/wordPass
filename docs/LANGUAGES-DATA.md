@@ -6,9 +6,8 @@ build them from open sources, and `tools/check/lang_test.c`. The game reads it (
 LANGUAGE option and the runtime letter tables are done, see the last section). The first edition of the data
 shipped with known gaps (thin pass-pool cells, small Swedish and Danish pools, a heuristic Finnish dictionary);
 a second pass closed them, and "What the second pass changed" below says how and what is still limited.
-English is untouched: `data/dict.bin`,
-`data/pools.bin` and `data/variants.bin` are byte for byte what they were (the manifest pins their sha256
-and `make check` verifies it).
+The English dictionary and `data/variants.bin` are untouched; `data/pools.bin` changed only by the content audit
+below (the manifest pins the sha256 of all three and `make check` verifies it).
 
 ## The ten languages
 
@@ -17,21 +16,62 @@ different route than the others (German's wordnet, Finnish's dictionary, see Lim
 
 | code | name in the menu | language | dictionary words | common tier | pass words | dict.bin | pools.bin | Qu tile | letters with no tile |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | :---: | --- |
-| es | ESPANOL | Spanish | 188,926 | 23,250 | 13,731 | 1,257,867 | 93,369 | yes | K W |
-| fr | FRANCAIS | French | 146,690 | 21,352 | 16,023 | 979,870 | 109,697 | yes | W |
-| de | DEUTSCH | German | 167,158 | 21,859 | 14,293 | 1,278,177 | 99,715 | yes | none |
-| it | ITALIANO | Italian | 213,299 | 23,320 | 15,839 | 1,494,184 | 111,132 | yes | J K W X Y |
-| pt | PORTUGUES | Portuguese | 220,000 | 21,307 | 16,190 | 1,479,568 | 110,320 | yes | K W Y |
-| nl | NEDERLANDS | Dutch | 220,000 | 22,787 | 16,233 | 1,638,962 | 111,119 | no | Q |
-| sv | SVENSKA | Swedish | 220,000 | 23,072 | 14,016 | 1,571,118 | 91,687 | no | Q W Z |
-| pl | POLSKI | Polish | 220,000 | 25,443 | 14,147 | 1,444,133 | 94,047 | no | Q V X |
-| da | DANSK | Danish | 202,198 | 22,688 | 14,297 | 1,464,862 | 94,192 | no | Q |
-| fi | SUOMI | Finnish | 220,000 | 25,819 | 15,489 | 1,610,723 | 107,594 | no | C Q W X Z |
+| es | ESPANOL | Spanish | 188,926 | 23,250 | 13,362 | 1,257,867 | 90,904 | yes | K W |
+| fr | FRANCAIS | French | 146,690 | 21,352 | 15,863 | 979,870 | 108,899 | yes | W |
+| de | DEUTSCH | German | 167,158 | 21,859 | 14,074 | 1,278,177 | 98,425 | yes | none |
+| it | ITALIANO | Italian | 213,299 | 23,320 | 15,699 | 1,494,184 | 110,414 | yes | J K W X Y |
+| pt | PORTUGUES | Portuguese | 220,000 | 21,307 | 16,097 | 1,479,568 | 109,866 | yes | K W Y |
+| nl | NEDERLANDS | Dutch | 220,000 | 22,787 | 16,096 | 1,638,962 | 110,405 | no | Q |
+| sv | SVENSKA | Swedish | 220,000 | 23,072 | 13,964 | 1,571,118 | 91,384 | no | Q W Z |
+| pl | POLSKI | Polish | 220,000 | 25,443 | 13,946 | 1,444,133 | 92,832 | no | Q V X |
+| da | DANSK | Danish | 202,198 | 22,688 | 14,212 | 1,464,862 | 93,694 | no | Q |
+| fi | SUOMI | Finnish | 220,000 | 25,819 | 15,370 | 1,610,723 | 106,900 | no | C Q W X Z |
 
-`data/lang` is 15,243,016 bytes in all (`data/lang/manifest.txt` has the exact numbers, one tab separated
+`data/lang` is 15,233,867 bytes in all (`data/lang/manifest.txt` has the exact numbers, one tab separated
 row per language, read by the test). A letter with "no tile" is one the language does not use: it has
 under 0.04 percent of the tiles, so words containing it are left out of the dictionary (a word you can
 never spell is dead weight) and the bag never deals it.
+
+## The content audit (the owner's rule)
+
+Every pass-word list and every interface translation was read through twice, word by word, by two
+independent readers (the method is in `docs/language-audit/README.md`). The owner's decision on content is strict:
+**every word that was flagged for the content ceiling stays, except outright slurs** (ethnic, national, religious,
+sexual-orientation and gender slurs such as taffy, queer, redneck, zigeuner, moro, gitano, tzigane, esquimau, cigano,
+moffen). Words flagged as profanity, sexual, anatomy, bodily, insult, drugs-alcohol, violence-crime, hate, ableist,
+reads-as or other are kept. What was removed from the pools:
+
+* **slurs** (the owner's rule above),
+* **junk**: names, fragments, foreign words and misspellings that a native speaker would not accept as a pass word,
+* **off-theme** words that are clearly wrong for their theme (they are not moved: a word that is right for another theme
+  is simply left out).
+
+The removals are reproducible: each word is on `tools/words/blocklist.txt` (English) or
+`tools/words/lang/<code>/blocklist.txt`, in three commented groups (slur, junk, off-theme), written `=word` (the exact
+word only, not the "starts with" rule of 5+ letter entries) and a `#` starts a comment. The pool builders never bring
+them back. They stay in the dictionaries: a word you may play is still accepted. `docs/language-audit/removed-<code>.txt`
+lists every word that left a pool (word, theme as it was, reason) and the words that entered it in the same rebuild
+when a theme was refilled or a 1,000-word cap lifted.
+
+Theme names were corrected where the label did not carry the English theme's meaning (English SHAPES is now FIGURES;
+`tools/lang/themes.py` has the other languages) and the interface strings that the readers found wrong, inconsistent
+or mistranslated were fixed in `tools/lang/ui_strings.tsv`.
+
+| language | slurs | junk | off-theme | other | entered in the rebuild | pass words now | theme names changed | interface strings changed |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| en | 17 | 19 | 189 | 0 | 4 | 17,682 | 1 | 18 |
+| es | 9 | 121 | 341 | 0 | 102 | 13,362 | 5 | 31 |
+| fr | 10 | 157 | 37 | 0 | 44 | 15,863 | 4 | 23 |
+| de | 6 | 198 | 134 | 0 | 119 | 14,074 | 3 | 43 |
+| it | 12 | 176 | 37 | 0 | 85 | 15,699 | 3 | 33 |
+| pt | 8 | 84 | 14 | 0 | 13 | 16,097 | 2 | 25 |
+| nl | 6 | 146 | 42 | 0 | 57 | 16,096 | 6 | 35 |
+| sv | 2 | 40 | 12 | 0 | 2 | 13,964 | 4 | 21 |
+| pl | 6 | 228 | 102 | 0 | 135 | 13,946 | 4 | 22 |
+| da | 5 | 95 | 32 | 1 | 48 | 14,212 | 2 | 29 |
+| fi | 4 | 38 | 80 | 0 | 3 | 15,370 | 2 | 35 |
+
+("other" is a word the pipeline dropped only because refilling a theme shifted a cap; "entered" are words that took the freed places, each one a dictionary word that passed the same filters and the blocklists. No theme needed a hand-written refill: the existing ladder refilled every theme to the standard. English CURSES lost a five-letter word and was refilled by hand with pshaw, hokum and bilge.)
 
 ## The pipeline
 
@@ -136,16 +176,16 @@ and at least 5 at 7 letters; LEXICON has at least 100 words; every language has 
 
 | language | pass words before | after | themes below the standard before | after | thin cells before | after |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| es | 13,690 | 13,731 | 18 | 0 | 20 | 0 |
-| fr | 16,058 | 16,023 | 8 | 0 | 8 | 0 |
-| de | 14,330 | 14,293 | 8 | 0 | 9 | 0 |
-| it | 15,846 | 15,839 | 8 | 0 | 11 | 0 |
-| pt | 16,211 | 16,190 | 7 | 0 | 7 | 0 |
-| nl | 16,290 | 16,233 | 4 | 0 | 5 | 0 |
-| sv | 9,926 | 14,016 | 12 | 0 | 15 | 0 |
-| pl | 14,112 | 14,147 | 5 | 0 | 6 | 0 |
-| da | 9,263 | 14,297 | 15 | 0 | 21 | 0 |
-| fi | 16,261 | 15,489 | 10 | 0 | 10 | 0 |
+| es | 13,690 | 13,362 | 18 | 0 | 20 | 0 |
+| fr | 16,058 | 15,863 | 8 | 0 | 8 | 0 |
+| de | 14,330 | 14,074 | 8 | 0 | 9 | 0 |
+| it | 15,846 | 15,699 | 8 | 0 | 11 | 0 |
+| pt | 16,211 | 16,097 | 7 | 0 | 7 | 0 |
+| nl | 16,290 | 16,096 | 4 | 0 | 5 | 0 |
+| sv | 9,926 | 13,964 | 12 | 0 | 15 | 0 |
+| pl | 14,112 | 13,946 | 5 | 0 | 6 | 0 |
+| da | 9,263 | 14,212 | 15 | 0 | 21 | 0 |
+| fi | 16,261 | 15,370 | 10 | 0 | 10 | 0 |
 
 ("Thin cell" is a theme and a length below its quota; before the second pass 95 themes had one, 346 words
 were missing in all. Finnish has fewer pass words because its dictionary no longer holds names and slang.)

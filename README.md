@@ -222,7 +222,7 @@ in `tools/words/SOURCES.md`.
 ### Shelves
 
 Every shelf draws its pass from a themed pool, and the plaque on the top
-screen names it (PASS - BINDERY). The **word library** holds about 17,900
+screen names it (PASS - BINDERY). The **word library** holds about 17,700
 pass words in 40 themes that cycle as you climb. The first eight shelves are
 the bookish ones: **Bindery** (book, page, spine, jacket ...), **Ink** (nib,
 font, quill, scribe ...), **Verse** (poem, rhyme, sonnet ...), **Tales**
@@ -233,7 +233,7 @@ opens out: **Beasts**, **Music**, **Herbal**, **Voyage**, **Cookery**,
 **Myth**, **Anatomy**, **Play**, **Alchemy**, **Weather**, **Guild**,
 **Smithy**, **Attire**, **House**, **Moods**, **Curses**, **Words**,
 **Deeds**, **Motion**, **Traits**, **Clans**, **Minds**, **Folk**, **Times**,
-**Making**, **Wares**, **Shapes**, **Change**, **Trade**, **States**,
+**Making**, **Wares**, **Figures**, **Change**, **Trade**, **States**,
 **Events** and **Lexicon**. Every pool runs from familiar words to obscure
 ones, and a shelf only draws from the first 48 + 24 x shelf words of it, so
 early shelves stay familiar and deep ones open the whole shelf. Daily Pass

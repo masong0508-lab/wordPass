@@ -42,3 +42,24 @@ fuck*
 spasser hore* voldt* knep* pikhoved hundelort sexe* sexliv mulat gigolo hanrej debil nazi*
 mongol*
 spast*
+# slur: ethnic, national, religious, sexual-orientation or gender slurs (owner's rule: the only content class removed)
+=eskimo =hedning =polak =sigojner =tyrk
+# junk: not a word a native speaker accepts (name, fragment, foreign word, misspelling)
+=anga =angar =arti =atlantis =back =bagi =basta =benjamin
+=bista =blaererov =bordeaux =boston =brol =bush =caesar =cape
+=charlie =city =david =dexter =dods =donna =earl =eksper
+=england =ethan =evergreen =flux =football =frank =genom =google
+=grape =gudson =handy =harnal =heil =henry =heri =hobbit
+=hook =horm =hostak =hotyv =hvabehar =i =jack =java
+=jens =jersey =juan =khan =klaus =kobenhavn =kulor =lady
+=lars =mads =marshall =matrix =maya =miles =miss =monsieur
+=mulder =news =nice =norman =nova =ok =paris =plastic
+=please =pope =right =roger =rusland =sarah =simoni =sk
+=skudar =smakage =smakager =small =solar =soren =spedals =spencer
+=sura =tiar =times =troy =tyskland =utoj =valor =vedga
+=victoria =vincent =yang =zarina
+# off-theme: clearly wrong for its theme (removed from the pools; still valid in the dictionary)
+=anvende =batteri =botanik =brusebad =douche =elbil =fersken =forsorge
+=galakse =genbruge =graevling =gullasch =hval =hvem =jeep =knag
+=kringle =kupon =mikroovn =peber =piskeris =ragout =saft =salte
+=sedan =serviet =tank =taxa =taxi =truck =udnytte =vaekkeur
