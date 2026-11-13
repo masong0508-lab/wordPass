@@ -217,6 +217,7 @@ The renderer (`python3 tools/music/render.py --stats`) prints each song's peak s
 
     make guide          # tools/emu/screens.py retakes every picture from the ROM, then tools/check_guide.py checks the text
     make guide-check    # only the check: gcc and Python, no ROM, no emulator
+`make guide` also retakes the three pictures at the top of README.md (`screenshot.png`, `screenshot-fire.png`, `screenshot-results.png` in the repository root, the `readme_*` shots, which tools/check_guide.py does not read).
 
 `tools/emu/screens.py [rom] [--list] [--only word|word] [--jobs n]` drives the ROM through `wp.Emu` and the poke channel. Every
 picture comes from a NAMED shot function registered with `@shot('file.png', ...)`; each shot runs in its own child process
