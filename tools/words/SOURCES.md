@@ -14,7 +14,7 @@
 Library size: 40 themes, about 17,700 pass words in 121 KB (`data/pools.bin`).
 
 Content ceiling: the strongest words the library will use are *holy*, *damn*, *crappola* and *moobs*.
-Anything harsher is on the blocklist and is never picked as a pass word.
+Anything harsher is on the blocklist and is never picked as a pass word. The content audit's removals (slurs, junk, off-theme words) are on it too, see `docs/language-audit/README.md`.
 
 ## Regenerating
 

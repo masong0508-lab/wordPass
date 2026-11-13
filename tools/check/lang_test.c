@@ -47,7 +47,7 @@ static const char *UNKNOWN[NLANG] = {
 };
 // theme names that must be exactly these: the first shelf, the animal shelf and the last one
 static const char *NAME0[NLANG] = { "LIBROS", "RELIURE", "BUCHER", "LIBRI", "LIVROS", "BOEKEN", "BOKBAND", "KSIAZKI", "BOGER", "KIRJAT" };
-static const char *NAME8[NLANG] = { "BESTIAS", "BETES", "TIERE", "BESTIE", "BICHOS", "DIEREN", "DJUR", "ZWIERZE", "DYR", "ELAIMET" };
+static const char *NAME8[NLANG] = { "BESTIAS", "BETES", "TIERE", "BESTIE", "BICHOS", "DIEREN", "DJUR", "FAUNA", "DYR", "ELAIMET" };
 static const char *NAME39[NLANG] = { "LEXICO", "LEXIQUE", "LEXIKON", "LESSICO", "LEXICO", "LEXICON", "LEXIKON", "SLOWNIK", "ORDBOG", "SANASTO" };
 
 static u8 *slurp(const char *path, size_t *size)
