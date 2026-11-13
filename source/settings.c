@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 Settings S;
 static bool fatReady;
@@ -19,7 +20,11 @@ static int clockOverride;           // settingsDebugClock: 0 = the real clock
 #ifndef CFG_PATH
 #define CFG_PATH "/wordPass.cfg"
 #endif
-#define CFG_TMP CFG_PATH ".tmp"
+#define CFG_FILE "wordPass.cfg"
+// The save's paths. settingsInit points them at the card's own device ("fat:/wordPass.cfg", "sd:/..."): a path with no
+// device name goes to the C library's default device, and libfilesystem's nitroFSInit (langInit, after settingsInit)
+// moves that to nitro:/, the read-only ROM, whenever it reads the card itself instead of through FAT.
+static char cfgPath[96] = CFG_PATH, cfgTmp[104] = CFG_PATH ".tmp";
 #define V1_BYTES_A 28               // every WPS1 file ever written: magic, up to eight option bytes, four records
 #define V1_BYTES_B 32               // the same layout with a trailing word of padding
 #define DATE_MIN 20250101
@@ -162,16 +167,33 @@ static size_t readFile(const char *path, void *buf, size_t cap)
     return n;
 }
 
+// "fat:/" (a working directory as getcwd gives it right after fatInitDefault) and a file name make "fat:/wordPass.cfg";
+// false when the directory names no device. Pure, so tools/check can test it.
+bool settingsCardPath(const char *cwd, const char *file, char *out, size_t cap)
+{
+    const char *colon = strchr(cwd, ':');
+    if (!colon || colon == cwd || colon - cwd > 8) return false;
+    int n = snprintf(out, cap, "%.*s:/%s", (int)(colon - cwd), cwd, file);
+    return n > 0 && (size_t)n < cap;
+}
+
+const char *settingsCfgPath(void) { return cfgPath; }
+
 void settingsInit(void)
 {
     settingsDefaults();
+    strcpy(cfgPath, CFG_PATH); strcpy(cfgTmp, CFG_PATH ".tmp");
     fatReady = fatInitDefault();
     if (!fatReady) return;
+    char cwd[64], p[sizeof cfgPath], t[sizeof cfgTmp];      // fatInitDefault made the card the default device: name it
+    if (getcwd(cwd, sizeof cwd) && settingsCardPath(cwd, CFG_FILE, p, sizeof p) && settingsCardPath(cwd, CFG_FILE ".tmp", t, sizeof t)) {
+        strcpy(cfgPath, p); strcpy(cfgTmp, t);
+    }
     u8 buf[256];                        // room to see a file that is too long, which is rejected
-    size_t n = readFile(CFG_PATH, buf, sizeof(buf));
+    size_t n = readFile(cfgPath, buf, sizeof(buf));
     if (n && settingsDecode(buf, n)) return;
     // an interrupted save may have left the finished image next to the (missing) old file
-    n = readFile(CFG_TMP, buf, sizeof(buf));
+    n = readFile(cfgTmp, buf, sizeof(buf));
     if (n) settingsDecode(buf, n);
     else settingsDefaults();
 }
@@ -185,14 +207,14 @@ bool settingsSave(void)
     u8 buf[sizeof(Settings)];
     size_t n = settingsEncode(buf);
     bool ok = false;
-    FILE *f = fopen(CFG_TMP, "wb");
+    FILE *f = fopen(cfgTmp, "wb");
     if (f) {
         ok = fwrite(buf, 1, n, f) == n;
         if (fclose(f) != 0) ok = false;
     }
-    if (ok && rename(CFG_TMP, CFG_PATH) != 0) {
-        remove(CFG_PATH);
-        ok = rename(CFG_TMP, CFG_PATH) == 0;
+    if (ok && rename(cfgTmp, cfgPath) != 0) {
+        remove(cfgPath);
+        ok = rename(cfgTmp, cfgPath) == 0;
     }
     lastSaveFailed = !ok;
     return ok;

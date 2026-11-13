@@ -310,6 +310,8 @@ void settingsInit(void);
 void settingsDefaults(void);
 bool settingsSave(void);
 bool settingsPersistent(void);
+bool settingsCardPath(const char *cwd, const char *file, char *out, size_t cap);   // pure: "fat:/" + file -> "fat:/file" (false: no device in cwd)
+const char *settingsCfgPath(void);               // where the save goes (device-qualified on the DS)
 bool settingsSaveFailed(void);                    // the last settingsSave could not write the card
 bool settingsDecode(const void *buf, size_t n);   // pure: a saved file (WPS2, or a WPS1 legacy file) into S; false = defaults
 size_t settingsEncode(void *buf);                 // pure: S into a WPS2 file image (sizeof(Settings) bytes, CRC filled)
