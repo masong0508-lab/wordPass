@@ -322,6 +322,18 @@ static void musicTests(void)
         musicNewShelf(1, false);
         g.cell[3][2].state = CELL_BURN; capture(sn, 2, 0); g.cell[3][2].state = CELL_TILE;
         CHECK("tempo: 7 frames a step with the lowest flame on row 3, 8 on row 2", t3 == 7 && sn[0].tempo == 8);
+        {   // the floor: no song is ever pushed faster than 5 frames a step under fire (a base of 6 or 5 is what lands on it)
+            Song fastS = LEGACY; int floorOk = 1;
+            for (int base = 8; base >= 5; base--) {
+                fastS.stepFrames = (u8)base; musicForceSong(&fastS);
+                musicNewShelf(1, false);
+                g.cell[3][5].state = CELL_BURN; capture(sn, 2, 0); g.cell[3][5].state = CELL_TILE;
+                int wantT = base - 2 < 5 ? 5 : base - 2;
+                if (sn[0].tempo != wantT) floorOk = 0;
+            }
+            CHECK("tempo: under fire the step is never shorter than 5 frames (bases 8, 7, 6 and 5 give 6, 5, 5 and 5)", floorOk);
+            musicForceSong(&LEGACY);
+        }
         {   // the real spacing between steps follows the tempo
             musicNewShelf(1, false);
             g.cell[3][5].state = CELL_BURN;
@@ -1182,8 +1194,11 @@ int main(int argc, char **argv)
     bool fast = g.heatThreshold == 8 && g.burnEvery == 1;
     S.fire = FIRE_RELAXED; g.shelf = 5; boardNewShelf(&g);
     bool relaxed = g.heatThreshold == 10 && g.burnEvery == 2;      // shelf 5: the meter 7 + 3 and the fire one turn slower
+    S.fire = FIRE_FAST; g.shelf = 12; boardNewShelf(&g);           // the meter is 4 here: FAST's minus 2 would give 2, the floor holds it at 4
+    bool fastFloor = g.heatThreshold == 4 && g.lockTier == 2;
     S.fire = FIRE_NORMAL;
     CHECK("FAST and RELAXED adjust the thresholds", fast && relaxed);
+    CHECK("FAST never takes the meter below 4 (shelf 12 stays at 4, not 2 or 3)", fastFloor);
 
     // ---- letter bag (item 08): 100 letters a cycle, two of J/Q/X/Z, the rest by weight
     {
@@ -1455,6 +1470,7 @@ int main(int argc, char **argv)
         set(0, 0, CELL_TILE, 'z'); set(0, 1, CELL_TILE, 'a'); set(0, 2, CELL_TILE, 'x');      // "zax": rare
         boardTryAddToChain(&g, 0, 0); boardTryAddToChain(&g, 0, 1); boardTryAddToChain(&g, 0, 2);
         int zaxPts = boardSubmit(&g);
+        CHECK("a rare word counts in the shelf's own rareWords", g.rareWords == 1);
         CHECK("stats: a word counts, a rare word counts as rare, longest and best word are kept",
               zaxPts > 0 && S.wordsSpelled == 1 && S.rareWords == 1 && S.longestLen == 3 && !strcmp(S.longestWord, "zax") &&
               S.bestWordPts == zaxPts && !strcmp(S.bestWordTxt, "zax"));
@@ -1480,6 +1496,8 @@ int main(int argc, char **argv)
         g.practice = true;
         set(5, 5, CELL_TILE, 'q'); boardPeel(&g, 5, 5);
         CHECK("stats: a practice peel is not counted", S.peels == p0 + 2 && S.peelsHit == h0 + 1);
+        g.back[3][3] = 1; set(3, 3, CELL_TILE, 'q');                  // a practice peel that HITS the pass: still no lifetime hit
+        CHECK("stats: a practice peel that finds a pass letter is not a lifetime hit", boardPeel(&g, 3, 3) == 2 && S.peelsHit == h0 + 1 && S.peels == p0 + 2);
         memset(&S, 0, sizeof(S)); S.music = 1;
     }
 
