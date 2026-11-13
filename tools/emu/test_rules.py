@@ -910,8 +910,9 @@ def _():
         e.run(120); e.set_score(score)
         g = force_fail(); r = e.records(); leave_result()
         return g, r
-    g, r = scored_daily(dA, 3775, 0)
-    assert r['bestDaily'] >= 3775 and g['newBest'] == 1, f'first Daily: best {r["bestDaily"]} newBest {g["newBest"]}'
+    top = e.records()['bestDaily'] + 3775          # earlier scenarios may already have left a record
+    g, r = scored_daily(dA, top, 0)
+    assert r['bestDaily'] == top and g['newBest'] == 1, f'first Daily: best {r["bestDaily"]} newBest {g["newBest"]}'
     base = r['bestDaily']; baseDate = r['bestDailyDate']
     g, r = scored_daily(dB, 100, dA)
     assert r['bestDaily'] == base and r['bestDailyDate'] == baseDate, f'a lower Daily overwrote the record: {r["bestDaily"]} on {r["bestDailyDate"]} (was {base} on {baseDate})'
