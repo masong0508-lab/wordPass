@@ -11,34 +11,72 @@ permissions:
   contents: write
 
 jobs:
+  check:
+    # The same checks as `make check` locally, plus the generated-file drift checks, the guide check and the Python tools.
+    # Native rule tests need only gcc and Python; no toolchain container.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Rule tests, data tests and generated-file drift (make check)
+        # settings, languages (all thirty data files), interface text, board and music rules, the balance bot self-test,
+        # source/songs.c against its generator, source/ui_strings.c/.h against ui_strings.tsv, the settingsSave() sites
+        run: make check
+      - name: Written guide against the code and the data (tools/check_guide.py)
+        run: python3 tools/check_guide.py
+      - name: Tracked music renders against a fresh render (make music-check)
+        run: make music-check
+      - name: Python tools compile
+        run: python3 -m py_compile tools/*.py tools/emu/*.py tools/lang/*.py tools/music/*.py tools/check/*.py
+
   nds:
+    needs: check
     runs-on: ubuntu-latest
     # Pinned: ROMs from this image boot in DeSmuME as well as melonDS and hardware.
     # devkitpro/devkitarm:latest (libnds 2 / calico) also builds but needs melonDS or hardware.
     container: devkitpro/devkitarm:20240511
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build ROM
         run: make
-      - name: Check the ROM exists
-        run: ls -l wordPass.nds
+      - name: Check the ROM exists and carries the ten languages
+        run: |
+          ls -l wordPass.nds
+          test "$(find nitrofiles/lang -name '*.bin' | wc -l)" -eq 30
+          test "$(ls nitrofiles/lang | wc -l)" -eq 10
+          grep -aq 'letters.bin' wordPass.nds
       - name: Upload ROM
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: wordPass.nds
-          path: wordPass.nds
+          name: wordPass
+          path: |
+            wordPass.nds
+            wordPass.elf
       - name: Release
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: wordPass.nds
 
-  check:
-    # Native rule tests and the emulator tooling, no toolchain container needed.
+  emulator:
+    # Boots the built ROM headless in DeSmuME (py-desmume is a binary wheel with its own SDL2, so pip alone is enough;
+    # the DBG symbol lookup of tools/emu/wp.py runs arm-none-eabi-nm in the toolchain image through the runner's docker).
+    needs: nds
     runs-on: ubuntu-latest
+    env:
+      SDL_VIDEODRIVER: dummy
+      SDL_AUDIODRIVER: dummy
     steps:
-      - uses: actions/checkout@v4
-      - name: Rule tests (make check)
-        run: make check
-      - name: Python tools compile
-        run: python3 -m py_compile tools/emu/*.py
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          name: wordPass
+      - name: Install py-desmume, Pillow and numpy
+        run: python3 -m pip install py-desmume pillow numpy
+      - name: Pull the toolchain image (symbol lookup)
+        run: docker pull devkitpro/devkitarm:20240511
+      - name: Smoke test
+        run: python3 tools/emu/smoke.py wordPass.nds smoke-out
+      - name: Rule scenarios (tags and manual runs only, 15 to 25 minutes)
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        timeout-minutes: 90
+        run: python3 tools/emu/test_rules.py wordPass.nds rules-out
