@@ -25,7 +25,7 @@ def card_with_rom(d, tag, rom):
 def case(tag, rom, elf, d):
     """One situation, end to end. Raises AssertionError on the first thing that is wrong."""
     from fatrig import FatEmu, read_cfg, card_files, cfg_fields, SETTINGS_MAGIC
-    from wp import ST_TITLE, ST_OPTIONS, ST_LANGPICK
+    from wp import ST_TITLE, ST_OPTIONS, ST_LANGPICK, ST_FAIL, FAIL_WORDS, COLS, ROWS, TILE
     img = card_with_rom(d, tag, rom)
     argv = tag != 'noargv'
 
@@ -76,6 +76,24 @@ def case(tag, rom, elf, d):
     need(not any(n.lower() == 'wordpass.cfg.tmp' for n, _ in card_files(img)), 'a temp file was left on the card: %r' % (card_files(img),))
     e.power_cycle()
     need(e.state()['state'] == ST_TITLE and e.S_theme() == t2, 'third boot did not load the second save')
+
+    # a Classic run that ends is on the card as soon as the RUN OVER card is up, without a tap on it (switch off there)
+    games0 = cfg_fields(read_cfg(img))['gamesPlayed']
+    e.start_classic(); e.set_tutor(1)
+    e.set_lives(1)
+    e.set_features(shuffles=0)
+    for c in range(COLS):
+        for r in range(ROWS): e.set_cell(c, r, TILE, 'x')     # a board with no word: the next peel is OUT OF WORDS
+    g = e.state()
+    plain = [(c, r) for c in range(COLS) for r in range(ROWS) if not g['back'][c][r]]
+    e.peel(*plain[len(plain) // 2]); e.run(30)
+    g = e.state()
+    need(g['state'] == ST_FAIL and g['fail'] == FAIL_WORDS and g['lives'] == 0, 'the run did not end (state %d fail %d lives %d)' % (g['state'], g['fail'], g['lives']))
+    need(not e.flags()['saveFailed'], 'the run-end save failed')
+    c = cfg_fields(read_cfg(img))
+    need(c['gamesPlayed'] == games0 + 1, 'the card says %d games, %d before the run, and the card is not tapped yet' % (c['gamesPlayed'], games0))
+    e.power_cycle()
+    need(e.state()['state'] == ST_TITLE, 'reboot after the run over did not reach the title')
 
 
 DAMAGE = {

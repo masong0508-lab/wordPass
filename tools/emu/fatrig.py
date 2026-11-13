@@ -92,6 +92,7 @@ def cfg_fields(b):
     d = dict(zip(names, b[8:8 + len(names)]))
     d.update(magic=magic, version=version, crc=crc, size=len(b))
     d['bestClassic'], d['bestClassicShelf'] = struct.unpack_from('<ii', b, 20)
+    d['gamesPlayed'], d['shelvesCleared'], d['wordsSpelled'] = struct.unpack_from('<iii', b, 52)
     return d
 
 

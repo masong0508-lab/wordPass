@@ -16,6 +16,7 @@
 Settings S;
 static bool fatReady;
 static bool lastSaveFailed;
+static unsigned saveCount;          // settingsSave calls that reached the card code (tests and the run-end save read it)
 static int clockOverride;           // settingsDebugClock: 0 = the real clock
 #ifndef CFG_PATH
 #define CFG_PATH "/wordPass.cfg"
@@ -203,6 +204,7 @@ void settingsInit(void)
 // in which case the old file is removed first (the temp file still holds the new image).
 bool settingsSave(void)
 {
+    saveCount++;
     if (!fatReady) return false;
     u8 buf[sizeof(Settings)];
     size_t n = settingsEncode(buf);
@@ -222,6 +224,7 @@ bool settingsSave(void)
 
 bool settingsPersistent(void) { return fatReady; }
 bool settingsSaveFailed(void) { return lastSaveFailed; }
+unsigned settingsSaveCount(void) { return saveCount; }
 
 // ---- the clock and Daily arithmetic
 

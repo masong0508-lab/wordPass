@@ -312,6 +312,7 @@ bool settingsSave(void);
 bool settingsPersistent(void);
 bool settingsCardPath(const char *cwd, const char *file, char *out, size_t cap);   // pure: "fat:/" + file -> "fat:/file" (false: no device in cwd)
 const char *settingsCfgPath(void);               // where the save goes (device-qualified on the DS)
+unsigned settingsSaveCount(void);                 // how many times settingsSave has been called
 bool settingsSaveFailed(void);                    // the last settingsSave could not write the card
 bool settingsDecode(const void *buf, size_t n);   // pure: a saved file (WPS2, or a WPS1 legacy file) into S; false = defaults
 size_t settingsEncode(void *buf);                 // pure: S into a WPS2 file image (sizeof(Settings) bytes, CRC filled)
@@ -331,7 +332,7 @@ int  gfxTipIndex(void);               // debug: which tip card shows
 bool gfxInTitleOptions(int px, int py);
 bool gfxInTitleLedger(int px, int py);   // the BEST line under the title buttons: opens THE LEDGER
 int  gfxLangPickRowAt(int px, int py);  // the chooser's row under a touch (0..LANG_COUNT-1), -1 none
-bool gfxInTitleLanguage(int px, int py); // the language tag in the title's other top corner: next language
+bool gfxInTitleLanguage(int px, int py); // the language tag in the title's other top corner: opens the language chooser
 bool gfxInTitleGuide(int px, int py);    // the GUIDE button in the title's top corner
 enum { GH_NONE = -1, GH_BACK = 0, GH_PREV, GH_NEXT, GH_DOT };
 void gfxGuideNavReset(void);             // test channel: the prev/next buttons pulse again

@@ -1007,7 +1007,7 @@ Open **OPTIONS** from the title (the button, or **Y**). Tap the left half of a r
 
 ### 11.3 The saved file
 
-Settings, records, the Daily state and the Ledger are saved to **`wordPass.cfg`** on the card when a FAT filesystem is available (flashcarts with DLDI, DSi SD). The file is **136 bytes**, written to `wordPass.cfg.tmp` and renamed over the old one, so a card pulled mid-write leaves the previous file intact. It carries a CRC-16 checksum: a damaged file falls back to the defaults. It still reads the older 28-byte format. It is saved when you leave OPTIONS, when you tap past a results or fail card, when you quit to the title, when you start a scored Daily, when a record changes and when you finish the first guided shelf.
+Settings, records, the Daily state and the Ledger are saved to **`wordPass.cfg`** on the card when a FAT filesystem is available (flashcarts with DLDI, DSi SD). The file is **136 bytes**, written to `wordPass.cfg.tmp` and renamed over the old one, so a card pulled mid-write leaves the previous file intact. It carries a CRC-16 checksum: a damaged file falls back to the defaults. It still reads the older 28-byte format. It is saved when you leave OPTIONS, when you tap past a results or fail card, when you quit to the title, when a Classic shelf or run ends (the RUN OVER card counts the game at once, before any tap), when you start a scored Daily, when a record changes and when you finish the first guided shelf.
 
 **Without a card** (an emulator without a FAT image, a DS without a flashcart) everything lasts for the session and the options screen says `NOT SAVED: NO CARD`. If a write fails it says `SAVE FAILED`. With a card it says `SAVED TO CARD`.
 
