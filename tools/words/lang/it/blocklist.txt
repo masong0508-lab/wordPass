@@ -49,3 +49,35 @@ vaffanculo
 vagina
 zoccola
 fanculo* stupra* sessual* eretto nazi* pompin* sborr*
+# slur: ethnic, national, religious, sexual-orientation or gender slurs (owner's rule: the only content class removed)
+=eschimese =froci =giuda =giudeo =marrano =moro =mulatto =negra
+=pederasta =pigmeo =saraceno =sodomita
+# junk: not a word a native speaker accepts (name, fragment, foreign word, misspelling)
+=account =alter =ando =audi =audience =bacon =badge =baltimora
+=barbie =bear =beat =beef =blue =boot =business =cameraman
+=card =carre =cassie =cesare =chauffeur =clarence =clou =container
+=coque =coroner =cover =cross =cruiser =cuba =dance =dante
+=database =detector =dian =diane =disc =discount =drag =drop
+=eduardo =elisa =elise =endo =espada =fans =fast =finn
+=flag =free =freezer =front =full =game =garden =gentleman
+=giacomo =gianni =gigi =glie =goblin =gossip =goto =guardrail
+=habitue =hard =help =india =inning =interpol =iosa =ipad
+=leda =lise =loft =loop =love =luigi =made =madison
+=mainframe =mala =mara =martin =mass =metal =miranda =model
+=mozart =muffin =napoleone =nico =niet =nightclub =nino =nobel
+=noir =nous =nurse =olivia =once =oscar =overdrive =paco
+=palmer =pamela =pandora =paolino =paolo =pasquale =ping =plum
+=plus =pong =prince =priori =pseudo =punch =quai =quartier
+=queen =rambo =ramen =ranger =real =reception =riscio =robbie
+=rocco =rouge =round =rush =sabrina =scoop =secret =selz
+=senior =shunt =simone =single =slam =smash =soap =sonia
+=soubrette =sound =sous =space =stage =stanford =stars =sterling
+=stra =streaming =strip =stuart =superman =suzanne =teenager =terminal
+=terrence =thug =tibet =time =timer =tout =trip =troll
+=unii =user =vamp =veci =victoria =vietnam =zane =zara
+# off-theme: clearly wrong for its theme (removed from the pools; still valid in the dictionary)
+=acque =adulto =auto =bici =camion =clan =corte =cuccetta
+=dire =enfasi =essere =gara =gente =marzo =muso =palco
+=papavero =persa =persona =piena =pizza =popolo =razza =reso
+=resta =rumore =ruspa =scesa =tale =tizio =tram =umano
+=video =virus =volere =voto =zolla

@@ -53,3 +53,49 @@ mord*
 fick*
 erektion gefickt verarscht verarsch* scheiss* urin* pisse sex* lahmarsch dirne geil* kack* wichs*
 mongol*
+# slur: ethnic, national, religious, sexual-orientation or gender slurs (owner's rule: the only content class removed)
+=farbiger =halbblut =mohr =turken =zigeuner =zigeunern
+# junk: not a word a native speaker accepts (name, fragment, foreign word, misspelling)
+=acta =adams =adele =adria =afrika =agypten =albert =alex
+=alexander =alexandre =algerien =amerika =amerikas =amor =amsterdam =antarktis
+=anti =apollo =arte =asien =asta =athen =athene =atlantik
+=attitude =audi =augustus =bagdad =balkan =basic =beelzebub =beirut
+=belgien =benjamin =benz =berlin =bern =best =bonn =brasilien
+=brussel =budapest =burma =caritas =casar =charlie =charlies =chile
+=china =christus =damaskus =danemark =delhi =desmond =detroit =diamond
+=diana =donau =dracula =dublin =ebay =einstein =england =englands
+=enter =europa =europas =evas =facebook =file =filmtiger =florenz
+=fortuna =frankfurt =fritz =future =google =hamburg =hermann =hermes
+=holland =hollywood =immernoch =indien =iran =irland =istanbul =italien
+=japan =jean =jesu =jesus =juda =judas =jupiter =kairo
+=karibik =kiew =koln =kolumbien =kongo =krim =kron =kuba
+=kurt =lockhart =louis =luzifer =madeleine =madrid =mailand =main
+=mainframe =mali =malta =marokko =mars =marshall =mekka =mephisto
+=merkur =mexiko =michelle =minsk =mohammed =moser =moskau =munchen
+=nano =nasa =nato =nordkorea =norwegen =nothing =office =olympia
+=oscar =oslo =pakistan =palastina =para =paris =pazifik =peking
+=peru =philippe =pluto =portland =portugal =prag =rasa =rhein
+=riga =rios =roms =russland =sach =saigon =schweiz =sizilien
+=sofia =spanien =stack =starbuck =stasi =stockholm =sudafrika =sudan
+=syrien =taiwan =tatern =tele =telephon =thailand =tokio =torrente
+=turkei =turtle =twitter =udssr =unicef =unterlass =ural =vatikan
+=venezuela =venus =vice =waldorf =walk =wallander =warschau =well
+=wend =wien =wizard =wolfgang =woll =zier
+# off-theme: clearly wrong for its theme (removed from the pools; still valid in the dictionary)
+=abenteuer =abreissen =acht =agent =ampel =aufregung =augen =aushalten
+=auto =badewanne =bein =blutdruck =blute =bonus =brett =bullauge
+=chefarzt =cholera =cousine =deutscher =dosen =dschungel =eier =einladen
+=erpressen =ersatz =firma =flak =flasche =flugzeug =frisur =funf
+=furs =fuss =fussball =gespenst =glatze =glauben =glocke =gorilla
+=gurke =haar =hals =hauptmann =heck =heizung =hinkommen =hirsch
+=internet =isolieren =justiz =kafer =kaninchen =kater =kellner =knabe
+=knochel =knochen =knodel =kochtopf =komma =kopf =krahe =kugel
+=kunden =kusine =leistung =loch =marke =maschine =maulwurf =motor
+=mutig =nase =nerven =notfall =ochse =orten =panzer =person
+=pferd =politesse =programm =prufen =punktzahl =rache =realitat =regierung
+=salat =salz =sandwich =schiene =schlaf =schlauch =schnauze =schuh
+=schule =schwert =sechs =segelboot =sind =sosse =speck =stein
+=stiefel =tapfer =tasse =taxi =teppich =topf =torpedo =trainer
+=traktor =tresen =ubung =uniform =unter =vanille =vorschlag =wachhund
+=waffe =wahrsagen =wecker =werkstatt =western =wettburo =wolf =zahne
+=zange =zeitpunkt =zeug =zigarre =zwang =zwillinge
