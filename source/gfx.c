@@ -652,17 +652,29 @@ static void stepPopups(void)
     for (int i = 0; i < 6; i++) if (pops[i].life) { pops[i].life--; if (pops[i].life & 1) pops[i].y--; }
 }
 
+static int boardX0;                                    // left edge of the framed board area (set with the layout below)
+// keep a label of width w (plus a shadow pixel) inside the board strip, 3 px from its frame on each side
+static int clampInBoard(int x, int w)
+{
+    int hi = boardX0 + BOARD_W - 3 - w;
+    if (x > hi) x = hi;
+    if (x < boardX0 + 3) x = boardX0 + 3;
+    return x;
+}
+
 static void drawPopups(void)
 {
     for (int i = 0; i < 6; i++) if (pops[i].life) {
         int sc = pops[i].life > 34 ? 2 : 1;
-        drawTextShadow(pops[i].x - textWidth(pops[i].txt, sc) / 2, pops[i].y, pops[i].txt, pops[i].life > 6 ? pops[i].col : DIM, sc);
+        int w = textWidth(pops[i].txt, sc), x = pops[i].x - w / 2;
+        x = clampInBoard(x, w + 1);                            // an edge column's popup stays inside the board strip, both hands
+        drawTextShadow(x, pops[i].y, pops[i].txt, pops[i].life > 6 ? pops[i].col : DIM, sc);
     }
 }
 
 // ---------------------------------------------------------------- layout
 
-static int gridX = GRID_X, panelX = 176, boardX0 = 0;   // boardX0: left edge of the framed board area
+static int gridX = GRID_X, panelX = 176;   // boardX0: left edge of the framed board area
 #define BX(x) ((x) + boardX0)
 
 static void cellOrigin(int c, int r, int *x, int *y)
@@ -1083,7 +1095,7 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
         const char *peelTag = ui(UI_PEELTAG);
         int tw = textWidth(peelTag, 1), ly = y - 9;
         if (ly < 3) ly = 3;
-        int lx = x + TILE_W / 2 - tw / 2;
+        int lx = clampInBoard(x + TILE_W / 2 - tw / 2, tw + 2);
         fillRect(lx - 1, ly - 1, tw + 2, 9, BLACK);
         drawText(lx, ly, peelTag, WHITE, 1);
     }
@@ -1384,7 +1396,7 @@ static void drawTopTitle(void)
         drawOptionsHelp();
         char s[48];
         if (S.bestClassic) { uiFmt(s, sizeof s, UI_O_BESTLINE, S.bestClassic, S.bestClassicShelf); drawTextCenter(128, 150, s, DIM_TEXT, 1); }
-        if (S.bestDaily)   { uiFmt(s, sizeof s, UI_O_BESTDAILY, S.bestDaily, S.bestDailyDate); drawTextCenter(128, 160, s, DIM_TEXT, 1); }
+        if (S.bestDaily)   { uiFmt(s, sizeof s, UI_O_BESTDAILY, S.bestDaily, S.bestDailyDate / 100 % 100, S.bestDailyDate % 100); drawTextCenter(128, 160, s, DIM_TEXT, 1); }
         drawTextCenter(128, 172, ui(UI_O_TAPHINT), DIM_TEXT, 1);
         return;
     }
@@ -1489,7 +1501,7 @@ static int guidePageSeen = -1;             // the page the top screen was last l
 static int guideAge;                       // frames since the page opened: the words type in over the first ~50
 static int guideNavUsed;                   // the prev/next buttons pulse until one has been used
 static char guideCache[GUIDE_MAX_LINES][GUIDE_LINE_BUF];
-static int guideCachePage = -1;
+static int guideCachePage = -1, guideCacheLang = -1;   // the cache is for one page in one language
 
 static int gTick(void) { return ((frame >> 2) - guideBase) & (GUIDE_LOOP - 1); }
 void gfxGuideNavReset(void) { guideNavUsed = 0; }
@@ -1499,7 +1511,7 @@ int gfxGuideAge(void) { return guideAge; }
 // ---- the touch screen
 #define GD_TEXT_X   14                     // 38 characters run from x 14 to 241
 #define GD_TEXT_Y   29
-#define GD_BACK_W   40
+#define GD_BACK_W   47
 #define GD_NAV_Y    168                    // the prev/next buttons (24 x 20) and the page dots
 #define GD_DOT_C0   79                     // centre of the first of eight dots, 14 apart (they centre on x 128)
 static int guideBackX(void) { return S.hand == HAND_LEFT ? 6 : SCREEN_W - 6 - GD_BACK_W; }   // BACK sits on the stylus side
@@ -1543,13 +1555,13 @@ static void drawGuide(const Game *g)
     drawTopDots();
     rectOutline(0, 0, SCREEN_W, SCREEN_H, GOLD_DK);
     rectOutline(1, 1, SCREEN_W - 2, SCREEN_H - 2, GOLD);
-    if (guideCachePage != page) { guideLines(page, guideCache); guideCachePage = page; }
+    if (guideCachePage != page || guideCacheLang != langCur()) { guideLines(page, guideCache); guideCachePage = page; guideCacheLang = langCur(); }
 
     const char *title = guideTitle(page);
     drawTextShadow(SCREEN_W / 2 - textWidth(title, 2) / 2, 8, title, GOLD_LT, 2);
     int bx = guideBackX();
     rectOutline(bx, 6, GD_BACK_W, 15, DIM);
-    drawTextCenter(bx + GD_BACK_W / 2, 10, ui(UI_OP_BACK), INK, 1);
+    drawTextCenter(bx + GD_BACK_W / 2, 10, ui(UI_GD_BACK), INK, 1);
     char cnt[8]; fmtInt(cnt, page + 1); strcat(cnt, "/"); fmtInt(cnt + strlen(cnt), GUIDE_PAGES);
     drawText(S.hand == HAND_LEFT ? SCREEN_W - 8 - textWidth(cnt, 1) : 8, 10, cnt, DIM_TEXT, 1);   // the page counter takes the other corner
     hline(GD_TEXT_X, 25, SCREEN_W - 2 * GD_TEXT_X, GOLD_DK);
@@ -1981,7 +1993,7 @@ static void gdModes(const Game *g, int t)
     drawTextCenter(80, 74, ui(UI_T_DAILY), BLACK, 1);
     fmtInt(s, day); if (day < 10) { s[1] = s[0]; s[0] = '0'; s[2] = 0; }
     drawTextCenter(80, 92, s, GOLD_LT, 3);
-    drawTextBox(80 - textWidth(boardDailyModName(mod), 1) / 2 + (16 - e) * 2, 116, boardDailyModName(mod), ACCENT, 1, 54, 106);
+    drawTextBox(80 - textWidth(boardDailyModName(mod), 1) / 2 + (16 - e) * 2, 116, boardDailyModName(mod), ACCENT, 1, 53, 108);
     // what the modifier does, from the Daily rules
     ShelfRules r; boardDailyRules(mod, &r);
     char l1[40], l2[40];
@@ -2216,6 +2228,9 @@ static void drawTop(const Game *g)
             if (pop) drawGemSized(x - grow, y0 - grow, bw + grow * 2, PLAQUE_H + grow * 2, &GEM_DIAMOND, true);
             else blitPlaque(x, y0);
             drawChar(x + 6, y0 + 6, 'A' + (g->pass[i] - 'a'), C(4,6,10), 2);
+        } else if (g->state == ST_FAIL) {            // a lost shelf: the letters you never found show on this screen too, in red
+            rectOutline(x, y0, bw, 26, FIRE1);
+            drawChar(x + 6, y0 + 6, 'A' + (g->pass[i] - 'a'), FIRE1, 2);
         } else {
             rectOutline(x, y0, bw, 26, GOLD_DK);
             fillRect(x + 4, y0 + 22, bw - 8, 1, GOLD);
@@ -2314,7 +2329,11 @@ static void drawTop(const Game *g)
     }
 
     // message: pops in at double size, then settles
-    if (g->msg[0]) {
+    if (g->state == ST_FAIL) {                  // a lost shelf says why on this screen as well as on the card
+        const char *fn = boardFailName(g->fail);
+        int sc = textWidth(fn, 2) <= 230 ? 2 : 1;
+        drawTextShadow(SCREEN_W / 2 - textWidth(fn, sc) / 2, sc == 2 ? 162 : 166, fn, FIRE1, sc);
+    } else if (g->msg[0]) {
         int sc = (g->msgTimer > 46 && textWidth(g->msg, 2) <= 230) ? 2 : 1;
         int mx = SCREEN_W / 2 - textWidth(g->msg, sc) / 2, mc = g->msgTimer != 0 ? 1 : 0;
         u16 col = mc ? GOLD_LT : INK;
@@ -2652,7 +2671,10 @@ static void drawResultsCard(const Game *g)
     hline(BX(lx), cy + 40, cw - 20, DIM);
     drawBestWord(g, cy + 45);
     siprintf(s, "%d", g->wordsThisShelf);
-    if (g->uniqueWords < g->wordsThisShelf) uiFmt(s, sizeof s, UI_R_UNIQUE, g->wordsThisShelf, g->uniqueWords);
+    if (g->uniqueWords < g->wordsThisShelf) {
+        uiFmt(s, sizeof s, UI_R_UNIQUE, g->wordsThisShelf, g->uniqueWords);
+        if (textWidth(ui(UI_R_WORDS), 1) + textWidth(s, 1) + 6 > rx - lx) siprintf(s, "%d (%d)", g->wordsThisShelf, g->uniqueWords);   // two-digit counts: the short form keeps a gap
+    }
     drawStatRow(lx, rx, cy + 63, ui(UI_R_WORDS), DIM_TEXT, s, WHITE);
     siprintf(s, "%d", g->peels);
     drawStatRow(lx, rx, cy + 72, ui(UI_PEELS), DIM_TEXT, s, g->peels == g->passLen ? GOLD_LT : g->peels <= g->passLen + 2 ? ACCENT : WHITE);
@@ -2931,11 +2953,12 @@ static void topSigs(const Game *g, u32 sig[4])
         h0 = hmix(h0, fireNext);
         h1 = hmix(h1, g->passLen);
         for (int i = 0; i < g->passLen; i++) h1 = hmix(h1, g->found[i] + letterPop[i] * 2);
+        h1 = hmix(h1, g->state == ST_FAIL);
         h1 = hmix(h1, fireLow + 2); h2 = hmix(h2, fireLow + 2);
         h2 = hstr(h2, chainWordNow); h2 = hmix(h2, chainScoreNow); h2 = hmix(h2, chainValidNow); h2 = hmix(h2, invalidTimer);
         h2 = hstr(h2, g->lastWord); h2 = hmix(h2, g->lastWordScore); h2 = hmix(h2, g->ledgerN);
         h2 = hmix(h2, g->ledgerN ? g->ledgerPts[ledgerIndex(g, 0)] : 0);
-        h3 = hmix(h3, g->shelf); h3 = hstr(h3, g->msg);
+        h3 = hmix(h3, g->shelf); h3 = hstr(h3, g->msg); h3 = hmix(h3, g->state == ST_FAIL ? 1 + g->fail : 0);
         h3 = hmix(h3, g->msgTimer > 46); h3 = hmix(h3, g->msgTimer != 0); h3 = hmix(h3, msgAge < 20 ? msgAge + 1 : 0);
     }
     topSigNow[0] = sig[0] = h0; topSigNow[1] = sig[1] = h1; topSigNow[2] = sig[2] = h2; topSigNow[3] = sig[3] = h3;

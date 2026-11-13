@@ -15,13 +15,14 @@ static void setMsg(const char *m, int frames)      // frames -1: sticky, shown u
 }
 
 // a message queued behind the current one: shown when msgTimer runs out
-static char pendingMsg[MSG_LEN];
-static int pendingFrames;
+static char pendingMsg[2][MSG_LEN];          // up to two: a banner, its one line explanation, then the find-the-pass line
+static int pendingFrames[2], pendingN;
 
 static void queueMsg(const char *m, int frames)
 {
-    strncpy(pendingMsg, m, MSG_LEN - 1); pendingMsg[MSG_LEN - 1] = 0;
-    pendingFrames = frames;
+    if (pendingN >= 2) return;
+    strncpy(pendingMsg[pendingN], m, MSG_LEN - 1); pendingMsg[pendingN][MSG_LEN - 1] = 0;
+    pendingFrames[pendingN++] = frames;
 }
 
 // ---- the guided first shelf: sticky prompts on the top screen while Classic shelf 1 is new to the player.
@@ -104,11 +105,12 @@ static void startShelf(void)
     musicPlayShelf(&G);
     char s[MSG_LEN];
     uiFmt(s, sizeof s, UI_MS_FIND, boardPassTheme(&G), G.passLen);   // 31 chars at most in English
-    pendingMsg[0] = 0;
+    pendingN = 0;
     if (G.twist) {
         char t[MSG_LEN];
         uiFmt(t, sizeof t, UI_MS_SHELFTWIST, G.shelf, boardTwistName(G.twist));
         setMsg(t, 150);
+        queueMsg(ui(G.twist == TWIST_INK ? UI_MS_TW_INK : G.twist == TWIST_DAMP ? UI_MS_TW_DAMP : UI_MS_TW_BURIED), 150);
         queueMsg(s, 180);
     } else setMsg(s, 180);
 }
@@ -151,7 +153,15 @@ static bool newGame(int mode)
         char t[MSG_LEN];
         if (G.practice) strcpy(t, ui(UI_MS_PRACTICE));
         else uiFmt(t, sizeof t, UI_MS_DAILYMOD, boardDailyModName(G.dailyMod));
-        queueMsg(G.msg, G.msgTimer);       // the shelf intro follows
+        char intro[MSG_LEN]; strcpy(intro, G.msg); int introFrames = G.msgTimer;
+        pendingN = 0;
+        if (!G.practice) {                 // what the modifier does, then the shelf intro follows
+            char d[MSG_LEN];
+            if (G.dailyMod == DAILYMOD_LONG) uiFmt(d, sizeof d, UI_MS_DM_LONG, DAILY_LONG_LEN);
+            else strcpy(d, ui(G.dailyMod == DAILYMOD_EMBER ? UI_MS_DM_EMBER : G.dailyMod == DAILYMOD_DEEP ? UI_MS_DM_DEEP : UI_MS_DM_STANDARD));
+            queueMsg(d, 150);
+        }
+        queueMsg(intro, introFrames);
         setMsg(t, 150);
     }
     G.state = ST_PLAY;
@@ -258,7 +268,7 @@ static void quitToTitle(void)
     G.armed = 0; G.peekLatch = 0;
     boardNewShelf(&G);
     G.state = ST_TITLE;
-    G.msg[0] = 0; G.msgTimer = 0; pendingMsg[0] = 0;
+    G.msg[0] = 0; G.msgTimer = 0; pendingN = 0;
     refreshClock();
     gfxFadeIn();
     musicMenu();
@@ -740,7 +750,7 @@ int main(void)
         if (G.state != ST_PLAY) { G.cue = CUE_NONE; G.cueAge = 0; }
         if (G.msgTimer > 0 && --G.msgTimer == 0) {
             G.msg[0] = 0;
-            if (pendingMsg[0]) { setMsg(pendingMsg, pendingFrames); pendingMsg[0] = 0; }
+            if (pendingN) { setMsg(pendingMsg[0], pendingFrames[0]); pendingN--; memcpy(pendingMsg[0], pendingMsg[1], MSG_LEN); pendingFrames[0] = pendingFrames[1]; }
             else if (G.state == ST_PLAY || G.state == ST_PAUSE) tutorAfterMsg();     // the guide's next prompt, or its end
         }
         boardAnimate(&G);
