@@ -9,6 +9,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <sys/mman.h>
 
 static int fails;
 #define CHECK(name, cond) do { if (cond) printf("PASS %s\n", name); else { printf("FAIL %s (%s) at %s:%d\n", name, #cond, __FILE__, __LINE__); fails++; } } while (0)
@@ -50,6 +52,18 @@ static u8 *loadFile(const char *path)
     u8 *buf = malloc(n);
     if (fread(buf, 1, n, f) != (size_t)n) { fclose(f); return NULL; }
     fclose(f);
+    return buf;
+}
+
+static u8 *slurpFile(const char *path, size_t *n)
+{
+    FILE *f = fopen(path, "rb");
+    if (!f) return NULL;
+    fseek(f, 0, SEEK_END); long len = ftell(f); fseek(f, 0, SEEK_SET);
+    u8 *buf = malloc((size_t)len);
+    if (!buf || fread(buf, 1, (size_t)len, f) != (size_t)len) { fclose(f); free(buf); return NULL; }
+    fclose(f);
+    *n = (size_t)len;
     return buf;
 }
 
@@ -1911,7 +1925,97 @@ int main(int argc, char **argv)
             CHECK("a letters image without the magic is refused", !langParseLetters(bad, sizeof(bad), &t) && !langParseLetters(NULL, 0, &t));
             memcpy(bad, "WPL1", 4);
             CHECK("a letters image with no tiles or a short one is refused", !langParseLetters(bad, sizeof(bad), &t) && !langParseLetters(bad, 10, &t));
-            CHECK("langApply with a bad letters buffer leaves English active", !langApply(LANG_ES, dict_bin, pools_bin, bad, sizeof(bad)) && langCur() == LANG_EN);
+            CHECK("langApply with a bad letters buffer leaves English active", !langApply(LANG_ES, dict_bin, 1000, pools_bin, 1000, bad, sizeof(bad)) && langCur() == LANG_EN);
+        }
+        // dict.bin and pools.bin validation: a wrong magic, a file shorter than its header says, counts that run past
+        // the end, a theme with no word: all refused, English stays whole (the reader used to take every count on trust)
+        {
+            size_t nd = 0, np = 0, nl = 0;
+            u8 *d = slurpFile("data/lang/es/dict.bin", &nd), *pl = slurpFile("data/lang/es/pools.bin", &np), *lt = slurpFile("data/lang/es/letters.bin", &nl);
+            CHECK("the Spanish files are there for the damage tests", d && pl && lt && nd > 1000 && np > 1000 && nl == LANG_LETTERS_BYTES);
+            if (d && pl && lt) {
+                u8 *x = (u8 *)malloc(nd > np ? nd : np);
+                bool english = true;
+#define STAYS_ENGLISH() (langCur() == LANG_EN && boardWordOk("book", 4) && !boardWordOk("casaz", 5) && strcmp(poolName(0), "BINDERY") == 0 && letterValue(23) == 8)
+                CHECK("control: the undamaged Spanish files apply", langApply(LANG_ES, d, nd, pl, np, lt, nl) && langCur() == LANG_ES);
+                langApply(LANG_EN, NULL, 0, NULL, 0, NULL, 0);
+                memcpy(x, d, nd); x[1] ^= 0x01;
+                CHECK("a dictionary with a damaged magic is refused and English stays", !langApply(LANG_ES, x, nd, pl, np, lt, nl) && STAYS_ENGLISH());
+                CHECK("a dictionary 100 bytes short is refused", !langApply(LANG_ES, d, nd - 100, pl, np, lt, nl) && STAYS_ENGLISH());
+                CHECK("a dictionary cut inside its header is refused", !langApply(LANG_ES, d, 40, pl, np, lt, nl) && STAYS_ENGLISH());
+                memcpy(x, d, nd); x[4 + 4 * 3 + 3] = 0x7f;      // the count of 6-letter words becomes absurd
+                CHECK("a dictionary whose counts run past its end is refused", !langApply(LANG_ES, x, nd, pl, np, lt, nl) && STAYS_ENGLISH());
+                memcpy(x, d, 4); memset(x + 4, 0, nd - 4);
+                CHECK("a dictionary with no words at all is refused", !langApply(LANG_ES, x, nd, pl, np, lt, nl) && STAYS_ENGLISH());
+                memcpy(x, pl, np); x[0] ^= 0x20;
+                CHECK("pools with a damaged magic are refused", !langApply(LANG_ES, d, nd, x, np, lt, nl) && STAYS_ENGLISH());
+                CHECK("pools 3000 bytes short are refused", !langApply(LANG_ES, d, nd, pl, np - 3000, lt, nl) && STAYS_ENGLISH());
+                CHECK("pools cut inside the theme headers are refused", !langApply(LANG_ES, d, nd, pl, 30, lt, nl) && STAYS_ENGLISH());
+                memcpy(x, pl, np); memset(x + 8 + 8, 0, 12);       // theme 0: all six counts zero
+                CHECK("pools with a theme that has no word are refused (pickPass would divide by zero)", !langApply(LANG_ES, d, nd, x, np, lt, nl) && STAYS_ENGLISH());
+                memcpy(x, pl, np); x[4] = 0; x[5] = 0xff;           // 65280 themes announced
+                CHECK("pools announcing more themes than the file can hold are refused", !langApply(LANG_ES, d, nd, x, np, lt, nl) && STAYS_ENGLISH());
+                english = langApply(LANG_ES, d, nd, pl, np, lt, nl) && langApply(LANG_EN, NULL, 0, NULL, 0, NULL, 0) && STAYS_ENGLISH();
+                CHECK("a refused load never disturbs the next good one", english);
+                free(x);
+            }
+            free(d); free(pl); free(lt);
+        }
+        // the raw card path's file-name table walk: the real layout is found, and no damaged or random table can make it
+        // read outside the table (the table sits at the end of a page followed by an unmapped one: a stray read crashes)
+        {
+            u8 t[64]; memset(t, 0, sizeof t);
+            // directory table: root (0xF000) names at 32; 0xF001 "lang" names at 40; 0xF002 "es" names at 46
+            #define W16(o, v) do { t[o] = (v) & 255; t[(o) + 1] = (v) >> 8; } while (0)
+            W16(0, 32); W16(4, 0); W16(6, 3);
+            W16(8, 40); W16(12, 0); W16(14, 0xF000);
+            W16(16, 46); W16(20, 0); W16(22, 0xF001);
+            t[32] = 0x80 | 4; memcpy(t + 33, "lang", 4); W16(37, 0xF001); t[39] = 0;
+            t[40] = 0x80 | 2; memcpy(t + 41, "es", 2); W16(43, 0xF002); t[45] = 0;
+            t[46] = 11; memcpy(t + 47, "letters.bin", 11); t[58] = 0;
+            #undef W16
+            CHECK("the name table walk finds lang/es/letters.bin (case-insensitively) and refuses what is not a file there",
+                  langFntFind(t, sizeof t, "lang/es/letters.bin") == 0 && langFntFind(t, sizeof t, "LANG/ES/LETTERS.BIN") == 0 &&
+                  langFntFind(t, sizeof t, "lang/es") == -1 && langFntFind(t, sizeof t, "lang/xx/letters.bin") == -1 && langFntFind(t, sizeof t, "lang/es/dict.bin") == -1);
+            size_t pg = (size_t)sysconf(_SC_PAGESIZE);
+            u8 *map = mmap(NULL, 2 * pg, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+            bool mapped = map != MAP_FAILED && mprotect(map + pg, pg, PROT_NONE) == 0;
+            CHECK("scratch pages for the name table fuzz", mapped);
+            if (mapped) {
+                u32 seed = 12345; int bad = 0;
+                for (int round = 0; round < 40000; round++) {
+                    u32 len = 1 + (round % 70);                                 // a table of this many bytes, flush against the guard page
+                    u8 *tab = map + pg - len;
+                    for (u32 i = 0; i < len; i++) { seed ^= seed << 13; seed ^= seed >> 17; seed ^= seed << 5; tab[i] = round % 4 == 0 ? (u8)(seed >> 3) : (i < sizeof t ? t[i] : 0); }
+                    if (round % 4 != 0) for (int k = 0; k < 1 + round % 5; k++) { seed ^= seed << 13; seed ^= seed >> 17; seed ^= seed << 5; tab[seed % len] ^= (u8)(1u << (seed >> 29)); }
+                    int id = langFntFind(tab, len, "lang/es/letters.bin");
+                    if (id < -1 || id > 0xFFFF) bad++;
+                }
+                CHECK("40000 random and bit-flipped name tables: no read outside the table, every answer a file id or -1", bad == 0);
+                munmap(map, 2 * pg);
+            }
+        }
+        // langLoad end to end on a damaged language: the files are read from a scratch tree, the load fails, English is
+        // active, langLoadFailed() says so (the options and the chooser print it), and the next good load clears it
+        {
+            static const char *const F[3] = { "dict.bin", "pools.bin", "letters.bin" };
+            char cwd[512];
+            CHECK("scratch tree for the damaged-language load", getcwd(cwd, sizeof cwd) != NULL && system("rm -rf build/langdmg && mkdir -p build/langdmg/data/lang/es") == 0);
+            for (int k = 0; k < 3; k++) {
+                char src[64], dst[96]; snprintf(src, sizeof src, "data/lang/es/%s", F[k]); snprintf(dst, sizeof dst, "build/langdmg/data/lang/es/%s", F[k]);
+                size_t n = 0; u8 *b = slurpFile(src, &n);
+                FILE *o = b ? fopen(dst, "wb") : NULL;
+                if (o) { fwrite(b, 1, k == 1 ? n - 3000 : n, o); fclose(o); }          // pools.bin 3000 bytes short
+                free(b);
+            }
+            bool chd = chdir("build/langdmg") == 0;
+            bool loaded = chd ? langLoad(LANG_ES) : true;
+            bool failed = langLoadFailed();
+            bool eng = STAYS_ENGLISH();
+            if (chd && chdir(cwd) != 0) printf("cannot return to %s\n", cwd);
+            CHECK("langLoad of a Spanish with a short pools.bin fails, English is active and langLoadFailed says so", chd && !loaded && failed && eng);
+            CHECK("the next good load (from the real tree) succeeds and clears the failure", langLoad(LANG_ES) && !langLoadFailed() && langCur() == LANG_ES);
+            CHECK("... and back to English", langLoad(LANG_EN) && STAYS_ENGLISH() && !langLoadFailed());
         }
     }
 

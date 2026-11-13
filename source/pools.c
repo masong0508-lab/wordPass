@@ -19,35 +19,46 @@ typedef struct {
 static PoolSet enSet, altSet;
 static const PoolSet *P = &enSet;
 
-static void poolsParse(PoolSet *s, const u8 *p)
+// Fills `s` from a WPP1 image of `bytes` bytes (IMAGE_TRUSTED: the compiled-in one). Returns false, with no themes, when
+// the magic is wrong, the header or any word run would reach past the end of the image, or a theme has no word.
+static bool poolsParse(PoolSet *s, const u8 *p, size_t bytes)
 {
     s->n = 0;
-    if (!p || memcmp(p, "WPP1", 4) != 0) return;
-    const int fileThemes = p[4] | (p[5] << 8) | (p[6] << 16) | (p[7] << 24);
-    const int n = fileThemes > MAX_THEMES ? MAX_THEMES : fileThemes;
+    if (!p || memcmp(p, "WPP1", 4) != 0) return false;
+    const bool trusted = bytes == IMAGE_TRUSTED;
+    if (!trusted && bytes < 8) return false;
+    const u32 fileThemes = (u32)p[4] | ((u32)p[5] << 8) | ((u32)p[6] << 16) | ((u32)p[7] << 24);
+    if (!trusted && (fileThemes == 0 || fileThemes > 4096 || 8 + 20 * (size_t)fileThemes > bytes)) return false;
+    const int n = fileThemes > MAX_THEMES ? MAX_THEMES : (int)fileThemes;
     const u8 *hdr = p + 8;
-    const u8 *body = p + 8 + 20 * fileThemes;               // word data follows every theme's header
+    const u8 *body = p + 8 + 20 * (size_t)fileThemes;       // word data follows every theme's header
+    unsigned long long used = 8 + 20 * (unsigned long long)fileThemes;
     for (int t = 0; t < n; t++) {
         s->name[t] = (const char *)hdr;                      // 8 bytes, NUL padded, 7 letters at most
-        for (int k = 0; k < NLEN; k++) s->count[t][k] = hdr[8 + 2 * k] | (hdr[9 + 2 * k] << 8);
+        unsigned words = 0;
+        for (int k = 0; k < NLEN; k++) { s->count[t][k] = hdr[8 + 2 * k] | (hdr[9 + 2 * k] << 8); words += s->count[t][k]; }
+        if (!trusted && words == 0) return false;            // pickPass needs a word in every theme
         hdr += 20;
     }
     for (int t = 0; t < n; t++)
         for (int k = 0; k < NLEN; k++) {
             s->base[t][k] = body;
             body += (size_t)s->count[t][k] * (POOL_MIN_LEN + k);
+            used += (unsigned long long)s->count[t][k] * (POOL_MIN_LEN + k);
         }
+    if (!trusted && used > bytes) return false;
     s->n = n;
+    return true;
 }
 
-void poolsInit(void) { poolsParse(&enSet, pools_bin); P = &enSet; }
+void poolsInit(void) { poolsParse(&enSet, pools_bin, IMAGE_TRUSTED); P = &enSet; }
 
-// Make a language's pools (a WPP1 image) the active ones; NULL or the English image selects English.
-bool poolsSet(const u8 *p)
+// Make a language's pools (a WPP1 image of `bytes` bytes) the active ones; NULL or the English image selects English.
+// A damaged image is refused (false) and English stays.
+bool poolsSet(const u8 *p, size_t bytes)
 {
     if (!p || p == pools_bin) { P = &enSet; return true; }
-    poolsParse(&altSet, p);
-    if (altSet.n == 0) { P = &enSet; return false; }
+    if (!poolsParse(&altSet, p, bytes)) { altSet.n = 0; P = &enSet; return false; }
     P = &altSet;
     return true;
 }

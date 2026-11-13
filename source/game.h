@@ -383,7 +383,8 @@ int  letterValue(int letter);        // of the active language
 
 // dict.c
 void dictInit(void);
-void dictSet(const u8 *p);                    // activate another WPD3 image (a loaded language)
+#define IMAGE_TRUSTED ((size_t)-1)               // dictSet/poolsSet size of the compiled-in tables: no bounds to check
+bool dictSet(const u8 *p, size_t bytes);      // activate another WPD3 image of `bytes` bytes (a loaded language); false = damaged, table empty
 
 // pools.c: themed pass-word library (data/pools.bin)
 void poolsInit(void);
@@ -391,7 +392,7 @@ int  poolThemeCount(void);
 const char *poolName(int theme);                              // "BINDERY"
 void poolWordEn(int theme, int len, int idx, char *out);      // the same, English
 const char *poolNameEn(int theme);                            // the English name, whatever the language (the guide)
-bool poolsSet(const u8 *p);                                   // activate a WPP1 image (NULL = the compiled-in English)
+bool poolsSet(const u8 *p, size_t bytes);                         // activate a WPP1 image of `bytes` bytes (NULL = the compiled-in English); false = damaged, English stays
 int  poolCount(int theme, int len);                           // words of that length in the theme
 void poolWord(int theme, int len, int idx, char *out);        // out holds len + 1 bytes
 int  dictLookup(const char *word, int len);   // 0 none, 1 common, 2 rare
@@ -451,7 +452,9 @@ int  uiFmt(char *out, int cap, int id, ...);      // fill the %d / %s / %02d / %
 int  langCur(void);                           // the active language
 const LangTables *langTables(void);
 bool langParseLetters(const u8 *b, size_t n, LangTables *out);
-bool langApply(int idx, const u8 *dict, const u8 *pools, const u8 *letters, size_t lettersBytes);
+bool langApply(int idx, const u8 *dict, size_t dictBytes, const u8 *pools, size_t poolBytes, const u8 *letters, size_t lettersBytes);
+int  langFntFind(const u8 *tab, u32 tabLen, const char *path);   // pure, bounds-checked: the file id of "lang/xx/file.bin" in a NitroFS name table image, or -1
+bool langLoadFailed(void);                // the last langLoad of another language could not complete: English is active (the options and the chooser say so)
 void langInitEnglish(void);
 int  letterValueEn(int letter);               // the English value table (the compiled-in one, whatever the language)
 int  guideGems(int id, u8 gems[4], int *wordLen);   // the gems of a guide example word (a UI_EX_* string); Qu is one gem

@@ -47,6 +47,29 @@ def patch_dldi(src, dst):
     return dst
 
 
+def rom_file_range(rom, path):
+    """(offset, size) of a NitroFS file inside the .nds (walks the header's name and allocation tables), so a test can
+    damage one file in a private copy of the ROM."""
+    d = open(rom, 'rb').read()
+    fnt_off, fnt_len, fat_off, fat_len = struct.unpack_from('<4I', d, 0x40)
+    u16 = lambda o: struct.unpack_from('<H', d, o)[0]
+    u32 = lambda o: struct.unpack_from('<I', d, o)[0]
+    dir_id, parts = 0xF000, path.split('/')
+    for i, part in enumerate(parts):
+        ent = fnt_off + u32(fnt_off + 8 * (dir_id & 0xFFF)); fid = u16(fnt_off + 8 * (dir_id & 0xFFF) + 4)
+        while d[ent]:
+            n = d[ent] & 0x7F; is_dir = d[ent] & 0x80; name = d[ent + 1:ent + 1 + n].decode(); ent += 1 + n
+            if is_dir: sub = u16(ent); ent += 2
+            if name == part:
+                if i == len(parts) - 1:
+                    a, b = struct.unpack_from('<2I', d, fat_off + 8 * fid); return a, b - a
+                dir_id = sub; break
+            if not is_dir: fid += 1
+        else:
+            raise KeyError(path)
+    raise KeyError(path)
+
+
 def make_card(path, files, total_mb=64):
     """A fresh FAT16 card image holding `files` [(name, bytes)] in its root directory."""
     return fatimg.create(path, files, total_mb=total_mb)

@@ -2457,7 +2457,8 @@ static void drawOptions(const Game *g)
     }
     rectOutline(54, 153, 64, 17, DIM);
     drawTextCenter(86, 158, ui(UI_OP_BACK), INK, 1);
-    if (!settingsPersistent()) drawTextCenter(86, 176, ui(UI_OP_NOSAVE), DIM_TEXT, 1);
+    if (langLoadFailed()) drawTextCenter(86, 176, ui(UI_OP_LANGFAIL), FIRE2, 1);     // a damaged language file: English stayed
+    else if (!settingsPersistent()) drawTextCenter(86, 176, ui(UI_OP_NOSAVE), DIM_TEXT, 1);
     else if (settingsSaveFailed()) drawTextCenter(86, 176, ui(UI_OP_SAVEFAIL), FIRE2, 1);
     else drawTextCenter(86, 176, ui(UI_OP_SAVED), DIM_TEXT, 1);
 }
@@ -2780,7 +2781,8 @@ static void drawLangPick(const Game *g)
         drawText(86 - textWidth(langName(i), 1) / 2, y + 3, langName(i), on ? WHITE : ok ? INK : DIM2, 1);
         if (i == langCur()) drawChar(18, y + 3, '*', GOLD_LT, 1);
     }
-    drawTextCenter(86, 172, ui(UI_LP_HINT), DIM_TEXT, 1);
+    if (langLoadFailed()) drawTextCenter(86, 172, ui(UI_OP_LANGFAIL), FIRE2, 1);
+    else drawTextCenter(86, 172, ui(UI_LP_HINT), DIM_TEXT, 1);
 }
 
 static void drawOverlay(const Game *g)

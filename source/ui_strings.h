@@ -198,6 +198,7 @@ enum {
     UI_OP_BACK,
     UI_OP_NOSAVE,
     UI_OP_SAVEFAIL,
+    UI_OP_LANGFAIL,
     UI_OP_SAVED,
     UI_L_GAMES,
     UI_L_SHELVES,

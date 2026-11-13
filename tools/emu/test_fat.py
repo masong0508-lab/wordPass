@@ -78,9 +78,43 @@ def case(tag, rom, elf, d):
     need(e.state()['state'] == ST_TITLE and e.S_theme() == t2, 'third boot did not load the second save')
 
 
+DAMAGE = {
+    'a dictionary with a damaged magic': ('lang/es/dict.bin', lambda b, st, n: b.__setitem__(st + 1, b[st + 1] ^ 1)),
+    'pools in which a theme has no word': ('lang/es/pools.bin', lambda b, st, n: b.__setitem__(slice(st + 16, st + 28), bytes(12))),
+}
+
+
+def damaged_case(kind, rom, elf, d):
+    """A language file damaged inside the ROM: the load must fail, English must stay and be playable, and the options screen
+    must say so. (The ROM copy is damaged by flipping bytes at the file's place in the card image.)"""
+    from fatrig import rom_file_range
+    from wp import Emu, ST_OPTIONS, ST_TITLE, ST_PLAY
+    path, hit = DAMAGE[kind]
+    data = bytearray(open(rom, 'rb').read())
+    st, n = rom_file_range(rom, path)
+    hit(data, st, n)
+    bad = os.path.join(d, 'damaged.nds'); open(bad, 'wb').write(bytes(data))
+    e = Emu(bad, elf=elf)
+    e.set_tutor(1)
+    assert e.state()['langMask'] & 2, 'Spanish is not even listed'
+    e.tap(86, 170); e.run(30)
+    assert e.state()['state'] == ST_OPTIONS
+    e.tap(130, 32 + 13 * 8 + 6); e.run(20)              # LANGUAGE, right half: the next language, Espanol
+    g = e.state()
+    assert g['language'] == 0, 'the damaged language was accepted (language %d)' % g['language']
+    e.shot(os.path.join(d, 'damaged_options.png'))
+    e.press('B', settle=30)
+    e.start_classic(); e.run(20)
+    g = e.state()
+    assert g['state'] == ST_PLAY and g['passLen'] >= 4, 'English is not playable after the failed load'
+    print('CASE OK')
+
+
 def main():
     if len(sys.argv) >= 6 and sys.argv[1] == '--case':          # child: one situation
         case(sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]); print('CASE OK'); return 0
+    if len(sys.argv) >= 6 and sys.argv[1] == '--damaged':
+        damaged_case(sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]); return 0
     rom, elf, out = sys.argv[1], sys.argv[2], sys.argv[3]
     from fatrig import patch_dldi
     d = os.path.join(out, 'fat'); shutil.rmtree(d, ignore_errors=True); os.makedirs(d)
@@ -92,6 +126,11 @@ def main():
         if 'CASE OK' in r.stdout: print('PASS fat card: save, power off, reboot, load (%s)' % tag)
         else:
             fails += 1; print('FAIL fat card: save, power off, reboot, load (%s) -' % tag, (r.stderr.strip().splitlines() or ['?'])[-1])
+    for kind in DAMAGE:
+        r = subprocess.run([sys.executable, '-I', os.path.abspath(__file__), '--damaged', kind, rom, elf, d], capture_output=True, text=True)
+        if 'CASE OK' in r.stdout: print('PASS damaged language file stays English: %s' % kind)
+        else:
+            fails += 1; print('FAIL damaged language file stays English: %s -' % kind, (r.stderr.strip().splitlines() or ['?'])[-1])
     print('FAT OK' if not fails else 'FAT FAILED: %d failure(s)' % fails)
     return fails
 
