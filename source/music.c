@@ -111,11 +111,19 @@ static DutyCycle dutyOf(int pct)
 }
 
 // ---- voices: every write to the hardware goes through these, and only when the value changed
+// Voice::freq and every Hz in this file are MUSICAL Hz (the pitch you hear). libnds takes the channel's SAMPLE RATE
+// (timer = -0x1000000 / freq, no scaling: ARM7 soundDataHandler and soundCommandHandler), and a PSG duty wave is
+// PSG_SAMPLES = 8 samples per cycle, so a PSG voice must be sent 8 x its pitch or it sounds three octaves low.
+// A noise channel's freq is its LFSR clock and goes out unchanged. The register is 16 bits: PSG_MAX_HZ is the
+// highest pitch a PSG voice can reach (8191 Hz, about C9); nothing the game plays gets near it (the PITCHSTAT check asserts it).
+#define PSG_SAMPLES 8
+#define PSG_MAX_HZ (65535 / PSG_SAMPLES)
+static int hwFreq(bool noise, int hz) { return noise ? hz : hz * PSG_SAMPLES; }
 static void vFreq(Voice *x, int hz)
 {
     if (hz < 1) hz = 1;
-    if (hz > 65535) hz = 65535;
-    if (hz != x->freq) { soundSetFreq(x->id, (u16)hz); x->freq = hz; }
+    if (hz > (x->noise ? 65535 : PSG_MAX_HZ)) hz = x->noise ? 65535 : PSG_MAX_HZ;
+    if (hz != x->freq) { soundSetFreq(x->id, (u16)hwFreq(x->noise, hz)); x->freq = hz; }
 }
 
 static void vDuty(Voice *x, int pct)
@@ -282,7 +290,7 @@ void musicInit(void)
         x->rel = INST(v)->release;
         x->duty = (int)dutyOf(INST(v)->dutySus);
         x->pan = 64;
-        x->id = x->noise ? soundPlayNoise(8000, 0, 64) : soundPlayPSG((DutyCycle)x->duty, 440, 0, 64);
+        x->id = x->noise ? soundPlayNoise(8000, 0, 64) : soundPlayPSG((DutyCycle)x->duty, (u16)hwFreq(false, 440), 0, 64);
         vPan(x, pan[v]);
         lastSent[v] = 0;
     }

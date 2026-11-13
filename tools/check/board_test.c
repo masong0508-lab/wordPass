@@ -1923,6 +1923,7 @@ int main(int argc, char **argv)
     CHECK("note table octaves double", hz[81] == 880 && hz[57] == 220);
 
     musicTests();
+    pitchTests();
     songTests();
 
     printf("%s: %d failure(s)\n", fails ? "CHECK FAILED" : "CHECK OK", fails);

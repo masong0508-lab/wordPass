@@ -402,6 +402,14 @@ or sparser, are in `tools/music/songs_src.py` (`gain`, `att`, the `bell` and `so
   note reaches the PSG at the pitch and level the table says, the form A A B A and its loop, the tempo under fire, which song plays
   where (title and menus, Classic shelves 1..12, Lockdown tiers, FIRE FAST, Daily), 60 fps with the music running, the
   loudness cap against the old tune's own peak, the menu song's properties above, no hardware value written twice, MUSIC off.
+- **PSG pitch on the hardware.** Every Hz in the song tables, the note table (C4 = 262, A4 = 440) and the effects is the
+  pitch you hear. libnds takes a channel's *sample rate* (the ARM7 sets the timer to `0xFF000000 / freq` and does not scale
+  it, for `soundPlayPSG` and `soundSetFreq` alike) and a DS PSG duty wave is eight samples per cycle, so `music.c` sends a
+  PSG voice eight times its pitch (`hwFreq`) and the two noise voices their own value (their frequency is the LFSR clock).
+  The register is 16 bits, so a PSG pitch is limited to 8191 Hz (about C9); the highest the game plays is 2350 Hz, so no
+  note is clamped and none had to be transposed. `make check` drives every song, effect, stinger and the fanfare and
+  asserts frame by frame that the value sent is 8 x the mirror's Hz for the six PSG voices, the same for the noise voices,
+  and that nothing exceeds 65535 (`PITCHSTAT`). Not verified: that the result sounds right on a DS (nothing here was heard).
 - Measured, not heard: the balance between voices (each voice's peak level and the sum), the register of every lead, the
   density of every hook, the claim that the menu song is gentle. The guesses an ear would settle are the swing of the
   shuffle on a 16th grid (a true shuffle needs triplets, which the 16-step bar cannot hold; PURDIE WALK keeps the

@@ -59,6 +59,55 @@ static int differPct(const u8 *a, const u8 *b, int n)
 }
 static int onsetCount(const u8 *h, int from, int to) { int n = 0; for (int i = from; i < to; i++) if (h[i] && h[i] != 99) n++; return n; }
 
+// PSG pitch: libnds takes a channel's SAMPLE RATE and a PSG duty wave has 8 samples per cycle, so what reaches the
+// hardware for the six PSG voices (ids 0..5: hook pulse bass pad alarm chime) must be 8 x the note's Hz, and the two
+// noise voices (6, 7) go out unchanged. The mirror (musicDebug) keeps the musical Hz; the stub keeps what the
+// "hardware" got. Every song, every effect, the stingers, the fanfare and the peek are driven through the sequencer.
+static int pitchBad, pitchMaxHz, pitchFrames;
+static void pitchWatch(void)
+{
+    MusicDbg d = mdbg();
+    pitchFrames++;
+    for (int v = 0; v < 8; v++) {
+        int want = v < 6 ? d.hz[v] * 8 : d.hz[v];
+        if (stubHz[v] != want || stubHz[v] > 65535 || stubHz[v] < 1) pitchBad++;
+        if (v < 6 && d.hz[v] > pitchMaxHz) pitchMaxHz = d.hz[v];
+    }
+}
+static void pitchRun(int n) { for (int i = 0; i < n; i++) { musicTick(&g); pitchWatch(); } }
+
+static void pitchTests(void)
+{
+    boardOf('a'); g.passLen = 0;
+    memset(&S, 0, sizeof(S)); S.music = 1; S.fire = FIRE_NORMAL;
+    pitchBad = pitchMaxHz = pitchFrames = 0;
+    for (int i = 0; i < NSONGS; i++) {
+        for (int pass = 0; pass < 3; pass++) {
+            musicForceSong(&SONGS[i]);
+            g.state = pass == 2 ? ST_TITLE : ST_PLAY;
+            musicNewShelf(1, false);
+            pitchRun(40);
+            for (int bar = 0; bar < 4 * 4; bar++) {                  // four loops, so section B is heard
+                musicWord(3 + bar % 8, 0, false);
+                if (bar % 5 == 0) musicCascade(6);
+                musicSfx(SFX_TAP, 1 + bar % 10); pitchRun(3); musicSfx(SFX_UNTAP, 1 + bar % 10);
+                musicSfx(SFX_SCORCH, 0); musicSfx(SFX_PEEL, 0); musicSfx(SFX_INVALID, 0); musicSfx(SFX_MENU, 0);
+                musicSfx(SFX_IGNITE, 0); musicSfx(SFX_FIRESTEP, 0);
+                musicPeek(bar % 3 == 0); musicReveal(bar & 1);
+                pitchRun(16 * SONGS[i].stepFrames - 3);
+            }
+            musicPeek(false);
+            for (int k = 1; k <= 10; k++) { musicSfx(SFX_TAP, k); pitchRun(4); }
+            for (int r = FAIL_FIRE; r <= FAIL_WORDS; r++) { musicFail(r); pitchRun(300); }
+            musicNewShelf(1, false); g.state = ST_PASSED; musicPassComplete(); pitchRun(200);
+        }
+    }
+    musicForceSong(NULL);
+    CHECK("every PSG voice is sent 8 x its pitch and every noise voice its own Hz, never above 65535 (all songs, effects, stingers)", pitchBad == 0 && pitchFrames > 50000);
+    CHECK("no PSG pitch the game plays reaches the 16-bit ceiling (8191 Hz), so nothing is clamped or transposed", pitchMaxHz > 1000 && pitchMaxHz < 65535 / 8);
+    printf("PITCHSTAT: highest PSG pitch %d Hz (x8 = %d of 65535) over %d frames\n", pitchMaxHz, pitchMaxHz * 8, pitchFrames);
+}
+
 static void songTests(void)
 {
     u16 nhz[128];
