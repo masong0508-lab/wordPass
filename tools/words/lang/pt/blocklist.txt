@@ -49,3 +49,20 @@ vagina
 viadinho
 viado
 sexo* sexual* estupr* nazi* gaja gajas
+# slur: ethnic, national, religious, sexual-orientation or gender slurs (owner's rule: the only content class removed)
+=chino =cigano =esquimo =gringo =maricas =mongol =mulato =nego
+# junk: not a word a native speaker accepts (name, fragment, foreign word, misspelling)
+=able =adam =aids =alabama =aligator =anas =armenia =axis
+=baltimore =bang =boom =brasil =carolina =cartoon =center =charles
+=chat =ciao =code =coupe =csis =cube =czar =doge
+=dora =duble =edta =egeu =einstein =flash =frite =game
+=hola =ioes =jane =jeep =jesus =jimbo =joao =laptop
+=laura =libre =lime =live =locus =lucifer =luis =lulu
+=mane =marte =miami =mouse =nina =olga =pager =palestina
+=paparazzi =paxa =pete =plus =pongo =pool =puzzle =rita
+=rose =router =rush =sable =satori =shop =some =soul
+=spam =spin =talus =tape =techno =tempora =valencia =vote
+=xena =zombie =zone =zoom
+# off-theme: clearly wrong for its theme (removed from the pools; still valid in the dictionary)
+=colega =dela =este =fazer =hertz =homem =mara =morrer
+=resto =sobre =sorrir =tirar =trato =vestido
