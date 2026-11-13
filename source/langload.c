@@ -32,8 +32,8 @@ static void path(char *out, int idx, const char *file)
 // page with CARD_CLK_SLOW and the longest command delay, about 2 ms a page, which measured 4.1 seconds per megabyte in
 // DeSmuME: 5 to 7 seconds for a language. So when the ROM is read from the card itself, the three files are located
 // through the ROM's own file tables (the same FNT and FAT NitroFS reads) and read with the header's card control word,
-// the way the card boot code reads. When the program was started from a flashcart (a path in argv and a working FAT), NitroFS
-// reads the .nds from the SD card through FAT, which is already fast, and the raw path is never used. The raw path proves
+// the way the card boot code reads. When NitroFS reads the .nds from the SD card through FAT (libfilesystem got an argv path it could open), it is already
+// fast and the raw path is never used; rawInit tells the two apart by the working directory libfilesystem leaves. The raw path proves
 // itself first (langInit compares what it reads with what NitroFS reads); anything that does not match falls back.
 static bool rawOk;
 static u8 *fnt;
@@ -96,8 +96,11 @@ static bool rawLocate(const char *path, u32 *start, u32 *size)
 static void rawInit(void)
 {
     rawOk = false;
-    const struct __argv *a = __system_argv;
-    if (a->argvMagic == ARGV_MAGIC && a->argc > 0 && settingsPersistent()) return;   // started from a flashcart's SD card (FAT works): NitroFS reads the .nds through FAT
+    // Decide from what libfilesystem did, not from whether argv and FAT exist: when it opens the .nds through FAT it
+    // leaves the working directory on that device, when it reads the card itself (no argv, or argv[0] is not a file on
+    // the FAT card) it chdir()s to nitro:/. Only the second case is slow and wants the raw path.
+    char cwd[16];
+    if (getcwd(cwd, sizeof cwd) && strncmp(cwd, "nitro:", 6) != 0) return;
     u32 fs = __NDSHeader->filenameSize;
     if (!__NDSHeader->cardControl13 || fs < 8 || fs > 16384) return;
     fnt = (u8 *)malloc(fs + 4);

@@ -48,12 +48,18 @@ def case(tag, rom, elf, d):
     need(dev == ('fat' if tag == 'ok' else 'nitro'), 'the default device after boot is %r' % (dev,))
     need(e.flags()['fatReady'] == 1, 'FAT is not up: %r' % e.flags())
     need(e.state()['state'] == ST_LANGPICK, 'first boot did not show the language chooser')
+    # the fast card path is for the setups where libfilesystem reads the card itself (the default device moved to nitro:)
+    need(e.flags()['rawOk'] == (0 if tag == 'ok' else 1), 'rawOk is %d: the fast path must run exactly when NitroFS reads the card (%r)' % (e.flags()['rawOk'], e.flags()))
     e.press('A', settle=30)
     need(not e.flags()['saveFailed'], 'the chooser answer was not saved (default device %s): %r' % (dev, e.flags()))
     b = read_cfg(img)
     need(b is not None and cfg_fields(b)['magic'] == SETTINGS_MAGIC, 'no wordPass.cfg on the card after the chooser: %r' % (card_files(img),))
     need(cfg_fields(b)['languageChosen'] == 1, 'the saved file does not record the language choice')
     t0 = cfg_fields(b)['theme']
+    e.set_language(6)                                  # NEDERLANDS: the biggest dictionary, a blocking load
+    need(e.state()['language'] == 6, 'the language did not load')
+    need(e.state()['loadMs'] < 2000, 'loading a language took %d ms (the slow NitroFS card path is 4500 to 7200)' % e.state()['loadMs'])
+    e.set_language(0)
     options_theme(e)
     need(not e.flags()['saveFailed'], 'leaving OPTIONS did not save')
     t1 = cfg_fields(read_cfg(img))['theme']
