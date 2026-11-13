@@ -2365,7 +2365,7 @@ static void drawTitle(const Game *g)
         rectOutline(BX(GUIDE_BTN_X), 7, GUIDE_BTN_W, 17, cue ? lerp15(GOLD_DK, WHITE, pp) : GOLD_DK);
         drawTextCenter(BX(GUIDE_BTN_X + GUIDE_BTN_W / 2), 12, ui(UI_T_GUIDE), cue ? lerp15(ACCENT, WHITE, pp / 2) : INK, 1);
     }
-    {   // the language tag: tap for the next language (the name in gold once it is not English)
+    {   // the language tag: tap to open the language chooser (the name in gold once it is not English)
         bool en = langCur() == LANG_EN;
         fillRect(BX(LANG_BTN_X), 7, LANG_BTN_W, 17, BLACK);
         rectOutline(BX(LANG_BTN_X), 7, LANG_BTN_W, 17, en ? GOLD_DK : GOLD);

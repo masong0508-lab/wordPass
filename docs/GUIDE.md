@@ -41,7 +41,7 @@ the **touch screen** (the bottom one): the board of gems on one side and a narro
 
 ![The title's touch screen with numbered markers: 1 CLASSIC, 2 the Daily button, 3 OPTIONS, 4 the GUIDE button, 5 the LEDGER line, 6 the language tag.](img/title_zoom.png)
 *The title buttons. 1 CLASSIC, 2 the Daily Pass button (it shows the date and the day's modifier), 3 OPTIONS, 4 the pulsing ? GUIDE
-button (it pulses until you have finished your first guided shelf), 5 the BEST / LEDGER line, which opens the lifetime statistics, 6 the language tag (tap it for the next language; section 14).*
+button (it pulses until you have finished your first guided shelf), 5 the BEST / LEDGER line, which opens the lifetime statistics, 6 the language tag (tap it to open the language chooser; section 14).*
 
 ### The first shelf, step by step
 
@@ -1170,7 +1170,7 @@ The songs (generated from `tools/music/songs_src.py`; the checker compares this 
 
 > **Regenerated section.** This section describes the ten languages as the code does *today* (`source/lang.c`, `source/langload.c`, `data/lang/`). `tools/emu/screens.py` regenerates its pictures and `python3 tools/check_guide.py` checks the option names and the data it quotes, so a later change is found cheaply. The data pipeline and its limits are in `docs/LANGUAGES-DATA.md`.
 
-The game plays in **English** and in **ten more languages**: Spanish, French, German, Italian, Portuguese, Dutch, Swedish, Polish, Danish and Finnish. The **LANGUAGE** option (the ninth row of the options) and the language tag in the title's top left corner (tap it for the next language) switch the whole game.
+The game plays in **English** and in **ten more languages**: Spanish, French, German, Italian, Portuguese, Dutch, Swedish, Polish, Danish and Finnish. The **LANGUAGE** option (the ninth row of the options) and the language tag in the title's top left corner (tap it to open the language chooser) switch the whole game.
 
 The first time the game starts, with no saved settings, it shows the **language chooser** before the title. It is also reachable from the title tag and with **A** on the LANGUAGE row.
 
@@ -1178,7 +1178,7 @@ The first time the game starts, with no saved settings, it shows the **language 
 *The chooser. 1 English and the ten others, 2 the highlighted language (tap one, or use the d-pad and A), 3 the hint line. The language currently in use carries a gold star.*
 
 ![The title screen in English, Espanol and Deutsch: the language tag in the top left corner.](img/title_language.png)
-*The title's language tag. In English it is a quiet tag; in any other language it lights gold and shows that language's name, with a chevron: tap it for the next language.*
+*The title's language tag. In English it is a quiet tag; in any other language it lights gold and shows that language's name, with a chevron: tap it to open the language chooser.*
 
 | Setting | Values | What it decides |
 | --- | --- | --- |
