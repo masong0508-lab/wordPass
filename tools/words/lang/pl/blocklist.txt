@@ -50,3 +50,49 @@ sukin*
 dupa*
 kurw* pierdol* chuj* fiut* skurwiel* przydup* dziwk* zajebi* seks* erekcj* cip* szmat
 nazi*
+# slur: ethnic, national, religious, sexual-orientation or gender slurs (owner's rule: the only content class removed)
+=cygan =cyganski =czarnuchu =pederasta =sodomita =zabojad
+# junk: not a word a native speaker accepts (name, fragment, foreign word, misspelling)
+=albert =anno =apollo =back =backhand =backup =baht =baki
+=band =banner =barbecue =bart =bass =bauer =beat =beeper
+=belt =bill =billboard =black =blue =boba =bobby =booker
+=booster =boss =boys =brander =brown =bull =burke =call
+=camp =campus =canoe =carmen =carol =case =cash =chan
+=charter =chen =chin =choi =club =cocktail =cody =college
+=colon =confetti =continuum =cool =cracker =crawl =dark =derek
+=dirk =dniowy =dolcow =donna =dossier =drag =drake =earl
+=easy =einstein =enter =fair =fast =fine =firewall =food
+=ford =franklin =free =future =game =gear =girl =gonna
+=gotow =grand =green =groupie =hacker =hall =hand =happy
+=hard =hardware =hatchback =head =hello =help =henry =here
+=hero =high =home =homer =hour =house =igloo =iron
+=jack =jacka =jehowa =jehowy =jiao =jordan =jorku =keep
+=kent =king =kingston =kirk =kiss =klark =koledz =kolorado
+=kongo =lana =land =last =lead =leader =lenny =life
+=lincoln =line =long =lori =lost =madame =made =madison
+=mainframe =make =manny =marek =mark =marshall =marsylia =martin
+=mike =milka =millenium =mine =miss =monsieur =moon =more
+=morris =much =news =nick =nicka =night =nikki =omar
+=open =outsider =page =pager =palmtop =parker =penny =penthouse
+=pepsi =peta =pink =play =plug =project =race =randy
+=register =right =roadster =rock =rockman =roll =romeo =said
+=salt =scrabble =shaker =shimmy =show =skip =skull =sleeping
+=slim =smiley =sniezka =snow =soccer =song =sorry =soul
+=spencer =star =sten =strit =swiad =szawel =tabasco =talk
+=team =tech =tell =them =time =tomi =trick =trip
+=upgrade =walkman =wanda =wania =want =white =will =wind
+=world =yale =yuppie =zoom
+# off-theme: clearly wrong for its theme (removed from the pools; still valid in the dictionary)
+=alarm =ananas =apetyt =auto =automat =awatar =baranek =bufet
+=cyborg =cynk =czapka =czolg =danie =delfin =drut =drzazga
+=dywan =element =filizanka =finanse =fotel =fundusz =genom =gorset
+=gumka =herc =jarzmo =jeep =kanapa =kapital =kielich =klakson
+=klient =kolizja =kombi =komorka =koryto =kotka =krawat =kulka
+=kuzyn =lustro =marzec =mecz =melodia =migacz =napiwek =nerwowosc
+=nietoperz =notes =nozyce =nuta =obrazki =ojciec =pecherz =piolun
+=plecak =pletwa =pluca =poduszka =poker =portfel =predkosc =pustak
+=randka =refleks =riksza =robot =rower =sarkofag =sciana =sedan
+=sernik =skuter =sprezyna =strych =studnia =suknia =swierszcz =szalwia
+=szkielet =szklanka =szlem =szybkosc =tama =tank =torba =trener
+=trojka =tytul =wagon =walet =wianek =wicher =wirus =woda
+=worek =zagroda =zapora =zbiornik =zgaga =zyleta
