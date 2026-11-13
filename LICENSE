@@ -20,5 +20,10 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-The word list in data/dict.bin is generated from the ENABLE word list,
-which is in the public domain.
+The MIT licence above covers the code (source/, the scripts in tools/, the build
+files and the text of docs/). It does NOT by itself cover the files in data/ or
+the copies of them inside wordPass.nds: those are word lists derived from
+third-party sources (Princeton WordNet, the public-domain ENABLE list,
+FrequencyWords, Hunspell dictionaries, wordnets, Voikko, FreeDict and others),
+and the licences of those sources apply to them. See NOTICE, data/NOTICE,
+data/lang/NOTICE, docs/THIRD-PARTY.md and the texts in LICENSES/.
