@@ -41,7 +41,7 @@ the **touch screen** (the bottom one): the board of gems on one side and a narro
 
 ![The title's touch screen with numbered markers: 1 CLASSIC, 2 the Daily button, 3 OPTIONS, 4 the GUIDE button, 5 the LEDGER line, 6 the language tag.](img/title_zoom.png)
 *The title buttons. 1 CLASSIC, 2 the Daily Pass button (it shows the date and the day's modifier), 3 OPTIONS, 4 the pulsing ? GUIDE
-button (it pulses until you have finished your first guided shelf), 5 the BEST / LEDGER line, which opens the lifetime statistics, 6 the language tag (tap it for the next language; section 14).*
+button (it pulses until you have finished your first guided shelf), 5 the BEST / LEDGER line, which opens the lifetime statistics, 6 the language tag (tap it to open the language chooser; section 14).*
 
 ### The first shelf, step by step
 
@@ -1009,7 +1009,7 @@ Open **OPTIONS** from the title (the button, or **Y**). Tap the left half of a r
 
 ### 11.3 The saved file
 
-Settings, records, the Daily state and the Ledger are saved to **`wordPass.cfg`** on the card when a FAT filesystem is available (flashcarts with DLDI, DSi SD). The file is **136 bytes**, written to `wordPass.cfg.tmp` and renamed over the old one, so a card pulled mid-write leaves the previous file intact. It carries a CRC-16 checksum: a damaged file falls back to the defaults. It still reads the older 28-byte format. It is saved when you leave OPTIONS, when you tap past a results or fail card, when you quit to the title, when you start a scored Daily, when a record changes and when you finish the first guided shelf.
+Settings, records, the Daily state and the Ledger are saved to **`wordPass.cfg`** on the card when a FAT filesystem is available (flashcarts with DLDI, DSi SD). The file is **136 bytes**, written to `wordPass.cfg.tmp` and renamed over the old one, so a card pulled mid-write leaves the previous file intact. It carries a CRC-16 checksum: a damaged file falls back to the defaults. It still reads the older 28-byte format. It is saved when you leave OPTIONS, when you tap past a results or fail card, when you quit to the title, when a Classic shelf or run ends (the RUN OVER card counts the game at once, before any tap), when you start a scored Daily, when a record changes and when you finish the first guided shelf.
 
 **Without a card** (an emulator without a FAT image, a DS without a flashcart) everything lasts for the session and the options screen says `NOT SAVED: NO CARD`. If a write fails it says `SAVE FAILED`. With a card it says `SAVED TO CARD`.
 
@@ -1135,7 +1135,7 @@ A step is a sixteenth note of **5 to 12 frames** depending on the song (180 down
 
 **Tempo.** While a flame is on row 3 or lower the whole tune speeds up by one frame a step, on row 5 or lower by two (never faster than 5 frames a step), and it relaxes one bar after the shelf is fire-free.
 
-**Which song.** The **title, options, ledger, guide, language chooser and first-boot chooser** all play one dedicated **menu song**, a slow, warm music box. **Classic** shelves rotate through five songs by shelf (shelf 1 the first, shelf 6 the first again); **Lockdown** plays a dark, hard song by tier (tier 0 the slowest, tiers 2 and 3 the hardest); a Classic shelf on **FIRE: FAST** borrows the dark songs by shelf; the **Daily Pass** has its own song. Pausing, peeking, results, failing and the sound effects work the same on top of whichever song plays.
+**Which song.** The **title, options, ledger, guide, language chooser and first-boot chooser** all play one dedicated **menu song**, a slow, warm music box (the guide opened from the pause menu keeps the shelf's own song in its quiet pause mix instead, so the shelf comes back exactly as it was left). **Classic** shelves rotate through five songs by shelf (shelf 1 the first, shelf 6 the first again); **Lockdown** plays a dark, hard song by tier (tier 0 the slowest, tiers 2 and 3 the hardest); a Classic shelf on **FIRE: FAST** borrows the dark songs by shelf; the **Daily Pass** has its own song. Pausing, peeking, results, failing and the sound effects work the same on top of whichever song plays.
 
 **Reactions.**
 
@@ -1148,7 +1148,7 @@ A step is a sixteenth note of **5 to 12 frames** depending on the song (180 down
 
 **Stereo.** Hook, bass and pulse in the middle; the pad a little right; the drums a little left; the chimes right; the hiss and noise effects far right; the alarm far left.
 
-**Sound effects** run on their own small sequencer with priorities, so a small sound never cuts a bigger one: a rising pentatonic tap for each gem you chain (it climbs with the chain length and tops out at ten gems), a short step back when you drop one, a buzzing pair of notes for a refused word, a rush of air for a peel that finds nothing, a falling hiss and a sliding chime for a scorch, a rising flare when a flame is lit, a low crackle when the fire creeps, and a soft blip on every menu move.
+**Sound effects** run on their own small sequencer with priorities, so a small sound never cuts a bigger one: a rising pentatonic tap for each gem you chain (it climbs with the chain length and tops out at ten gems, and its five notes come from the playing song's own scale), a short step back when you drop one, a buzzing pair of notes for a refused word, a rush of air for a peel that finds nothing, a falling hiss and a sliding chime for a scorch, a rising flare when a flame is lit, a low crackle when the fire creeps, and a soft blip on every menu move.
 
 The songs (generated from `tools/music/songs_src.py`; the checker compares this table with `source/songs.c`):
 
@@ -1172,7 +1172,7 @@ The songs (generated from `tools/music/songs_src.py`; the checker compares this 
 
 > **Regenerated section.** This section describes the ten languages as the code does *today* (`source/lang.c`, `source/langload.c`, `data/lang/`). `tools/emu/screens.py` regenerates its pictures and `python3 tools/check_guide.py` checks the option names and the data it quotes, so a later change is found cheaply. The data pipeline and its limits are in `docs/LANGUAGES-DATA.md`.
 
-The game plays in **English** and in **ten more languages**: Spanish, French, German, Italian, Portuguese, Dutch, Swedish, Polish, Danish and Finnish. The **LANGUAGE** option (the ninth row of the options) and the language tag in the title's top left corner (tap it for the next language) switch the whole game.
+The game plays in **English** and in **ten more languages**: Spanish, French, German, Italian, Portuguese, Dutch, Swedish, Polish, Danish and Finnish. The **LANGUAGE** option (the ninth row of the options) and the language tag in the title's top left corner (tap it to open the language chooser) switch the whole game.
 
 The first time the game starts, with no saved settings, it shows the **language chooser** before the title. It is also reachable from the title tag and with **A** on the LANGUAGE row.
 
@@ -1180,7 +1180,7 @@ The first time the game starts, with no saved settings, it shows the **language 
 *The chooser. 1 English and the ten others, 2 the highlighted language (tap one, or use the d-pad and A), 3 the hint line. The language currently in use carries a gold star.*
 
 ![The title screen in English, Espanol and Deutsch: the language tag in the top left corner.](img/title_language.png)
-*The title's language tag. In English it is a quiet tag; in any other language it lights gold and shows that language's name, with a chevron: tap it for the next language.*
+*The title's language tag. In English it is a quiet tag; in any other language it lights gold and shows that language's name, with a chevron: tap it to open the language chooser.*
 
 | Setting | Values | What it decides |
 | --- | --- | --- |

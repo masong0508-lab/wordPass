@@ -17,32 +17,43 @@ static const u8 recLen[MAX_LEN + 1] = { 0, 0, 0, 4, 4, 4, 4, 5, 6, 7, 7, 8, 8, 9
 typedef struct { const u8 *base[MAX_LEN + 1]; u32 count[MAX_LEN + 1]; } Table;
 static Table dict, variants;
 
-static void tableInit(Table *t, const u8 *p, const char *magic)
+// bytes = how many bytes the image really has (a loaded language file), or IMAGE_TRUSTED for the compiled-in tables.
+// An image whose magic is wrong, whose header is cut short, whose records would run past its end or that holds no
+// words at all leaves the table empty and returns false.
+static bool tableInit(Table *t, const u8 *p, size_t bytes, const char *magic)
 {
     memset(t, 0, sizeof(*t));
-    if (!p || memcmp(p, magic, 4) != 0) return;
-    p += 4;
+    if (!p || memcmp(p, magic, 4) != 0) return false;
+    const size_t hdr = 4 + 4 * (size_t)(MAX_LEN - MIN_LEN + 1);
+    if (bytes != IMAGE_TRUSTED && bytes < hdr) return false;
+    const u8 *q = p + 4;
     u32 counts[MAX_LEN + 1];
+    unsigned long long total = hdr, words = 0;
     for (int n = MIN_LEN; n <= MAX_LEN; n++) {
-        counts[n] = p[0] | (p[1] << 8) | (p[2] << 16) | ((u32)p[3] << 24);
-        p += 4;
+        counts[n] = q[0] | (q[1] << 8) | (q[2] << 16) | ((u32)q[3] << 24);
+        q += 4;
+        total += (unsigned long long)counts[n] * recLen[n];
+        words += counts[n];
     }
+    if (bytes != IMAGE_TRUSTED && (total > bytes || words == 0)) return false;
     for (int n = MIN_LEN; n <= MAX_LEN; n++) {
-        t->base[n] = p;
+        t->base[n] = q;
         t->count[n] = counts[n];
-        p += (size_t)counts[n] * recLen[n];
+        q += (size_t)counts[n] * recLen[n];
     }
+    return true;
 }
 
 void dictInit(void)
 {
-    tableInit(&dict, dict_bin, "WPD3");
-    tableInit(&variants, variants_bin, "WPV1");
+    tableInit(&dict, dict_bin, IMAGE_TRUSTED, "WPD3");
+    tableInit(&variants, variants_bin, IMAGE_TRUSTED, "WPV1");
 }
 
-// Point the validation table at another WPD3 image (a language loaded from the filesystem); the
-// spelling variants stay as dictInit left them (they only apply to English).
-void dictSet(const u8 *p) { tableInit(&dict, p, "WPD3"); }
+// Point the validation table at another WPD3 image of `bytes` bytes (a language loaded from the filesystem); the
+// spelling variants stay as dictInit left them (they only apply to English). False (and an empty table) when the
+// image is not what it says it is.
+bool dictSet(const u8 *p, size_t bytes) { return tableInit(&dict, p, bytes, "WPD3"); }
 
 // 5 bits per letter, big-endian, left aligned in rec bytes, tier bit clear. A letter at bit
 // offset b lands in the 16-bit window starting at byte b / 8 (5 + 7 bits never overflow it).

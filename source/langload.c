@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <fcntl.h>
 #include <unistd.h>
 #ifdef ARM9
@@ -21,6 +22,7 @@ static bool fsReady;
 static bool avail[LANG_COUNT];
 static u8 *bufDict, *bufPools, *bufLetters;
 static int lastMs;
+static bool loadFailed;
 
 static void path(char *out, int idx, const char *file)
 {
@@ -32,8 +34,8 @@ static void path(char *out, int idx, const char *file)
 // page with CARD_CLK_SLOW and the longest command delay, about 2 ms a page, which measured 4.1 seconds per megabyte in
 // DeSmuME: 5 to 7 seconds for a language. So when the ROM is read from the card itself, the three files are located
 // through the ROM's own file tables (the same FNT and FAT NitroFS reads) and read with the header's card control word,
-// the way the card boot code reads. When the program was started from a flashcart (a path in argv and a working FAT), NitroFS
-// reads the .nds from the SD card through FAT, which is already fast, and the raw path is never used. The raw path proves
+// the way the card boot code reads. When NitroFS reads the .nds from the SD card through FAT (libfilesystem got an argv path it could open), it is already
+// fast and the raw path is never used; rawInit tells the two apart by the working directory libfilesystem leaves. The raw path proves
 // itself first (langInit compares what it reads with what NitroFS reads); anything that does not match falls back.
 static bool rawOk;
 static u8 *fnt;
@@ -57,52 +59,82 @@ static void rawRead(u32 off, u8 *dst, u32 len)
 
 static u32 rd16(const u8 *b) { return (u32)b[0] | ((u32)b[1] << 8); }
 static u32 rd32(const u8 *b) { return rd16(b) | (rd16(b + 2) << 16); }
+#endif
 
-// ROM offset and size of "lang/xx/file.bin" through the FNT (directories, then names) and the FAT
-static bool rawLocate(const char *path, u32 *start, u32 *size)
+// The file id of "lang/xx/file.bin" in a file-name table image (FNT: a directory table, then each directory's names),
+// or -1. The table is data read with a path that has not proved itself yet, so every directory index, name offset and
+// length is checked against the table's own size before it is followed: a wrong answer from the card must end in -1,
+// never in a read outside the buffer (the ARM9 has no exception handler). Pure, so the native tests fuzz it.
+int langFntFind(const u8 *tab, u32 tabLen, const char *path)
 {
+    #define B16(o) ((u32)tab[o] | ((u32)tab[(o) + 1] << 8))
+    #define B32(o) (B16(o) | (B16((o) + 2) << 16))
     u32 dir = 0xF000;
     const char *p = path;
-    for (;;) {
+    const u8 *end = tab + tabLen;
+    for (int depth = 0; depth < 8; depth++) {
         const char *e = strchr(p, '/');
         size_t n = e ? (size_t)(e - p) : strlen(p);
-        const u8 *ent = fnt + rd32(fnt + 8 * (dir & 0xFFF));
-        u32 fid = rd16(fnt + 8 * (dir & 0xFFF) + 4);
+        u32 idx = dir & 0xFFF;
+        if (8 * (size_t)idx + 8 > tabLen) return -1;             // the directory table entry
+        u32 off = B32(8 * idx);
+        if (off >= tabLen) return -1;                            // where its names start
+        const u8 *ent = tab + off;
+        u32 fid = B16(8 * idx + 4);
         bool found = false;
-        while (*ent) {
+        while (ent < end && *ent) {
             size_t len = *ent & 0x7F;
             bool isDir = (*ent & 0x80) != 0;
+            if (ent + 1 + len + (isDir ? 2 : 0) > end) return -1;   // a name or a directory id running off the table
             const u8 *nm = ent + 1;
             ent += 1 + len;
             u32 did = 0;
-            if (isDir) { did = rd16(ent); ent += 2; }
+            if (isDir) { did = (u32)ent[0] | ((u32)ent[1] << 8); ent += 2; }
             if (len == n && strncasecmp((const char *)nm, p, n) == 0) {
                 if (e && isDir) { dir = did; found = true; break; }
-                if (!e && !isDir) {
-                    u8 fe[8];
-                    rawRead(__NDSHeader->fatOffset + 8 * fid, fe, 8);
-                    *start = rd32(fe); *size = rd32(fe + 4) - *start;
-                    return true;
-                }
-                return false;
+                return !e && !isDir ? (int)fid : -1;
             }
             if (!isDir) fid++;
         }
-        if (!found) return false;
+        if (!found) return -1;
         p = e + 1;
     }
+    return -1;
+    #undef B16
+    #undef B32
+}
+
+#ifdef ARM9
+static u32 fntLen;
+#define RAW_MAX_FILE (8u << 20)                           // no language file is anywhere near this
+
+// ROM offset and size of "lang/xx/file.bin": its id from the FNT, then its entry in the FAT (bounds-checked too)
+static bool rawLocate(const char *path, u32 *start, u32 *size)
+{
+    int fid = langFntFind(fnt, fntLen, path);
+    if (fid < 0 || 8 * (size_t)fid + 8 > __NDSHeader->fatSize) return false;
+    u8 fe[8];
+    rawRead(__NDSHeader->fatOffset + 8 * (u32)fid, fe, 8);
+    u32 st = rd32(fe), en = rd32(fe + 4);
+    if (st < 0x200 || en < st || en - st > RAW_MAX_FILE) return false;
+    *start = st; *size = en - st;
+    return true;
 }
 
 static void rawInit(void)
 {
     rawOk = false;
-    const struct __argv *a = __system_argv;
-    if (a->argvMagic == ARGV_MAGIC && a->argc > 0 && settingsPersistent()) return;   // started from a flashcart's SD card (FAT works): NitroFS reads the .nds through FAT
+    // Decide from what libfilesystem did, not from whether argv and FAT exist: when it opens the .nds through FAT it
+    // leaves the working directory on that device, when it reads the card itself (no argv, or argv[0] is not a file on
+    // the FAT card) it chdir()s to nitro:/. Only the second case is slow and wants the raw path.
+    char cwd[16];
+    if (getcwd(cwd, sizeof cwd) && strncmp(cwd, "nitro:", 6) != 0) return;
     u32 fs = __NDSHeader->filenameSize;
     if (!__NDSHeader->cardControl13 || fs < 8 || fs > 16384) return;
     fnt = (u8 *)malloc(fs + 4);
     if (!fnt) return;
     memset(fnt, 0, fs + 4);
+    fntLen = fs;
     rawRead(__NDSHeader->filenameOffset, fnt, fs);
     // proof: the raw path must find the same file at the same size NitroFS does, with the same first bytes
     u32 st, sz;
@@ -110,11 +142,11 @@ static void rawInit(void)
     if (fd < 0) { free(fnt); fnt = NULL; return; }
     off_t nsz = lseek(fd, 0, SEEK_END);
     lseek(fd, 0, SEEK_SET);
-    u8 a4[4], b4[4];
-    bool ok = read(fd, a4, 4) == 4;
+    u8 a[LANG_LETTERS_BYTES], b[LANG_LETTERS_BYTES];
+    bool ok = nsz == LANG_LETTERS_BYTES && read(fd, a, sizeof a) == (ssize_t)sizeof a;
     close(fd);
-    ok = ok && rawLocate("lang/es/letters.bin", &st, &sz) && (off_t)sz == nsz;
-    if (ok) { rawRead(st, b4, 4); ok = memcmp(a4, b4, 4) == 0 && memcmp(b4, "WPL1", 4) == 0; }
+    ok = ok && rawLocate("lang/es/letters.bin", &st, &sz) && sz == LANG_LETTERS_BYTES;
+    if (ok) { rawRead(st, b, sizeof b); ok = memcmp(a, b, sizeof a) == 0 && memcmp(b, "WPL1", 4) == 0; }   // the whole file, both ways
     if (!ok) { free(fnt); fnt = NULL; return; }
     rawOk = true;
 }
@@ -192,6 +224,7 @@ void langInit(void)
 
 bool langAvailable(int idx) { return idx >= 0 && idx < LANG_COUNT && avail[idx]; }
 int  langLoadMs(void) { return lastMs; }
+bool langLoadFailed(void) { return loadFailed; }
 #ifdef ARM9
 bool langFastPath(void) { return rawOk; }
 #else
@@ -209,11 +242,13 @@ bool langLoad(int idx)
 {
     if (idx == langCur()) return true;
     // the previous language goes first: two dictionaries at once would not fit in main RAM
-    langApply(LANG_EN, NULL, NULL, NULL, 0);
+    langApply(LANG_EN, NULL, 0, NULL, 0, NULL, 0);
     freeBuffers();
     lastMs = 0;
+    loadFailed = false;
     if (idx == LANG_EN) return true;
     if (!langAvailable(idx)) return false;
+    musicHush();                      // the load blocks for 0.2 s to 7 s with no musicTick: no frozen chord meanwhile
     gfxLoading(langName(idx));
 #ifdef ARM9
     cpuStartTiming(0);
@@ -224,13 +259,12 @@ bool langLoad(int idx)
     LOAD(idx, "dict.bin", bufDict, nd);
     LOAD(idx, "pools.bin", bufPools, np);
     LOAD(idx, "letters.bin", bufLetters, nl);
-    (void)np; (void)nd;
-    bool ok = bufDict && bufPools && bufLetters && langApply(idx, bufDict, bufPools, bufLetters, nl);
+    bool ok = bufDict && bufPools && bufLetters && langApply(idx, bufDict, nd, bufPools, np, bufLetters, nl);   // sizes as read: a short or damaged file is refused
 #ifdef ARM9
     lastMs = (int)(cpuEndTiming() / (BUS_CLOCK / 1000));
 #else
     lastMs = (int)((clock() - t0) * 1000 / CLOCKS_PER_SEC);
 #endif
-    if (!ok) { freeBuffers(); langApply(LANG_EN, NULL, NULL, NULL, 0); return false; }
+    if (!ok) { freeBuffers(); langApply(LANG_EN, NULL, 0, NULL, 0, NULL, 0); loadFailed = true; return false; }
     return true;
 }

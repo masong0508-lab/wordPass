@@ -310,6 +310,9 @@ void settingsInit(void);
 void settingsDefaults(void);
 bool settingsSave(void);
 bool settingsPersistent(void);
+bool settingsCardPath(const char *cwd, const char *file, char *out, size_t cap);   // pure: "fat:/" + file -> "fat:/file" (false: no device in cwd)
+const char *settingsCfgPath(void);               // where the save goes (device-qualified on the DS)
+unsigned settingsSaveCount(void);                 // how many times settingsSave has been called
 bool settingsSaveFailed(void);                    // the last settingsSave could not write the card
 bool settingsDecode(const void *buf, size_t n);   // pure: a saved file (WPS2, or a WPS1 legacy file) into S; false = defaults
 size_t settingsEncode(void *buf);                 // pure: S into a WPS2 file image (sizeof(Settings) bytes, CRC filled)
@@ -330,7 +333,7 @@ int  gfxTipIndex(void);               // debug: which tip card shows
 bool gfxInTitleOptions(int px, int py);
 bool gfxInTitleLedger(int px, int py);   // the BEST line under the title buttons: opens THE LEDGER
 int  gfxLangPickRowAt(int px, int py);  // the chooser's row under a touch (0..LANG_COUNT-1), -1 none
-bool gfxInTitleLanguage(int px, int py); // the language tag in the title's other top corner: next language
+bool gfxInTitleLanguage(int px, int py); // the language tag in the title's other top corner: opens the language chooser
 bool gfxInTitleGuide(int px, int py);    // the GUIDE button in the title's top corner
 enum { GH_NONE = -1, GH_BACK = 0, GH_PREV, GH_NEXT, GH_DOT };
 void gfxGuideNavReset(void);             // test channel: the prev/next buttons pulse again
@@ -383,7 +386,8 @@ int  letterValue(int letter);        // of the active language
 
 // dict.c
 void dictInit(void);
-void dictSet(const u8 *p);                    // activate another WPD3 image (a loaded language)
+#define IMAGE_TRUSTED ((size_t)-1)               // dictSet/poolsSet size of the compiled-in tables: no bounds to check
+bool dictSet(const u8 *p, size_t bytes);      // activate another WPD3 image of `bytes` bytes (a loaded language); false = damaged, table empty
 
 // pools.c: themed pass-word library (data/pools.bin)
 void poolsInit(void);
@@ -391,7 +395,7 @@ int  poolThemeCount(void);
 const char *poolName(int theme);                              // "BINDERY"
 void poolWordEn(int theme, int len, int idx, char *out);      // the same, English
 const char *poolNameEn(int theme);                            // the English name, whatever the language (the guide)
-bool poolsSet(const u8 *p);                                   // activate a WPP1 image (NULL = the compiled-in English)
+bool poolsSet(const u8 *p, size_t bytes);                         // activate a WPP1 image of `bytes` bytes (NULL = the compiled-in English); false = damaged, English stays
 int  poolCount(int theme, int len);                           // words of that length in the theme
 void poolWord(int theme, int len, int idx, char *out);        // out holds len + 1 bytes
 int  dictLookup(const char *word, int len);   // 0 none, 1 common, 2 rare
@@ -451,7 +455,9 @@ int  uiFmt(char *out, int cap, int id, ...);      // fill the %d / %s / %02d / %
 int  langCur(void);                           // the active language
 const LangTables *langTables(void);
 bool langParseLetters(const u8 *b, size_t n, LangTables *out);
-bool langApply(int idx, const u8 *dict, const u8 *pools, const u8 *letters, size_t lettersBytes);
+bool langApply(int idx, const u8 *dict, size_t dictBytes, const u8 *pools, size_t poolBytes, const u8 *letters, size_t lettersBytes);
+int  langFntFind(const u8 *tab, u32 tabLen, const char *path);   // pure, bounds-checked: the file id of "lang/xx/file.bin" in a NitroFS name table image, or -1
+bool langLoadFailed(void);                // the last langLoad of another language could not complete: English is active (the options and the chooser say so)
 void langInitEnglish(void);
 int  letterValueEn(int letter);               // the English value table (the compiled-in one, whatever the language)
 int  guideGems(int id, u8 gems[4], int *wordLen);   // the gems of a guide example word (a UI_EX_* string); Qu is one gem
@@ -470,6 +476,7 @@ void gameSetLanguage(int idx);                // main.c: from the title or the o
 
 // music.c
 void musicInit(void);
+void musicHush(void);                 // silence every channel before a blocking stretch (a language load); the next tick brings the music back
 void musicTick(const Game *g);       // once per vblank
 void musicNewShelf(int shelf, bool lockdown);   // a Classic shelf with no fire pressure (tests); the game uses musicPlayShelf
 void musicPlayShelf(const Game *g);   // a new shelf of the running game: the song comes from its mode, tier and the FIRE setting

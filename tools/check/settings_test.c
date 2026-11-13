@@ -9,6 +9,16 @@
 
 bool stubFatOk = true;
 
+// libfat's rename refuses an existing target (POSIX replaces it), so on the DS every save after the first takes the
+// remove-then-rename branch of settingsSave. The check binary is linked with --wrap=rename to behave like libfat.
+int __real_rename(const char *from, const char *to);
+static int renameRefused;
+int __wrap_rename(const char *from, const char *to)
+{
+    if (access(to, F_OK) == 0) { renameRefused++; return -1; }
+    return __real_rename(from, to);
+}
+
 static int fails;
 #define CHECK(name, cond) do { if (cond) printf("PASS %s\n", name); else { printf("FAIL %s (%s) at %s:%d\n", name, #cond, __FILE__, __LINE__); fails++; } } while (0)
 
@@ -180,6 +190,20 @@ int main(void)
     settingsDebugClock(0);
     CHECK("the real clock reads a plausible date here", settingsClockOk(settingsToday()));
 
+    // ---- where the save goes: the card's device, whatever the default device is later
+    {
+        char p[64];
+        CHECK("the save path takes the device from the working directory after fatInitDefault (fat:/ and sd:/)",
+              settingsCardPath("fat:/", "wordPass.cfg", p, sizeof p) && !strcmp(p, "fat:/wordPass.cfg") &&
+              settingsCardPath("sd:/", "wordPass.cfg.tmp", p, sizeof p) && !strcmp(p, "sd:/wordPass.cfg.tmp") &&
+              settingsCardPath("fat:/roms/ds/", "wordPass.cfg", p, sizeof p) && !strcmp(p, "fat:/wordPass.cfg"));
+        CHECK("... a working directory with no device, an empty one or a path that does not fit gives no path",
+              !settingsCardPath("/home/user", "wordPass.cfg", p, sizeof p) && !settingsCardPath("", "x", p, sizeof p) &&
+              !settingsCardPath(":/", "x", p, sizeof p) && !settingsCardPath("fat:/", "wordPass.cfg", p, 8));
+        stubFatOk = true; settingsInit();
+        CHECK("without a device in the working directory (the host) the configured path is used", !strcmp(settingsCfgPath(), CFG_PATH));
+    }
+
     // ---- the card: save, reload, no leftover temp file, fallbacks
     remove(CFG_PATH); remove(CFG_PATH ".tmp");
     stubFatOk = true;
@@ -197,9 +221,13 @@ int main(void)
     settingsInit();
     CHECK("settingsInit reads the saved file back", S.bestClassic == 4242 && S.theme == THEME_EMBER && S.wordsSpelled == 12 && !strcmp(S.longestWord, "wordpass"));
     S.bestClassic = 5000;
-    CHECK("a second save replaces the first", settingsSave());
+    int refusedBefore = renameRefused;
+    CHECK("a second save replaces the first (rename onto the existing file is refused, as libfat does: remove, then rename)", settingsSave() && renameRefused == refusedBefore + 1);
     settingsInit();
     CHECK("... and reads back the newer one", S.bestClassic == 5000);
+    f = fopen(CFG_PATH ".tmp", "rb");
+    CHECK("... with no temp file left", f == NULL);
+    if (f) fclose(f);
 
     // a card pulled mid-save: the old file is gone but the finished temp image is there
     n = settingsEncode(buf);

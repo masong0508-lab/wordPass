@@ -111,11 +111,19 @@ static DutyCycle dutyOf(int pct)
 }
 
 // ---- voices: every write to the hardware goes through these, and only when the value changed
+// Voice::freq and every Hz in this file are MUSICAL Hz (the pitch you hear). libnds takes the channel's SAMPLE RATE
+// (timer = -0x1000000 / freq, no scaling: ARM7 soundDataHandler and soundCommandHandler), and a PSG duty wave is
+// PSG_SAMPLES = 8 samples per cycle, so a PSG voice must be sent 8 x its pitch or it sounds three octaves low.
+// A noise channel's freq is its LFSR clock and goes out unchanged. The register is 16 bits: PSG_MAX_HZ is the
+// highest pitch a PSG voice can reach (8191 Hz, about C9); nothing the game plays gets near it (the PITCHSTAT check asserts it).
+#define PSG_SAMPLES 8
+#define PSG_MAX_HZ (65535 / PSG_SAMPLES)
+static int hwFreq(bool noise, int hz) { return noise ? hz : hz * PSG_SAMPLES; }
 static void vFreq(Voice *x, int hz)
 {
     if (hz < 1) hz = 1;
-    if (hz > 65535) hz = 65535;
-    if (hz != x->freq) { soundSetFreq(x->id, (u16)hz); x->freq = hz; }
+    if (hz > (x->noise ? 65535 : PSG_MAX_HZ)) hz = x->noise ? 65535 : PSG_MAX_HZ;
+    if (hz != x->freq) { soundSetFreq(x->id, (u16)hwFreq(x->noise, hz)); x->freq = hz; }
 }
 
 static void vDuty(Voice *x, int pct)
@@ -180,8 +188,17 @@ typedef struct {
 typedef struct { Sfx s; int frame, prio, base; bool on; } SfxState;
 static SfxState sfxTone, sfxNoise;
 
-static const u8 PENTA[2][10] = { { 0, 2, 4, 7, 9, 12, 14, 16, 19, 21 },       // major pentatonic
-                                 { 0, 3, 5, 7, 10, 12, 15, 17, 19, 22 } };     // minor pentatonic (minor, phrygian and hijaz songs)
+// The tap and untap notes climb a pentatonic built from the current song's own scale, so a chain never plays a note the
+// song is not in: a major-third mode (major, mixolydian, lydian, hijaz) takes degrees 1 2 3 5 6, a minor-third mode
+// (minor, dorian, phrygian) takes 1 b3 4 5 b7, and harmonic minor, whose seventh is a leading tone, takes 1 b3 4 5 b6.
+// Ten steps: the five tones, then the same five an octave up. (Song::tap is no longer read: the mode decides.)
+static int tapSemi(int k)       // k = 0..9
+{
+    const u8 *sc = SCALES[cur->mode];
+    static const u8 MAJ_THIRD[5] = { 0, 1, 2, 4, 5 }, MIN_THIRD[5] = { 0, 2, 3, 4, 6 }, HARM[5] = { 0, 2, 3, 4, 5 };
+    const u8 *deg = sc[2] == 4 ? MAJ_THIRD : sc[6] == 10 ? MIN_THIRD : HARM;
+    return sc[deg[k % 5]] + 12 * (k / 5);
+}
 
 static const Sfx SFX_TAB[SFX_COUNT] = {
     [SFX_TAP]      = { {12}, 1, 3, 12, 48, 1, 0, 0, 0, 0, 0, 0 },
@@ -248,7 +265,7 @@ void musicSfx(int id, int param)
     Sfx s = SFX_TAB[id];
     if (id == SFX_TAP || id == SFX_UNTAP) {
         int k = param < 1 ? 1 : param > 10 ? 10 : param;
-        s.semi[0] = (s8)(12 + PENTA[cur->tap ? 1 : 0][k - 1]);
+        s.semi[0] = (s8)(12 + tapSemi(k - 1));
     }
     bool took = false;
     if (s.n && startTone(&s, rootNote, s.prio)) took = true;
@@ -282,7 +299,7 @@ void musicInit(void)
         x->rel = INST(v)->release;
         x->duty = (int)dutyOf(INST(v)->dutySus);
         x->pan = 64;
-        x->id = x->noise ? soundPlayNoise(8000, 0, 64) : soundPlayPSG((DutyCycle)x->duty, 440, 0, 64);
+        x->id = x->noise ? soundPlayNoise(8000, 0, 64) : soundPlayPSG((DutyCycle)x->duty, (u16)hwFreq(false, 440), 0, 64);
         vPan(x, pan[v]);
         lastSent[v] = 0;
     }
@@ -646,8 +663,21 @@ static void voiceFrame(int v)
     if (lastSent[v] != x->out) { soundSetVolume(x->id, (u8)x->out); lastSent[v] = (s16)x->out; }
 }
 
-// Which mix a game state gets. Anything that is not play, the results card, the fail card or the pause
-// menu (the title, options, the ledger, and any screen added later) gets the attract mix.
+// A blocking stretch is coming (a language load reads a megabyte or two with no frame in between, so musicTick does not
+// run): silence every channel now, or the last chord would hold for the whole load. The envelopes restart from zero and
+// the next musicTick brings the music back with the short attack of a resume.
+void musicHush(void)
+{
+    if (!booted) return;
+    for (int v = 0; v < NVOICE; v++) {
+        if (lastSent[v]) soundSetVolume(V[v].id, 0);
+        lastSent[v] = 0; V[v].out = 0;
+    }
+    upFrames = 16;
+}
+
+// Which mix a game state gets. Anything that is not play, the results card, the fail card, the pause menu or the
+// guide opened from it (the title, options, the ledger, and any screen added later) gets the attract mix.
 static int mixFor(const Game *g)
 {
     switch (g->state) {
@@ -655,6 +685,7 @@ static int mixFor(const Game *g)
         case ST_PASSED: return MIX_PASSED;
         case ST_FAIL:   return MIX_FAIL;
         case ST_PAUSE:  return MIX_PAUSE;
+        case ST_GUIDE:  return g->guideFrom == ST_PAUSE ? MIX_PAUSE : MIX_ATTRACT;   // from the pause menu the shelf's song stays in its quiet mix (the attract mix would add drums and bass the shelf has not earned)
         default:        return MIX_ATTRACT;
     }
 }

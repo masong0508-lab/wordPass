@@ -62,18 +62,19 @@ bool langParseLetters(const u8 *b, size_t n, LangTables *out)
 }
 
 // Make a language active: its validation dictionary, its pass pools and its letter tables. dict and pools NULL
-// (or idx 0) select the compiled-in English; letters is only read for another language. Returns false, and
-// leaves English active, when a buffer is not what its magic says.
-bool langApply(int idx, const u8 *dict, const u8 *pools, const u8 *letters, size_t lettersBytes)
+// (or idx 0) select the compiled-in English; letters is only read for another language. The byte counts are what
+// was really read: a buffer whose magic is wrong, or whose header counts reach past its end, is refused. Returns
+// false, and leaves English active, when any of the three is damaged.
+bool langApply(int idx, const u8 *dict, size_t dictBytes, const u8 *pools, size_t poolBytes, const u8 *letters, size_t lettersBytes)
 {
     LangTables t = ENGLISH;
     bool ok = true;
     if (idx > 0 && idx < LANG_COUNT && dict && pools && langParseLetters(letters, lettersBytes, &t)) {
-        dictSet(dict);
-        if (!poolsSet(pools)) ok = false;
+        if (!dictSet(dict, dictBytes)) ok = false;
+        if (!poolsSet(pools, poolBytes)) ok = false;
     } else ok = idx == 0;
     if (!ok) { t = ENGLISH; idx = 0; }
-    if (idx == 0) { dictSet(dict_bin); poolsSet(NULL); }
+    if (idx == 0) { dictSet(dict_bin, IMAGE_TRUSTED); poolsSet(NULL, 0); }
     T = t;
     cur = idx;
     boardBagReset();

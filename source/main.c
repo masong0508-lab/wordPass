@@ -194,6 +194,16 @@ static void recordScore(void)
     if (best) { G.newBest = 1; settingsSave(); }
 }
 
+// A Classic shelf or run ended (the fail on the last bookmark, a cleared shelf): recordScore saves only when a record
+// changed, but the lifetime statistics (games, shelves, words, peels) changed in RAM all the same, and the RUN OVER card
+// is where the DS gets switched off. One write at most.
+static void recordAndSave(void)
+{
+    unsigned before = settingsSaveCount();
+    recordScore();
+    if (G.mode == MODE_CLASSIC && settingsSaveCount() == before) settingsSave();
+}
+
 // Switch language (title and options only: a shelf in play keeps the letters it was dealt). An unavailable language
 // is English. The title's board is rebuilt so the pass and the debug mirror belong to the new language.
 void gameSetLanguage(int idx)
@@ -283,8 +293,8 @@ static void enterFail(void)
         if (G.lives == 0) S.gamesPlayed++;   // the last bookmark: the run is over
     }
     // a failed shelf with a bookmark left is retried from its start score: those points are not the player's, so they
-    // record nothing (the run's score is recorded when it ends)
-    if (G.mode != MODE_CLASSIC || G.lives == 0) recordScore();
+    // record nothing (the run's score is recorded, and saved, when it ends)
+    if (G.mode != MODE_CLASSIC || G.lives == 0) recordAndSave();
     gfxShake(14);
     gfxFlash();
     G.peekHeld = 0; G.armed = 0; G.peekLatch = 0;
@@ -548,7 +558,7 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
                         for (int dr = 0; dr < ROWS; dr++)
                             if (G.cell[dc][dr].state == CELL_SECRET) gfxBurst(dc, dr, BURST_REVEAL, G.cell[dc][dr].letter);
                 musicPassComplete();
-                recordScore();
+                recordAndSave();
             }
         }
         return;
