@@ -126,9 +126,9 @@ int main(void)
     uiFmt(o, sizeof o, UI_O_BESTLINE, 1234, 5);
     CHECK(!strcmp(o, "BEST CLASSIC 1234  SHELF 5"), "two ints: %s", o);
     uiFmt(o, sizeof o, UI_MS_FIND, "BINDERY", 7);
-    CHECK(!strcmp(o, "BINDERY: FIND THE 7 LETTER PASS"), "string then int: %s", o);
+    CHECK(!strcmp(o, "BINDERY: FIND THE 7-LETTER PASS"), "string then int: %s", o);
     uiFmt(o, sizeof o, UI_T_DRAGHINT, "R");
-    CHECK(!strcmp(o, "DRAG SPELLS. R PEEKS"), "string slot: %s", o);
+    CHECK(!strcmp(o, "DRAG TO SPELL. R PEEKS"), "string slot: %s", o);
     uiFmt(o, sizeof o, UI_R_FINAL, -5);
     CHECK(!strcmp(o, "FINAL -5"), "negative: %s", o);
     uiFmt(o, 8, UI_O_BESTLINE, 123456, 99);

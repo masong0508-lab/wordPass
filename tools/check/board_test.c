@@ -1578,17 +1578,17 @@ int main(int argc, char **argv)
         CHECK("guide THE PASS names three themes and counts them from the pools", strstr(all[3], "BINDERY, BEASTS, WEATHER") && strstr(all[3], num) && !strcmp(want, "BINDERY, BEASTS, WEATHER"));
         CHECK("guide THE PASS prints the pass-letter reward and the shelf bonuses",
               strstr(all[3], "PAYS 100 X SHELF") && strstr(all[3], "+1000 X SHELF") && strstr(all[3], "+25 X SHELF") && strstr(all[3], "UNDER 40") &&
-              strstr(all[3], "PERFECT, NO WASTED PEEK: +400 X SHELF") && strstr(all[3], "CLEAN, 2 SPARE PEEKS: +150 X SHELF") &&
+              strstr(all[3], "PERFECT, NO WASTED PEEL: +400 X SHELF") && strstr(all[3], "CLEAN, 2 SPARE PEELS: +150 X SHELF") &&
               boardPassLetterReward(3) == 300 && boardShelfBonus(3) == 3000 && boardSpeedBonus(2, 30) == 500 && boardSpeedBonus(2, 50) == 0);
         int kind;
         CHECK("bonus helpers: perfect, clean and none", boardPeelBonus(2, 5, 5, &kind) == 800 && kind == 2 && boardPeelBonus(2, 7, 5, &kind) == 300 && kind == 1 && boardPeelBonus(2, 8, 5, &kind) == 0 && kind == 0);
         strcpy(want, "BOOKMARKS START A RUN");
         CHECK("guide SHELVES: bookmarks, twists, Lockdown tiers, overtime from the rules",
-              strstr(all[5], "3 BOOKMARKS START A RUN") && strstr(all[5], "SHELF 4, 7, 10") && strstr(all[5], "INK SPILL: 3 HOLES") && strstr(all[5], "METER -2") && strstr(all[5], "PASS +1 LONGER") &&
-              strstr(all[5], "LOCKDOWN FROM SHELF 6") && strstr(all[5], "EVERY 6 TURNS") && strstr(all[5], "SHELF 9, 12, 15") && strstr(all[5], "FROM 11") &&
+              strstr(all[5], "3 BOOKMARKS START A RUN") && strstr(all[5], "SHELVES 4, 7, 10") && strstr(all[5], "INK SPILL: 3 HOLES") && strstr(all[5], "METER -2") && strstr(all[5], "PASS +1 LONGER") &&
+              strstr(all[5], "LOCKDOWN FROM SHELF 6") && strstr(all[5], "EVERY 6 TURNS") && strstr(all[5], "SHELVES 9, 12, 15") && strstr(all[5], "FROM 11") &&
               strstr(all[5], "TURN 25 (17 FROM SHELF 10)") && boardTwistShelf(4) && boardTwistShelf(7) && !boardTwistShelf(5) && !boardTwistShelf(3));
         CHECK("guide FIRE: the three fail screens are named by the game", strstr(all[4], boardFailName(FAIL_FIRE)) && strstr(all[4], boardFailName(FAIL_SCORCH)) && strstr(all[4], boardFailName(FAIL_WORDS)) &&
-              !strcmp(boardLockdownName(0), "LOCKDOWN") && !strcmp(boardLockdownName(3), "LOCKDOWN IV") && strstr(all[4], "SHELF 1-3") != NULL);
+              !strcmp(boardLockdownName(0), "LOCKDOWN") && !strcmp(boardLockdownName(3), "LOCKDOWN IV") && strstr(all[4], "SHELVES 1-3") != NULL);
         CHECK("guide MODES names the four Daily modifiers", strstr(all[6], "STANDARD, EMBER, DEEP, LONG") != NULL);
 
         // the example words are worth what the game pays: I N K (+70) and Qu I Z (+210) on a real board
