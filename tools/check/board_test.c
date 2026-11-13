@@ -748,6 +748,19 @@ int main(int argc, char **argv)
         CHECK("a bridge cell that is a hole is not available", boardChainTouch(&g, 0, 2, false) == CT_NOT_ADJACENT);
     }
     boardOf('e');
+    {   // the manual: a tap on a gem away from the chain starts a new chain there; the d-pad flashes red. Only a drag bridges.
+        boardChainTouch(&g, 0, 0, true); boardChainTouch(&g, 0, 1, false);
+        CHECK("a fresh TAP two gems below the tail restarts the chain there (no bridge)",
+              boardChainTouch(&g, 0, 3, true) == CT_RESTARTED && g.chainLen == 1 && g.chainR[0] == 3);
+        boardClearChain(&g); boardChainTouch(&g, 0, 0, true); boardChainTouch(&g, 0, 1, false);
+        CHECK("the d-pad's A on a gem two steps away is refused (no bridge)",
+              boardChainCursor(&g, 0, 3) == CT_NOT_ADJACENT && g.chainLen == 2);
+        CHECK("the d-pad's A on a touching gem adds it, and starts a chain from nothing",
+              boardChainCursor(&g, 0, 2) == CT_ADDED && g.chainLen == 3 && (boardClearChain(&g), boardChainCursor(&g, 4, 4) == CT_ADDED) && g.chainLen == 1);
+        boardClearChain(&g); boardChainTouch(&g, 0, 0, true); boardChainTouch(&g, 0, 1, false);
+        CHECK("a DRAG sample two gems on still bridges the one a fast stylus skipped", boardChainTouch(&g, 0, 3, false) == CT_BRIDGED && g.chainLen == 4);
+    }
+    boardOf('e');
     {   // a full chain cannot take a bridge; the tail tap submits a valid chain
         boardChainTouch(&g, 0, 0, true);
         for (int r = 1; r < 8; r++) boardChainTouch(&g, 0, r, false);
@@ -1134,10 +1147,48 @@ int main(int argc, char **argv)
     boardPeel(&g, 2, 2);
     CHECK("Lockdown pulse every pulseEvery turns", g.turn == 3 && g.heat == 4 && !g.overtime);
 
-    // ---- dfsWords depth 5: a five-letter-only board still has words
+    // ---- dfsWords depth 5: a board whose only word is five letters long still has words. BUILD down a column of X holds no
+    // shorter word on its path (no BUI, UIL, ILD, BUIL or UILD): replacing any one letter by X leaves a dead board, so the
+    // search that finds it must reach five letters (it would fail if the search stopped at three or four).
     boardOf('x');
-    set(2, 1, CELL_TILE, 'b'); set(2, 2, CELL_TILE, 'r'); set(2, 3, CELL_TILE, 'i'); set(2, 4, CELL_TILE, 'n'); set(2, 5, CELL_TILE, 'g');
-    CHECK("boardHasWords finds a five-letter word", boardHasWords(&g));
+    for (int i = 0; i < 5; i++) set(2, 1 + i, CELL_TILE, "build"[i]);
+    CHECK("boardHasWords finds a five-letter word (and only that one)", boardHasWords(&g) && boardWordOk("build", 5));
+    {
+        bool deadWhenBroken = true;
+        for (int k = 0; k < 5; k++) {
+            boardOf('x');
+            for (int i = 0; i < 5; i++) set(2, 1 + i, CELL_TILE, i == k ? 'x' : "build"[i]);
+            if (boardHasWords(&g)) deadWhenBroken = false;
+        }
+        CHECK("... and the board is dead once any one of its five letters is an X", deadWhenBroken);
+    }
+
+    // ---- the dead-board search counts gems, not letters: a Qu gem next to a vowel is two gems (QUA, 3 letters), which a
+    // chain cannot submit (it needs three gems), so a board whose only word is that does not count as alive
+    boardOf('x');
+    set(3, 3, CELL_TILE, 'q'); set(3, 4, CELL_TILE, 'a');
+    {
+        bool quaWord = boardWordOk("qua", 3);
+        CHECK("Qu + A spells a three-letter word (the premise)", quaWord && langQuTile());
+        CHECK("... but it is two gems: the board is dead", !boardHasWords(&g));
+        set(3, 5, CELL_TILE, 'd');                          // QUAD is three gems
+        CHECK("... and QUA + D (three gems) is alive again", boardWordOk("quad", 4) && boardHasWords(&g));
+    }
+
+    // ---- a found pass letter Q is the plain letter, not the Qu gem: it chains as one letter, the pass's own U follows it
+    boardOf('x');
+    set(3, 3, CELL_SECRET, 'q'); set(3, 4, CELL_SECRET, 'u'); set(3, 5, CELL_TILE, 'i'); set(3, 6, CELL_TILE, 't');
+    {
+        char qw[16];
+        for (int r = 3; r <= 6; r++) boardChainTouch(&g, 3, r, r == 3);
+        boardChainWord(&g, qw);
+        CHECK("pass diamonds Q, U then I, T spell QUIT (not QUUIT)", g.chainLen == 4 && !strcmp(qw, "quit"));
+        boardClearChain(&g);
+        set(3, 3, CELL_TILE, 'q');
+        for (int r = 3; r <= 6; r++) boardChainTouch(&g, 3, r, r == 3);
+        boardChainWord(&g, qw);
+        CHECK("a Qu tile still spells two letters: Qu, U, I, T is QUUIT", !strcmp(qw, "quuit") && boardChainTouch(&g, 3, 6, false) == CT_IGNORED);
+    }
 
     // ---- shelf thresholds
     S.fire = FIRE_NORMAL;
@@ -1420,7 +1471,7 @@ int main(int argc, char **argv)
             memset(&a, 0, sizeof(a)); a.mode = MODE_DAILY; a.dailySeed = day; a.shelf = 1; boardNewShelf(&a);
             memset(&b, 0, sizeof(b)); b.mode = MODE_DAILY; b.dailySeed = day; b.shelf = 1; boardNewShelf(&b);
             int m = boardDailyMod(day);
-            if (m != (int)(((u32)((u32)day * 2654435761u) >> 28) & 3)) seedBad++;
+            { u32 x = (u32)day; x ^= x >> 16; x *= 0x7feb352du; x ^= x >> 15; x *= 0x846ca68bu; x ^= x >> 16; if (m != (int)(x >> 30)) seedBad++; }   // the guide's formula
             if (a.dailyMod != m) bad++;
             seen[m]++;
             bool same = strcmp(a.pass, b.pass) == 0 && memcmp(a.back, b.back, sizeof(a.back)) == 0 && a.dailyMod == b.dailyMod;
@@ -1446,6 +1497,34 @@ int main(int argc, char **argv)
         CHECK("Daily DEEP: every pass letter in rows 5..7, meter 9, fire every turn", deepBad == 0);
         CHECK("Daily LONG: a seven-letter pass (the nearest length when the pool lacks one), meter 8", longBad == 0);
         CHECK("Daily with a modifier is still one board for everyone (same date, same board)", sameBad == 0);
+        {   // the date's choices are independent draws: no alternation in pairs, no repeat five days later (the old hash
+            // was an arithmetic progression: +2 on 87% of days, the same theme five days on in 41%, the same pass in 4.6%)
+            enum { DAYS = 1100 };
+            static int mods[DAYS], themes[DAYS], lens[DAYS]; static char passes[DAYS][12];
+            int n = 0, y = 2026, mo = 1, d = 1;
+            static const int ml[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+            while (n < DAYS) {
+                Game a; memset(&a, 0, sizeof(a)); a.mode = MODE_DAILY; a.dailySeed = y * 10000 + mo * 100 + d; a.shelf = 1; boardNewShelf(&a);
+                mods[n] = a.dailyMod; themes[n] = a.passTheme; lens[n] = a.passLen; strcpy(passes[n], a.pass); n++;
+                if (++d > ml[mo - 1] + (mo == 2 && y % 4 == 0)) { d = 1; if (++mo > 12) { mo = 1; y++; } }
+            }
+            int plus2 = 0, same1 = 0, same5 = 0, pass5 = 0, pass1 = 0, len6 = 0;
+            for (int i = 0; i + 5 < n; i++) {
+                if (((mods[i + 1] - mods[i]) & 3) == 2) plus2++;
+                if (themes[i + 1] == themes[i]) same1++;
+                if (themes[i + 5] == themes[i]) same5++;
+                if (!strcmp(passes[i + 5], passes[i])) pass5++;
+                if (!strcmp(passes[i + 1], passes[i])) pass1++;
+                if (lens[i] == 6) len6++;
+            }
+            int m5 = n - 5;
+            printf("   Daily dates %d: modifier +2 next day %d%%, same theme next day %d%% / five days on %d%%, same pass five days on %d%%, six-letter %d%%\n",
+                   n, plus2 * 100 / m5, same1 * 100 / m5, same5 * 100 / m5, pass5 * 100 / m5, len6 * 100 / m5);
+            CHECK("Daily modifier: tomorrow's is not today's +2 (that was 87%; independent draws give 25%)", plus2 * 100 / m5 < 40);
+            CHECK("Daily theme: the same theme one or five days on is rare (that was 41% five days on; independent draws give 2.5%)", same1 * 100 / m5 < 8 && same5 * 100 / m5 < 8);
+            CHECK("Daily pass: the same pass one or five days on is rare (that was 4.6% five days on)", pass5 * 100 / m5 < 2 && pass1 * 100 / m5 < 2);
+            CHECK("Daily length: five and six letters both come up", len6 * 100 / m5 > 20 && len6 * 100 / m5 < 80);
+        }
     }
 
     // ---- lifetime stats: words, longest, best word, rare words, peels; a Daily replay leaves no trace

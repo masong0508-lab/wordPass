@@ -354,6 +354,7 @@ int  boardRandomLetter(void);        // one draw from the shuffled letter bag (e
 void boardDebugFireStep(Game *g);    // test channel: one fire advance plus gravity, no turn
 enum ChainTouch { CT_IGNORED, CT_ADDED, CT_BACKTRACKED, CT_TRUNCATED, CT_BRIDGED, CT_RESTARTED, CT_NOT_ADJACENT, CT_SUBMIT_TAP };
 enum ChainTouch boardChainTouch(Game *g, int c, int r, bool fresh);   // one touch sample; fresh = a new tap, false = a drag
+enum ChainTouch boardChainCursor(Game *g, int c, int r);    // the d-pad's A on the cursor gem: like a step, never bridges
 bool boardTryAddToChain(Game *g, int c, int r);   // a drag sample: true if the chain grew, shrank by one or bridged
 void boardClearChain(Game *g);
 int  boardSubmit(Game *g);           // returns score gained, 0 if invalid

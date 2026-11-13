@@ -583,7 +583,7 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
             int tc = G.chainLen ? G.chainC[G.chainLen - 1] : -1, tr = G.chainLen ? G.chainR[G.chainLen - 1] : -1;
             if (G.chainLen >= 3 && tc == G.curC && tr == G.curR) { gfxPress(PRESS_SUBMIT); submitChain(); }
             else {
-                enum ChainTouch ct = boardChainTouch(&G, G.curC, G.curR, G.chainLen == 0);
+                enum ChainTouch ct = boardChainCursor(&G, G.curC, G.curR);
                 if (ct == CT_NOT_ADJACENT || ct == CT_RESTARTED) { gfxNope(G.curC, G.curR); if (ct == CT_NOT_ADJACENT) musicSfx(SFX_INVALID, 0); }
             }
         } else { gfxPress(PRESS_SUBMIT); submitChain(); }

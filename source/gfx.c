@@ -402,7 +402,7 @@ static void buildHeatTables(void)
 // backdrop since no dot column coincides with a gem edge column in either hand layout.
 #define COMP_ROWS 20
 typedef struct { u32 w[TILE_W / 2]; } GemRow;
-static ALIGN(4) GemRow gemLetter[26][COMP_ROWS], diamondLetter[26][COMP_ROWS];
+static ALIGN(4) GemRow gemLetter[26][COMP_ROWS], diamondLetter[27][COMP_ROWS];   // diamondLetter[26]: the plain Q of a found pass letter
 
 static void setupTheme(void)
 {
@@ -420,6 +420,7 @@ static void setupTheme(void)
     buildHeatTables();
 }
 
+#define DIAMOND_Q 26                    // drawLetter's code for the plain letter Q (a found pass letter Q is not the Qu gem)
 static void drawLetter(int x, int y, int letter, u16 col, u16 shadow);
 
 // clear a w x h block at the top-left of the render target to 0 (transparent)
@@ -462,6 +463,7 @@ static void buildGemCache(void)
         buildComposite(gemLetter[l], p, l, C(31,31,29), p->dark);
         buildComposite(diamondLetter[l], &GEM_DIAMOND, l, C(4,6,10), C(20,22,26));
     }
+    buildComposite(diamondLetter[26], &GEM_DIAMOND, DIAMOND_Q, C(4,6,10), C(20,22,26));
     cur = saved; clipY0 = c0; clipY1 = c1;
     gemCacheReady = true;
 }
@@ -817,7 +819,9 @@ static inline bool inChain(int c, int r) { return (u32)(chainMask >> (c * ROWS +
 
 static void drawLetter(int x, int y, int letter, u16 col, u16 shadow)
 {
-    if (letter == 'q' - 'a') {
+    if (letter == DIAMOND_Q) {
+        drawChar2Shadow(x + 7, y + 4, 'Q', col, shadow);
+    } else if (letter == 'q' - 'a') {
         drawChar2Shadow(x + 2, y + 5, 'Q', col, shadow);
         drawChar(x + 14, y + 10, 'U', shadow, 1); drawChar(x + 13, y + 9, 'U', col, 1);
     } else {
@@ -1013,11 +1017,11 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
                     break;
                 case CELL_SECRET: {
                     if (!sq && !lit && !cl->flash && yd + 1 >= clipY0 && yd + 1 + COMP_ROWS <= clipY1) {
-                        blitComposite(diamondLetter[cl->letter], x, yd + 1);   // gem and letter in one move
+                        blitComposite(diamondLetter[cl->letter == 'q' - 'a' ? DIAMOND_Q : cl->letter], x, yd + 1);   // gem and letter in one move
                     } else {
                         if (sq) drawGemSized(x, yd + sq, TILE_W, TILE_H - sq, &GEM_DIAMOND, lit);
                         else { blitGem(x, yd, 5); if (lit) { rectOutline(x, yd, TILE_W, TILE_H, WHITE); rectOutline(x + 1, yd + 1, TILE_W - 2, TILE_H - 2, WHITE); } }
-                        drawLetter(x, yd + sq / 2, cl->letter, C(4,6,10), C(20,22,26));
+                        drawLetter(x, yd + sq / 2, cl->letter == 'q' - 'a' ? DIAMOND_Q : cl->letter, C(4,6,10), C(20,22,26));
                     }
                     // travelling sparkle across the diamond
                     int sx = x + 3 + ((frame + c * 5 + r * 9) % 40) / 2;

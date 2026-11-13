@@ -766,7 +766,13 @@ def _():
 
 # ---- persistence, Daily rules and the ledger (item 09) -------------------------------------
 MODS = ['STANDARD', 'EMBER', 'DEEP', 'LONG']
-def daily_mod(d): return (((d * 2654435761) & 0xFFFFFFFF) >> 28) & 3
+def daily_draw(d, k):      # the guide's date mix (board.c dailyDraw)
+    x = (d + k * 0x9E3779B9) & 0xFFFFFFFF
+    x ^= x >> 16; x = (x * 0x7feb352d) & 0xFFFFFFFF
+    x ^= x >> 15; x = (x * 0x846ca68b) & 0xFFFFFFFF
+    x ^= x >> 16
+    return x
+def daily_mod(d): return daily_draw(d, 0) >> 30
 def date_with_mod(mod, start=20270401):
     d = start
     while daily_mod(d) != mod: d += 1

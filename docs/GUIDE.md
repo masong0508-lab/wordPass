@@ -280,7 +280,7 @@ The letters come from a shuffled **bag of 100** drawn without replacement, so a 
 * Every gem must **touch** the one before it (section 3.1) and you may not use a gem twice.
 * **Backtrack:** drag back onto the previous gem to drop the last one. B does the same from the d-pad.
 * **Cut back:** tap an earlier gem of the chain to cut the chain back to it (a tap only; a drag across your own chain does nothing).
-* **Bridge:** if the stylus is fast enough to skip a gem, the game fills it in when there is exactly one gem that touches both the tail and the gem you reached. If there are two possible gems it does not guess: a drag that cannot be explained flashes the gem red and does nothing.
+* **Bridge:** if the stylus is fast enough to skip a gem, the game fills it in when there is exactly one gem that touches both the tail and the gem you reached. If there are two possible gems it does not guess: a drag that cannot be explained flashes the gem red and does nothing. Only a drag bridges: a tap two gems from the tail restarts there, and the d-pad flashes red.
 * **Restart:** a tap on a gem away from the chain starts a new chain there. A drag never restarts: it can only extend, backtrack or bridge.
 * Submit by tapping the tail again (chain of at least three), SUBMIT, or A. Peeking switches chaining off while you hold the shoulder button.
 
@@ -901,7 +901,7 @@ Pass depth is not a clock: measured with the bot (`docs/BALANCE.md`) a deeper pa
 
 ### 10.1 The seed
 
-The **Daily Pass** is one fixed shelf for everyone on a date. The game reads the DS clock, turns the date into a number `YYYYMMDD` and uses it as the **seed** for everything random on the shelf: the board, its refills, the fire. Two players on the same date get the same board, the same pass and the same fire if they play the same words. The daily **modifier** is bits 28 and 29 of `seed × 2654435761` (as a 32-bit number), and the **theme** and **pass length** come from that number shifted right by 8 (the theme is it modulo 40; the pass is 6 letters when bit 3 of the shifted number is set and 5 otherwise, or 7 under LONG; the word is its index modulo the pool's first 200).
+The **Daily Pass** is one fixed shelf for everyone on a date. The game reads the DS clock, turns the date into a number `YYYYMMDD` and uses it as the **seed** for everything random on the shelf: the board, its refills, the fire. Two players on the same date get the same board, the same pass and the same fire if they play the same words. Every choice the date makes is its own draw: the date goes through a 32-bit mix (`x ^= x >> 16; x *= 0x7feb352d; x ^= x >> 15; x *= 0x846ca68b; x ^= x >> 16`, with `k × 0x9E3779B9` added to the date first, k = 0 to 3), so neighbouring dates share nothing. Draw 0 gives the daily **modifier** (its top two bits), draw 1 the **theme** (modulo the number of themes, 40), draw 2 the **pass length** (6 letters when its top bit is set and 5 otherwise, or 7 under LONG) and draw 3 the word (its index modulo the pool's first 200).
 
 A Daily is **one shelf, shelf 1**: a pass clears it and a tap on the card goes back to the title.
 

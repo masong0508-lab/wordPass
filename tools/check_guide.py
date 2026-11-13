@@ -458,7 +458,11 @@ def main():
             if names[i] == 'LONG' and str(D['DAILY_LONG_LEN']) not in r[4]: fail(f'Daily LONG pass length: guide {r[4]}, game {D["DAILY_LONG_LEN"]}')
     # the modifier hash: the Python reading of the formula in the guide must equal boardDailyMod
     for seed, mod in F['dailymod']:
-        if (((seed * 2654435761) & 0xFFFFFFFF) >> 28) & 3 != mod: fail(f'daily modifier hash for {seed}: game {mod}')
+        x = seed & 0xFFFFFFFF                  # the guide's mix: x ^= x >> 16; x *= 0x7feb352d; x ^= x >> 15; x *= 0x846ca68b; x ^= x >> 16
+        x ^= x >> 16; x = (x * 0x7feb352d) & 0xFFFFFFFF
+        x ^= x >> 15; x = (x * 0x846ca68b) & 0xFFFFFFFF
+        x ^= x >> 16
+        if x >> 30 != mod: fail(f'daily modifier hash for {seed}: game {mod}')
     t = need('neighbours')        # | Column | Neighbours as (dx, dy) |
     if t:
         for r in t:

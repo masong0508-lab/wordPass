@@ -145,9 +145,20 @@ static void placeSecrets(Game *g, int minRow)
 // The Daily modifier: a hash of the date, so every player gets the same one. STANDARD changes
 // nothing; EMBER lights the fire sooner and keeps it moving every turn, DEEP buries the pass
 // in the bottom rows, LONG asks for a seven-letter pass.
+// Every choice the date makes is its own draw: the date goes through a 32-bit finalizer (an avalanche mix, so
+// neighbouring dates share nothing) with a different offset per choice. k: 0 modifier, 1 theme, 2 pass length, 3 word.
+static u32 dailyDraw(int seed, u32 k)
+{
+    u32 x = (u32)seed + k * 0x9E3779B9u;
+    x ^= x >> 16; x *= 0x7feb352du;
+    x ^= x >> 15; x *= 0x846ca68bu;
+    x ^= x >> 16;
+    return x;
+}
+
 int boardDailyMod(int seed)
 {
-    return (int)(((u32)((u32)seed * 2654435761u) >> 28) & 3);
+    return (int)(dailyDraw(seed, 0) >> 30);
 }
 
 const char *boardDailyModName(int mod)
@@ -278,12 +289,11 @@ static void pickPass(Game *g, int extraLen)
     const int themes = poolThemeCount();
     int theme, idx, len, n;
     if (g->mode == MODE_DAILY) {
-        u32 hash = (u32)((u32)g->dailySeed * 2654435761u) >> 8;
-        theme = hash % themes;
-        len = nearestPoolLen(theme, g->dailyMod == DAILYMOD_LONG ? DAILY_LONG_LEN : (hash & 8) ? 6 : 5);
+        theme = dailyDraw(g->dailySeed, 1) % themes;
+        len = nearestPoolLen(theme, g->dailyMod == DAILYMOD_LONG ? DAILY_LONG_LEN : (dailyDraw(g->dailySeed, 2) >> 31) ? 6 : 5);
         n = poolCount(theme, len);
         if (n > 200) n = 200;      // Daily stays on familiar words
-        idx = hash % n;
+        idx = dailyDraw(g->dailySeed, 3) % n;
     } else {
         theme = (g->shelf - 1) % themes;
         len = nearestPoolLen(theme, boardPassLenFor(g->shelf) + extraLen);
@@ -422,7 +432,7 @@ static bool bridgeCell(const Game *g, int c, int r, int *bc, int *br)
 
 // One touch sample on gem (c, r). `fresh` is a new stylus-down (a tap), false while dragging:
 // a tap may cut the chain back, restart it or submit it; a drag never restarts mid-stroke.
-enum ChainTouch boardChainTouch(Game *g, int c, int r, bool fresh)
+static enum ChainTouch chainTouch(Game *g, int c, int r, bool fresh, bool bridge)
 {
     if (!boardIsChainable(g, c, r)) return CT_IGNORED;
     if (g->chainLen == 0) {
@@ -448,7 +458,7 @@ enum ChainTouch boardChainTouch(Game *g, int c, int r, bool fresh)
         return CT_ADDED;
     }
     int bc, br;
-    if (g->chainLen + 2 <= MAX_CHAIN && bridgeCell(g, c, r, &bc, &br)) {   // a fast stylus skipped one gem
+    if (bridge && g->chainLen + 2 <= MAX_CHAIN && bridgeCell(g, c, r, &bc, &br)) {   // a fast stylus skipped one gem
         g->chainC[g->chainLen] = bc; g->chainR[g->chainLen] = br;
         g->chainC[g->chainLen + 1] = c; g->chainR[g->chainLen + 1] = r;
         g->chainLen += 2;
@@ -461,6 +471,19 @@ enum ChainTouch boardChainTouch(Game *g, int c, int r, bool fresh)
     return CT_NOT_ADJACENT;
 }
 
+// A stylus sample. Only a drag (not a fresh tap) forgives a skipped gem: a tap on a gem two steps away starts a new chain.
+enum ChainTouch boardChainTouch(Game *g, int c, int r, bool fresh)
+{
+    return chainTouch(g, c, r, fresh, !fresh);
+}
+
+// The d-pad's A on the cursor gem: a deliberate step, so it never bridges (a gem that does not touch the tail is
+// refused), and with an empty chain it starts one.
+enum ChainTouch boardChainCursor(Game *g, int c, int r)
+{
+    return chainTouch(g, c, r, g->chainLen == 0, false);
+}
+
 // A drag sample: true if the gem was added, backtracked or bridged (the older rule-test entry point).
 bool boardTryAddToChain(Game *g, int c, int r)
 {
@@ -470,13 +493,16 @@ bool boardTryAddToChain(Game *g, int c, int r)
 
 void boardClearChain(Game *g) { g->chainLen = 0; }
 
+// A Qu gem spells two letters. A found pass letter Q (a diamond) is the plain letter: the pass's own U diamond follows it.
+static inline bool quGem(const Cell *cl) { return cl->letter == 'q' - 'a' && cl->state != CELL_SECRET && langQuTile(); }
+
 void boardChainWord(const Game *g, char *out)
 {
     int n = 0;
     for (int i = 0; i < g->chainLen; i++) {
-        int l = g->cell[g->chainC[i]][g->chainR[i]].letter;
-        out[n++] = 'a' + l;
-        if (l == 'q' - 'a' && langQuTile()) out[n++] = 'u';
+        const Cell *cl = &g->cell[g->chainC[i]][g->chainR[i]];
+        out[n++] = 'a' + cl->letter;
+        if (quGem(cl)) out[n++] = 'u';
     }
     out[n] = 0;
 }
@@ -965,18 +991,19 @@ int boardLowestFireRow(const Game *g)
 }
 
 // Is any 3- to 5-letter word still spellable? (longer-only boards are rare)
-static bool dfsWords(const Game *g, int c, int r, char *w, int n, bool used[COLS][ROWS])
+// (a chain needs three GEMS: a Qu gem is two letters, so QUE alone is not spellable)
+static bool dfsWords(const Game *g, int c, int r, char *w, int n, int gems, bool used[COLS][ROWS])
 {
-    int l = g->cell[c][r].letter;
-    w[n++] = 'a' + l;
-    if (l == 'q' - 'a' && langQuTile()) w[n++] = 'u';
-    if (n >= 3 && wordAccepted(w, n)) return true;
+    w[n++] = 'a' + g->cell[c][r].letter;
+    if (quGem(&g->cell[c][r])) w[n++] = 'u';
+    gems++;
+    if (gems >= 3 && wordAccepted(w, n)) return true;
     if (n >= 5) return false;
     used[c][r] = true;
     int nc[6], nr[6], k = boardNeighbors(c, r, nc, nr);
     for (int i = 0; i < k; i++) {
         if (used[nc[i]][nr[i]] || !boardIsChainable(g, nc[i], nr[i])) continue;
-        if (dfsWords(g, nc[i], nr[i], w, n, used)) { used[c][r] = false; return true; }
+        if (dfsWords(g, nc[i], nr[i], w, n, gems, used)) { used[c][r] = false; return true; }
     }
     used[c][r] = false;
     return false;
@@ -986,9 +1013,8 @@ static bool dfsWords(const Game *g, int c, int r, char *w, int n, bool used[COLS
 // needBurn asks for a path through at least one flame.
 static bool hintDfs(const Game *g, int c, int r, char *w, int n, int maxLen, int depth, u8 *pc, u8 *pr, bool used[COLS][ROWS], bool needBurn, bool burnSeen)
 {
-    int l = g->cell[c][r].letter;
-    w[n++] = 'a' + l;
-    if (l == 'q' - 'a' && langQuTile()) w[n++] = 'u';
+    w[n++] = 'a' + g->cell[c][r].letter;
+    if (quGem(&g->cell[c][r])) w[n++] = 'u';
     pc[depth] = (u8)c; pr[depth] = (u8)r;
     depth++;
     if (g->cell[c][r].state == CELL_BURN) burnSeen = true;
@@ -1032,6 +1058,6 @@ bool boardHasWords(const Game *g)
     bool used[COLS][ROWS] = {{false}};
     for (int c = 0; c < COLS; c++)
         for (int r = 0; r < ROWS; r++)
-            if (boardIsChainable(g, c, r) && dfsWords(g, c, r, w, 0, used)) return true;
+            if (boardIsChainable(g, c, r) && dfsWords(g, c, r, w, 0, 0, used)) return true;
     return false;
 }
