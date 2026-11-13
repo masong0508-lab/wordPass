@@ -121,6 +121,7 @@ check:
 	$(BUILD)/bot_check --selftest
 	python3 tools/music/build_songs.py --check || (echo 'source/songs.c is not what tools/music/songs_src.py generates: run make songs'; exit 1)
 	python3 tools/music/render.py --stats > /dev/null
+	python3 tools/check/save_sites.py
 	python3 tools/lang/gen_ui.py --check || (echo 'source/ui_strings.[ch] are not what tools/lang/gen_ui.py generates from ui_strings.tsv: run python3 tools/lang/gen_ui.py'; exit 1)
 
 # The balance bot (tools/check/bot.c): plays the real rules code headlessly with a competent and a weak player model and
