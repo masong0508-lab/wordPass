@@ -158,13 +158,17 @@ static ITCM_CODE __attribute__((noinline)) void fillRect(int x, int y, int w, in
             // loop step per word, which is what the screen clears and the backdrop spend
             // most of their time on (VRAM takes the words at the same bus rate either way)
             int k = n >> 4;
-            u32 c1 = col2, c2 = col2, c3 = col2, c4 = col2, c5 = col2, c6 = col2, c7 = col2;
+            // the eight source registers are pinned to r2..r9 so the register list is written in the order the
+            // hardware stores them (the assembler warns about, and reorders, any other order)
+            register u32 f0 asm("r2") = col2, f1 asm("r3") = col2, f2 asm("r4") = col2, f3 asm("r5") = col2;
+            register u32 f4 asm("r6") = col2, f5 asm("r7") = col2, f6 asm("r8") = col2, f7 asm("r9") = col2;
             asm volatile(
-                "1: stmia %0!, {%2, %3, %4, %5, %6, %7, %8, %9}\n\t"
+                "1: stmia %0!, {r2, r3, r4, r5, r6, r7, r8, r9}\n\t"
                 "subs %1, %1, #1\n\t"
                 "bne 1b"
-                : "+r"(p32), "+r"(k), "+r"(col2), "+r"(c1), "+r"(c2), "+r"(c3), "+r"(c4), "+r"(c5), "+r"(c6), "+r"(c7)
-                : : "memory", "cc");
+                : "+r"(p32), "+r"(k)
+                : "r"(f0), "r"(f1), "r"(f2), "r"(f3), "r"(f4), "r"(f5), "r"(f6), "r"(f7)
+                : "memory", "cc");
             n &= 15;
         }
         for (; n >= 2; n -= 2) *p32++ = col2;
@@ -475,12 +479,13 @@ static ITCM_CODE __attribute__((noinline)) void blitComposite(const GemRow *src,
     u32 *d = (u32 *)(cur + y * SCREEN_W + x);
     const u32 *sp = (const u32 *)src;
     for (int j = 0; j < COMP_ROWS; j++, d += SCREEN_W / 2) {
-        u32 *dd = d, r0, r1, r2, r3, r4, r5;
+        u32 *dd = d;
+        register u32 r0 asm("r4"), r1 asm("r5"), r2 asm("r6"), r3 asm("r7"), r4 asm("r8"), r5 asm("r9");   // ascending, as ldm/stm store them
         asm volatile(
-            "ldmia %0!, {%2, %3, %4, %5, %6, %7}\n\t"
-            "stmia %1!, {%2, %3, %4, %5, %6, %7}\n\t"
-            "ldmia %0!, {%2, %3, %4, %5, %6, %7}\n\t"
-            "stmia %1, {%2, %3, %4, %5, %6, %7}"
+            "ldmia %0!, {r4, r5, r6, r7, r8, r9}\n\t"
+            "stmia %1!, {r4, r5, r6, r7, r8, r9}\n\t"
+            "ldmia %0!, {r4, r5, r6, r7, r8, r9}\n\t"
+            "stmia %1, {r4, r5, r6, r7, r8, r9}"
             : "+r"(sp), "+r"(dd), "=&r"(r0), "=&r"(r1), "=&r"(r2), "=&r"(r3), "=&r"(r4), "=&r"(r5)
             : : "memory");
     }

@@ -21,7 +21,8 @@ static int pendingFrames[2], pendingN;
 static void queueMsg(const char *m, int frames)
 {
     if (pendingN >= 2) return;
-    strncpy(pendingMsg[pendingN], m, MSG_LEN - 1); pendingMsg[pendingN][MSG_LEN - 1] = 0;
+    size_t n = strlen(m); if (n > MSG_LEN - 1) n = MSG_LEN - 1;
+    memcpy(pendingMsg[pendingN], m, n); pendingMsg[pendingN][n] = 0;
     pendingFrames[pendingN++] = frames;
 }
 
