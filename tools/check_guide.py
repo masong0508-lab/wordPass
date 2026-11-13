@@ -430,6 +430,21 @@ def main():
                 want = [str(x['rule_threshold']), str(x['rule_every']), 'yes' if x['lockdown'] else 'no', str(x['rule_pulse']) if x['lockdown'] else '-', str(x['minrow']), str(x['passlen']), f"{x['rule_twin']}of8"]
                 if got != want: fail(f'ladder shelf {shelf}: guide {got}, game {want}')
         if sorted({rng(r[0], 30)[0] for r in t}) != list(range(1, 25)) + [25]: fail('the ladder table must list shelves 1 to 24 and a row for 25 and up')
+    # the numbers the prose repeats: the cheat sheet's meter line, the Lockdown meter in the strategy section
+    ladder12 = [L[s]['rule_threshold'] for s in range(1, 13)]
+    if any(L[s]['rule_threshold'] != ladder12[-1] for s in range(12, 31)): fail('the meter is not flat from shelf 12 on')
+    want = '**Meter** | ' + ', '.join(map(str, ladder12)) + f' on shelves 1 to 12, then {ladder12[-1]}'
+    if want not in text: fail(f'the cheat sheet must read "{want}" (the game\'s meter ladder)')
+    runs = []                                     # (first shelf, last shelf, meter) over the Lockdown shelves 6..12
+    for s in range(6, 13):
+        if runs and runs[-1][2] == L[s]['rule_threshold'] and s < 12: runs[-1][1] = s
+        else: runs.append([s, s, L[s]['rule_threshold']])
+    def say(a, b, m, last):
+        if last: return f'{m} from shelf {a}'
+        return f'{m} on shelf {a}' if a == b else f'{m} on shelves {a} and {b}' if b == a + 1 else f'{m} on shelves {a} to {b}'
+    want = 'The meter is ' + ', '.join(say(a, b, m, i == len(runs) - 1) for i, (a, b, m) in enumerate(runs[:-1])) + ' and ' + say(*runs[-1], True)
+    if want not in text: fail(f'the Lockdown strategy text must read "{want}"')
+    if runs[-1][2] > 2 * F['peelheat'][1]: fail('the strategy text says two Lockdown peels light a gem on the last meter, but the meter is higher than two peels')
     t = need('fire-settings')     # | Shelf | RELAXED | NORMAL | FAST |   "meter / every"
     if t:
         for r in t:
@@ -620,6 +635,15 @@ def main():
         for r in (t or []):
             msg = r[0].strip('`*').strip()
             if '"' + msg + '"' not in allsrc: fail(f'{tname[:-1]} "{msg}" is not a string in the source')
+    # the callout table lists the callouts in the order main.c tries them, COMBO included
+    t = need('callouts')
+    if t:
+        order = [r[0].strip('`*').strip() for r in t]
+        ms = re.search(r'callout, one per word.*?burstNewFlames', read(os.path.join(SRC, 'main.c')), re.S)
+        ids = ['UI_CO_SPECT', 'UI_CO_LINK', 'UI_CO_COMBO', 'UI_CO_EXCELLENT', 'UI_CO_GOOD', 'UI_CO_AGAIN', 'UI_CO_RARE']
+        pos = [ms.group(0).find(i) for i in ids] if ms else [-1]
+        if min(pos) < 0 or pos != sorted(pos): fail('main.c no longer tries the callouts in the order SPECTACULAR, PASS LINK, COMBO, EXCELLENT, GOOD, AGAIN, RARE')
+        if order != ['SPECTACULAR!', 'PASS LINK!', 'COMBO X%d!', 'EXCELLENT!', 'GOOD!', 'AGAIN', 'RARE WORD']: fail(f'callout table order {order} is not the game\'s')
     t = need('fail-cards')        # | Card | Cause |
     if t:
         names_ = [r[0].strip('`*').strip() for r in t]

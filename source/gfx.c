@@ -1955,7 +1955,8 @@ static void gdShelves(int t)
         drawText(28, y, boardLockdownName(tier), on ? WHITE : FIRE2, 1);
         char v[8];
         fmtInt(v, sh); strcat(v, "+"); drawTextCenter(HXS[0], y, v, on ? WHITE : INK, 1);
-        fmtInt(v, r.threshold); drawTextCenter(HXS[1], y, v, on ? WHITE : INK, 1);
+        ShelfRules rl; boardShelfRules(tier < 3 ? tierShelf(tier + 1) - 1 : sh, &rl);   // the meter the tier settles on (its first shelf is the ramp's exception)
+        fmtInt(v, rl.threshold); drawTextCenter(HXS[1], y, v, on ? WHITE : INK, 1);
         fmtInt(v, r.pulseEvery); drawTextCenter(HXS[2], y, v, on ? WHITE : INK, 1);
         fmtInt(v, 1); if (r.twinEighths) strcat(v, "+"); drawTextCenter(HXS[3], y, v, r.twinEighths ? FIRE2 : (on ? WHITE : INK), 1);   // 1+: some ignitions light two columns
     }

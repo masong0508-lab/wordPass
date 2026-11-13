@@ -436,6 +436,7 @@ Every scored word gets at most one callout, the first of these that applies:
 | --- | --- |
 | `SPECTACULAR!` | a word of 8 letters or more |
 | `PASS LINK!` | a word through at least one diamond |
+| `COMBO X%d!` | the third word of a streak and every word after it, X being its place in the streak (it takes the place of the four callouts below) |
 | `EXCELLENT!` | a word of 7 letters |
 | `GOOD!` | a word of 5 or 6 letters |
 | `AGAIN` | a repeat of 4 letters or fewer |
@@ -491,7 +492,7 @@ Worked, for that card: the words scored 100 (STONE: 5 × 2 × 10), 160 (GARDEN: 
 
 ### 5.6 Combos and hints
 
-**Combo.** Every word you spell after another word, with no peel between them, pays **10% more** than the word before it, up to **+50%** from the sixth word of a streak. The bonus is added after everything else in section 5.1 (including the repeat penalty), rounded down, and the panel's chain value already includes it. The first word after a peel is back at the plain score. The panel shows `COMBO X3` (in the accent colour, gold once the bonus is capped) in the row where the chain value goes when no chain is held, and the third word of a streak calls out **COMBO X3!**.
+**Combo.** Every word you spell after another word, with no peel between them, pays **10% more** than the word before it, up to **+50%** from the sixth word of a streak. The bonus is added after everything else in section 5.1 (including the repeat penalty), rounded down, and the panel's chain value already includes it. The first word after a peel is back at the plain score. The panel shows `COMBO X3` (in the accent colour, gold once the bonus is capped) in the row where the chain value goes when no chain is held, and from the third word of a streak on, every word calls out **COMBO X3!**, **COMBO X4!** and so on, in place of EXCELLENT, GOOD, AGAIN and RARE WORD (SPECTACULAR and PASS LINK still come first).
 
 <!-- check:combo -->
 | Words in the streak | 1 | 2 | 3 | 4 | 5 | 6 and more |
@@ -785,7 +786,7 @@ OUT OF WORDS is checked after every turn by searching the board for any accepted
 
 A shelf that has no word of 3 to 5 letters left (the OUT OF WORDS test of section 8.7) is **re-dealt once** instead of lost: every plain gem and every flame gets a new letter from the bag (diamonds, holes and the flames' places stay as they were), up to ten tries until a word exists, and the top screen says `NO WORDS: GEMS SHUFFLED, +3 HEAT` with a **SHUFFLE!** callout. The re-deal costs **3 heat**, like a three-letter word, and can light a flame. There is one re-deal per shelf (`SHUFFLES_PER_SHELF`); a second dead board loses the shelf, and a board that cannot be re-dealt into a word still does.
 
-Why: the bot (`docs/BALANCE.md`) played 7,200 shelves per language and never met a dead board, so the rule is a safety net, not a mechanic: a player can no longer lose a long run to a freak deal.
+Why: the bot (`docs/BALANCE.md`) played 7,200 competent shelves per language and met no dead board in English and three in German, so the rule is a safety net, not a mechanic: a player can no longer lose a long run to a freak deal.
 
 ---
 
@@ -1067,7 +1068,7 @@ A diamond is a free multiplier: any word through it earns half again, and it nev
 
 ### 12.7 Lockdown
 
-The meter is 5 or 4 and a peel is 2 heat: two peels can light a gem. Long words through flames are the best move in the game: they put the flame out and add no heat. Keep gems that spell long words together. From shelf 11 some ignitions light two columns (more of them every two shelves), so two flames at once is normal: kill the lower one first.
+The meter is 8 on shelf 6, 6 on shelves 7 and 8, 5 on shelves 9 to 11 and 4 from shelf 12, and a peel is 2 heat: on the last meter two peels in a row light a gem, and on a meter of 5 a peel after a short word does. Long words through flames are the best move in the game: they put the flame out and add no heat. Keep gems that spell long words together. From shelf 11 some ignitions light two columns (more of them every two shelves), so two flames at once is normal: kill the lower one first.
 
 ### 12.8 The Daily modifiers
 
@@ -1096,7 +1097,7 @@ The meter is 5 or 4 and a peel is 2 heat: two peels can light a gem. Long words 
 | **Score** | (letter values) x length multiplier x 10; +200 at 7 letters; +30 per letter through a flame; +50% per diamond (two at most); repeats halved |
 | **Multiplier** | 3-4 letters x1, 5-6 x2, 7-8 x3, 9+ x4 |
 | **Heat** | 3-letter word 3, 4 letters 2, 5-6 letters 1, 7+ 0; a peel 1 (2 in Lockdown) |
-| **Meter** | 10 (shelves 1-2), 7 (3-5), 5 (6-11), 4 (12+) |
+| **Meter** | 10, 10, 9, 8, 7, 8, 6, 6, 5, 5, 5, 4 on shelves 1 to 12, then 4 |
 | **Overtime** | past turn 24 (16 in Lockdown from shelf 10, later on shelves 6 to 9): +1 heat, growing every 12 turns |
 | **Pass pays** | 100 per letter x shelf; 1000 x shelf; 25 x shelf per turn under 40; PERFECT 400 x shelf; CLEAN 150 x shelf |
 | **Hole number** | how many of the 6 neighbours hide a pass letter (found letters count) |
