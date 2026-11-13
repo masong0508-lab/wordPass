@@ -1654,6 +1654,15 @@ int main(int argc, char **argv)
                         int de = 0, dl = 0;
                         for (const char *ch = pe; *ch; ch++) if (*ch >= '0' && *ch <= '9') de += *ch - '0' + 1;
                         for (const char *ch = plain; *ch; ch++) if (*ch >= '0' && *ch <= '9') dl += *ch - '0' + 1;
+                        if (p == 1) {   // SCORING's alphabet-sized table moves the lines, so the COMBO line is found by its percent signs
+                            char want[16];
+                            if (strchr(pe, '%')) {
+                                snprintf(want, sizeof want, "+%d%%", COMBO_PCT_PER_WORD);
+                                if (!strstr(plain, want)) { lnum = false; printf("   lang %d page 2 line %d: COMBO line lacks %s: %s\n", lg, i, want, plain); }
+                                snprintf(want, sizeof want, "%d%%", COMBO_CAP_PCT);
+                                if (!strstr(plain, want)) { lnum = false; printf("   lang %d page 2 line %d: COMBO line lacks %s: %s\n", lg, i, want, plain); }
+                            }
+                        }
                         if (de != dl && i != 1 && !(p == 1) && !(p == 0 && i == 13)) { lnum = false; printf("   lang %d page %d line %d: digits differ from English: %s | %s\n", lg, p + 1, i, pe, plain); }
                     }
                     if (h > GUIDE_MAX_H) { ltall = false; printf("   lang %d page %d is %d px tall\n", lg, p + 1, h); }

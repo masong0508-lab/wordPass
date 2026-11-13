@@ -144,6 +144,20 @@ int main(void)
     fmt(o, sizeof o, "%d/%d", 3, 4);
     CHECK(!strcmp(o, "3/4"), "sequential: %s", o);
 
+    // a literal percent sign is text, not a slot: before a slot, between two, after the last
+    fmt(o, sizeof o, "100% %d", 7); CHECK(!strcmp(o, "100% 7"), "literal before a slot: %s", o);
+    fmt(o, sizeof o, "+%d% PER, TO %d%", 10, 50);
+    CHECK(!strcmp(o, "+10% PER, TO 50%"), "literal between and after slots: %s", o);
+    fmt(o, sizeof o, "% %s %d%", "A", 3); CHECK(!strcmp(o, "% A 3%"), "literal first: %s", o);
+    for (int l = 0; l < LANG_COUNT; l++) {          // the guide's COMBO line, in every language
+        curLang = l;
+        uiFmt(o, sizeof o, UI_GS_10, 10, 50);
+        char *w = o;
+        for (const char *r = o; ; r++) { if ((unsigned char)*r > 6) *w++ = *r; if (!*r) break; }   // drop the colour codes
+        CHECK(strstr(o, "+10%") && strstr(o, "50%") && strlen(o) > 14, "%s: COMBO line reads %s", langCode(l), o);
+    }
+    curLang = 0;
+
     for (int l = 0; l < LANG_COUNT; l++) printf("  %s widest string %d px\n", langCode(l), widest[l]);
     printf(fails ? "UI TEST FAILED: %d failure(s)\n" : "UI TEST OK\n", fails);
     return fails != 0;

@@ -723,6 +723,9 @@ def _():
     else:
         assert g['burnEvery'] == 2 and g['heatThreshold'] == 6 and g['passLen'] == 5 and not holes, f'DAMP {g["burnEvery"]} {g["heatThreshold"]}'
     e.run(140); g = e.state()
+    expl = {1: 'HOLES ON THE BOARD, WORK AROUND THEM', 2: 'SLOWER FIRE, BUT A SHORTER METER', 3: 'ONE LETTER LONGER, LOW DOWN'}[g['twist']][:31]
+    assert g['msg'] == expl, f'the twist explanation follows the banner: {g["msg"]!r}'
+    e.run(150); g = e.state()
     assert g['msg'] == f'TALES: FIND THE {g["passLen"]}-LETTER PASS', f'queued intro {g["msg"]!r}'
     print('   shelf 4:', name, g['pass'])
     twists = {}
@@ -1791,8 +1794,8 @@ def check_tutor(tag):
     peek = 'HOLD R OR TAP PEEK' if left else 'HOLD L OR TAP PEEK'
     e.set_tutor(0); e.start_classic(); e.set_lives(3)
     e.run(260)                                              # the shelf intro (180 frames) runs out, then the prompt stays
-    g = e.state(); assert g['tutorStep'] == 0 and g['msgTimer'] == -1 and g['msg'].startswith('DRAG 3 TOUCHING GEMS'), f'{tag}: step 0: {g["tutorStep"]} {g["msgTimer"]} {g["msg"]!r}'
-    e.run(300); assert msg_of('DRAG 3 TOUCHING GEMS') and e.state()['msgTimer'] == -1, f'{tag}: the prompt must be sticky'
+    g = e.state(); assert g['tutorStep'] == 0 and g['msgTimer'] == -1 and g['msg'].startswith('DRAG 3+ TOUCHING GEMS'), f'{tag}: step 0: {g["tutorStep"]} {g["msgTimer"]} {g["msg"]!r}'
+    e.run(300); assert msg_of('DRAG 3+ TOUCHING GEMS') and e.state()['msgTimer'] == -1, f'{tag}: the prompt must be sticky'
     e.shot(f'{out}/rules_tutor_0_{tag}.png')
     e.set_heat(0); e.set_burn(0, 99); e.set_turn(0)
     path = spell_cells('bed'); e.chain(path); e.press('A', settle=10)
@@ -1897,6 +1900,16 @@ GUIDE_PAGES = 8
 def guide_dot(i): return (79 + 14 * i, 178)           # the page dots (centres), 14 apart on the bottom row
 GUIDE_PREV, GUIDE_NEXT = (18, 178), (238, 178)         # the 24 x 20 buttons in the bottom corners
 def guide_back(left): return (26, 13) if left else (230, 13)   # BACK takes the stylus-side corner
+GD_BACK_W = 47                                                  # source/gfx.c GD_BACK_W
+def guide_back_check(tag, left):
+    """The guide's BACK label (the widest 41 px) keeps two clear columns inside its outline and nothing lit beside it."""
+    px = e.pixels(); bx = 6 if left else 256 - 6 - GD_BACK_W; rows = range(192 + 8, 192 + 20)
+    inside = ui_lit(px, [bx + 1, bx + 2, bx + GD_BACK_W - 3, bx + GD_BACK_W - 2], rows)
+    assert not inside, f'{tag}: the BACK label touches its outline: {inside[:3]}'
+    outside = ui_lit(px, [bx - 2, bx - 1, bx + GD_BACK_W, bx + GD_BACK_W + 1], rows)
+    assert not outside, f'{tag}: lit pixels beside the BACK button: {outside[:3]}'
+    assert ui_lit(px, range(bx + 3, bx + GD_BACK_W - 3), rows), f'{tag}: no BACK label drawn'
+
 def guide_open_from_title():
     e.tap(e.bx + 137, 15, settle=20)
     g = e.state(); assert g['state'] == ST_GUIDE and g['guideFrom'] == ST_TITLE and g['guidePage'] == 0, f'GUIDE did not open: {g["state"]} from {g["guideFrom"]} page {g["guidePage"]}'
@@ -2818,6 +2831,7 @@ def _():
                 g = e.state(); assert g['guidePage'] == page, f'{code} {tag}: expected page {page}, on {g["guidePage"]}'
                 e.run(50)
                 e.shot(f'{out}/ui_guide_{code}_{tag}_{page + 1}.png')
+                guide_back_check(f'{code} {tag} page {page + 1}', left)
                 guide_margins(f'{code} {tag}', page, ticks=32, step=2)
                 if page < GUIDE_PAGES - 1: e.tap(*GUIDE_NEXT, settle=10)
             e.tap(*guide_back(left), settle=15); g = e.state(); assert g['state'] == ST_TITLE, f'{code} {tag}: BACK did not return to the title: {g["state"]}'
@@ -2936,6 +2950,190 @@ def ui_text(code, row_id, *args):
 
 def lit_rect(px, x0, y0, x1, y1, thr=250):
     return sum(1 for y in range(y0, y1) for x in range(x0, x1) if sum(px[x, y]) > thr)
+
+def lit_extent(px, x0, y0, x1, y1, thr=250):
+    """(leftmost, rightmost) x of the lit pixels in the rectangle, or None."""
+    xs = [x for y in range(y0, y1) for x in range(x0, x1) if sum(px[x, y]) > thr]
+    return (min(xs), max(xs)) if xs else None
+
+# ---- text that must stay whole: popups and the PEEL tag in the edge columns, the results WORDS row, the Dutch calendar tile, the options date -----
+_ABI = {}
+def abi_offsets():
+    """offsetof(Game, wordsThisShelf / uniqueWords) and offsetof(Settings, bestDaily / bestDailyDate) of the ARM build, read from a
+    throw-away object compiled in the pinned toolchain image (so the test follows the struct instead of pinning byte offsets)."""
+    if _ABI: return _ABI
+    import subprocess, tempfile
+    src = ('#include <nds.h>\n#include <stddef.h>\n#include "game.h"\n'
+           'char o1[offsetof(Game, wordsThisShelf) + 1000];\nchar o2[offsetof(Game, uniqueWords) + 1000];\n'
+           'char o3[offsetof(Settings, bestDaily) + 1000];\nchar o4[offsetof(Settings, bestDailyDate) + 1000];\n')
+    with tempfile.TemporaryDirectory() as d:
+        open(os.path.join(d, 'o.c'), 'w').write(src)
+        cmd = ('export PATH=$PATH:/opt/devkitpro/devkitARM/bin; arm-none-eabi-gcc -march=armv5te -mtune=arm946e-s -DARM9 -std=gnu11 '
+               '-I/opt/devkitpro/libnds/include -I/w/source -c /f/o.c -o /f/o.o && arm-none-eabi-nm -S /f/o.o')
+        r = subprocess.run(['docker', 'run', '--rm', '-v', f'{REPO}:/w', '-v', f'{d}:/f', 'devkitpro/devkitarm:20240511', 'bash', '-c', cmd],
+                           capture_output=True, text=True)
+        for ln in r.stdout.splitlines():
+            p = ln.split()
+            if len(p) == 4 and p[3] in ('o1', 'o2', 'o3', 'o4'): _ABI[p[3]] = int(p[1], 16) - 1000
+    assert len(_ABI) == 4, f'could not read the struct offsets: {r.stdout[-300:]} {r.stderr[-300:]}'
+    return _ABI
+def sym(name):
+    from wp import symbol
+    return symbol(os.path.join(REPO, 'wordPass.elf'), name)
+
+def new_lit(px, base, xs, ys, thr=200):
+    return [(x, y) for y in ys for x in xs if sum(px[x, y]) > thr and sum(base[x, y]) <= thr]
+
+STRIP_EDGES = lambda bx: list(range(bx, bx + 3)) + list(range(bx + 170, bx + 173))   # outside [bx+3, bx+169]
+
+@scenario('popups: +N and PASS LINK over a gem in the first and last column stay inside the board strip (2x and 1x), both hands')
+def _():
+    for left in (False, True):
+        set_hand(left); b = e.bx
+        for col in (0, 6):
+            tag = f'{"left" if left else "right"} col {col}'
+            calm(); e.run(20)
+            e.set_back(col, 2, 1); e.peel(col, 2); g = e.state()
+            assert g['cell'][col][2][1] == SECRET, f'{tag}: peel: {g["cell"][col][:4]}'
+            gem = e.letter(g['cell'][col][2])
+            if e.words is None: e.words = load_words()
+            word = next(w for w in sorted(e.words) if w.startswith(gem) and len(w) == len(gem) + 2 and 'q' not in w[len(gem):])
+            e.set_cell(col, 3, TILE, word[len(gem)]); e.set_cell(col, 4, TILE, word[len(gem) + 1]); e.run(5)
+            e.emu.input.touch_release(); e.run(30)
+            base = e.pixels()
+            e.chain([(col, 2), (col, 3), (col, 4)]); e.press('A', hold=3, settle=0)
+            for k in range(14):
+                e.run(3); px = e.pixels()
+                xs = [p[0] for p in new_lit(px, base, range(b + 3, b + 170), range(192 + 1, 192 + 90), thr=500)]
+                if k in (1, 8):          # k 1 is the 2x phase (PASS LINK 107 px), k 8 the 1x phase (53 px): the whole label, not a cut one
+                    e.shot(f'{out}/rules_popup_{tag.replace(" ", "_")}_{k}.png')
+                    need = 100 if k == 1 else 36
+                    assert xs and max(xs) - min(xs) + 1 >= need, f'{tag} frame {k}: the popup is cut: {min(xs) if xs else None}..{max(xs) if xs else None}, wanted {need} px'
+            g = e.state(); assert g['lastWord'] == word, f'{tag}: {word} did not score: {g["lastWord"]!r}'
+    set_hand(False)
+
+@scenario('PEEL tag: armed over a gem of the first and last column, in the wordiest languages, stays whole inside the board strip, both hands')
+def _():
+    for left in (False, True):
+        for i in (3, 8, 2, 1):                       # de, pl (7 letters), fr (6 letters), es
+            code = LANG_CODES[i]; set_hand(left); b = e.bx
+            lang_shelf(i); e.set_heat(0); e.set_burn(0, 99)
+            tag = f'{code} {"left" if left else "right"}'
+            for col in (0, 6):
+                e.emu.input.touch_release(); e.run(10)
+                base = e.pixels()
+                x, y = e.center(col, 4)
+                e.hold('L', True); e.emu.input.touch_set_pos(x, y); e.run(8)
+                assert e.state()['armed'], f'{tag} col {col}: the peel did not arm'
+                px = e.pixels(); e.shot(f'{out}/rules_peeltag_{code}_{"L" if left else "R"}_{col}.png')
+                ys = range(192 + y - 11 - 11 - 11, 192 + y - 11 - 2)          # the rows of the tag above the armed gem
+                bad = new_lit(px, base, STRIP_EDGES(b), ys, thr=700)     # the tag's text and backing are white and black
+                assert not bad, f'{tag} col {col}: the PEEL tag leaves the board strip: {bad[:3]}'
+                w = len(ui_text(code, 'PEELTAG')) * 6 - 1
+                xs = [p[0] for p in new_lit(px, base, range(b + 3, b + 170), range(192 + y - 11 - 11 - 1, 192 + y - 11 - 2), thr=500)]
+                assert xs and max(xs) - min(xs) + 1 >= w - 5, f'{tag} col {col}: the PEEL tag is cut: {min(xs) if xs else None}..{max(xs) if xs else None}, wanted {w} px'
+                e.emu.input.touch_release(); e.hold('L', False); e.run(6)
+    set_hand(False); lang_title(0)
+
+@scenario('results card: the WORDS label and the N (M UNIQUE) value keep a gap with two-digit counts (es, de, pt), both hands')
+def _():
+    o = abi_offsets(); G = sym('G')
+    for left in (False, True):
+        for i in (1, 3, 5):
+            code = LANG_CODES[i]; set_hand(left); b = e.bx
+            lang_shelf(i); e.set_lives(3); e.set_turn(0)
+            e.mem.write_long(G + o['o1'], 12); e.mem.write_long(G + o['o2'], 11)
+            g = e.state()
+            for k in range(1, g['passLen'] + 1):
+                e.set_heat(0); e.set_turn(0); e.set_burn(0, 99)
+                g = e.state()
+                for c, r in e.burn_cells(g): e.set_cell(c, r, TILE, 'e')
+                c, r = e.secret_cells(g)[k]; e.peel(c, r)
+            g = e.state(); assert g['state'] == ST_PASSED, f'{code}: shelf not cleared: {g["state"]}'
+            e.run(120); e.shot(f'{out}/rules_words_row_{code}_{"L" if left else "R"}.png'); px = e.pixels()
+            wl = len(ui_text(code, 'R_WORDS')) * 6 - 1
+            rows = range(192 + 22 + 63, 192 + 22 + 70)
+            assert lit_rect(px, b + 21, 192 + 22 + 63, b + 21 + wl, 192 + 22 + 70) > 20, f'{code}: the WORDS label is not where the test looks'
+            gap = [(x, y) for y in rows for x in range(b + 21 + wl, b + 21 + wl + 4) if sum(px[x, y]) > 200]
+            assert not gap, f'{code} {"left" if left else "right"}: the WORDS value touches its label: {gap[:3]}'
+            e.press('A', settle=5)
+    set_hand(False); lang_title(0)
+
+@scenario('Dutch guide MODES page: the settled STANDAARD on the calendar tile is complete and inside the tile')
+def _():
+    set_hand(False); lang_title(10 if False else LANG_CODES.index('nl')); e.set_tutor(1); e.run(20)
+    guide_open_from_title()
+    for _ in range(6): e.press('RIGHT', settle=8)
+    assert e.state()['guidePage'] == 6, f'page {e.state()["guidePage"]}'
+    best = 0
+    for k in range(40):
+        e.run(6); px = e.pixels()
+        ext = lit_extent(px, 53, 114, 107, 124, thr=250)
+        if ext: best = max(best, ext[1] - ext[0] + 1)
+        if k == 20: e.shot(f'{out}/rules_modes_nl.png')
+    assert best >= 52, f'STANDAARD on the calendar tile is only {best} px wide (53 expected)'
+    e.press('B', settle=20); lang_title(0)
+
+@scenario('options: the best Daily line shows the date as MM-DD, not as YYYYMMDD, inside the plaque, in the wordiest languages')
+def _():
+    o = abi_offsets(); S = sym('S')
+    for i in (8, 3, 10, 0):
+        code = LANG_CODES[i]; set_hand(False); lang_title(i)
+        e.mem.write_long(S + o['o3'], 23456); e.mem.write_long(S + o['o4'], 20271101)
+        e.tap(e.bx + 86, 170, settle=30); assert e.state()['state'] == ST_OPTIONS
+        px = e.pixels(); e.shot(f'{out}/rules_options_bestdaily_{code}.png')
+        want = ui_text(code, 'O_BESTDAILY').replace('%d', '23456', 1).replace('%02d', '11', 1).replace('%02d', '01', 1)
+        w = len(want) * 6 - 1
+        ext = lit_extent(px, 12, 159, 244, 168, thr=200)
+        assert ext and abs((ext[1] - ext[0] + 1) - w) <= 2, f'{code}: the best Daily line is {ext} wide, wanted {w} px ({want})'
+        assert ext[0] >= 12 and ext[1] <= 244, f'{code}: the best Daily line {ext} reaches the plaque frame'
+        e.press('B', settle=20)
+    lang_title(0)
+
+def top_msg_edge(tag, ys=range(160, 178)):
+    """The top screen's message line stays 14 px clear of the plaque frame (x 8..9 and 246..247)."""
+    px = e.pixels()
+    bad = ui_lit(px, list(range(10, 14)) + list(range(242, 246)), ys)
+    assert not bad, f'{tag}: the message line reaches the plaque: {bad[:3]}'
+
+@scenario('Daily modifier banner: a one line explanation follows the name, fits the top screen in the wordiest languages, then the find-the-pass line')
+def _():
+    for left in (False, True):
+        for i in (0, 3, 8, 10):                      # en, de, pl, fi
+            code = LANG_CODES[i]; set_hand(left); lang_title(i)
+            for mod in range(4):
+                day = date_with_mod(mod); daily_title(day); e.set_daily(0, 0, 0)
+                tap_daily(wait=1)
+                key = 'MS_DM_' + MODS[mod]
+                want = ui_text(code, key, 7)[:31] if mod == 3 else ui_text(code, key)[:31]
+                seen = False; tag = f'{code} {MODS[mod]} {"left" if left else "right"}'
+                for k in range(80):
+                    e.run(6); g = e.state()
+                    if g['msg'] == want:
+                        seen = True; top_msg_edge(tag)
+                        if k and not os.path.exists(f'{out}/rules_dm_{code}_{MODS[mod]}.png'): e.shot(f'{out}/rules_dm_{code}_{MODS[mod]}.png')
+                assert seen, f'{tag}: the explanation {want!r} never showed (last msg {g["msg"]!r})'
+                g = e.state(); assert g['mode'] == 1 and g['practice'] == 0, f'{tag}: not a scored Daily'
+                pause_do('QUIT'); e.set_clock(0); e.run(30)
+    set_hand(False); lang_title(0)
+
+@scenario('lost shelf: the top screen names the failure and shows the whole pass, inside the plaque, in the wordiest languages')
+def _():
+    for i in (0, 3, 8, 10):
+        code = LANG_CODES[i]; set_hand(False)
+        if i: lang_shelf(i)
+        else: lang_title(0); e.start_classic()
+        e.set_lives(3); e.set_heat(0); e.set_burn(0, 99)
+        g = force_fail(); e.run(80)
+        px = e.pixels(); e.shot(f'{out}/rules_failtop_{code}.png')
+        top_msg_edge(f'{code} fail')
+        want = ui_text(code, ['F_LOST', 'F_DESTROYED', 'F_OUTWORDS'][2])
+        ext = lit_extent(px, 12, 160, 244, 178, thr=200)
+        assert ext and ext[1] - ext[0] + 1 >= len(want) * 6 - 2, f'{code}: the failure name {want!r} is not on the top screen: {ext}'
+        red = sum(1 for y in range(60, 86) for x in range(12, 222) if px[x, y][0] > 200 and px[x, y][1] < 140)
+        assert red > 60 * g['passLen'] // 2, f'{code}: the pass is not shown on the top screen ({red} red px)'
+        assert e.fps() == 120, f'{code}: fail fps'
+    to_title(); lang_title(0)
 
 def enlarged(path):
     """Writes <path>_touch2x.png (the touch screen at 2x) and <path>_top2x.png next to a shot, for reading it."""

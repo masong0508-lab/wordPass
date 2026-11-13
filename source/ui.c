@@ -18,7 +18,7 @@ static int forced = -1;
 void uiTestLang(int lang) { forced = lang; }
 const char *ui(int id) { return uiIn(id, forced >= 0 ? forced : langCur()); }
 
-typedef struct { char kind; int width; bool zero; int pos; } UiSlot;   // kind 'd' or 's'; pos is 1 based
+typedef struct { char kind; int width; bool zero; int pos; const char *start; } UiSlot;   // kind 'd' or 's'; pos is 1 based
 
 // the slots of a format in the order they appear; at most UI_MAX_SLOTS
 static int uiScan(const char *f, UiSlot *sl)
@@ -27,7 +27,7 @@ static int uiScan(const char *f, UiSlot *sl)
     for (; *f; f++) {
         if (*f != '%') continue;
         const char *p = f + 1;
-        UiSlot s = { 0, 0, false, 0 };
+        UiSlot s = { 0, 0, false, 0, f };
         if (p[0] >= '1' && p[0] <= '9' && p[1] == '$') { s.pos = p[0] - '0'; p += 2; }
         if (*p == '0') { s.zero = true; p++; }
         while (*p >= '0' && *p <= '9') s.width = s.width * 10 + (*p++ - '0');
@@ -60,7 +60,7 @@ int uiFmtV(char *out, int cap, const char *f, va_list ap)
     }
     int len = 0, k = 0;
     for (const char *c = f; *c; c++) {
-        if (*c != '%' || k >= n) { if (len < cap - 1) out[len++] = *c; continue; }
+        if (k >= n || c != sl[k].start) { if (len < cap - 1) out[len++] = *c; continue; }
         UiSlot s = sl[k++];
         while (*c != 'd' && *c != 's') c++;             // past the spec
         char tmp[16];
