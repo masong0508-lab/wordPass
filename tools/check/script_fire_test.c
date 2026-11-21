@@ -200,6 +200,13 @@ static void exercise(const char *dbFile,const char *tbFile,const char *pbFile, b
 
     CHECK(scriptBoardStartPass(&b,&dict,&tiles,&pools,77,5),
           "start pass for completion and bonus");
+    // Calling rescue directly cannot claim the completion bonus from an
+    // already revealed pass even if caller's status has not caught up.
+    scriptRulesStart(&rules,2,77);
+    for(int i=0;i<b.passLen;i++) b.found[i]=1;
+    CHECK(scriptRulesRescueTurn(&rules,&b,&tiles)==0 &&
+          rules.turns==0 && rules.status==SCRIPT_RUNNING &&
+          rules.lastBonus==0, "rescue cannot complete or award a finished pass");
     scriptRulesStart(&rules,2,77);
     for(int i=0;i<b.passLen;i++) b.found[i]=1;
     int bonus=scriptRulesTurn(&rules,&b,&tiles,1,true,false);
