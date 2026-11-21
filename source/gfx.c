@@ -2927,7 +2927,7 @@ static void drawPauseCard(const Game *g)
 // Only the separate engineering ROM exposes two extra, NON-persistent test
 // destinations. Compact the rows there so all 13 choices fit without scroll.
 #ifdef WP_CYR_PREVIEW
-#define PICK_Y0 19
+#define PICK_Y0 23
 #define PICK_DY 12
 #define PICK_COUNT (LANG_COUNT + 2)
 #else
