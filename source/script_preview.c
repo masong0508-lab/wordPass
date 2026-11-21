@@ -18,6 +18,7 @@ int scriptPreviewShelf;
 ScriptRules scriptPreviewRules;
 ScriptLedger scriptPreviewLedger;
 int scriptPreviewDaily, scriptPreviewDailyDate, scriptPreviewDailyClockError;
+int scriptPreviewHelp;
 int scriptPreviewLastTier, scriptPreviewLastScore;
 uint32_t scriptPreviewSeed;
 
