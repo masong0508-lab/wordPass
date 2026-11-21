@@ -17,6 +17,7 @@ int scriptPreviewThemeCount;
 int scriptPreviewShelf;
 ScriptRules scriptPreviewRules;
 ScriptLedger scriptPreviewLedger;
+int scriptPreviewDaily, scriptPreviewDailyDate;
 int scriptPreviewLastTier, scriptPreviewLastScore;
 uint32_t scriptPreviewSeed;
 
@@ -57,12 +58,18 @@ void scriptPreviewClose(void)
     scriptPreviewShelf = 0;
     memset(&scriptPreviewRules, 0, sizeof scriptPreviewRules);
     scriptLedgerReset(&scriptPreviewLedger);
+    scriptPreviewDaily = scriptPreviewDailyDate = 0;
     scriptPreviewLastTier = scriptPreviewLastScore = 0;
 }
 bool scriptPreviewNewPass(uint32_t seed)
 {
     if (!scriptPreviewPools.image || !scriptPreviewDict.image ||
         !scriptPreviewTiles.valid) return false;
+    if (scriptPreviewDaily) {
+        seed = scriptDailySeed(scriptPreviewDailyDate, scriptPreviewLanguage);
+        if (!seed) return false;
+        scriptPreviewScore = 0; // retries must not farm score
+    }
     scriptPreviewSeed = seed ? seed : 0x87654321u;
     scriptRulesStart(&scriptPreviewRules,
                      scriptPreviewShelf ? (unsigned)scriptPreviewShelf : 1u,
@@ -141,8 +148,20 @@ bool scriptPreviewOpen(int language, uint32_t seed)
     if (!scriptPreviewNewPass(seed)) { scriptPreviewClose(); return false; }
     return true;
 }
+bool scriptPreviewToggleDaily(int date, uint32_t freeSeed)
+{
+    if (!scriptPreviewDict.image) return false;
+    int next = !scriptPreviewDaily;
+    if (next && !scriptDailyValidDate(date)) return false;
+    scriptPreviewDaily = next;
+    scriptPreviewDailyDate = next ? date : 0;
+    scriptPreviewShelf = 1;
+    scriptPreviewScore = 0;
+    return scriptPreviewNewPass(freeSeed);
+}
 bool scriptPreviewAdvance(uint32_t seed)
 {
+    if (scriptPreviewDaily) return false; // one unranked repeatable daily shelf
     if (!scriptPreviewDict.image || scriptPreviewRules.status != SCRIPT_PASSED)
         return false;
     if (scriptPreviewShelf >= 999) return false;
