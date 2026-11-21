@@ -786,6 +786,19 @@ int main(void)
 
 #ifdef WP_CYR_PREVIEW
             case ST_SCRIPT_PREVIEW: {
+                // L+Y opens localized rules without losing a selected chain.
+                // B closes the rules instead of unexpectedly quitting to title.
+                if ((down & KEY_Y) && (held & KEY_L)) {
+                    scriptPreviewHelp ^= 1;
+                    break;
+                }
+                if (scriptPreviewHelp) {
+                    if (down & (KEY_A | KEY_B | KEY_Y | KEY_TOUCH)) {
+                        scriptPreviewHelp = 0;
+                        break; // dismissal must not also submit or touch a tile
+                    }
+                    if (!(down & KEY_START)) break;
+                }
                 if (down & (KEY_B | KEY_START)) {
                     scriptPreviewClose();
                     G.state = G.langFrom == ST_OPTIONS ? ST_OPTIONS : ST_TITLE;

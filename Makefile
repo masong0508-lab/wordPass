@@ -39,9 +39,9 @@ ARCH := -march=armv5te -mtune=arm946e-s
 
 CFLAGS   := -g -Wall -Wextra -Wshadow -O2 -ffunction-sections -fdata-sections\
             $(ARCH) $(INCLUDE) -DARM9
-# An opt-in engineering build packages only tiny synthetic Russian/Ukrainian
-# resource fixtures, exposes a hidden L+R+Y DS preview and never changes the
-# release ROM's 11-language picker or settings format.
+# An opt-in engineering build packages only small experimental Russian/
+# Ukrainian resource fixtures and exposes separate DEMO menu choices.
+# The regular ROM keeps its 11-language picker and settings format.
 ifeq ($(WP_CYR_PREVIEW),1)
 CFLAGS += -DWP_CYR_PREVIEW
 endif
@@ -61,6 +61,15 @@ export VPATH := $(foreach dir,$(SOURCES),$(CURDIR)/$(dir))\
 export DEPSDIR := $(CURDIR)/$(BUILD)
 
 CFILES   := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
+# The standard 11-language ROM must not compile or link any experimental
+# Russian/Ukrainian WPD4 gameplay, dictionary, ledger or Daily modules.
+# Native make check names its test sources explicitly, independently of this
+# ROM object list. The opt-in DS preview retains all eight modules.
+CYR_ONLY_CFILES := dict_v4.c pools_v2.c tiles_v2.c script_board.c \
+                   script_rules.c script_preview.c script_ledger.c script_daily.c
+ifneq ($(WP_CYR_PREVIEW),1)
+CFILES := $(filter-out $(CYR_ONLY_CFILES),$(CFILES))
+endif
 BINFILES := $(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.*)))
 
 export LD := $(CC)
