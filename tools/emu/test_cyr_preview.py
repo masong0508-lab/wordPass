@@ -52,16 +52,30 @@ def main(rom, output):
     check(get_int(e, "scriptPreviewTurns") == 1,
           "a valid six-letter Russian word must consume exactly one shelf turn")
     e.shot(str(out / "ru-scored.png"))
+    # Preview stores an independent, fixed-size eight-word score ledger.
+    # Byte offsets: 8*20 word IDs, 8 lengths, 8 uint16 scores, count, head,
+    # then aligned uint16 combo. These are diagnostics, not game save fields.
+    ledger = symbol(e.rom_elf, "scriptPreviewLedger")
+    ledger_bytes = bytes(e.mem.unsigned[ledger:ledger + 194])
+    check(ledger_bytes[184] == 1 and struct.unpack_from("<H", ledger_bytes, 186)[0] == 1,
+          "first scored Russian word should enter ledger and start combo")
+    check(get_int(e, "scriptPreviewLastScore") > 0,
+          "awarded Russian score must record a real submitted word")
     e.hold("L")
     e.tap(*e.center(1, 6), settle=8)
     e.hold("L", False)
     check(get_int(e, "scriptPreviewPeels") == 1, "touch-screen peel did not register")
     check(get_int(e, "scriptPreviewTurns") == 2,
           "a successful peel must cost another turn and trigger fire rules")
+    ledger_bytes = bytes(e.mem.unsigned[ledger:ledger + 194])
+    check(ledger_bytes[184] == 1 and struct.unpack_from("<H", ledger_bytes, 186)[0] == 0,
+          "peeling must break combo but keep Russian word history")
     e.press("X", settle=20)
     check(e.state()["state"] == 9 and get_int(e, "scriptPreviewLanguage") == 1,
           "X should switch to Ukrainian without changing the release locale")
     check(get_int(e, "scriptPreviewThemeCount") == 40, "Ukrainian preview should contain 40 seeded themes")
+    check(bytes(e.mem.unsigned[ledger:ledger + 194])[184] == 0,
+          "switching languages must not leak Russian word history into Ukrainian")
     e.shot(str(out / "uk-board.png"))
     # The first two language packs legitimately share the theme "КНИГИ",
     # and hidden passwords can have the same placeholder pattern. Compare
@@ -78,6 +92,8 @@ def main(rom, output):
     check(get_int(e, "scriptPreviewScore") > 0, "Ukrainian ПРИВІТ should score")
     check(get_int(e, "scriptPreviewTurns") == 1,
           "Ukrainian scripted board should share shelf-turn semantics")
+    check(bytes(e.mem.unsigned[ledger:ledger + 194])[184] == 1,
+          "Ukrainian scored word must have its own fresh ledger")
     e.press("SELECT", settle=8)
     check(get_int(e, "scriptPreviewTurns") == 0, "new pass did not reset turn counter")
     # Exercise a complete secret-finding shelf through REAL stylus taps,
