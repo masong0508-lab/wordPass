@@ -194,6 +194,35 @@ static void freeBuffers(void)
     bufDict = bufPools = bufLetters = NULL;
 }
 
+// Lightweight availability check: require all three resources before offering a
+// language in the chooser. An incomplete pack must not appear playable only
+// because its small letters.bin survived. Full parsing still happens in langLoad.
+static bool hasLanguageFiles(int idx)
+{
+    static const char *const files[3] = { "dict.bin", "pools.bin", "letters.bin" };
+    static const size_t minSize[3] = { 76, 808, LANG_LETTERS_BYTES };
+    for (int k = 0; k < 3; k++) {
+#ifdef ARM9
+        if (rawOk) {
+            char rel[40];
+            u32 st, sz;
+            strcpy(rel, "lang/"); strcat(rel, langCode(idx)); strcat(rel, "/"); strcat(rel, files[k]);
+            if (!rawLocate(rel, &st, &sz) || sz < minSize[k] ||
+                (k == 2 && sz != LANG_LETTERS_BYTES)) return false;
+            continue;
+        }
+#endif
+        char p[48];
+        path(p, idx, files[k]);
+        int fd = open(p, O_RDONLY);
+        if (fd < 0) return false;
+        off_t size = lseek(fd, 0, SEEK_END);
+        close(fd);
+        if (size < (off_t)minSize[k] || (k == 2 && size != LANG_LETTERS_BYTES)) return false;
+    }
+    return true;
+}
+
 void langInit(void)
 {
     langInitEnglish();
@@ -206,20 +235,7 @@ void langInit(void)
     fsReady = true;
 #endif
     if (!fsReady) return;
-    for (int i = 1; i < LANG_COUNT; i++) {
-#ifdef ARM9
-        if (rawOk) {                                  // the card path knows the file table already: no NitroFS lookups
-            char rel[40]; u32 st, sz;
-            strcpy(rel, "lang/"); strcat(rel, langCode(i)); strcat(rel, "/letters.bin");
-            avail[i] = rawLocate(rel, &st, &sz) && sz == LANG_LETTERS_BYTES;
-            continue;
-        }
-#endif
-        char p[48];
-        path(p, i, "letters.bin");
-        int fd = open(p, O_RDONLY);
-        if (fd >= 0) { avail[i] = true; close(fd); }
-    }
+    for (int i = 1; i < LANG_COUNT; i++) avail[i] = hasLanguageFiles(i);
 }
 
 bool langAvailable(int idx) { return idx >= 0 && idx < LANG_COUNT && avail[idx]; }
