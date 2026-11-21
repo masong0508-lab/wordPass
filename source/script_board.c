@@ -237,7 +237,7 @@ bool scriptBoardStartPass(ScriptBoard *b, const V4Dict *dict,
                           uint32_t seed, int requestedLength)
 {
     if (!b || !sameAlphabet(dict, tiles) || !pools || !pools->image ||
-        pools->symbols != dict->symbols || !pools->themes ||
+        !v4PoolsMatches(pools, dict) || !pools->themes ||
         requestedLength < WPP2_MIN_LEN || requestedLength > WPP2_MAX_LEN)
         return false;
     unsigned theme = (seed >> 8) % pools->themes;

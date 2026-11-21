@@ -23,6 +23,7 @@ typedef struct {
 // sorted unique pass words, symbol bounds and WPD4 dictionary membership.
 bool v4PoolsOpen(V4Pools *view, const uint8_t *data, size_t size,
                  const V4Dict *dict);
+bool v4PoolsMatches(const V4Pools *view, const V4Dict *dictionary);
 int v4PoolsCount(const V4Pools *view, int theme, int len);
 const char *v4PoolsName(const V4Pools *view, int theme);
 bool v4PoolsWord(const V4Pools *view, int theme, int len, int index,

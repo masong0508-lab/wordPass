@@ -120,6 +120,15 @@ bool v4PoolsOpen(V4Pools *pools, const uint8_t *data, size_t size,
     pools->symbols = (uint8_t)symbols;
     return true;
 }
+bool v4PoolsMatches(const V4Pools *pools, const V4Dict *dictionary)
+{
+    if (!pools || !pools->image || !dictionary || !dictionary->image ||
+        pools->symbols != dictionary->symbols) return false;
+    const uint8_t *alphabet = pools->image + WPP2_HEADER;
+    for (unsigned i = 0; i < pools->symbols; i++)
+        if (le32(alphabet + 4u * i) != dictionary->alphabet[i]) return false;
+    return true;
+}
 int v4PoolsCount(const V4Pools *pools, int theme, int len)
 {
     if (!pools || !pools->image || theme < 0 || theme >= pools->themes ||
