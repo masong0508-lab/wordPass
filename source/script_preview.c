@@ -17,7 +17,7 @@ int scriptPreviewThemeCount;
 int scriptPreviewShelf;
 ScriptRules scriptPreviewRules;
 ScriptLedger scriptPreviewLedger;
-int scriptPreviewDaily, scriptPreviewDailyDate;
+int scriptPreviewDaily, scriptPreviewDailyDate, scriptPreviewDailyClockError;
 int scriptPreviewLastTier, scriptPreviewLastScore;
 uint32_t scriptPreviewSeed;
 
@@ -58,7 +58,7 @@ void scriptPreviewClose(void)
     scriptPreviewShelf = 0;
     memset(&scriptPreviewRules, 0, sizeof scriptPreviewRules);
     scriptLedgerReset(&scriptPreviewLedger);
-    scriptPreviewDaily = scriptPreviewDailyDate = 0;
+    scriptPreviewDaily = scriptPreviewDailyDate = scriptPreviewDailyClockError = 0;
     scriptPreviewLastTier = scriptPreviewLastScore = 0;
 }
 bool scriptPreviewNewPass(uint32_t seed)
@@ -152,7 +152,11 @@ bool scriptPreviewToggleDaily(int date, uint32_t freeSeed)
 {
     if (!scriptPreviewDict.image) return false;
     int next = !scriptPreviewDaily;
-    if (next && !scriptDailyValidDate(date)) return false;
+    if (next && !scriptDailyValidDate(date)) {
+        scriptPreviewDailyClockError = 1;
+        return false;
+    }
+    scriptPreviewDailyClockError = 0;
     scriptPreviewDaily = next;
     scriptPreviewDailyDate = next ? date : 0;
     scriptPreviewShelf = 1;
