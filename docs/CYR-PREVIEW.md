@@ -58,6 +58,25 @@ emulator suite continues to test the standard ROM independently. The
 experimental ROM's emulator suite also taps the actual Russian and
 Ukrainian DEMO rows, tests both modes and verifies returning to the title.
 
+## Real scoring ledger and combo milestone
+
+The Russian and Ukrainian demo now use the same **eight-word recent history**
+principle as the retail Classic game: repeating an accepted word while it
+remains in the last eight scored words halves its base score. A streak of
+successful words adds 10% per preceding word, capped at +50%. An accepted peel
+breaks the streak but does not erase the recent-word history. The current
+word's HUD preview includes both modifiers so the score shown is the score
+awarded. The preview's tiny WPD4 symbol IDs are stored in a fixed 8×20 buffer
+(under 256 bytes total); there are no new images, heap allocations, runtime
+dictionary conversions or save-card writes.
+
+A new shelf, a language switch and a new demo clear the history; repeated
+Russian words cannot affect Ukrainian scoring or vice versa. Tests cover
+repeat penalties, combo cap, ring rollover, invalid words, peel reset and
+language isolation in the actual emulator. This is one step toward retail
+scoring parity, **not** a claim that the remaining Classic/Daily economy,
+password balancing and full 385-message localization are finished.
+
 ## Remaining work before playable new locales
 
 1. Obtain legally redistributable and native-speaker reviewed dictionaries
