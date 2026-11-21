@@ -1,17 +1,30 @@
-# Cyrillic Nintendo DS engineering preview
+# Russian and Ukrainian Nintendo DS engineering previews
 
-This project now builds a **separate, experimental Cyrillic DS ROM** alongside
-the ordinary 11-language wordPass.nds. This is **not** a complete Russian or
-Ukrainian release: the draft lexicons contain about 170 words and all 40
-theme headings, but only FOUR starter passwords per theme. These are not
-full dictionaries or production-ready pools and must not appear in the
-normal language selector.
+**Russian (Русский) and Ukrainian (Українська) are two separate languages.**
+Cyrillic is the writing system they share, not a third game language.
+This project builds a **separate, experimental DS ROM** alongside the
+ordinary 11-language wordPass.nds. The draft lexicons contain about 170
+words and all 40 theme headings, but only FOUR starter passwords per theme.
+These are NOT complete dictionaries, reviewed translations or finished
+Classic/Daily modes, and are not enabled in the production ROM.
 
-## Real handheld controls
+## Choose a language on the handheld
 
 Download the wordPass-cyr-preview artifact from GitHub Actions and launch
-wordPass-cyr-preview.nds. Choose English on the first-boot language chooser.
-On the title screen hold **L+R** and press **Y**.
+wordPass-cyr-preview.nds. On the title screen, tap the **LANGUAGE** badge
+(or open **OPTIONS > LANGUAGE**) and select one of two explicit entries:
+
+- **РУССКИЙ — DEMO**: Russian word boards and 40 draft themed shelves
+- **УКРАЇНСЬКА — DEMO**: Ukrainian word boards and 40 draft themed shelves
+
+The other 11 existing language choices remain unchanged. The two DEMO rows
+only appear in the separate experimental ROM. They open the independent
+script-ID game mode instead of pretending the normal Classic/Daily engine
+has already been translated. They are never stored as the retail language
+setting; after leaving a demo, the selected retail locale is unchanged.
+
+The old **hold L+R and press Y** developer shortcut from the title still
+opens Russian for debugging, but is no longer needed to find these modes.
 
 - Draw a word chain with the stylus; the first column is deliberately seeded
   with **ПРИВЕТ** in Russian or **ПРИВІТ** in Ukrainian to demonstrate scoring
@@ -41,7 +54,9 @@ nitrofiles/cyrpreview/{ru,uk}/{dict,tiles,pools}.bin.
 CI publishes both ROMs in separate artifacts. The preview emulator job
 tests the actual ARM9 title-screen entry, touch-input word submission,
 peeling, language switching and returning to title. The existing 11-language
-emulator suite continues to test the standard ROM independently.
+emulator suite continues to test the standard ROM independently. The
+experimental ROM's emulator suite also taps the actual Russian and
+Ukrainian DEMO rows, tests both modes and verifies returning to the title.
 
 ## Remaining work before playable new locales
 
@@ -57,8 +72,10 @@ emulator suite continues to test the standard ROM independently.
    The current engineering preview is an interactive but simplified path.
 5. Measure RAM, ROM, 60-FPS frame pacing, stylus responsiveness and
    native-resolution legibility on original DS/DSi hardware.
-6. Only after these gates should Russian/Ukrainian appear in the language
-   picker. Japanese, Korean and Chinese require separate script models.
+6. Only after these gates should Russian/Ukrainian become **production
+   language choices** for full Classic/Daily. Their separately marked DEMO
+   entries in the engineering ROM do not satisfy this release gate.
+   Japanese, Korean and Chinese require separate script models.
 
 This milestone is real DS technical integration, not linguistic completion.
 
