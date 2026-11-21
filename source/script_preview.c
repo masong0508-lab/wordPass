@@ -14,6 +14,8 @@ V4Pools scriptPreviewPools;
 int scriptPreviewLanguage;
 int scriptPreviewScore, scriptPreviewTurns, scriptPreviewPeels;
 int scriptPreviewThemeCount;
+int scriptPreviewShelf;
+ScriptRules scriptPreviewRules;
 int scriptPreviewLastTier, scriptPreviewLastScore;
 uint32_t scriptPreviewSeed;
 
@@ -51,6 +53,8 @@ void scriptPreviewClose(void)
     memset(&scriptPreviewBoard, 0, sizeof scriptPreviewBoard);
     scriptPreviewScore = scriptPreviewTurns = scriptPreviewPeels = 0;
     scriptPreviewThemeCount = 0;
+    scriptPreviewShelf = 0;
+    memset(&scriptPreviewRules, 0, sizeof scriptPreviewRules);
     scriptPreviewLastTier = scriptPreviewLastScore = 0;
 }
 bool scriptPreviewNewPass(uint32_t seed)
@@ -58,6 +62,9 @@ bool scriptPreviewNewPass(uint32_t seed)
     if (!scriptPreviewPools.image || !scriptPreviewDict.image ||
         !scriptPreviewTiles.valid) return false;
     scriptPreviewSeed = seed ? seed : 0x87654321u;
+    scriptRulesStart(&scriptPreviewRules,
+                     scriptPreviewShelf ? (unsigned)scriptPreviewShelf : 1u,
+                     scriptPreviewSeed);
     // 5 and 6 are both represented in the tiny fixtures; if a sampled theme
     // lacks that length, the prototype picks its nearest valid word length.
     if (!scriptBoardStartPass(&scriptPreviewBoard, &scriptPreviewDict,
@@ -125,31 +132,52 @@ bool scriptPreviewOpen(int language, uint32_t seed)
         return false;
     }
     scriptPreviewLanguage = language;
+    scriptPreviewShelf = 1;
     scriptPreviewThemeCount = scriptPreviewPools.themes;
     scriptPreviewScore = 0;
     if (!scriptPreviewNewPass(seed)) { scriptPreviewClose(); return false; }
     return true;
 }
+bool scriptPreviewAdvance(uint32_t seed)
+{
+    if (!scriptPreviewDict.image || scriptPreviewRules.status != SCRIPT_PASSED)
+        return false;
+    if (scriptPreviewShelf >= 999) return false;
+    // Keep the cumulative score across shelves; each new pass resets
+    // only heat, fire, peels and turn counters, never the release save.
+    scriptPreviewShelf++;
+    if (!scriptPreviewNewPass(seed ^ ((uint32_t)scriptPreviewShelf * 0x9e3779b9u))) {
+        scriptPreviewShelf--;
+        return false;
+    }
+    return true;
+}
 int scriptPreviewPeel(int c, int r)
 {
-    if (!scriptPreviewDict.image) return -1;
+    if (!scriptPreviewDict.image || scriptPreviewRules.status != SCRIPT_RUNNING)
+        return -1;
     int result = scriptBoardPeel(&scriptPreviewBoard, c, r);
-    if (result >= 0) {
+    if (result >= 0 || result == -2) {
         scriptPreviewPeels++;
-        scriptPreviewTurns++;
-        scriptPreviewLastTier = 0;
-        scriptPreviewLastScore = 0;
+        scriptPreviewLastTier = scriptPreviewLastScore = 0;
+        int bonus = scriptRulesTurn(&scriptPreviewRules, &scriptPreviewBoard,
+                                    &scriptPreviewTiles, 1, true, result == -2);
+        scriptPreviewTurns = scriptPreviewRules.turns;
+        scriptPreviewScore += bonus;
     }
     return result;
 }
 bool scriptPreviewChain(int c, int r)
 {
-    if (!scriptPreviewDict.image) return false;
+    if (!scriptPreviewDict.image || scriptPreviewRules.status != SCRIPT_RUNNING)
+        return false;
     return scriptBoardAdd(&scriptPreviewBoard, c, r);
 }
 int scriptPreviewSubmit(void)
 {
-    if (!scriptPreviewDict.image) return 0;
+    if (!scriptPreviewDict.image || scriptPreviewRules.status != SCRIPT_RUNNING)
+        return 0;
+    int length = scriptPreviewBoard.chainLen;
     int tier = 0;
     int points = scriptBoardSubmit(&scriptPreviewBoard, &scriptPreviewDict,
                                    &scriptPreviewTiles, &tier);
@@ -157,7 +185,10 @@ int scriptPreviewSubmit(void)
     scriptPreviewLastScore = points;
     if (points > 0) {
         scriptPreviewScore += points;
-        scriptPreviewTurns++;
+        scriptPreviewScore += scriptRulesTurn(&scriptPreviewRules,
+                                &scriptPreviewBoard, &scriptPreviewTiles,
+                                scriptRulesWordHeat(length), false, false);
+        scriptPreviewTurns = scriptPreviewRules.turns;
     }
     return points;
 }

@@ -5,6 +5,7 @@
 #define WORDPASS_SCRIPT_PREVIEW_H
 #ifdef WP_CYR_PREVIEW
 #include "script_board.h"
+#include "script_rules.h"
 #include <stdint.h>
 #include <stdbool.h>
 extern ScriptBoard scriptPreviewBoard;
@@ -16,6 +17,8 @@ extern int scriptPreviewScore;
 extern int scriptPreviewThemeCount; // inspect 40 draft themes in emulator regression
 extern int scriptPreviewTurns;
 extern int scriptPreviewPeels;
+extern int scriptPreviewShelf;
+extern ScriptRules scriptPreviewRules;
 extern int scriptPreviewLastTier;
 extern int scriptPreviewLastScore;
 extern uint32_t scriptPreviewSeed;
@@ -23,6 +26,8 @@ extern uint32_t scriptPreviewSeed;
 bool scriptPreviewOpen(int language, uint32_t seed);
 void scriptPreviewClose(void);
 bool scriptPreviewNewPass(uint32_t seed);
+// Advance only after a completed password. No production save changes.
+bool scriptPreviewAdvance(uint32_t seed);
 int scriptPreviewPeel(int c, int r);
 bool scriptPreviewChain(int c, int r);
 int scriptPreviewSubmit(void);
