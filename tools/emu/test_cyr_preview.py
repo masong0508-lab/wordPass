@@ -54,18 +54,27 @@ def main(rom, output):
           "dismissing Russian manual must resume the untouched board")
     e.press("R", settle=12)
     check(get_int(e, "scriptPreviewHints") == 1,
-          "R should find one real Cyrillic word path with bounded DFS")
-    e.press("Y", settle=6)  # clear hint, then manually score the greeting
+          "R should find a real seeded Cyrillic word with bounded DFS")
+    # Capture the actual bounded-hint path from the ARM9 board memory. Unlike
+    # the previous fixed greeting, today's puzzle may plant 4-6 symbols in
+    # different columns and one of the 40 actual themed vocabularies.
+    board_ptr = symbol(e.rom_elf, "scriptPreviewBoard")
+    ru_len = int(e.mem.unsigned[board_ptr + 152])
+    check(3 <= ru_len <= 6, "Russian theme seed should have a playable hint")
+    russian_path = [(int(e.mem.unsigned[board_ptr + 112 + i]),
+                     int(e.mem.unsigned[board_ptr + 132 + i]))
+                    for i in range(ru_len)]
+    check(all(0 <= col < 7 and 0 <= row < 8 for col, row in russian_path),
+          "hint path must be on the 7x8 board")
+    e.press("Y", settle=6)  # clear hint, then chain the ACTUAL real word
     e.press("R", settle=5)
     check(get_int(e, "scriptPreviewHints") == 1,
           "a single preview shelf cannot silently grant endless free hints")
-    # The development fixture guarantees ПРИВЕТ in the first column (six
-    # adjacent actual touch-screen gem positions), not merely dictionary data.
-    e.chain([(0, r) for r in range(6)])
+    e.chain(russian_path)
     e.press("A", settle=24)
-    check(get_int(e, "scriptPreviewScore") > 0, "real Cyrillic chain did not score")
+    check(get_int(e, "scriptPreviewScore") > 0, "real themed Russian word did not score")
     check(get_int(e, "scriptPreviewTurns") == 1,
-          "a valid six-letter Russian word must consume exactly one shelf turn")
+          "a valid Russian themed word must consume exactly one shelf turn")
     e.shot(str(out / "ru-scored.png"))
     # Preview stores an independent, fixed-size eight-word score ledger.
     # Byte offsets: 8*20 word IDs, 8 lengths, 8 uint16 scores, count, head,
@@ -117,9 +126,18 @@ def main(rom, output):
             ukrainian.convert("RGB").crop((16, 26, 240, 42)))
         check(delta.getbbox() is not None,
               "Cyrillic top-screen language label did not change")
-    e.chain([(0, r) for r in range(6)])
+    # The Ukrainian first shelf has its own theme-aware playable path,
+    # rather than recycling the Russian greeting/column-zero demonstration.
+    e.press("R", settle=9)
+    uk_len = int(e.mem.unsigned[board_ptr + 152])
+    check(3 <= uk_len <= 6, "Ukrainian themed puzzle needs a playable hint")
+    ukrainian_path = [(int(e.mem.unsigned[board_ptr + 112 + i]),
+                       int(e.mem.unsigned[board_ptr + 132 + i]))
+                      for i in range(uk_len)]
+    e.press("Y", settle=6)
+    e.chain(ukrainian_path)
     e.press("A", settle=20)
-    check(get_int(e, "scriptPreviewScore") > 0, "Ukrainian ПРИВІТ should score")
+    check(get_int(e, "scriptPreviewScore") > 0, "real themed Ukrainian word should score")
     check(get_int(e, "scriptPreviewTurns") == 1,
           "Ukrainian scripted board should share shelf-turn semantics")
     check(bytes(e.mem.unsigned[ledger:ledger + 194])[184] == 1,
