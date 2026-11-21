@@ -89,6 +89,14 @@ as available in the in-game language picker.
 - [x] Implement **unranked Daily Practice** with stable per-date and
       per-language puzzles, retry score resets and DS-clock validation;
       do not treat it as the retail scored Daily.
+- [x] Replace the fixed Russian/Ukrainian greeting planted on every
+      experimental shelf with a deterministic, dictionary-validated,
+      theme-aware 4–6-symbol chain. The seed varies word/column, protects
+      hidden password tiles, and supports the existing bounded hint solver;
+      native checks cover all 40 themes in both languages.
+- [ ] Expand every draft theme beyond four starter passwords, edit native
+      vocabulary and balance word lengths/weighted tiles. The seeded helper
+      guarantees *one* playable chain, not an abundant dictionary.
 - [ ] Bring Cyrillic modes to full retail Classic/Daily parity: lockdown,
       twists, complete hints economy, scored Daily/streaks, full statistics,
       saves, remaining fail conditions and measured difficulty balance.

@@ -32,6 +32,14 @@ bool scriptBoardStart(ScriptBoard *board, const V4Tiles *tiles, uint32_t seed);
 bool scriptBoardStartPass(ScriptBoard *board, const V4Dict *dictionary,
                           const V4Tiles *tiles, const V4Pools *pools,
                           uint32_t seed, int requestedLength);
+// Plant one valid, theme-aware 4..6-symbol word on a deterministic adjacent
+// path in the top five rows, never over hidden password tiles. Prefer this
+// shelf's actual theme; fall back to a valid nearby theme for sparse pools.
+// Does not modify password placement, board RNG, saves or the symbol bag.
+// Called once on a new experimental shelf (never per frame).
+bool scriptBoardPlantThemeWord(ScriptBoard *board, const V4Dict *dictionary,
+                               const V4Tiles *tiles, const V4Pools *pools,
+                               uint32_t seed);
 // A peel returns -1 for invalid action, 0 for empty hole, or 1..passLen for
 // the hidden symbol it revealed. Revealed diamonds are permanent firebreaks.
 int scriptBoardPeel(ScriptBoard *board, int col, int row);

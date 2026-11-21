@@ -73,6 +73,66 @@ static void suite(const char *dictPath, const char *tilePath, const char *poolPa
                   "pass text buffer bounds enforced");
         }
 
+    // Every draft theme must yield a deterministic, adjacent, scoreable
+    // word without the fixed ПРИВЕТ / ПРИВІТ demonstration. The password
+    // lives in the lower 3 rows; planting is confined to the upper 5.
+    // This also exercises the sparse-theme fallback with real RU/UK packs.
+    int seeded = 0, changedColumns = 0, lastColumn = -1;
+    CHECK(!scriptBoardPlantThemeWord(NULL,&d,&t,&p,1),
+          "null board rejected for theme seed");
+    for (unsigned theme = 0; theme < p.themes; theme++)
+        for (unsigned variation = 0; variation < 3; variation++) {
+            uint32_t seed = (theme << 8) | (variation * 37u + 3u);
+            CHECK(scriptBoardStartPass(&b,&d,&t,&p,seed,5),
+                  "theme=%u variant=%u password generated", theme, variation);
+            ScriptBoard before = b;
+            CHECK(scriptBoardPlantThemeWord(&b,&d,&t,&p,seed),
+                  "theme=%u variant=%u must have guaranteed playable word",
+                  theme, variation);
+            CHECK(scriptBoardStartPass(&repeat,&d,&t,&p,seed,5) &&
+                  scriptBoardPlantThemeWord(&repeat,&d,&t,&p,seed) &&
+                  !memcmp(&b,&repeat,sizeof b),
+                  "theme=%u variant=%u seeded playable word reproducible",
+                  theme, variation);
+            CHECK(!memcmp(b.back,before.back,sizeof b.back) &&
+                  !memcmp(b.pass,before.pass,sizeof b.pass) &&
+                  !memcmp(b.found,before.found,sizeof b.found) &&
+                  !memcmp(b.bag,before.bag,sizeof b.bag) &&
+                  b.seed==before.seed && b.bagPos==before.bagPos,
+                  "playable word cannot change password locations or RNG");
+            uint8_t hc[SCRIPT_HINT_MAX], hr[SCRIPT_HINT_MAX];
+            int hn = scriptBoardHint(&b,&d,&t,hc,hr);
+            CHECK(hn>=WPD4_MIN_WORD && hn<=SCRIPT_HINT_MAX,
+                  "theme=%u variant=%u exposes a playable hint path",theme,variation);
+            if (hn > 0) {
+                for (int k=0;k<hn;k++)
+                    CHECK(scriptBoardAdd(&b,hc[k],hr[k]),
+                          "hint path stays adjacent for theme=%u",theme);
+                CHECK(scriptBoardPreview(&b,&d,&t,NULL)>0,
+                      "hinted themed word must score for theme=%u",theme);
+                scriptBoardClearChain(&b);
+            }
+            // Planting never alters the bottom three rows (even if an
+            // example word is six symbols long). Each one remains peelable.
+            for (int col=0;col<SCRIPT_COLS;col++)
+                for (int row=SCRIPT_ROWS-3;row<SCRIPT_ROWS;row++)
+                    CHECK(b.tile[col][row]==before.tile[col][row] &&
+                          b.state[col][row]==before.state[col][row],
+                          "seeded word must not overwrite a hidden secret");
+            int changedCol = -1;
+            for (int col=0;col<SCRIPT_COLS;col++)
+                for (int row=0;row<SCRIPT_ROWS-3;row++)
+                    if (b.tile[col][row]!=before.tile[col][row])
+                        changedCol=col;
+            if (changedCol>=0) {
+                if (lastColumn>=0 && changedCol!=lastColumn) changedColumns++;
+                lastColumn=changedCol;
+            }
+            seeded++;
+        }
+    CHECK(seeded==(int)p.themes*3 && changedColumns>5,
+          "both languages should generate varied themed board layouts");
+
     CHECK(scriptBoardStartPass(&b,&d,&t,&p,0x12345678,5), "start full password test");
     CHECK(scriptBoardPeel(&b,-1,0)==-1 && scriptBoardPeel(&b,0,8)==-1,
           "invalid peel coordinates rejected");
@@ -139,6 +199,6 @@ int main(int argc,char **argv)
     suite(argv[1],argv[3],argv[5],false);
     suite(argv[2],argv[4],argv[6],true);
     printf(failures?"SCRIPT PASS FAILED: %d failure(s)\n":
-                    "SCRIPT PASS OK: Cyrillic passwords, secrets, peels, firebreaks, gravity\n",failures);
+                    "SCRIPT PASS OK: Cyrillic passwords, varied theme words, hints, secrets and gravity\n",failures);
     return failures?1:0;
 }
