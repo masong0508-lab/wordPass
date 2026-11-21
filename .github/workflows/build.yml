@@ -87,7 +87,7 @@ jobs:
         # scenarios load all ten translated languages in DeSmuME, spell valid and
         # invalid words with real stylus input, and inspect both-hand UI bounds.
         env:
-          WP_ONLY: "languages: a known word spelled through the real touch path|languages: a shelf of each language|options: best Daily uses the localized date order"
+          WP_ONLY: "languages: the NitroFS filesystem holds all ten|languages: the options row cycles through every language|languages: the title tag cycles the language|languages: a known word spelled through the real touch path|languages: a shelf of each language|options: best Daily uses the localized date order"
         run: python3 tools/emu/test_rules.py wordPass.nds languages-out
       - name: Rule scenarios (tags and manual runs only, 15 to 25 minutes)
         if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'

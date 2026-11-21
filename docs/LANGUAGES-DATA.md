@@ -22,7 +22,8 @@ concept such as **no save card**, **a pass letter**, **one scored daily**, or
 glyphs, formatting slots and pixel budgets; native tests exercise the real
 data readers. Standard GitHub CI now also uses DeSmuME to load **all ten
 translated languages**, submit known valid and invalid words through the
-real touch interface, and inspect each language's shelf layout in both left-
+real touch interface, exercise the options-row and title-screen
+language pickers, and inspect each language's shelf layout in both left-
 and right-handed modes. Run `python3 tools/lang/check_translation_quality.py`
 for the focused source/ROM translation check.
 
