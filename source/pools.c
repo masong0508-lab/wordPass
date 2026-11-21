@@ -24,9 +24,9 @@ static const PoolSet *P = &enSet;
 static bool poolsParse(PoolSet *s, const u8 *p, size_t bytes)
 {
     s->n = 0;
-    if (!p || memcmp(p, "WPP1", 4) != 0) return false;
     const bool trusted = bytes == IMAGE_TRUSTED;
-    if (!trusted && bytes < 8) return false;
+    // Check length *before* reading four magic bytes from a damaged image.
+    if (!p || (!trusted && bytes < 8) || memcmp(p, "WPP1", 4) != 0) return false;
     const u32 fileThemes = (u32)p[4] | ((u32)p[5] << 8) | ((u32)p[6] << 16) | ((u32)p[7] << 24);
     if (!trusted && (fileThemes == 0 || fileThemes > 4096 || 8 + 20 * (size_t)fileThemes > bytes)) return false;
     const int n = fileThemes > MAX_THEMES ? MAX_THEMES : (int)fileThemes;
@@ -42,9 +42,13 @@ static bool poolsParse(PoolSet *s, const u8 *p, size_t bytes)
     }
     for (int t = 0; t < n; t++)
         for (int k = 0; k < NLEN; k++) {
+            size_t span = (size_t)s->count[t][k] * (POOL_MIN_LEN + k);
+            // Validate each run before forming a pointer beyond the image.
+            // A corrupted high count formerly advanced body first.
+            if (!trusted && (used > bytes || span > bytes - (size_t)used)) return false;
             s->base[t][k] = body;
-            body += (size_t)s->count[t][k] * (POOL_MIN_LEN + k);
-            used += (unsigned long long)s->count[t][k] * (POOL_MIN_LEN + k);
+            body += span;
+            used += span;
         }
     if (!trusted && used != bytes) return false;
     s->n = n;

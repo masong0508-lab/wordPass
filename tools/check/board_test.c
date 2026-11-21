@@ -2105,6 +2105,8 @@ int main(int argc, char **argv)
                 CHECK("a dictionary with a damaged magic is refused and English stays", !langApply(LANG_ES, x, nd, pl, np, lt, nl) && STAYS_ENGLISH());
                 CHECK("a dictionary with an extra byte is refused", !langApply(LANG_ES, d, nd + 1, pl, np, lt, nl) && STAYS_ENGLISH());
                 CHECK("a dictionary 100 bytes short is refused", !langApply(LANG_ES, d, nd - 100, pl, np, lt, nl) && STAYS_ENGLISH());
+                const u8 tiny[2] = { 'W', 'P' };
+                CHECK("a two-byte dictionary cannot be read as four-byte magic", !langApply(LANG_ES, tiny, sizeof tiny, pl, np, lt, nl) && STAYS_ENGLISH());
                 CHECK("a dictionary cut inside its header is refused", !langApply(LANG_ES, d, 40, pl, np, lt, nl) && STAYS_ENGLISH());
                 memcpy(x, d, nd); x[4 + 4 * 3 + 3] = 0x7f;      // the count of 6-letter words becomes absurd
                 CHECK("a dictionary whose counts run past its end is refused", !langApply(LANG_ES, x, nd, pl, np, lt, nl) && STAYS_ENGLISH());
@@ -2114,6 +2116,7 @@ int main(int argc, char **argv)
                 CHECK("pools with a damaged magic are refused", !langApply(LANG_ES, d, nd, x, np, lt, nl) && STAYS_ENGLISH());
                 CHECK("pools with an extra byte are refused", !langApply(LANG_ES, d, nd, pl, np + 1, lt, nl) && STAYS_ENGLISH());
                 CHECK("pools 3000 bytes short are refused", !langApply(LANG_ES, d, nd, pl, np - 3000, lt, nl) && STAYS_ENGLISH());
+                CHECK("a two-byte pool cannot be read as four-byte magic", !langApply(LANG_ES, d, nd, tiny, sizeof tiny, lt, nl) && STAYS_ENGLISH());
                 CHECK("pools cut inside the theme headers are refused", !langApply(LANG_ES, d, nd, pl, 30, lt, nl) && STAYS_ENGLISH());
                 memcpy(x, pl, np); memset(x + 8 + 8, 0, 12);       // theme 0: all six counts zero
                 CHECK("pools with a theme that has no word are refused (pickPass would divide by zero)", !langApply(LANG_ES, d, nd, x, np, lt, nl) && STAYS_ENGLISH());

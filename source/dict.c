@@ -23,9 +23,9 @@ static Table dict, variants;
 static bool tableInit(Table *t, const u8 *p, size_t bytes, const char *magic)
 {
     memset(t, 0, sizeof(*t));
-    if (!p || memcmp(p, magic, 4) != 0) return false;
     const size_t hdr = 4 + 4 * (size_t)(MAX_LEN - MIN_LEN + 1);
-    if (bytes != IMAGE_TRUSTED && bytes < hdr) return false;
+    // A two-byte truncated file must never be compared as four-byte magic.
+    if (!p || (bytes != IMAGE_TRUSTED && bytes < hdr) || memcmp(p, magic, 4) != 0) return false;
     const u8 *q = p + 4;
     u32 counts[MAX_LEN + 1];
     unsigned long long total = hdr, words = 0;
