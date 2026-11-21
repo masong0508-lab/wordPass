@@ -123,6 +123,19 @@ int main(void)
     curLang = 0;
     uiFmt(o, sizeof o, UI_T_DAILYDATE, 11, 3);
     CHECK(!strcmp(o, "DAILY 1103"), "zero padded slots: %s", o);
+    // The deterministic Daily seed remains YYYYMMDD everywhere. Only its
+    // labels change: English MMDD/MM-DD, the ten translated locales DDMM/DD-MM.
+    for (int l = 0; l < LANG_COUNT; l++) {
+        curLang = l;
+        uiFmt(o, sizeof o, UI_T_DAILYDATE, 11, 3);
+        const char *digits = l == LANG_EN ? "1103" : "0311";
+        CHECK(strstr(o, digits) != NULL, "%s: Daily date needs %s, got %s", langCode(l), digits, o);
+        uiFmt(o, sizeof o, UI_O_BESTDAILY, 1234, 11, 3);
+        const char *date = l == LANG_EN ? "11-03" : "03-11";
+        CHECK(strstr(o, date) != NULL, "%s: best Daily date needs %s, got %s", langCode(l), date, o);
+        CHECK(strstr(o, "1234") != NULL, "%s: best Daily score lost after argument reordering: %s", langCode(l), o);
+    }
+    curLang = LANG_EN;
     uiFmt(o, sizeof o, UI_O_BESTLINE, 1234, 5);
     CHECK(!strcmp(o, "BEST CLASSIC 1234  SHELF 5"), "two ints: %s", o);
     uiFmt(o, sizeof o, UI_MS_FIND, "BINDERY", 7);
@@ -141,6 +154,13 @@ int main(void)
     // positional slots reorder the output, the arguments stay in position order
     fmt(o, sizeof o, "%2$s=%1$d", 7, "X");
     CHECK(!strcmp(o, "X=7"), "positional: %s", o);
+    fmt(o, sizeof o, "%9$d", 17);
+    CHECK(!strcmp(o, "%9$d"), "out-of-range positional slot is harmless literal text: %s", o);
+    fmt(o, sizeof o, "%d", (-2147483647 - 1));
+    CHECK(!strcmp(o, "-2147483648"), "minimum signed integer formats without overflow: %s", o);
+    char guard = 'Q';
+    fmt(&guard, 0, "%d", 6);
+    CHECK(guard == 'Q', "zero-capacity buffer remains unchanged");
     fmt(o, sizeof o, "%d/%d", 3, 4);
     CHECK(!strcmp(o, "3/4"), "sequential: %s", o);
 

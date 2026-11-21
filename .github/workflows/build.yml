@@ -10,6 +10,12 @@ on:
 permissions:
   contents: write
 
+# Keep only the latest validation for a moving pull request. Do not interrupt
+# main-branch builds or tagged release jobs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   check:
     # The same checks as `make check` locally, plus the generated-file drift checks, the guide check and the Python tools.
@@ -27,6 +33,13 @@ jobs:
         run: make music-check
       - name: Python tools compile
         run: python3 -m py_compile tools/*.py tools/emu/*.py tools/lang/*.py tools/music/*.py tools/check/*.py
+      - name: Generate actionable 11-language audit report
+        run: python3 tools/lang/quality_report.py build/language-quality.md
+      - name: Upload localization QA report
+        uses: actions/upload-artifact@v7
+        with:
+          name: wordPass-language-quality
+          path: build/language-quality.md
 
   nds:
     needs: check
@@ -76,6 +89,13 @@ jobs:
         run: docker pull devkitpro/devkitarm:20240511
       - name: Smoke test
         run: python3 tools/emu/smoke.py wordPass.nds smoke-out
+      - name: All-language ROM gameplay and layout smoke
+        # The full rule-scenario suite remains opt-in below. These two existing
+        # scenarios load all ten translated languages in DeSmuME, spell valid and
+        # invalid words with real stylus input, and inspect both-hand UI bounds.
+        env:
+          WP_ONLY: "languages: the NitroFS filesystem holds all ten|languages: the options row cycles through every language|languages: the title tag cycles the language|languages: a known word spelled through the real touch path|languages: a shelf of each language|options: best Daily uses the localized date order"
+        run: python3 tools/emu/test_rules.py wordPass.nds languages-out
       - name: Rule scenarios (tags and manual runs only, 15 to 25 minutes)
         if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         timeout-minutes: 90

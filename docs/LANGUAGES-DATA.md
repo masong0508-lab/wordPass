@@ -9,6 +9,62 @@ a second pass closed them, and "What the second pass changed" below says how and
 The English dictionary and `data/variants.bin` are untouched; `data/pools.bin` changed only by the content audit
 below (the manifest pins the sha256 of all three and `make check` verifies it).
 
+## Translation completeness and correctness gate (November 2026)
+
+`make check` now also runs `tools/lang/check_translation_quality.py`. Alongside the
+existing native dictionary tests and `gen_ui.py --check`, it checks all 385 user
+interface text entries in each of 11 languages (4,235 entries total), all **40**
+theme titles in each of the ten translated ROM pool files (400 packed names,
+not just the three samples previously asserted), and localized gameplay
+meaning for critical controls and messages. These checks fail if an essential
+concept such as **no save card**, **a pass letter**, **one scored daily**, or
+**daily streaks** disappears in translation. The generator still checks font
+glyphs, formatting slots and pixel budgets; native tests exercise the real
+data readers. Standard GitHub CI now also uses DeSmuME to load **all ten
+translated languages**, submit known valid and invalid words through the
+real touch interface, exercise the options-row and title-screen
+language pickers, and inspect each language's shelf layout in both left-
+and right-handed modes. Run `python3 tools/lang/check_translation_quality.py`
+for the focused source/ROM translation check.
+
+The accompanying corrections restore missing save-card warnings in Dutch
+and Finnish, clarify Polish daily limits, fix a Danish one-try typo, restore
+daily-streak context in six translations, improve daily-results wording, and
+make Italian/Portuguese pass-letter messages explicit.
+
+**Scope:** these automatic checks verify completeness, ROM/source parity,
+critical gameplay meaning and technical display constraints. They cannot
+prove every dictionary entry or all 4,235 strings idiomatic or semantically
+correct to a native speaker. The Daily date shown on the title and in the best-score record now uses
+month/day in English and day/month in the ten translated languages. Only
+display formatting changes: the **YYYYMMDD deterministic seed**, the shared
+Daily puzzle, and saved score dates remain unchanged. Native UI tests check
+all 11 date formats and the emulator checks that rendered records stay inside
+their plaque.
+
+A final language-by-language editorial review
+and playthrough remain necessary before claiming flawless translations.
+
+## Language quality milestone
+
+The game currently ships **11 total languages**, English plus the ten ROM
+language packs below. This milestone adds stronger **runtime protection**
+against broken packs (all three resources must exist with the right headers and
+sizes), strict parsing of letter weights/Qu/vowels/rare letters, rejection of
+malformed dictionary or pool sizes, and recovery to English after a failed
+load. These checks keep a damaged translation pack from corrupting the game.
+
+`python3 tools/lang/quality_report.py build/language-quality.md` creates an
+actionable per-language review report: translated-string coverage, tight pixel
+budgets, dictionary and pass-pool sizes, and UI labels that might need a
+native-speaker review. Every PR run attaches this Markdown file as the
+`wordPass-language-quality` artifact alongside the ROM artifact.
+
+The report is intentionally a **review aid**, not proof that each dictionary
+entry or translated sentence is linguistically correct. Unsupported language
+packs are not advertised as playable; adding a new language requires a
+dictionary, pass pools, tiles, complete UI, and console testing together.
+
 ## The ten languages
 
 All ten of the preferred set were buildable; there are no substitutions. Two of them needed a

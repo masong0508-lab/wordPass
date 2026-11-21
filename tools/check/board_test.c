@@ -2066,6 +2066,27 @@ int main(int argc, char **argv)
             CHECK("a letters image without the magic is refused", !langParseLetters(bad, sizeof(bad), &t) && !langParseLetters(NULL, 0, &t));
             memcpy(bad, "WPL1", 4);
             CHECK("a letters image with no tiles or a short one is refused", !langParseLetters(bad, sizeof(bad), &t) && !langParseLetters(bad, 10, &t));
+            // Small metadata mutations used to be silently accepted even
+            // though Qu and the vowel floor would then play incorrectly.
+            size_t nl = 0;
+            u8 *real = slurpFile("data/lang/es/letters.bin", &nl);
+            CHECK("Spanish letter table exists for metadata corruption tests", real && nl == LANG_LETTERS_BYTES);
+            if (real && nl == LANG_LETTERS_BYTES) {
+                u8 broken[LANG_LETTERS_BYTES];
+                CHECK("real language letter table parses", langParseLetters(real, nl, &t));
+                memcpy(broken, real, nl); broken[4] ^= 1;
+                CHECK("Qu flag corruption is refused", !langParseLetters(broken, nl, &t));
+                memcpy(broken, real, nl); broken[5] = 1;
+                CHECK("reserved metadata corruption is refused", !langParseLetters(broken, nl, &t));
+                memcpy(broken, real, nl); broken[16]++;
+                CHECK("weights that no longer sum to 100 are refused", !langParseLetters(broken, nl, &t));
+                memcpy(broken, real, nl); broken[6] = 254;
+                CHECK("invalid rare-letter index is refused", !langParseLetters(broken, nl, &t));
+                memcpy(broken, real, nl); broken[15] |= 0x80;
+                CHECK("out of alphabet vowel bits are refused", !langParseLetters(broken, nl, &t));
+                CHECK("letters with extra trailing bytes are refused", !langParseLetters(real, nl + 1, &t));
+            }
+            free(real);
             CHECK("langApply with a bad letters buffer leaves English active", !langApply(LANG_ES, dict_bin, 1000, pools_bin, 1000, bad, sizeof(bad)) && langCur() == LANG_EN);
         }
         // dict.bin and pools.bin validation: a wrong magic, a file shorter than its header says, counts that run past
@@ -2082,7 +2103,10 @@ int main(int argc, char **argv)
                 langApply(LANG_EN, NULL, 0, NULL, 0, NULL, 0);
                 memcpy(x, d, nd); x[1] ^= 0x01;
                 CHECK("a dictionary with a damaged magic is refused and English stays", !langApply(LANG_ES, x, nd, pl, np, lt, nl) && STAYS_ENGLISH());
+                CHECK("a dictionary with an extra byte is refused", !langApply(LANG_ES, d, nd + 1, pl, np, lt, nl) && STAYS_ENGLISH());
                 CHECK("a dictionary 100 bytes short is refused", !langApply(LANG_ES, d, nd - 100, pl, np, lt, nl) && STAYS_ENGLISH());
+                const u8 tiny[2] = { 'W', 'P' };
+                CHECK("a two-byte dictionary cannot be read as four-byte magic", !langApply(LANG_ES, tiny, sizeof tiny, pl, np, lt, nl) && STAYS_ENGLISH());
                 CHECK("a dictionary cut inside its header is refused", !langApply(LANG_ES, d, 40, pl, np, lt, nl) && STAYS_ENGLISH());
                 memcpy(x, d, nd); x[4 + 4 * 3 + 3] = 0x7f;      // the count of 6-letter words becomes absurd
                 CHECK("a dictionary whose counts run past its end is refused", !langApply(LANG_ES, x, nd, pl, np, lt, nl) && STAYS_ENGLISH());
@@ -2090,7 +2114,9 @@ int main(int argc, char **argv)
                 CHECK("a dictionary with no words at all is refused", !langApply(LANG_ES, x, nd, pl, np, lt, nl) && STAYS_ENGLISH());
                 memcpy(x, pl, np); x[0] ^= 0x20;
                 CHECK("pools with a damaged magic are refused", !langApply(LANG_ES, d, nd, x, np, lt, nl) && STAYS_ENGLISH());
+                CHECK("pools with an extra byte are refused", !langApply(LANG_ES, d, nd, pl, np + 1, lt, nl) && STAYS_ENGLISH());
                 CHECK("pools 3000 bytes short are refused", !langApply(LANG_ES, d, nd, pl, np - 3000, lt, nl) && STAYS_ENGLISH());
+                CHECK("a two-byte pool cannot be read as four-byte magic", !langApply(LANG_ES, d, nd, tiny, sizeof tiny, lt, nl) && STAYS_ENGLISH());
                 CHECK("pools cut inside the theme headers are refused", !langApply(LANG_ES, d, nd, pl, 30, lt, nl) && STAYS_ENGLISH());
                 memcpy(x, pl, np); memset(x + 8 + 8, 0, 12);       // theme 0: all six counts zero
                 CHECK("pools with a theme that has no word are refused (pickPass would divide by zero)", !langApply(LANG_ES, d, nd, x, np, lt, nl) && STAYS_ENGLISH());
@@ -2150,10 +2176,28 @@ int main(int argc, char **argv)
                 free(b);
             }
             bool chd = chdir("build/langdmg") == 0;
+            bool packAvailable = chd;
+            if (chd) {
+                // One missing file at a time in the scratch tree: previously the
+                // chooser looked only for letters.bin and advertised broken packs.
+                for (int k = 0; k < 3; k++) {
+                    char src[64], gone[80];
+                    snprintf(src, sizeof src, "data/lang/es/%s", F[k]);
+                    snprintf(gone, sizeof gone, "data/lang/es/held-%s", F[k]);
+                    if (rename(src, gone) != 0) { packAvailable = false; break; }
+                    langInit();
+                    if (langAvailable(LANG_ES)) packAvailable = false;
+                    if (rename(gone, src) != 0) { packAvailable = false; break; }
+                }
+                langInit();
+                if (!langAvailable(LANG_ES)) packAvailable = false;
+            }
+            CHECK("the chooser hides a language missing any one of its three resources", chd && packAvailable);
             bool loaded = chd ? langLoad(LANG_ES) : true;
             bool failed = langLoadFailed();
             bool eng = STAYS_ENGLISH();
             if (chd && chdir(cwd) != 0) printf("cannot return to %s\n", cwd);
+            langInit();            // restore the actual ROM-equivalent language tree after the scratch test
             CHECK("langLoad of a Spanish with a short pools.bin fails, English is active and langLoadFailed says so", chd && !loaded && failed && eng);
             CHECK("the next good load (from the real tree) succeeds and clears the failure", langLoad(LANG_ES) && !langLoadFailed() && langCur() == LANG_ES);
             CHECK("... and back to English", langLoad(LANG_EN) && STAYS_ENGLISH() && !langLoadFailed());

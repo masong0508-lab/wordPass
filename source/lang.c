@@ -40,23 +40,35 @@ int  langRare(int k) { return T.rare[k & 3]; }
 // every letter that has a tile, rare letters that have a tile (255 = none), at least one vowel tile.
 bool langParseLetters(const u8 *b, size_t n, LangTables *out)
 {
-    if (!b || n < LANG_LETTERS_BYTES || memcmp(b, "WPL1", 4) != 0) return false;
+    if (!b || !out || n != LANG_LETTERS_BYTES || memcmp(b, "WPL1", 4) != 0) return false;
+    // Reject malformed metadata rather than masking it into a valid-looking
+    // table. The loader depends on these flags for word spelling and safety.
+    if (b[4] > 1 || b[5] || b[10] || b[11]) return false;
     LangTables t;
     memset(&t, 0, sizeof(t));
     t.qu = b[4] & 1;
-    for (int i = 0; i < 4; i++) t.rare[i] = b[6 + i] < 26 && b[16 + b[6 + i]] ? b[6 + i] : 255;
+    for (int i = 0; i < 4; i++) {
+        int l = b[6 + i];
+        if (l != 255 && (l >= 26 || !b[16 + l])) return false;
+        for (int j = 0; j < i; j++) if (l != 255 && b[6 + j] == l) return false;
+        t.rare[i] = l;
+    }
     t.vowels = (u32)b[12] | ((u32)b[13] << 8) | ((u32)b[14] << 16) | ((u32)b[15] << 24);
-    t.vowels &= (1u << 26) - 1;
+    if (t.vowels & ~((1u << 26) - 1u)) return false;
     int sum = 0;
     bool vowelTile = false;
     for (int l = 0; l < 26; l++) {
         t.weight[l] = b[16 + l];
         t.value[l] = b[42 + l];
         sum += t.weight[l];
-        if (t.weight[l] && (t.value[l] < 1 || t.value[l] > 10)) return false;
+        if (t.weight[l] > 25 || (t.weight[l] && (t.value[l] < 1 || t.value[l] > 10)) ||
+            (!t.weight[l] && t.value[l])) return false;
         if (t.weight[l] && ((t.vowels >> l) & 1)) vowelTile = true;
     }
-    if (sum < 50 || sum > 200 || !vowelTile) return false;
+    if (sum != 100 || !vowelTile || t.qu != (t.weight['q' - 'a'] != 0)) return false;
+    // A E I O U are vowels in every shipped language; Y is optional.
+    if ((t.vowels & 0x104111u) != 0x104111u ||
+        (t.vowels & ~0x1104111u)) return false;
     *out = t;
     return true;
 }
