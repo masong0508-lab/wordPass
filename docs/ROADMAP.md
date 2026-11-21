@@ -79,9 +79,19 @@ as available in the in-game language picker.
       overtime, deterministic flame ignition and descent, diamond firebreaks,
       fatal scorched secrets, pass bonuses and next-shelf navigation, tested
       natively for both languages and in the optional DS preview.
-- [ ] Port the full retail logic (lockdown, twists, hints, daily rules, saves,
-      repeat-word ledger, all loss conditions and real difficulty balance)
-      before enabling Cyrillic as a normal selectable game mode.
+- [x] Add a bounded, dictionary-validated Russian/Ukrainian word hint
+      solver, tested natively and on the experimental DS.
+- [x] Add experimental eight-word repeat penalties, 10%-per-word combos
+      (capped at 50%) and peel resets, with native and DS regression coverage.
+- [x] Show separate **РУССКИЙ — DEMO** and **УКРАЇНСЬКА — DEMO**
+      selections in the opt-in preview ROM only; retail language options
+      remain unchanged until translation and feature-parity gates pass.
+- [x] Implement **unranked Daily Practice** with stable per-date and
+      per-language puzzles, retry score resets and DS-clock validation;
+      do not treat it as the retail scored Daily.
+- [ ] Bring Cyrillic modes to full retail Classic/Daily parity: lockdown,
+      twists, complete hints economy, scored Daily/streaks, full statistics,
+      saves, remaining fail conditions and measured difficulty balance.
 - [ ] Integrate complete Cyrillic packs into the **normal DS Classic and
       Daily systems** including fire, hints, stats, pass bonuses, progression,
       saves and native speaker reviewed content. Keep 11 locales compatible.
@@ -91,6 +101,13 @@ as available in the in-game language picker.
       generate sample words actually valid in the Russian dictionary.
 - [ ] Test full real stylus gameplay, fast language switching, memory,
       both-hand UI layouts and saves; only then offer Russian in the picker.
+
+The completed checkboxes above refer to the **separate experimental
+ROM**, not the normal 11-language release. The preview still uses small
+four-password-per-theme seed pools; native-speaker dictionaries, all 385 UI
+strings, guide text, memory/FPS measurements and save compatibility are open
+release blockers. See `docs/CYR-PREVIEW.md` for how to try both languages
+and test unranked Daily Practice.
 
 ### Milestone 3 — Ukrainian
 
