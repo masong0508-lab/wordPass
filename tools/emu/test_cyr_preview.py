@@ -72,9 +72,38 @@ def main(rom, output):
           "Ukrainian scripted board should share shelf-turn semantics")
     e.press("SELECT", settle=8)
     check(get_int(e, "scriptPreviewTurns") == 0, "new pass did not reset turn counter")
+    # Exercise a complete secret-finding shelf through REAL stylus taps,
+    # reading hidden pass coordinates from the ARM9 game's independent
+    # ScriptBoard memory. This is an emulator-only diagnostic: it does not
+    # put solutions on screen or in a production language pack. The first
+    # 153 bytes are tile[56], state[56], chainC[20], chainR[20], chainLen[1].
+    board = symbol(e.rom_elf, "scriptPreviewBoard")
+    pass_len = int(e.mem.unsigned[board + 227])
+    check(4 <= pass_len <= 9, "Cyrillic shelf password length is out of range")
+    secrets = {}
+    for col in range(7):
+        for row in range(8):
+            index = int(e.mem.unsigned[board + 153 + col * 8 + row])
+            if index:
+                check(1 <= index <= pass_len and index not in secrets,
+                      "hidden Cyrillic password index corrupted or duplicated")
+                secrets[index] = (col, row)
+    check(len(secrets) == pass_len, "every hidden password symbol must have a tile")
+    e.hold("L")
+    for index in range(1, pass_len + 1):
+        e.tap(*e.center(*secrets[index]), settle=5)
+    e.hold("L", False)
+    check(get_int(e, "scriptPreviewTurns") == pass_len,
+          "every revealed secret must consume a single shelf turn")
+    e.shot(str(out / "uk-shelf-won.png"))
+    e.press("A", settle=18)
+    check(get_int(e, "scriptPreviewShelf") == 2,
+          "a completed Cyrillic password must advance to the next shelf")
+    check(get_int(e, "scriptPreviewTurns") == 0,
+          "new Cyrillic shelf must reset heat/turn pacing")
     e.press("START", settle=20)
     check(e.state()["state"] == 0, "START should return to the untouched 11-language title")
-    print("CYRILLIC DS PREVIEW OK: bilingual touch scoring, shelf turns, refreshed top HUD, peel, reset, exit")
+    print("CYRILLIC DS PREVIEW OK: bilingual stylus scoring, heat turns, top HUD, full password clear and next shelf")
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
