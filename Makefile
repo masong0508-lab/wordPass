@@ -155,6 +155,7 @@ check:
 	python3 tools/lang/gen_ui.py --check || (echo 'source/ui_strings.[ch] are not what tools/lang/gen_ui.py generates from ui_strings.tsv: run python3 tools/lang/gen_ui.py'; exit 1)
 	python3 tools/check/ui_slot_sanity.py
 	python3 tools/lang/check_translation_quality.py
+	python3 tools/lang/check_translation_quality.py --selftest
 
 # The balance bot (tools/check/bot.c): plays the real rules code headlessly with a competent and a weak player model and
 # prints per-shelf tables (docs/BALANCE.md). `make bot` builds build/bot; `make bot-run` runs English and the other
