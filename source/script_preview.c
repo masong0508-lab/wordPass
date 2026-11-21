@@ -14,6 +14,7 @@ V4Pools scriptPreviewPools;
 int scriptPreviewLanguage;
 int scriptPreviewScore, scriptPreviewTurns, scriptPreviewPeels, scriptPreviewHints;
 int scriptPreviewThemeCount;
+int scriptPreviewRescues, scriptPreviewRescueError;
 int scriptPreviewShelf;
 ScriptRules scriptPreviewRules;
 ScriptLedger scriptPreviewLedger;
@@ -55,6 +56,7 @@ void scriptPreviewClose(void)
     memset(&scriptPreviewPools, 0, sizeof scriptPreviewPools);
     memset(&scriptPreviewBoard, 0, sizeof scriptPreviewBoard);
     scriptPreviewScore = scriptPreviewTurns = scriptPreviewPeels = scriptPreviewHints = 0;
+    scriptPreviewRescues = scriptPreviewRescueError = 0;
     scriptPreviewThemeCount = 0;
     scriptPreviewShelf = 0;
     memset(&scriptPreviewRules, 0, sizeof scriptPreviewRules);
@@ -82,6 +84,7 @@ bool scriptPreviewNewPass(uint32_t seed)
                               &scriptPreviewTiles, &scriptPreviewPools,
                               scriptPreviewSeed, 5)) return false;
     scriptPreviewTurns = scriptPreviewPeels = scriptPreviewHints = 0;
+    scriptPreviewRescues = scriptPreviewRescueError = 0;
     scriptPreviewLastTier = scriptPreviewLastScore = 0;
     scriptLedgerReset(&scriptPreviewLedger);
     // Each generated shelf now guarantees a valid dictionary word from its
@@ -181,6 +184,36 @@ bool scriptPreviewHint(void)
     memcpy(scriptPreviewBoard.chainR, r, (size_t)n);
     scriptPreviewBoard.chainLen = (uint8_t)n;
     scriptPreviewHints++;
+    return true;
+}
+bool scriptPreviewRescue(void)
+{
+    if (!scriptPreviewDict.image || scriptPreviewRules.status != SCRIPT_RUNNING)
+        return false;
+    if (!scriptPreviewRules.turns) {
+        scriptPreviewRescueError = 1; // use a normal word/peel first
+        return false;
+    }
+    if (scriptPreviewRescues) {
+        scriptPreviewRescueError = 2; // exactly one per shelf
+        return false;
+    }
+    uint32_t seed = scriptPreviewSeed ^
+                    ((uint32_t)(scriptPreviewRules.turns + 1u) * 0x9e3779b9u);
+    if (!scriptBoardPlantThemeWord(&scriptPreviewBoard, &scriptPreviewDict,
+                                   &scriptPreviewTiles, &scriptPreviewPools, seed)) {
+        scriptPreviewRescueError = 3; // board too obstructed, spend no turn
+        return false;
+    }
+    scriptBoardClearChain(&scriptPreviewBoard);
+    scriptPreviewRescues = 1;
+    scriptPreviewRescueError = 0;
+    scriptLedgerPeel(&scriptPreviewLedger); // any recovery breaks the combo
+    scriptPreviewLastTier = scriptPreviewLastScore = 0;
+    scriptPreviewScore += scriptRulesRescueTurn(&scriptPreviewRules,
+                                               &scriptPreviewBoard,
+                                               &scriptPreviewTiles);
+    scriptPreviewTurns = scriptPreviewRules.turns;
     return true;
 }
 // Words live as compact alphabet IDs, never as variable-length UTF-8 bytes.
