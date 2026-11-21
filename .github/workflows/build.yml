@@ -10,6 +10,12 @@ on:
 permissions:
   contents: write
 
+# Keep only the latest validation for a moving pull request. Do not interrupt
+# main-branch builds or tagged release jobs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   check:
     # The same checks as `make check` locally, plus the generated-file drift checks, the guide check and the Python tools.
