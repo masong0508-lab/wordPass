@@ -134,6 +134,7 @@ check:
 	$(BUILD)/script_board_check $(BUILD)/wpd4_ru.bin $(BUILD)/wpd4_uk.bin $(BUILD)/wpl2_ru.bin $(BUILD)/wpl2_uk.bin
 	python3 tools/lang/pools_v2.py --selftest $(BUILD)
 	python3 tools/lang/check_cyr_seeds.py
+	python3 tools/lang/import_cyr_hunspell.py --selftest $(BUILD)/cyr-source-intake
 	python3 tools/lang/build_preview.py $(BUILD)/cyrpreview
 	gcc -std=gnu11 -O2 -Wall -Wextra -Wshadow -I source tools/check/pools_v2_test.c source/pools_v2.c source/dict_v4.c -o $(BUILD)/pools_v2_check
 	$(BUILD)/pools_v2_check $(BUILD)/wpd4_ru.bin $(BUILD)/wpd4_uk.bin $(BUILD)/wpp2_ru.bin $(BUILD)/wpp2_uk.bin
