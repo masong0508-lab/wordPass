@@ -56,8 +56,18 @@ as available in the in-game language picker.
 
 - [ ] Legally redistributable Russian common-word and rare-word lexicon,
       native-speaker validation and appropriate source/license notices.
-- [ ] Version a script-aware dictionary / pool format and variable tile
-      alphabets without breaking the original English and ten language packs.
+- [x] Implement a **parallel WPD4 dictionary proof** (2–64 Unicode scalars,
+      compact variable-bit records, checksum, deterministic Russian/Ukrainian
+      fixture builders and native corruption/lookup regressions).
+- [x] Add an independent **WPL2** 33-symbol tile-table prototype with
+      100-tile weighted bags, explicit Cyrillic vowels, rare-symbol limits,
+      deterministic shuffling and matching WPD4 alphabet checks.
+- [x] Add an isolated 7×8 hex-grid prototype using WPD4/WPL2 symbol IDs,
+      stylus-style chain/backtracking, Cyrillic word scoring and deterministic
+      submit/refill, with Russian and Ukrainian native gameplay tests.
+- [ ] Integrate WPD4/WPL2 and script-aware pass pools into the **live DS board**
+      and every gameplay system, preserving the existing 26-letter path; do
+      not advertise incomplete Cyrillic packs in the language picker.
 - [ ] Define Qu-free vowel floors, tile distribution and word lengths for
       Cyrillic; balance with competent and weak bots.
 - [ ] Translate 385 UI messages, game guide and 40 theme names into Russian;

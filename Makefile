@@ -117,6 +117,14 @@ check:
 	$(BUILD)/ui_check
 	gcc -std=gnu11 -Wall -Wextra -Wshadow -I tools/check/stub -I source tools/check/font_utf8_test.c source/font.c -o $(BUILD)/font_utf8_check
 	$(BUILD)/font_utf8_check
+	python3 tools/lang/dict_v4.py --selftest $(BUILD)
+	gcc -std=gnu11 -O2 -Wall -Wextra -Wshadow -I source tools/check/dict_v4_test.c source/dict_v4.c -o $(BUILD)/dict_v4_check
+	$(BUILD)/dict_v4_check $(BUILD)/wpd4_ru.bin $(BUILD)/wpd4_uk.bin
+	python3 tools/lang/tiles_v2.py --selftest $(BUILD)
+	gcc -std=gnu11 -O2 -Wall -Wextra -Wshadow -I source tools/check/tiles_v2_test.c source/tiles_v2.c source/dict_v4.c -o $(BUILD)/tiles_v2_check
+	$(BUILD)/tiles_v2_check $(BUILD)/wpd4_ru.bin $(BUILD)/wpd4_uk.bin $(BUILD)/wpl2_ru.bin $(BUILD)/wpl2_uk.bin
+	gcc -std=gnu11 -O2 -Wall -Wextra -Wshadow -I source tools/check/script_board_test.c source/script_board.c source/tiles_v2.c source/dict_v4.c -o $(BUILD)/script_board_check
+	$(BUILD)/script_board_check $(BUILD)/wpd4_ru.bin $(BUILD)/wpd4_uk.bin $(BUILD)/wpl2_ru.bin $(BUILD)/wpl2_uk.bin
 	gcc -std=gnu11 -Wall -Wextra -Wshadow -I tools/check/stub -I source $(CHECK_SRC) -o $(BUILD)/check
 	$(BUILD)/check
 	gcc -std=gnu11 -O1 -Wall -Wextra -Wshadow -I tools/check/stub -I source $(BOT_SRC) -lm -o $(BUILD)/bot_check
