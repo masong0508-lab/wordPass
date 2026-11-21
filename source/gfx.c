@@ -2298,7 +2298,8 @@ static void drawScriptPreviewTop(void)
         drawTextCenter(128, 106, scriptPreviewLanguage ? "ПОТОЧНЕ СЛОВО" : "ТЕКУЩЕЕ СЛОВО", DIM_TEXT, 1);
         drawTextCenter(128, 122, chain, WHITE, fontTextColumns(chain) > 16 ? 1 : 2);
         int tier = 0;
-        int points = scriptBoardPreview(b, &scriptPreviewDict, &scriptPreviewTiles, &tier);
+        (void)scriptBoardPreview(b, &scriptPreviewDict, &scriptPreviewTiles, &tier);
+        int points = scriptPreviewQuote(); // exactly what submit awards, including repeats and combo
         char pts[52]; // UTF-8 Cyrillic labels can use two bytes per glyph
         if (points) {
             snprintf(pts, sizeof pts, "+%d %s", points,
@@ -2308,6 +2309,16 @@ static void drawScriptPreviewTop(void)
         } else if (b->chainLen >= 3)
             drawTextCenter(128, 147, scriptPreviewLanguage ?
                            "НЕМАЄ В СЛОВНИКУ" : "НЕТ В СЛОВАРЕ", FIRE2, 1);
+    }
+    // Word-history HUD is purely diagnostic in this engineering ROM.
+    // All character IDs and combo state remain fixed-size, not heap strings.
+    if (scriptPreviewLedger.combo > 0) {
+        char combo[48];
+        snprintf(combo, sizeof combo, scriptPreviewLedger.lastRepeat ?
+                 (scriptPreviewLanguage ? "СЕРІЯ %u / ПОВТОР" : "СЕРИЯ %u / ПОВТОР") :
+                 (scriptPreviewLanguage ? "СЕРІЯ %u" : "СЕРИЯ %u"),
+                 (unsigned)scriptPreviewLedger.combo);
+        drawTextCenter(128, 158, combo, ACCENT, 1);
     }
     if (scriptPreviewRules.status == SCRIPT_PASSED) {
         char msg[96];
