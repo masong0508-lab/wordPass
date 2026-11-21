@@ -124,7 +124,11 @@ class Emu:
     def run(self, n):
         for _ in range(n): self.emu.cycle()
     def shot(self, path):
-        self.emu.screenshot().save(path); return path
+        # A smoke or scenario run may use a fresh output directory; screenshots
+        # should never fail simply because CI has not created that directory.
+        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+        self.emu.screenshot().save(path)
+        return path
     def pixels(self):
         """RGB pixel access for the 256x384 screenshot (top screen y 0..191, touch y 192..383)."""
         return self.emu.screenshot().convert('RGB').load()

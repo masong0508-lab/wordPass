@@ -1009,29 +1009,36 @@ static bool dfsWords(const Game *g, int c, int r, char *w, int n, int gems, bool
     return false;
 }
 
-// A path that spells a common (not obscure) word, shortest first, for the guide's ghost drag and the SELECT hint.
-// needBurn asks for a path through at least one flame.
-static bool hintDfs(const Game *g, int c, int r, char *w, int n, int maxLen, int depth, u8 *pc, u8 *pr, bool used[COLS][ROWS], bool needBurn, bool burnSeen)
+// A common-word route for the tutorial ghost and SELECT hint. Prefer unplayed words; a repeated
+// ledger word still works when there is no alternative. No dynamic memory and at most five gems.
+// needBurn requests a route that actually extinguishes a flame.
+static bool hintDfs(const Game *g, int c, int r, char *w, int n, int maxLen, int depth, u8 *pc, u8 *pr,
+                    bool used[COLS][ROWS], bool needBurn, bool burnSeen, bool freshOnly)
 {
     w[n++] = 'a' + g->cell[c][r].letter;
     if (quGem(&g->cell[c][r])) w[n++] = 'u';
     pc[depth] = (u8)c; pr[depth] = (u8)r;
     depth++;
     if (g->cell[c][r].state == CELL_BURN) burnSeen = true;
-    if (depth >= 3 && depth == maxLen && (!needBurn || burnSeen) && dictLookup(w, n) == 1 && wordAccepted(w, n)) return true;
+    if (depth >= 3 && depth == maxLen && (!needBurn || burnSeen) && dictLookup(w, n) == 1 && wordAccepted(w, n)) {
+        w[n] = 0;             // ledgerHas compares NUL-terminated words; max five Qu gems fit w[16]
+        if (!freshOnly || !ledgerHas(g, w)) return true;
+    }
     if (depth >= maxLen) return false;
     used[c][r] = true;
     int nc[6], nr[6], k = boardNeighbors(c, r, nc, nr);
     for (int i = 0; i < k; i++) {
         if (used[nc[i]][nr[i]] || !boardIsChainable(g, nc[i], nr[i])) continue;
-        if (hintDfs(g, nc[i], nr[i], w, n, maxLen, depth, pc, pr, used, needBurn, burnSeen)) { used[c][r] = false; return true; }
+        if (hintDfs(g, nc[i], nr[i], w, n, maxLen, depth, pc, pr, used, needBurn, burnSeen, freshOnly)) { used[c][r] = false; return true; }
     }
     used[c][r] = false;
     return false;
 }
 
-// A common word of 3 to 5 letters on the board, shortest first. With a flame on the board a word through a flame is
-// looked for first (a hint that puts a flame out is worth more than one that does not).
+// A SELECT hint should *help* the player, not push them into a 3-letter heat spike.
+// Priority: put out a flame, choose an unplayed word, then prefer longer (less heat).
+// Still falls back to a repeated/short word if that's the only spellable route.
+// Bounded depth, stack-only state, and no added work in the per-frame renderer.
 int boardHintChain(const Game *g, u8 *outC, u8 *outR, int max)
 {
     char w[16];
@@ -1039,16 +1046,17 @@ int boardHintChain(const Game *g, u8 *outC, u8 *outR, int max)
     bool anyFlame = false;
     for (int c = 0; c < COLS; c++) for (int r = 0; r < ROWS; r++) if (g->cell[c][r].state == CELL_BURN) anyFlame = true;
     for (int pass = anyFlame ? 0 : 1; pass < 2; pass++)
-        for (int len = 3; len <= 5 && len <= max; len++) {
-            bool used[COLS][ROWS] = {{false}};
-            for (int c = 0; c < COLS; c++)
-                for (int r = 0; r < ROWS; r++)
-                    if ((g->cell[c][r].state == CELL_TILE || g->cell[c][r].state == CELL_BURN) &&
-                        hintDfs(g, c, r, w, 0, len, 0, pc, pr, used, pass == 0, false)) {
-                        for (int i = 0; i < len; i++) { outC[i] = pc[i]; outR[i] = pr[i]; }
-                        return len;
-                    }
-        }
+        for (int fresh = 1; fresh >= 0; fresh--)
+            for (int len = max < 5 ? max : 5; len >= 3; len--) {
+                bool used[COLS][ROWS] = {{false}};
+                for (int c = 0; c < COLS; c++)
+                    for (int r = 0; r < ROWS; r++)
+                        if ((g->cell[c][r].state == CELL_TILE || g->cell[c][r].state == CELL_BURN) &&
+                            hintDfs(g, c, r, w, 0, len, 0, pc, pr, used, pass == 0, false, fresh != 0)) {
+                            for (int i = 0; i < len; i++) { outC[i] = pc[i]; outR[i] = pr[i]; }
+                            return len;
+                        }
+            }
     return 0;
 }
 

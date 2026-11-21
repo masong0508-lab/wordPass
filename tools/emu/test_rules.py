@@ -10,6 +10,7 @@ from wp import Emu, COLS, ROWS, EMPTY, TILE, BURN, HOLE, SECRET, ST_TITLE, ST_PL
     LANG_CODES, LANG_NAMES, REPO, ST_LANGPICK
 
 rom = sys.argv[1]; out = sys.argv[2] if len(sys.argv) > 2 else '/tmp'
+os.makedirs(out, exist_ok=True)  # fresh CI runners do not contain the output folder
 e = Emu(rom)
 e.run(10)                                 # a first frame, so the DBG mirror is valid even when WP_ONLY skips the early scenarios
 e.set_tutor(1)                             # no guided first shelf: its prompts own the message line (the tutorial scenario switches it on)

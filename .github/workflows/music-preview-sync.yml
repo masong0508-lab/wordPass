@@ -1,0 +1,34 @@
+name: Refresh soundtrack previews
+
+# Explicitly refresh generated WAV/MIDI previews whenever the authored
+# song tables change. The strict build workflow still checks for drift.
+# Manual-only by design: this action writes tracked binary previews.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Render all song WAV and MIDI previews
+        run: |
+          make music-render
+          make music-check
+      - name: Commit only updated music previews
+        run: |
+          git add -- docs/music
+          if git diff --cached --quiet; then
+            echo "All tracked song previews already match the renderer."
+            exit 0
+          fi
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -m "Regenerate deterministic wordPass soundtrack previews"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

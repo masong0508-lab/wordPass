@@ -6,6 +6,7 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from wp import Emu, COLS, ROWS
 rom = sys.argv[1]; out = sys.argv[2] if len(sys.argv) > 2 else '/tmp'
+os.makedirs(out, exist_ok=True)  # fresh CI runners do not contain the output folder
 e = Emu(rom)
 e.run(150); e.shot(f'{out}/smoke_title.png')
 fps = e.fps(); assert fps >= 118, f'title fps too low: {fps}/120 (expect 120)'

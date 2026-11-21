@@ -1819,6 +1819,25 @@ int main(int argc, char **argv)
         set(4, 2, CELL_TILE, 'a');                          // no flame: the first word found is a plain one
         n = boardHintChain(&g, hc, hr, 5);
         CHECK("with no flame the hint is just a common word", n == 3);
+        // Hints now avoid extra fire: a five-gem word is offered ahead of an
+        // unrelated three-gem one, then the ledger steers toward new words.
+        boardOf('x');
+        set(0, 1, CELL_TILE, 's'); set(0, 2, CELL_TILE, 't');
+        set(0, 3, CELL_TILE, 'o'); set(0, 4, CELL_TILE, 'n'); set(0, 5, CELL_TILE, 'e');
+        set(6, 3, CELL_TILE, 'b'); set(6, 4, CELL_TILE, 'e'); set(6, 5, CELL_TILE, 'd');
+        n = boardHintChain(&g, hc, hr, 5);
+        CHECK("hint favors five-gem STONE over three-gem BED", n == 5 &&
+              hc[0] == 0 && hr[0] == 1 && hr[4] == 5);
+        strcpy(g.ledger[0], "stone"); g.ledgerN = 1; g.ledgerHead = 1;
+        n = boardHintChain(&g, hc, hr, 5);
+        CHECK("hint avoids the repeated STONE when a fresh word exists", n >= 3 && n < 5);
+        // When the only word has been scored already, do not strand the player.
+        boardOf('x');
+        set(0, 1, CELL_TILE, 'b'); set(0, 2, CELL_TILE, 'e'); set(0, 3, CELL_TILE, 'd');
+        strcpy(g.ledger[0], "bed"); g.ledgerN = 1; g.ledgerHead = 1;
+        n = boardHintChain(&g, hc, hr, 5);
+        CHECK("hint can fall back to a repeated word when necessary", n == 3);
+
         boardOf('x');
         CHECK("no word, no hint", boardHintChain(&g, hc, hr, 5) == 0);
         memset(&g, 0, sizeof g); g.mode = MODE_CLASSIC; g.shelf = 2; boardNewShelf(&g);
