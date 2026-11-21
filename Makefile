@@ -89,7 +89,11 @@ endif
 $(BUILD):
 	@mkdir -p $@
 	@if [ -n "$(strip $(NITRO))" ]; then rm -rf $(NITRO)/lang && mkdir -p $(NITRO)/lang && cp -r data/lang/. $(NITRO)/lang/ && rm -f $(NITRO)/lang/manifest.txt $(NITRO)/lang/NOTICE; fi
-	@if [ "$(WP_CYR_PREVIEW)" = "1" ]; then python3 tools/lang/build_preview.py $(NITRO)/cyrpreview; else rm -rf $(NITRO)/cyrpreview; fi
+	@if [ "$(WP_CYR_PREVIEW)" = "1" ]; then \
+	    if [ -n "$(strip $(CYR_EXTERNAL_DIR))" ]; then \
+	        python3 tools/lang/install_cyr_preview.py --input-root "$(CYR_EXTERNAL_DIR)" --output-root "$(NITRO)/cyrpreview"; \
+	    else python3 tools/lang/build_preview.py $(NITRO)/cyrpreview; fi; \
+	else rm -rf $(NITRO)/cyrpreview; fi
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
 # Regenerate the dictionary from a word list, marking COMMON words as the common tier:
@@ -135,6 +139,7 @@ check:
 	python3 tools/lang/pools_v2.py --selftest $(BUILD)
 	python3 tools/lang/check_cyr_seeds.py
 	python3 tools/lang/import_cyr_hunspell.py --selftest $(BUILD)/cyr-source-intake
+	python3 tools/lang/install_cyr_preview.py --selftest $(BUILD)/cyr-pack-install
 	python3 tools/lang/build_preview.py $(BUILD)/cyrpreview
 	gcc -std=gnu11 -O2 -Wall -Wextra -Wshadow -I source tools/check/pools_v2_test.c source/pools_v2.c source/dict_v4.c -o $(BUILD)/pools_v2_check
 	$(BUILD)/pools_v2_check $(BUILD)/wpd4_ru.bin $(BUILD)/wpd4_uk.bin $(BUILD)/wpp2_ru.bin $(BUILD)/wpp2_uk.bin

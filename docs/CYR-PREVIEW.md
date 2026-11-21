@@ -60,3 +60,37 @@ emulator suite continues to test the standard ROM independently.
    picker. Japanese, Korean and Chinese require separate script models.
 
 This milestone is real DS technical integration, not linguistic completion.
+
+## Bring your own licensed Cyrillic dictionary packs
+
+The built-in preview remains tiny and deterministic for emulator regression.
+For a more substantial **experimental DS preview**, run the explicit
+`tools/lang/import_cyr_hunspell.py` intake for **both** languages with your
+properly licensed source files. Place its output under a single directory,
+for example `../wordpass-cyr-sourced/ru/` and `../wordpass-cyr-sourced/uk/`. Both
+must include `dict.bin`, `tiles.bin`, `pools.bin`,
+`SOURCE-MANIFEST.json` and `LICENSE-SOURCE.txt`.
+
+Place the external packs **outside the build/ directory**, since `make clean` deletes build/.
+
+Then, with devkitARM installed:
+
+```sh
+make clean
+make WP_CYR_PREVIEW=1 CYR_EXTERNAL_DIR=../wordpass-cyr-sourced
+```
+
+This opts into **external** resources only for the preview ROM. It does not
+add them to the normal language selector, and the normal `make` still
+compiles the original 11-language ROM with no Cyrillic preview assets.
+
+Before installing, the script verifies both packs together: WPD4 dictionary
+format and exactly matching language alphabets, WPL2 distribution and
+dictionary parity, 40 WPP2 themes and their valid words, the source manifest
+and copied license notice, and a 1.5 MiB per-language dictionary RAM cap.
+It rejects missing, inconsistent, synthetic-only and altered-attribution
+inputs rather than packaging an accidentally broken or unlicensed pack.
+
+**Import does not mean release certification.** Full word quality, broad
+word pools, native-speaker review, rights checks, translated UI and complete
+Classic/Daily game rules are still required before enabling a real locale.

@@ -56,3 +56,29 @@ themes, Unicode word membership, provenance hashes and copied notices.
 Real source-derived imports do not alter the current playable 11-language
 ROM, do not automatically enter the Cyrillic engineering preview build and
 do not replace native-speaker approval, 60 FPS profiling or DS RAM tests.
+
+## Using attributable source packs in a DS preview
+
+The installer `tools/lang/install_cyr_preview.py` provides an explicit
+opt-in path from **both** imported Cyrillic packs to the separate Nintendo
+DS engineering ROM:
+
+```sh
+python3 tools/lang/install_cyr_preview.py \
+  --input-root ../wordpass-cyr-sourced \
+  --output-root nitrofiles/cyrpreview
+```
+
+It verifies WPD4/WPL2/WPP2 internals, the source manifest, license notice,
+dictionary size, expected Cyrillic Unicode alphabets and theme coverage.
+Imported resource packs retain their notices and source manifest in NitroFS.
+By default an imported language must have 1,000 or more dictionary words and
+a non-synthetic origin, so a miniature technical fixture cannot accidentally
+masquerade as a substantial sourced dictionary. It remains experimental.
+See `docs/CYR-PREVIEW.md` for the `make WP_CYR_PREVIEW=1
+CYR_EXTERNAL_DIR=...` build path.
+
+Native validation: `python3 tools/lang/install_cyr_preview.py --selftest
+build/cyr-pack-install`. The test checks both language installs, attribution
+tampering and cross-language pack rejection. These offline checks do not
+substitute for native speaker approval or hardware playtesting.
