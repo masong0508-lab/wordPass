@@ -94,3 +94,24 @@ inputs rather than packaging an accidentally broken or unlicensed pack.
 **Import does not mean release certification.** Full word quality, broad
 word pools, native-speaker review, rights checks, translated UI and complete
 Classic/Daily game rules are still required before enabling a real locale.
+
+## Shelf heat, fire and pass bonuses (development milestone)
+
+The Cyrillic preview now includes its **own Classic-like rules loop**:
+spelling a valid word and peeling a tile each take a turn; short words add
+more heat, while long words produce less. Heat ignites an ordinary gem.
+Existing flames descend every few turns, fall through holes, and stop at
+revealed password diamonds. A flame reaching the bottom loses the shelf.
+Peeling a burning secret (or one directly beneath fire) can scorch it and
+also cause a loss. Overtime adds heat when a puzzle takes too many turns.
+
+Revealing every secret letter awards a shelf bonus. Press **A** after winning
+to advance to the next shelf, or after losing to retry. Select is still a
+manual debug re-deal of the current shelf. The panel shows the shelf number,
+turn count, score, and heat meter, and the top screen reports the outcome.
+
+These rules are in `source/script_rules.c` and are **not identical** to the
+complete retail Classic/Daily rules (which include lockdown, twists,
+saved progress, a word ledger, hint fairness, full difficulty and balancing).
+The separate preview is still an engineering build with starter theme
+content and should not be presented as a full translated release.

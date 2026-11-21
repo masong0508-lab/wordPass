@@ -5,6 +5,7 @@ The preview's 40 *four-word* RU/UK theme seeds are NOT full language packs.
 The production ROM has no developer preview and still exposes 11 locales.
 """
 from pathlib import Path
+from PIL import Image, ImageChops
 import struct
 import sys
 from wp import Emu, symbol
@@ -33,6 +34,7 @@ def main(rom, output):
     check(e.state()["state"] == 9, "L+R+Y did not open real DS Cyrillic preview")
     check(get_int(e, "scriptPreviewLanguage") == 0, "preview should start in Russian")
     check(get_int(e, "scriptPreviewThemeCount") == 40, "Russian preview should contain 40 seeded themes")
+    check(get_int(e, "scriptPreviewShelf") == 1, "Cyrillic first shelf should start at 1")
     e.shot(str(out / "ru-board.png"))
     check(get_int(e, "scriptPreviewScore") == 0, "initial score is zero")
     # The development fixture guarantees ПРИВЕТ in the first column (six
@@ -40,24 +42,39 @@ def main(rom, output):
     e.chain([(0, r) for r in range(6)])
     e.press("A", settle=24)
     check(get_int(e, "scriptPreviewScore") > 0, "real Cyrillic chain did not score")
+    check(get_int(e, "scriptPreviewTurns") == 1,
+          "a valid six-letter Russian word must consume exactly one shelf turn")
     e.shot(str(out / "ru-scored.png"))
     e.hold("L")
     e.tap(*e.center(1, 6), settle=8)
     e.hold("L", False)
     check(get_int(e, "scriptPreviewPeels") == 1, "touch-screen peel did not register")
+    check(get_int(e, "scriptPreviewTurns") == 2,
+          "a successful peel must cost another turn and trigger fire rules")
     e.press("X", settle=20)
     check(e.state()["state"] == 9 and get_int(e, "scriptPreviewLanguage") == 1,
           "X should switch to Ukrainian without changing the release locale")
     check(get_int(e, "scriptPreviewThemeCount") == 40, "Ukrainian preview should contain 40 seeded themes")
     e.shot(str(out / "uk-board.png"))
+    # Compare the REAL rendered top-screen regions, not just ARM9 memory.
+    # A stale top-screen signature used to leave the old language/secret
+    # visible after switching the preview's independent board state.
+    with Image.open(out / "ru-board.png") as russian, Image.open(out / "uk-board.png") as ukrainian:
+        delta = ImageChops.difference(
+            russian.convert("RGB").crop((0, 0, 256, 192)),
+            ukrainian.convert("RGB").crop((0, 0, 256, 192)))
+        check(delta.getbbox() is not None,
+              "Cyrillic preview top screen remained stale after language switch")
     e.chain([(0, r) for r in range(6)])
     e.press("A", settle=20)
     check(get_int(e, "scriptPreviewScore") > 0, "Ukrainian ПРИВІТ should score")
+    check(get_int(e, "scriptPreviewTurns") == 1,
+          "Ukrainian scripted board should share shelf-turn semantics")
     e.press("SELECT", settle=8)
     check(get_int(e, "scriptPreviewTurns") == 0, "new pass did not reset turn counter")
     e.press("START", settle=20)
     check(e.state()["state"] == 0, "START should return to the untouched 11-language title")
-    print("CYRILLIC DS PREVIEW OK: Russian and Ukrainian touch chains, score, peel, reset, exit")
+    print("CYRILLIC DS PREVIEW OK: bilingual touch scoring, shelf turns, refreshed top HUD, peel, reset, exit")
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:

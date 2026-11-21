@@ -75,6 +75,13 @@ as available in the in-game language picker.
       touch/stylus input, bitmap glyph rendering, WPD4/WPL2/WPP2 resource
       loading, Russian/Ukrainian switching and real-word scoring, with a
       separate ROM and dedicated emulator scenario in CI.
+- [x] Introduce a **Cyrillic shelf-fire prototype** with word/peel heat,
+      overtime, deterministic flame ignition and descent, diamond firebreaks,
+      fatal scorched secrets, pass bonuses and next-shelf navigation, tested
+      natively for both languages and in the optional DS preview.
+- [ ] Port the full retail logic (lockdown, twists, hints, daily rules, saves,
+      repeat-word ledger, all loss conditions and real difficulty balance)
+      before enabling Cyrillic as a normal selectable game mode.
 - [ ] Integrate complete Cyrillic packs into the **normal DS Classic and
       Daily systems** including fire, hints, stats, pass bonuses, progression,
       saves and native speaker reviewed content. Keep 11 locales compatible.
