@@ -69,6 +69,21 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           files: wordPass.nds
+      - name: Build separate Cyrillic engineering preview ROM
+        run: |
+          make clean
+          make WP_CYR_PREVIEW=1
+          test -f nitrofiles/cyrpreview/ru/dict.bin
+          test -f nitrofiles/cyrpreview/uk/pools.bin
+          mv wordPass.nds wordPass-cyr-preview.nds
+          mv wordPass.elf wordPass-cyr-preview.elf
+      - name: Upload Cyrillic engineering preview ROM (NOT a release)
+        uses: actions/upload-artifact@v7
+        with:
+          name: wordPass-cyr-preview
+          path: |
+            wordPass-cyr-preview.nds
+            wordPass-cyr-preview.elf
 
   emulator:
     # Boots the built ROM headless in DeSmuME (py-desmume is a binary wheel with its own SDL2, so pip alone is enough;
@@ -87,8 +102,13 @@ jobs:
         run: python3 -m pip install py-desmume pillow numpy
       - name: Pull the toolchain image (symbol lookup)
         run: docker pull devkitpro/devkitarm:20240511
+      - uses: actions/download-artifact@v7
+        with:
+          name: wordPass-cyr-preview
       - name: Smoke test
         run: python3 tools/emu/smoke.py wordPass.nds smoke-out
+      - name: Real DS Cyrillic preview: touch, chain, peel, switch and exit
+        run: python3 tools/emu/test_cyr_preview.py wordPass-cyr-preview.nds cyr-preview-out
       - name: All-language ROM gameplay and layout smoke
         # The full rule-scenario suite remains opt-in below. These two existing
         # scenarios load all ten translated languages in DeSmuME, spell valid and
