@@ -333,7 +333,7 @@ static void announceShuffle(void)
 }
 
 // SELECT in play: the ghost drag traces a common word on the real board (a hint). Each shelf has HINTS_PER_SHELF; the
-// hint prefers a word through a flame when one burns. It stops at the first touch of the board.
+// hint prioritizes a flame, an unplayed word and lower-heat longer words. It stops at the first touch of the board.
 static void useHint(void)
 {
     if (G.hints <= 0) { setMsg(ui(UI_MS_NOHINT), 60); return; }
