@@ -121,7 +121,17 @@ def main(rom, output):
     e.shot(str(out / "ukrainian-direct-menu.png"))
     e.press("B", settle=16)
     check(e.state()["state"] == 0, "B must exit Ukrainian DEMO to normal title")
-    print("RUSSIAN AND UKRAINIAN DS OPTIONS OK: distinct chooser rows, game input, bilingual HUD, full shelf and safe exit")
+    # Also cover controller-only selection. The normal saved language stays
+    # English, so UP from the first entry must wrap to Ukrainian DEMO.
+    e.tap(55, 14, settle=12)
+    check(e.state()["state"] == 8, "cannot reopen language menu for D-pad test")
+    e.press("UP", settle=6)
+    e.press("A", settle=18)
+    check(e.state()["state"] == 9 and get_int(e, "scriptPreviewLanguage") == 1,
+          "D-pad UP wrapping / A should choose Українська DEMO")
+    e.press("START", settle=16)
+    check(e.state()["state"] == 0, "controller-selected Ukrainian DEMO must exit safely")
+    print("RUSSIAN AND UKRAINIAN DS OPTIONS OK: touch + D-pad picker, bilingual gameplay, full shelf and safe exit")
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
