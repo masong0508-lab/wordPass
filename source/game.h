@@ -57,7 +57,8 @@ enum {
     ST_OPTIONS,       // 5
     ST_STATS,         // 6: THE LEDGER, the lifetime stats screen (entered from the title)
     ST_GUIDE,         // 7: HOW TO PLAY, the in-game guide (from the title or the pause menu)
-    ST_LANGPICK       // 8: the LANGUAGE chooser (first boot, the title tag, the options row)
+    ST_LANGPICK,      // 8: the LANGUAGE chooser (first boot, the title tag, the options row)
+    ST_SCRIPT_PREVIEW // 9: opt-in engineering preview build only, never a release locale
 };
 
 enum {
@@ -515,6 +516,7 @@ void debugSync(Game *g);             // mirrors state for the emulator harness a
 extern const u8 font5x7[][7];
 int fontIndex(char ch);
 int fontLogoIndex(char ch);
+const u8 *fontGlyphCodepoint(unsigned cp);   // direct 5x7 Unicode glyph for a script tile
 const u8 *fontGlyphNext(const char **text); // UTF-8 UI text, one glyph; '?' on unsupported scripts
 int fontTextColumns(const char *text);      // rendered glyphs, not UTF-8 bytes   // lowercase w o r d for the wordmark
 

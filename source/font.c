@@ -166,6 +166,8 @@ static const u8 *fontUnicodeGlyph(unsigned cp)
     }
 }
 
+const u8 *fontGlyphCodepoint(unsigned cp) { return fontUnicodeGlyph(cp); }
+
 // Decode a strict Unicode scalar without allocating. On malformed UTF-8
 // consume one byte and display '?', never read beyond the terminating NUL.
 const u8 *fontGlyphNext(const char **text)

@@ -1,6 +1,7 @@
 // Software renderer: Bejeweled gems in an N+ frame, two 16-bit bitmap screens,
 // particles, floating popups, hardware fades and screen shake.
 #include "game.h"
+#include "script_preview.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -2187,8 +2188,123 @@ static void drawCues(const Game *g)
     }
 }
 
+
+#ifdef WP_CYR_PREVIEW
+// Developer-only Cyrillic board uses the ACTUAL two-screen VRAM renderer and
+// stylus coordinate geometry, not a mock picture or a separate framebuffer.
+// Each tile draws a gem plus an on-demand Unicode glyph. No 64-gem atlas.
+static void drawScriptPreviewBoard(void)
+{
+    const ScriptBoard *b = &scriptPreviewBoard;
+    const V4Dict *dict = &scriptPreviewDict;
+    const V4Tiles *tiles = &scriptPreviewTiles;
+    fillRect(0, 0, SCREEN_W, SCREEN_H, BLACK);
+    drawBoardFrame();
+    for (int c = 0; c < SCRIPT_COLS; c++) {
+        for (int r = 0; r < SCRIPT_ROWS; r++) {
+            int x = gridX + c * TILE_W;
+            int y = GRID_Y + r * TILE_H + ((c & 1) ? ODD_SHIFT : 0);
+            int state = b->state[c][r], id = b->tile[c][r];
+            if (state == SCRIPT_HOLE) {
+                rectOutline(x + 1, y + 1, TILE_W - 2, TILE_H - 2, ACCENT);
+                drawChar(x + 9, y + 8, '.', DIM_TEXT, 1);
+                continue;
+            }
+            if (id < 0 || id >= dict->symbols) continue;
+            const GemPal *pal = state == SCRIPT_DIAMOND ? &GEM_DIAMOND :
+                                state == SCRIPT_BURN ? &GEM_FIRE :
+                                GEM_PALS[v4TilesVowel(tiles, id) ? 0 :
+                                         (int)(id % 4) + 1];
+            drawGemSized(x, y, TILE_W, TILE_H, pal, false);
+            const u8 *glyph = fontGlyphCodepoint(dict->alphabet[id]);
+            u16 fg = state == SCRIPT_DIAMOND ? C(4,6,10) : WHITE;
+            drawGlyph(x + 8, y + 5, glyph, pal->dark, 2);
+            drawGlyph(x + 7, y + 4, glyph, fg, 2);
+            if (b->back[c][r] && state != SCRIPT_DIAMOND)
+                fillRect(x + 10, y + 20, 4, 1, GOLD);
+            for (int k = 0; k < b->chainLen; k++)
+                if (b->chainC[k] == c && b->chainR[k] == r) {
+                    rectOutline(x, y, TILE_W, TILE_H, GOLD_LT);
+                    rectOutline(x + 1, y + 1, TILE_W - 2, TILE_H - 2, WHITE);
+                    break;
+                }
+        }
+    }
+    const int px0 = panelX + 2;
+    rectOutline(panelX, 2, 78, 188, GOLD_DK);
+    drawText(px0 + 6, 10, "CYRILLIC", GOLD_LT, 1);
+    drawText(px0 + 6, 20, "DS TEST", ACCENT, 1);
+    hline(px0 + 2, 33, 70, GOLD_DK);
+    drawText(px0 + 7, 40, scriptPreviewLanguage ? "UKRAINIAN" : "RUSSIAN", WHITE, 1);
+    char n[16];
+    drawText(px0 + 4, 57, "SCORE", DIM_TEXT, 1);
+    fmtInt(n, scriptPreviewScore);
+    drawText(px0 + 4, 67, n, GOLD_LT, 1);
+    drawText(px0 + 4, 81, "PEELS", DIM_TEXT, 1);
+    fmtInt(n, scriptPreviewPeels);
+    drawText(px0 + 4, 91, n, WHITE, 1);
+    hline(px0 + 2, 107, 70, GOLD_DK);
+    drawText(px0 + 4, 113, "L+TAP PEEL", WHITE, 1);
+    drawText(px0 + 4, 124, "A  SUBMIT", WHITE, 1);
+    drawText(px0 + 4, 135, "Y  CLEAR", WHITE, 1);
+    drawText(px0 + 4, 146, "X  LANG", WHITE, 1);
+    drawText(px0 + 4, 157, "SEL  NEXT", WHITE, 1);
+    drawText(px0 + 4, 170, "START EXIT", ACCENT, 1);
+    if (scriptBoardPassComplete(b))
+        drawText(px0 + 2, 181, "PASS FOUND", GOLD_LT, 1);
+}
+static void drawScriptPreviewTop(void)
+{
+    fillRect(0, 0, SCREEN_W, SCREEN_H, BLACK);
+    rectOutline(7, 7, 242, 178, GOLD_DK);
+    rectOutline(8, 8, 240, 176, GOLD);
+    drawTextCenter(128, 18, "CYRILLIC ENGINE PREVIEW", GOLD_LT, 1);
+    drawTextCenter(128, 31, "SMALL TEST DICTIONARY ONLY", DIM_TEXT, 1);
+    const ScriptBoard *b = &scriptPreviewBoard;
+    const char *theme = v4PoolsName(&scriptPreviewPools, b->passTheme);
+    drawTextCenter(128, 47, theme, ACCENT, 2);
+    char word[80] = {0};
+    if (scriptBoardPassUtf8(b, &scriptPreviewDict, word, sizeof word)) {
+        // Hidden symbols are still readable as placeholders until peeled.
+        // This is NOT displayed as a spoiler; build a separate masked string.
+        char masked[80] = {0};
+        const char *p = word;
+        int at = 0;
+        for (int i = 0; i < b->passLen && at < (int)sizeof masked - 5; i++) {
+            const char *before = p;
+            (void)fontGlyphNext(&p);
+            if (b->found[i]) {
+                while (before < p) masked[at++] = *before++;
+            } else masked[at++] = '_';
+            if (i != b->passLen - 1) masked[at++] = ' ';
+        }
+        masked[at] = 0;
+        drawTextCenter(128, 70, masked, scriptBoardPassComplete(b) ? GOLD_LT : WHITE, 2);
+    }
+    hline(26, 96, 204, DIM);
+    char chain[88] = {0};
+    if (scriptBoardChainUtf8(b, &scriptPreviewDict, chain, sizeof chain)) {
+        drawTextCenter(128, 106, "CURRENT WORD", DIM_TEXT, 1);
+        drawTextCenter(128, 122, chain, WHITE, fontTextColumns(chain) > 16 ? 1 : 2);
+        int tier = 0;
+        int points = scriptBoardPreview(b, &scriptPreviewDict, &scriptPreviewTiles, &tier);
+        char pts[24];
+        if (points) {
+            snprintf(pts, sizeof pts, "+%d %s", points, tier == 1 ? "COMMON" : "RARE");
+            drawTextCenter(128, 147, pts, GOLD_LT, 1);
+        } else if (b->chainLen >= 3) drawTextCenter(128, 147, "NOT IN TEST DICTIONARY", FIRE2, 1);
+    }
+    if (scriptBoardPassComplete(b))
+        drawTextCenter(128, 169, "PASS DISCOVERED! SELECT: NEXT", GOLD_LT, 1);
+    else drawTextCenter(128, 169, "HOLD L + TAP TO REVEAL LETTERS", ACCENT, 1);
+}
+#endif
+
 static void drawTop(const Game *g)
 {
+#ifdef WP_CYR_PREVIEW
+    if (g->state == ST_SCRIPT_PREVIEW) { drawScriptPreviewTop(); return; }
+#endif
     fillRect(0, 0, SCREEN_W, SCREEN_H, BLACK);
     if (g->state == ST_GUIDE) { drawTopGuide(g); return; }
     if (menuState(g->state)) {
@@ -3103,6 +3219,12 @@ void gfxFrame(const Game *g)
     // The hardware dim is re-requested by overlayCard every frame it is wanted; a state
     // that draws no card (play) must not inherit it from the previous frame's card.
     dimOn = false;
+#ifdef WP_CYR_PREVIEW
+    if (g->state == ST_SCRIPT_PREVIEW) {
+        drawScriptPreviewBoard();
+        PROF(0); PROF(1); PROF(2); PROF(3); PROF(4);
+    } else
+#endif
     if (menuState(g->state)) {
         // menus paint their own black strip and frame: no board, no panel. Particles and
         // popups that outlive the game go on top of the menu, not under it.
