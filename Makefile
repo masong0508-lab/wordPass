@@ -115,6 +115,8 @@ check:
 	$(BUILD)/lang_check
 	gcc -std=gnu11 -Wall -Wextra -Wshadow -I tools/check/stub -I source tools/check/ui_test.c source/ui.c source/ui_strings.c -o $(BUILD)/ui_check
 	$(BUILD)/ui_check
+	gcc -std=gnu11 -Wall -Wextra -Wshadow -I tools/check/stub -I source tools/check/font_utf8_test.c source/font.c -o $(BUILD)/font_utf8_check
+	$(BUILD)/font_utf8_check
 	gcc -std=gnu11 -Wall -Wextra -Wshadow -I tools/check/stub -I source $(CHECK_SRC) -o $(BUILD)/check
 	$(BUILD)/check
 	gcc -std=gnu11 -O1 -Wall -Wextra -Wshadow -I tools/check/stub -I source $(BOT_SRC) -lm -o $(BUILD)/bot_check

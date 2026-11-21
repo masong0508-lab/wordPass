@@ -14,6 +14,15 @@ and uncover the pass. Spell weak words and the shelf catches fire.
 - **On your own machine:** install Docker and run `./build.sh`. The ROM appears as `wordPass.nds`. The Docker image is pinned so the ROM boots in DeSmuME, melonDS and on hardware.
 - Play it in melonDS or DeSmuME, or copy it to a flashcart. The ten extra languages live in the ROM's own filesystem, so use a flashcart that runs the ROM normally.
 
+## Roadmap and additional writing systems
+
+**[docs/ROADMAP.md](docs/ROADMAP.md)** tracks the remaining release work and
+the staged expansion from the current 11 playable languages into Cyrillic,
+Japanese, Korean and Chinese. The first step is a strict UTF-8 text renderer
+with hand-drawn Russian/Ukrainian glyphs; **new languages are not playable
+yet**. Their full dictionaries, pass pools, alphabet rules and UI translations
+will be separate milestones with hardware and emulator validation.
+
 ## The guide
 
 **[docs/GUIDE.md](docs/GUIDE.md) is the complete manual**: a five-minute quick start, every control, the hex board,

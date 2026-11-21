@@ -514,6 +514,8 @@ void debugSync(Game *g);             // mirrors state for the emulator harness a
 // font.c
 extern const u8 font5x7[][7];
 int fontIndex(char ch);
-int fontLogoIndex(char ch);   // lowercase w o r d for the wordmark
+int fontLogoIndex(char ch);
+const u8 *fontGlyphNext(const char **text); // UTF-8 UI text, one glyph; '?' on unsupported scripts
+int fontTextColumns(const char *text);      // rendered glyphs, not UTF-8 bytes   // lowercase w o r d for the wordmark
 
 #endif
