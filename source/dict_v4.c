@@ -78,6 +78,38 @@ bool v4DictOpen(V4Dict *view, const uint8_t *data, size_t bytes)
         view->base[k] = data + offset;
         view->count[k] = num;
         words += num;
+
+        // WPD4 is binary-searched by encoded symbol ID, so merely checking
+        // offsets and the accidental-corruption checksum is not sufficient.
+        // Reject malformed indexes, duplicate/out-of-order words and
+        // nonzero padding BEFORE exposing the image to the game. A checksum
+        // can be recomputed over malformed (or deliberately crafted) data.
+        const unsigned padding = rec * 8u - (unsigned)k * bits - 1u;
+        const unsigned padMask = (1u << padding) - 1u;
+        const unsigned idMask = (1u << bits) - 1u;
+        const uint8_t *previous = NULL;
+        for (uint32_t i = 0; i < num; i++) {
+            const uint8_t *word = data + offset + (size_t)i * rec;
+            if (((unsigned)word[rec - 1u] >> 1u) & padMask) return false;
+            for (int j = 0; j < k; j++) {
+                unsigned bit = (unsigned)j * bits;
+                unsigned at = bit >> 3, shift = bit & 7u;
+                unsigned pair = (unsigned)word[at] << 8;
+                if (at + 1u < rec) pair |= word[at + 1u];
+                unsigned id = (pair >> (16u - bits - shift)) & idMask;
+                if (id >= n) return false;
+            }
+            if (previous) {
+                int cmp = memcmp(previous, word, rec - 1u);
+                if (!cmp) {
+                    unsigned a = previous[rec - 1u] & 0xfeu;
+                    unsigned b = word[rec - 1u] & 0xfeu;
+                    cmp = (a > b) - (a < b);
+                }
+                if (cmp >= 0) return false;
+            }
+            previous = word;
+        }
         offset += (size_t)num * rec;
     }
     if (offset != bytes || !words) return false;
