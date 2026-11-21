@@ -77,6 +77,21 @@ language isolation in the actual emulator. This is one step toward retail
 scoring parity, **not** a claim that the remaining Classic/Daily economy,
 password balancing and full 385-message localization are finished.
 
+## On-device language-specific controls help
+
+While playing either demo, **hold L and press Y** to open a readable
+Russian or Ukrainian control guide on the existing top LCD. It explains
+how to chain neighboring tiles, submit, clear a chain, peel/reveal a
+password letter, use the once-per-shelf hint, switch languages, start
+unranked Daily Practice and understand repeated-word/combination scoring.
+
+Press **B** or **A** to close the guide without exiting the demo or
+accidentally submitting the current chain. Press **START** to leave the
+game normally. The manual is stored as one small flag, does not allocate
+a new framebuffer or texture, and appears only in the experimental ROM.
+The emulator tests both native-language pages, redraw, preserved turn
+count and safe dismissal.
+
 ## Daily Practice (unranked, experimental)
 
 In the Russian or Ukrainian demo press **L+SELECT** to switch between
