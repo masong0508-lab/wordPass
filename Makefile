@@ -39,9 +39,9 @@ ARCH := -march=armv5te -mtune=arm946e-s
 
 CFLAGS   := -g -Wall -Wextra -Wshadow -O2 -ffunction-sections -fdata-sections\
             $(ARCH) $(INCLUDE) -DARM9
-# An opt-in engineering build packages only tiny synthetic Russian/Ukrainian
-# resource fixtures, exposes a hidden L+R+Y DS preview and never changes the
-# release ROM's 11-language picker or settings format.
+# An opt-in engineering build packages only small experimental Russian/
+# Ukrainian resource fixtures and exposes separate DEMO menu choices.
+# The regular ROM keeps its 11-language picker and settings format.
 ifeq ($(WP_CYR_PREVIEW),1)
 CFLAGS += -DWP_CYR_PREVIEW
 endif
