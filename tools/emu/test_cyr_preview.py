@@ -37,6 +37,21 @@ def main(rom, output):
     check(get_int(e, "scriptPreviewShelf") == 1, "Cyrillic first shelf should start at 1")
     e.shot(str(out / "ru-board.png"))
     check(get_int(e, "scriptPreviewScore") == 0, "initial score is zero")
+    # Localized manual uses only the normal top LCD and pauses gameplay while
+    # visible. B dismisses it without exiting or consuming a shelf turn.
+    e.hold("L")
+    e.press("Y", settle=20)
+    e.hold("L", False)
+    check(get_int(e, "scriptPreviewHelp") == 1, "L+Y must show Russian rules")
+    e.shot(str(out / "russian-controls-help.png"))
+    with Image.open(out / "ru-board.png") as normal, Image.open(out / "russian-controls-help.png") as manual:
+        delta = ImageChops.difference(normal.convert("RGB").crop((0, 0, 256, 192)),
+                                      manual.convert("RGB").crop((0, 0, 256, 192)))
+        check(delta.getbbox() is not None, "Russian manual did not redraw the top LCD")
+    e.press("B", settle=16)
+    check(e.state()["state"] == 9 and get_int(e, "scriptPreviewHelp") == 0
+          and get_int(e, "scriptPreviewTurns") == 0,
+          "dismissing Russian manual must resume the untouched board")
     e.press("R", settle=12)
     check(get_int(e, "scriptPreviewHints") == 1,
           "R should find one real Cyrillic word path with bounded DFS")
@@ -77,6 +92,21 @@ def main(rom, output):
     check(bytes(e.mem.unsigned[ledger:ledger + 194])[184] == 0,
           "switching languages must not leak Russian word history into Ukrainian")
     e.shot(str(out / "uk-board.png"))
+    e.hold("L")
+    e.press("Y", settle=18)
+    e.hold("L", False)
+    check(get_int(e, "scriptPreviewHelp") == 1, "L+Y must show Ukrainian rules")
+    e.shot(str(out / "ukrainian-controls-help.png"))
+    with Image.open(out / "russian-controls-help.png") as russian, Image.open(out / "ukrainian-controls-help.png") as ukrainian:
+        delta = ImageChops.difference(russian.convert("RGB").crop((20, 12, 236, 157)),
+                                      ukrainian.convert("RGB").crop((20, 12, 236, 157)))
+        check(delta.getbbox() is not None, "Ukrainian manual must have translated content")
+    # Press A to dismiss; the dismissal may NOT also submit a word.
+    turns_before = get_int(e, "scriptPreviewTurns")
+    e.press("A", settle=16)
+    check(e.state()["state"] == 9 and get_int(e, "scriptPreviewHelp") == 0 and
+          get_int(e, "scriptPreviewTurns") == turns_before,
+          "A should close Ukrainian manual without scoring or consuming a turn")
     # The first two language packs legitimately share the theme "КНИГИ",
     # and hidden passwords can have the same placeholder pattern. Compare
     # the explicit translated language label on the ACTUAL top LCD instead
