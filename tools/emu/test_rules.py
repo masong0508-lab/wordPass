@@ -3094,7 +3094,7 @@ def _():
             if not m.group(1): sequential[0] += 1
             value = (23456, 11, 1)[pos]
             return f'{value:02d}' if m.group(2) else str(value)
-        want = re.sub(r'%(?:([1-9])\\$)?(02)?d', number, fmt)
+        want = re.sub(r'%(?:([1-9])\$)?(02)?d', number, fmt)
         date = '11-01' if code == 'en' else '01-11'
         assert date in want, f'{code}: expected localized {date} in {want}'
         w = len(want) * 6 - 1
