@@ -25,6 +25,7 @@ extern ScriptRules scriptPreviewRules;
 extern ScriptLedger scriptPreviewLedger;
 extern int scriptPreviewDaily;     // 0 classic-style demo; 1 unranked Daily practice
 extern int scriptPreviewDailyDate; // YYYYMMDD, independent of retail Daily records
+extern int scriptPreviewDailyClockError; // unset RTC feedback, no save writes
 extern int scriptPreviewLastTier;
 extern int scriptPreviewLastScore;
 extern uint32_t scriptPreviewSeed;
