@@ -1868,6 +1868,9 @@ int main(int argc, char **argv)
         bool allAvail = langAvailable(LANG_EN);
         for (int i = 1; i < LANG_COUNT; i++) allAvail = allAvail && langAvailable(i);
         CHECK("all ten languages are found on the filesystem", allAvail && !langAvailable(LANG_COUNT) && !langAvailable(-1));
+        CHECK("language navigation wraps in both directions when all packs are available",
+              langNextAvailable(LANG_EN, 1) == LANG_ES && langNextAvailable(LANG_EN, -1) == LANG_FI &&
+              langNextAvailable(LANG_FI, 1) == LANG_EN && langNextAvailable(LANG_ES, -1) == LANG_EN);
 
         static const char *const KNOWN[LANG_COUNT] = { "",
             "casa perro mesa libro escuela ciudad mariposa", "maison chat table livre ecole ville papillon", "haus hund tisch buch schule stadt schmetterling",
@@ -2186,11 +2189,13 @@ int main(int argc, char **argv)
                     snprintf(gone, sizeof gone, "data/lang/es/held-%s", F[k]);
                     if (rename(src, gone) != 0) { packAvailable = false; break; }
                     langInit();
-                    if (langAvailable(LANG_ES)) packAvailable = false;
+                    if (langAvailable(LANG_ES) || langNextAvailable(LANG_EN, 1) != LANG_EN ||
+                        langNextAvailable(LANG_EN, -1) != LANG_EN) packAvailable = false;
                     if (rename(gone, src) != 0) { packAvailable = false; break; }
                 }
                 langInit();
-                if (!langAvailable(LANG_ES)) packAvailable = false;
+                if (!langAvailable(LANG_ES) || langNextAvailable(LANG_EN, 1) != LANG_ES ||
+                    langNextAvailable(LANG_EN, -1) != LANG_ES) packAvailable = false;
             }
             CHECK("the chooser hides a language missing any one of its three resources", chd && packAvailable);
             bool loaded = chd ? langLoad(LANG_ES) : true;
@@ -2199,6 +2204,7 @@ int main(int argc, char **argv)
             if (chd && chdir(cwd) != 0) printf("cannot return to %s\n", cwd);
             langInit();            // restore the actual ROM-equivalent language tree after the scratch test
             CHECK("langLoad of a Spanish with a short pools.bin fails, English is active and langLoadFailed says so", chd && !loaded && failed && eng);
+            CHECK("reselecting English clears a failed language-load warning", langLoad(LANG_EN) && !langLoadFailed() && STAYS_ENGLISH());
             CHECK("the next good load (from the real tree) succeeds and clears the failure", langLoad(LANG_ES) && !langLoadFailed() && langCur() == LANG_ES);
             CHECK("... and back to English", langLoad(LANG_EN) && STAYS_ENGLISH() && !langLoadFailed());
         }

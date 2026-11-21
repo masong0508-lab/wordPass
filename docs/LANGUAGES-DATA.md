@@ -60,6 +60,12 @@ budgets, dictionary and pass-pool sizes, and UI labels that might need a
 native-speaker review. Every PR run attaches this Markdown file as the
 `wordPass-language-quality` artifact alongside the ROM artifact.
 
+The language picker now skips missing language packs with UP/DOWN, ignores taps
+on unavailable choices, and leaves the player in the chooser with an error
+instead of saving a failed choice if data becomes unreadable after the initial
+ROM scan. Picking the already active language does not regenerate the title's
+waiting shelf or needlessly reload the dictionary.
+
 The report is intentionally a **review aid**, not proof that each dictionary
 entry or translated sentence is linguistically correct. Unsupported language
 packs are not advertised as playable; adding a new language requires a
