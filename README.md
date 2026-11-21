@@ -62,7 +62,9 @@ against the source and the data files by `tools/check_guide.py`, and every pictu
   same with and without it, a player who never peels earns none of it and one
   who peels at random almost none.
 - **Hint.** SELECT shows a common word on the board with the ghost drag, twice a
-  shelf (through a flame, if one burns). Ten idle seconds offer one for free.
+  shelf. It prioritizes extinguishing a flame, then an unplayed word, then
+  longer words (which normally add less heat), falling back to shorter or
+  previously played words if necessary. Ten idle seconds offer one for free.
 - **Shuffle.** A board with no word left is re-dealt once a shelf (+3 heat)
   instead of ending the shelf.
 - **Overtime.** Past turn 24 on a shelf (16 in Lockdown from shelf 10, later on
