@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """On-ROM Cyrillic preview test. Runs actual ARM9 game code in DeSmuME.
 
-The preview's small synthetic RU/UK fixtures are NOT full language packs.
+The preview's 40 *four-word* RU/UK theme seeds are NOT full language packs.
 The production ROM has no developer preview and still exposes 11 locales.
 """
 from pathlib import Path
@@ -32,6 +32,7 @@ def main(rom, output):
     e.hold("L", False)
     check(e.state()["state"] == 9, "L+R+Y did not open real DS Cyrillic preview")
     check(get_int(e, "scriptPreviewLanguage") == 0, "preview should start in Russian")
+    check(get_int(e, "scriptPreviewThemeCount") == 40, "Russian preview should contain 40 seeded themes")
     e.shot(str(out / "ru-board.png"))
     check(get_int(e, "scriptPreviewScore") == 0, "initial score is zero")
     # The development fixture guarantees ПРИВЕТ in the first column (six
@@ -47,6 +48,7 @@ def main(rom, output):
     e.press("X", settle=20)
     check(e.state()["state"] == 9 and get_int(e, "scriptPreviewLanguage") == 1,
           "X should switch to Ukrainian without changing the release locale")
+    check(get_int(e, "scriptPreviewThemeCount") == 40, "Ukrainian preview should contain 40 seeded themes")
     e.shot(str(out / "uk-board.png"))
     e.chain([(0, r) for r in range(6)])
     e.press("A", settle=20)
