@@ -94,9 +94,13 @@ as available in the in-game language picker.
       theme-aware 4–6-symbol chain. The seed varies word/column, protects
       hidden password tiles, and supports the existing bounded hint solver;
       native checks cover all 40 themes in both languages.
+- [x] Add a bounded one-use recovery move for sparse Cyrillic shelves:
+      L+R after a turn can plant one valid word around burns/holes, costs
+      heat and time, breaks combos, never awards points, and avoids hidden
+      passwords. Includes fail-atomic and real emulator input tests.
 - [ ] Expand every draft theme beyond four starter passwords, edit native
       vocabulary and balance word lengths/weighted tiles. The seeded helper
-      guarantees *one* playable chain, not an abundant dictionary.
+      and limited rescue guarantee a way back, not an abundant dictionary.
 - [ ] Bring Cyrillic modes to full retail Classic/Daily parity: lockdown,
       twists, complete hints economy, scored Daily/streaks, full statistics,
       saves, remaining fail conditions and measured difficulty balance.
