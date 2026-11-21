@@ -60,6 +60,7 @@ void scriptPreviewClose(void)
     memset(&scriptPreviewRules, 0, sizeof scriptPreviewRules);
     scriptLedgerReset(&scriptPreviewLedger);
     scriptPreviewDaily = scriptPreviewDailyDate = scriptPreviewDailyClockError = 0;
+    scriptPreviewHelp = 0;
     scriptPreviewLastTier = scriptPreviewLastScore = 0;
 }
 bool scriptPreviewNewPass(uint32_t seed)
