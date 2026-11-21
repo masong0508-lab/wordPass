@@ -63,15 +63,16 @@ def main(rom, output):
           "X should switch to Ukrainian without changing the release locale")
     check(get_int(e, "scriptPreviewThemeCount") == 40, "Ukrainian preview should contain 40 seeded themes")
     e.shot(str(out / "uk-board.png"))
-    # Compare the REAL rendered top-screen regions, not just ARM9 memory.
-    # A stale top-screen signature used to leave the old language/secret
-    # visible after switching the preview's independent board state.
+    # The first two language packs legitimately share the theme "КНИГИ",
+    # and hidden passwords can have the same placeholder pattern. Compare
+    # the explicit translated language label on the ACTUAL top LCD instead
+    # of falsely requiring otherwise identical theme artwork to change.
     with Image.open(out / "ru-board.png") as russian, Image.open(out / "uk-board.png") as ukrainian:
         delta = ImageChops.difference(
-            russian.convert("RGB").crop((0, 0, 256, 192)),
-            ukrainian.convert("RGB").crop((0, 0, 256, 192)))
+            russian.convert("RGB").crop((16, 26, 240, 42)),
+            ukrainian.convert("RGB").crop((16, 26, 240, 42)))
         check(delta.getbbox() is not None,
-              "Cyrillic preview top screen remained stale after language switch")
+              "Cyrillic top-screen language label did not change")
     e.chain([(0, r) for r in range(6)])
     e.press("A", settle=20)
     check(get_int(e, "scriptPreviewScore") > 0, "Ukrainian ПРИВІТ should score")
