@@ -793,9 +793,11 @@ int main(void)
                     break;
                 }
                 if (scriptPreviewHelp) {
-                    if (down & (KEY_A | KEY_B | KEY_Y | KEY_TOUCH))
+                    if (down & (KEY_A | KEY_B | KEY_Y | KEY_TOUCH)) {
                         scriptPreviewHelp = 0;
-                    else if (!(down & KEY_START)) break;
+                        break; // dismissal must not also submit or touch a tile
+                    }
+                    if (!(down & KEY_START)) break;
                 }
                 if (down & (KEY_B | KEY_START)) {
                     scriptPreviewClose();
