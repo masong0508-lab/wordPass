@@ -157,6 +157,51 @@ int v4DictLookupIds(const V4Dict *view, const uint8_t *ids, int symbols)
     }
     return 0;
 }
+// Test a packed Unicode symbol-ID prefix, ignoring the record's rare/common
+// tier bit and any trailing bits beyond this prefix. The WPD4 reader already
+// checked strict lexicographical ordering when the image was opened, so
+// binary searching is safe even with large externally sourced lexicons.
+static int prefixCompare(const uint8_t *rec, const uint8_t *key,
+                         unsigned prefixBits)
+{
+    unsigned whole = prefixBits >> 3;
+    int cmp = memcmp(rec, key, whole);
+    if (cmp || !(prefixBits & 7u)) return cmp;
+    unsigned mask = 0xffu << (8u - (prefixBits & 7u));
+    unsigned a = rec[whole] & mask, b = key[whole] & mask;
+    return (a > b) - (a < b);
+}
+bool v4DictHasPrefixIds(const V4Dict *view, const uint8_t *ids, int count)
+{
+    if (!view || !view->image || !ids || count <= 0 ||
+        count > WPD4_MAX_WORD) return false;
+    uint8_t key[16] = {0};
+    for (int i = 0; i < count; i++) {
+        if (ids[i] >= view->symbols) return false;
+        for (int bit = view->bits - 1; bit >= 0; bit--) {
+            unsigned at = (unsigned)i * view->bits +
+                          (unsigned)(view->bits - 1 - bit);
+            key[at >> 3] |= (uint8_t)(((ids[i] >> bit) & 1u) <<
+                                     (7u - (at & 7u)));
+        }
+    }
+    unsigned prefixBits = (unsigned)count * view->bits;
+    int firstLength = count > WPD4_MIN_WORD ? count : WPD4_MIN_WORD;
+    for (int length = firstLength; length <= WPD4_MAX_WORD; length++) {
+        int lo = 0, hi = (int)view->count[length] - 1;
+        unsigned stride = width(length, view->bits);
+        while (lo <= hi) {
+            int mid = lo + ((hi - lo) >> 1);
+            const uint8_t *word = view->base[length] + (size_t)mid * stride;
+            int cmp = prefixCompare(word, key, prefixBits);
+            if (!cmp) return true;
+            if (cmp < 0) lo = mid + 1;
+            else hi = mid - 1;
+        }
+    }
+    return false;
+}
+
 // This restricted uppercasing is intentional: only simple Latin/Cyrillic
 // case pairs are supported in this version, not arbitrary Unicode casefold.
 static uint32_t upper(uint32_t cp)
