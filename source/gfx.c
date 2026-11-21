@@ -2232,34 +2232,34 @@ static void drawScriptPreviewBoard(void)
     }
     const int px0 = panelX + 2;
     rectOutline(panelX, 2, 78, 188, GOLD_DK);
-    drawText(px0 + 6, 10, "CYRILLIC", GOLD_LT, 1);
+    drawText(px0 + 6, 10, "RU/UK DEMO", GOLD_LT, 1);
     char label[20];
-    snprintf(label, sizeof label, "SHELF %d", scriptPreviewShelf);
+    snprintf(label, sizeof label, scriptPreviewLanguage ? "ПОЛИЦЯ %d" : "ПОЛКА %d", scriptPreviewShelf);
     drawText(px0 + 6, 20, label, ACCENT, 1);
     hline(px0 + 2, 33, 70, GOLD_DK);
     drawText(px0 + 7, 40, scriptPreviewLanguage ? "УКРАЇНСЬКА" : "РУССКИЙ", WHITE, 1);
-    char n[16];
-    drawText(px0 + 4, 57, "SCORE", DIM_TEXT, 1);
+    char n[28];
+    drawText(px0 + 4, 57, scriptPreviewLanguage ? "БАЛИ" : "СЧЁТ", DIM_TEXT, 1);
     fmtInt(n, scriptPreviewScore);
     drawText(px0 + 4, 67, n, GOLD_LT, 1);
-    snprintf(n, sizeof n, "HEAT %d/%d",
+    snprintf(n, sizeof n, scriptPreviewLanguage ? "СПЕКА %d/%d" : "ЖАР %d/%d",
              scriptPreviewRules.heat, scriptPreviewRules.heatThreshold);
     drawText(px0 + 4, 81, n,
              scriptPreviewRules.heat >= scriptPreviewRules.heatThreshold - 2 ?
              FIRE2 : DIM_TEXT, 1);
-    snprintf(n, sizeof n, "TURN %u", scriptPreviewRules.turns);
+    snprintf(n, sizeof n, scriptPreviewLanguage ? "ХІД %u" : "ХОД %u", scriptPreviewRules.turns);
     drawText(px0 + 4, 94, n, WHITE, 1);
     hline(px0 + 2, 107, 70, GOLD_DK);
     drawText(px0 + 4, 113, "L+TAP PEEL", WHITE, 1);
     drawText(px0 + 4, 124, "A  SUBMIT", WHITE, 1);
     drawText(px0 + 4, 135, "Y CLR R HINT", WHITE, 1);
-    drawText(px0 + 4, 146, "X  LANG", WHITE, 1);
-    drawText(px0 + 4, 157, "SEL  NEXT", WHITE, 1);
-    drawText(px0 + 4, 170, "START EXIT", ACCENT, 1);
+    drawText(px0 + 4, 146, scriptPreviewLanguage ? "X МОВА" : "X ЯЗЫК", WHITE, 1);
+    drawText(px0 + 4, 157, scriptPreviewLanguage ? "SEL ДАЛІ" : "SEL ДАЛЕЕ", WHITE, 1);
+    drawText(px0 + 4, 170, scriptPreviewLanguage ? "START ВИХІД" : "START ВЫХОД", ACCENT, 1);
     if (scriptPreviewRules.status == SCRIPT_PASSED)
-        drawText(px0 + 2, 181, "PASS FOUND", GOLD_LT, 1);
+        drawText(px0 + 2, 181, scriptPreviewLanguage ? "ЗНАЙДЕНО" : "НАЙДЕНО", GOLD_LT, 1);
     else if (scriptPreviewRules.status == SCRIPT_FAILED)
-        drawText(px0 + 2, 181, "FIRE LOST", FIRE2, 1);
+        drawText(px0 + 2, 181, scriptPreviewLanguage ? "ВОГОНЬ" : "ПОЖАР", FIRE2, 1);
 }
 static void drawScriptPreviewTop(void)
 {
@@ -2270,7 +2270,7 @@ static void drawScriptPreviewTop(void)
     // The first Russian/Ukrainian shelves both say "КНИГИ". Show the
     // active language explicitly so switching remains unambiguous and testable.
     drawTextCenter(128, 31, scriptPreviewLanguage ?
-                   "УКРАЇНСЬКА - TEST WORDS" : "РУССКИЙ - TEST WORDS", DIM_TEXT, 1);
+                   "УКРАЇНСЬКА - ДЕМО" : "РУССКИЙ - ДЕМО", DIM_TEXT, 1);
     const ScriptBoard *b = &scriptPreviewBoard;
     const char *theme = v4PoolsName(&scriptPreviewPools, b->passTheme);
     drawTextCenter(128, 47, theme, ACCENT, 2);
@@ -2295,23 +2295,32 @@ static void drawScriptPreviewTop(void)
     hline(26, 96, 204, DIM);
     char chain[88] = {0};
     if (scriptBoardChainUtf8(b, &scriptPreviewDict, chain, sizeof chain)) {
-        drawTextCenter(128, 106, "CURRENT WORD", DIM_TEXT, 1);
+        drawTextCenter(128, 106, scriptPreviewLanguage ? "ПОТОЧНЕ СЛОВО" : "ТЕКУЩЕЕ СЛОВО", DIM_TEXT, 1);
         drawTextCenter(128, 122, chain, WHITE, fontTextColumns(chain) > 16 ? 1 : 2);
         int tier = 0;
         int points = scriptBoardPreview(b, &scriptPreviewDict, &scriptPreviewTiles, &tier);
         char pts[24];
         if (points) {
-            snprintf(pts, sizeof pts, "+%d %s", points, tier == 1 ? "COMMON" : "RARE");
+            snprintf(pts, sizeof pts, "+%d %s", points,
+                     scriptPreviewLanguage ? (tier == 1 ? "ЗВИЧАЙНЕ" : "РІДКІСНЕ")
+                                           : (tier == 1 ? "ЧАСТОЕ" : "РЕДКОЕ"));
             drawTextCenter(128, 147, pts, GOLD_LT, 1);
-        } else if (b->chainLen >= 3) drawTextCenter(128, 147, "NOT IN TEST DICTIONARY", FIRE2, 1);
+        } else if (b->chainLen >= 3)
+            drawTextCenter(128, 147, scriptPreviewLanguage ?
+                           "НЕМАЄ В СЛОВНИКУ" : "НЕТ В СЛОВАРЕ", FIRE2, 1);
     }
     if (scriptPreviewRules.status == SCRIPT_PASSED) {
         char msg[52];
-        snprintf(msg, sizeof msg, "SHELF SAVED +%d - A: NEXT", scriptPreviewRules.lastBonus);
+        snprintf(msg, sizeof msg, scriptPreviewLanguage ?
+                 "ПОЛИЦЮ ВРЯТОВАНО +%d - A: ДАЛІ" :
+                 "ПОЛКА СПАСЕНА +%d - A: ДАЛЬШЕ", scriptPreviewRules.lastBonus);
         drawTextCenter(128, 169, msg, GOLD_LT, 1);
     } else if (scriptPreviewRules.status == SCRIPT_FAILED)
-        drawTextCenter(128, 169, "FIRE WON - A: RETRY / START: EXIT", FIRE2, 1);
-    else drawTextCenter(128, 169, "R: HINT  L+TAP: REVEAL", ACCENT, 1);
+        drawTextCenter(128, 169, scriptPreviewLanguage ?
+                       "ВОГОНЬ - A: ЗНОВУ" : "ПОЖАР - A: СНОВА", FIRE2, 1);
+    else drawTextCenter(128, 169, scriptPreviewLanguage ?
+                        "R: ПІДКАЗКА L+TAP: ВІДКРИТИ" :
+                        "R: ПОДСКАЗКА L+TAP: ОТКРЫТЬ", ACCENT, 1);
 }
 #endif
 
