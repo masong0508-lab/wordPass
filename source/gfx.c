@@ -2234,8 +2234,7 @@ static void drawScriptPreviewBoard(void)
     rectOutline(panelX, 2, 78, 188, GOLD_DK);
     drawText(px0 + 6, 10, "RU/UK DEMO", GOLD_LT, 1);
     char label[20];
-    if (scriptPreviewDaily)
-        snprintf(label, sizeof label, scriptPreviewLanguage ? "ДЕНЬ" : "ДЕНЬ");
+    if (scriptPreviewDaily) strcpy(label, "ДЕНЬ");
     else snprintf(label, sizeof label, scriptPreviewLanguage ? "ПОЛИЦЯ %d" : "ПОЛКА %d", scriptPreviewShelf);
     drawText(px0 + 6, 20, label, ACCENT, 1);
     hline(px0 + 2, 33, 70, GOLD_DK);
