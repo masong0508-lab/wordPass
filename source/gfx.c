@@ -3099,6 +3099,11 @@ static void topSigs(const Game *g, u32 sig[4])
         h0 = hmix(h0, g->state);
         h0 = hmix(h0, scriptPreviewShelf);
         h0 = hmix(h0, scriptPreviewLanguage);
+        // Language alters glyphs and theme words outside the first slice.
+        // Invalidate the full top HUD, not only its unchanged heading strip.
+        h1 = hmix(h1, scriptPreviewLanguage);
+        h2 = hmix(h2, scriptPreviewLanguage);
+        h3 = hmix(h3, scriptPreviewLanguage);
         h1 = hmix(h1, b->passLen);
         h1 = hmix(h1, b->passTheme);
         for (int i = 0; i < b->passLen; i++) {
