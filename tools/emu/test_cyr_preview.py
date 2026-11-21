@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""On-ROM Cyrillic preview test. Runs actual ARM9 game code in DeSmuME.
+"""Russian/Ukrainian DS menu and gameplay tests against actual ARM9 DeSmuME.
 
 The preview's 40 *four-word* RU/UK theme seeds are NOT full language packs.
 The production ROM has no developer preview and still exposes 11 locales.
@@ -24,15 +24,15 @@ def main(rom, output):
     e = Emu(rom)
     e.run(90)
     check(e.state()["state"] == 0, "expected title after selecting English")
-    # Entry is intentionally hidden in preview ROMs, not in the public language
-    # chooser: the release build never compiles this branch.
-    e.hold("L")
-    e.hold("R")
-    e.press("Y", settle=20)
-    e.hold("R", False)
-    e.hold("L", False)
-    check(e.state()["state"] == 9, "L+R+Y did not open real DS Cyrillic preview")
-    check(get_int(e, "scriptPreviewLanguage") == 0, "preview should start in Russian")
+    # Tap the actual LANGUAGE badge on the title screen. Only the separate
+    # engineering ROM offers two added choices, explicitly labelled DEMO.
+    e.tap(55, 14, settle=16)
+    check(e.state()["state"] == 8, "title language badge did not open chooser")
+    e.shot(str(out / "russian-ukrainian-chooser.png"))
+    # Preview-only rows 11 and 12: y=23+11*12+6 and 23+12*12+6.
+    e.tap(80, 161, settle=24)
+    check(e.state()["state"] == 9, "Русский DEMO option failed to enter DS preview")
+    check(get_int(e, "scriptPreviewLanguage") == 0, "Russian menu entry selected wrong board")
     check(get_int(e, "scriptPreviewThemeCount") == 40, "Russian preview should contain 40 seeded themes")
     check(get_int(e, "scriptPreviewShelf") == 1, "Cyrillic first shelf should start at 1")
     e.shot(str(out / "ru-board.png"))
@@ -111,7 +111,17 @@ def main(rom, output):
           "new Cyrillic shelf must reset heat/turn pacing")
     e.press("START", settle=20)
     check(e.state()["state"] == 0, "START should return to the untouched 11-language title")
-    print("CYRILLIC DS PREVIEW OK: bilingual stylus scoring, heat turns, top HUD, full password clear and next shelf")
+    # The second choice must work independently from the same visible menu,
+    # without first launching Russian and pressing X.
+    e.tap(55, 14, settle=14)
+    check(e.state()["state"] == 8, "returning title badge should reopen chooser")
+    e.tap(80, 173, settle=22)
+    check(e.state()["state"] == 9 and get_int(e, "scriptPreviewLanguage") == 1,
+          "Українська DEMO option failed to start Ukrainian independently")
+    e.shot(str(out / "ukrainian-direct-menu.png"))
+    e.press("B", settle=16)
+    check(e.state()["state"] == 0, "B must exit Ukrainian DEMO to normal title")
+    print("RUSSIAN AND UKRAINIAN DS OPTIONS OK: distinct chooser rows, game input, bilingual HUD, full shelf and safe exit")
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
