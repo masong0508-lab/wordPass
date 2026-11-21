@@ -67,15 +67,17 @@ The built-in preview remains tiny and deterministic for emulator regression.
 For a more substantial **experimental DS preview**, run the explicit
 `tools/lang/import_cyr_hunspell.py` intake for **both** languages with your
 properly licensed source files. Place its output under a single directory,
-for example `build/cyr-sourced/ru/` and `build/cyr-sourced/uk/`. Both
+for example `../wordpass-cyr-sourced/ru/` and `../wordpass-cyr-sourced/uk/`. Both
 must include `dict.bin`, `tiles.bin`, `pools.bin`,
 `SOURCE-MANIFEST.json` and `LICENSE-SOURCE.txt`.
+
+Place the external packs **outside the build/ directory**, since `make clean` deletes build/.
 
 Then, with devkitARM installed:
 
 ```sh
 make clean
-make WP_CYR_PREVIEW=1 CYR_EXTERNAL_DIR=build/cyr-sourced
+make WP_CYR_PREVIEW=1 CYR_EXTERNAL_DIR=../wordpass-cyr-sourced
 ```
 
 This opts into **external** resources only for the preview ROM. It does not
