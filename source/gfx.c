@@ -2266,7 +2266,7 @@ static void drawScriptPreviewTop(void)
     fillRect(0, 0, SCREEN_W, SCREEN_H, BLACK);
     rectOutline(7, 7, 242, 178, GOLD_DK);
     rectOutline(8, 8, 240, 176, GOLD);
-    drawTextCenter(128, 18, "CYRILLIC ENGINE PREVIEW", GOLD_LT, 1);
+    drawTextCenter(128, 18, "RUSSIAN / UKRAINIAN PREVIEW", GOLD_LT, 1);
     // The first Russian/Ukrainian shelves both say "КНИГИ". Show the
     // active language explicitly so switching remains unambiguous and testable.
     drawTextCenter(128, 31, scriptPreviewLanguage ?
@@ -2923,14 +2923,23 @@ static void drawPauseCard(const Game *g)
     }
 }
 
-// the language chooser: the eleven names in a list like the options, the highlighted one boxed
+// Normal releases retain the same 11-language chooser and its geometry.
+// Only the separate engineering ROM exposes two extra, NON-persistent test
+// destinations. Compact the rows there so all 13 choices fit without scroll.
+#ifdef WP_CYR_PREVIEW
+#define PICK_Y0 19
+#define PICK_DY 12
+#define PICK_COUNT (LANG_COUNT + 2)
+#else
 #define PICK_Y0 22
 #define PICK_DY 13
+#define PICK_COUNT LANG_COUNT
+#endif
 int gfxLangPickRowAt(int x, int y)
 {
     if (x < 12 || x >= 160 || y < PICK_Y0) return -1;
     int r = (y - PICK_Y0) / PICK_DY;
-    return r < LANG_COUNT ? r : -1;
+    return r < PICK_COUNT ? r : -1;
 }
 
 static void drawLangPick(const Game *g)
@@ -2942,15 +2951,30 @@ static void drawLangPick(const Game *g)
     drawBoardFrame();
     boardX0 = savedX0;
     drawTextShadow(86 - textWidth(ui(UI_LP_TITLE), 2) / 2, 7, ui(UI_LP_TITLE), GOLD_LT, 2);
-    for (int i = 0; i < LANG_COUNT; i++) {
+    for (int i = 0; i < PICK_COUNT; i++) {
         int y = PICK_Y0 + i * PICK_DY;
-        bool on = i == g->langPick, ok = langAvailable(i);
+        bool on = i == g->langPick;
+        bool ok = i < LANG_COUNT ? langAvailable(i) : true;
         if (on) { fillRect(12, y, 148, PICK_DY - 1, lerp15(BLACK, ACCENT, 4)); rectOutline(12, y, 148, PICK_DY - 1, ACCENT); }
+#ifdef WP_CYR_PREVIEW
+        if (i >= LANG_COUNT) {
+            // Native Cyrillic script and unmistakable beta status; never
+            // misrepresent these starter packs as fully translated locales.
+            const char *name = i == LANG_COUNT ? "РУССКИЙ" : "УКРАЇНСЬКА";
+            drawText(21, y + 2, name, on ? WHITE : INK, 1);
+            drawText(122, y + 2, "DEMO", on ? GOLD_LT : DIM_TEXT, 1);
+            continue;
+        }
+#endif
         drawText(86 - textWidth(langName(i), 1) / 2, y + 3, langName(i), on ? WHITE : ok ? INK : DIM2, 1);
         if (i == langCur()) drawChar(18, y + 3, '*', GOLD_LT, 1);
     }
+#ifdef WP_CYR_PREVIEW
+    drawTextCenter(86, 181, "RU/UK: TEST WORDS", DIM_TEXT, 1);
+#else
     if (langLoadFailed()) drawTextCenter(86, 172, ui(UI_OP_LANGFAIL), FIRE2, 1);
     else drawTextCenter(86, 172, ui(UI_LP_HINT), DIM_TEXT, 1);
+#endif
 }
 
 static void drawOverlay(const Game *g)
