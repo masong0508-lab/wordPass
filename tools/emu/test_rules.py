@@ -2363,6 +2363,26 @@ def _():
     p = spell_cells('bed'); pv, gain, g = spell(p)
     assert gain == pv == Emu.word_score('bed') and g['lastWord'] == 'bed', f'English after the languages: {pv} {gain}'
 
+@scenario('languages: selecting the active language keeps the title board stable, and B cancels the chooser')
+def _():
+    set_hand(False); to_title(); e.set_language(0); e.run(10)
+    before = e.state()
+    e.tap(40, 15, settle=10)
+    assert e.state()['state'] == ST_LANGPICK, 'the title language tag opens the chooser'
+    e.press('A', settle=10)  # English selected again: no dictionary reload, no board reroll
+    after = e.state()
+    assert after['state'] == ST_TITLE and after['language'] == 0
+    assert after['pass'] == before['pass'] and after['cell'] == before['cell'] and after['back'] == before['back'], (
+        'selecting the current language must not regenerate the title board')
+    e.tap(40, 15, settle=10)
+    assert e.state()['state'] == ST_LANGPICK
+    e.press('B', settle=10)
+    assert e.state()['state'] == ST_TITLE and e.state()['language'] == 0, 'B cancels language switching'
+    e.tap(40, 15, settle=10); e.press('UP', settle=4)
+    e.press('A', settle=10)
+    assert e.state()['state'] == ST_TITLE and e.state()['language'] == 10, 'UP from English wraps to Finnish'
+    lang_title(0)
+
 @scenario('languages: a shelf of each language, both hands, a nine-letter pass and long theme names stay inside the plaque and HUD')
 def _():
     for left in (False, True):

@@ -221,21 +221,22 @@ void gameSetLanguage(int idx)
 {
     if (G.state != ST_TITLE && G.state != ST_OPTIONS) return;
     if (idx < 0 || idx >= LANG_COUNT || !langAvailable(idx)) idx = LANG_EN;
-    if (!langLoad(idx)) idx = LANG_EN;
-    S.language = (u8)langCur();
-    S.languageChosen = 1;
+    if (idx == langCur()) {       // selecting the current entry should not reroll the waiting board
+        (void)langLoad(idx);     // clear an old error if the player chose English
+        S.language = (u8)langCur();
+        S.languageChosen = 1;
+        return;
+    }
+    bool loaded = langLoad(idx);
+    S.language = (u8)langCur();   // English if a pack failed partway through loading
+    if (loaded) S.languageChosen = 1;
     boardNewShelf(&G);
 }
 
 // the next available language in a direction, wrapping (English is always there)
 static void cycleLanguage(int dir)
 {
-    int idx = langCur();
-    for (int i = 0; i < LANG_COUNT; i++) {
-        idx = (idx + LANG_COUNT + dir) % LANG_COUNT;
-        if (langAvailable(idx)) break;
-    }
-    gameSetLanguage(idx);
+    gameSetLanguage(langNextAvailable(langCur(), dir));
 }
 
 static void cycleOption(int row, int dir)
@@ -700,12 +701,19 @@ int main(void)
             }
             case ST_LANGPICK: {  // tap a language, or UP/DOWN and A; B backs out once a language has been chosen
                 int hit = (down & KEY_TOUCH) ? gfxLangPickRowAt(t.px, t.py) : -1;
-                if (down & KEY_UP)   G.langPick = (G.langPick + LANG_COUNT - 1) % LANG_COUNT;
-                if (down & KEY_DOWN) G.langPick = (G.langPick + 1) % LANG_COUNT;
+                if (down & KEY_UP)   G.langPick = langNextAvailable(G.langPick, -1);
+                if (down & KEY_DOWN) G.langPick = langNextAvailable(G.langPick, 1);
                 bool go = (down & (KEY_A | KEY_START)) != 0;
-                if (hit >= 0) { G.langPick = hit; go = true; }
+                if (hit >= 0 && langAvailable(hit)) { G.langPick = hit; go = true; }
                 if ((down & KEY_B) && S.languageChosen) { G.state = G.langFrom; break; }
-                if (go) { G.state = G.langFrom; gameSetLanguage(G.langPick); settingsSave(); }
+                if (go && langAvailable(G.langPick)) {
+                    G.state = G.langFrom;
+                    gameSetLanguage(G.langPick);
+                    if (langLoadFailed()) {       // a pack may disappear after initial probing
+                        G.state = ST_LANGPICK;     // keep the load error visible; do not save a failed choice
+                        G.langPick = langCur();
+                    } else settingsSave();
+                }
                 break;
             }
             case ST_STATS:       // THE LEDGER: B, X, A, START or any tap leaves

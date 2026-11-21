@@ -255,6 +255,19 @@ void langInit(void)
 }
 
 bool langAvailable(int idx) { return idx >= 0 && idx < LANG_COUNT && avail[idx]; }
+
+// A menu can wrap past a broken or missing pack without opening it. English
+// remains the fallback when no translated files are on the ROM.
+int langNextAvailable(int from, int dir)
+{
+    if (from < 0 || from >= LANG_COUNT) from = LANG_EN;
+    int step = dir < 0 ? -1 : 1;
+    for (int i = 0; i < LANG_COUNT; i++) {
+        from = (from + LANG_COUNT + step) % LANG_COUNT;
+        if (avail[from]) return from;
+    }
+    return LANG_EN;
+}
 int  langLoadMs(void) { return lastMs; }
 bool langLoadFailed(void) { return loadFailed; }
 #ifdef ARM9
@@ -272,7 +285,9 @@ bool langFastPath(void) { return false; }
 
 bool langLoad(int idx)
 {
-    if (idx == langCur()) return true;
+    // Selecting the already active language is a no-op, but a past failure
+    // message must clear when the player explicitly settles on English.
+    if (idx == langCur()) { loadFailed = false; lastMs = 0; return true; }
     // the previous language goes first: two dictionaries at once would not fit in main RAM
     langApply(LANG_EN, NULL, 0, NULL, 0, NULL, 0);
     freeBuffers();

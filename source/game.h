@@ -468,6 +468,7 @@ int  langRare(int k);                         // k = 0..3
 // langload.c
 void langInit(void);                          // mount the filesystem and find out which languages are on it
 bool langAvailable(int idx);
+int  langNextAvailable(int from, int dir);  // next present language, wrapping and skipping missing packs
 bool langLoad(int idx);                       // load and activate (free the previous one first); false = could not, English is active
 bool langFastPath(void);                      // reads go straight from the card (see langload.c) rather than through NitroFS
 int  langLoadMs(void);                        // milliseconds the last langLoad took (0 for English)
