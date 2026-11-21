@@ -84,45 +84,12 @@ bool scriptPreviewNewPass(uint32_t seed)
     scriptPreviewTurns = scriptPreviewPeels = scriptPreviewHints = 0;
     scriptPreviewLastTier = scriptPreviewLastScore = 0;
     scriptLedgerReset(&scriptPreviewLedger);
-    // Guarantee one real Cyrillic word that can be chained on the DS, even
-    // when an external legally sourced Hunspell pack excludes the old
-    // sample ПРИВЕТ / ПРИВІТ. The tiny built-in fixtures retain that exact
-    // six-letter demonstration for deterministic emulator screenshots.
-    static const uint32_t ru[] = {0x041f,0x0420,0x0418,0x0412,0x0415,0x0422};
-    static const uint32_t uk[] = {0x041f,0x0420,0x0418,0x0412,0x0406,0x0422};
-    const uint32_t *word = scriptPreviewLanguage ? uk : ru;
-    uint8_t ids[WPP2_MAX_LEN] = {0};
-    int len = 6;
-    bool known = true;
-    for (int i = 0; i < len; i++) {
-        int id = v4DictSymbol(&scriptPreviewDict, word[i]);
-        if (id < 0) { known = false; break; }
-        ids[i] = (uint8_t)id;
-    }
-    if (known) known = v4DictLookupIds(&scriptPreviewDict, ids, len) != 0;
-    if (!known) {
-        static const uint8_t preferred[] = {6, 5, 4, 7, 8, 9};
-        len = 0;
-        for (int theme = 0; theme < scriptPreviewPools.themes && !len; theme++)
-            for (unsigned k = 0; k < sizeof preferred; k++) {
-                int n = preferred[k];
-                if (v4PoolsCount(&scriptPreviewPools, theme, n) > 0 &&
-                    v4PoolsWord(&scriptPreviewPools, theme, n, 0, ids)) {
-                    len = n;
-                    break;
-                }
-            }
-        if (!len) return false;
-    }
-    for (int i = 0; i < len; i++) {
-        // For a rare nine-symbol seed, the ninth gem sits on the hex
-        // neighbor at (1,6), avoiding the clipped odd-column bottom row.
-        int c = i < SCRIPT_ROWS ? 0 : 1;
-        int r = i < SCRIPT_ROWS ? i : SCRIPT_ROWS - 2;
-        scriptPreviewBoard.tile[c][r] = ids[i];
-        scriptPreviewBoard.state[c][r] = SCRIPT_TILE;
-    }
-    return true;
+    // Each generated shelf now guarantees a valid dictionary word from its
+    // own theme when possible, instead of always spelling ПРИВЕТ/ПРИВІТ.
+    // This includes Daily Practice: identical date + language => same word.
+    return scriptBoardPlantThemeWord(&scriptPreviewBoard, &scriptPreviewDict,
+                                    &scriptPreviewTiles, &scriptPreviewPools,
+                                    scriptPreviewSeed);
 }
 bool scriptPreviewOpen(int language, uint32_t seed)
 {
