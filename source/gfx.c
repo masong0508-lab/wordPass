@@ -2267,7 +2267,10 @@ static void drawScriptPreviewTop(void)
     rectOutline(7, 7, 242, 178, GOLD_DK);
     rectOutline(8, 8, 240, 176, GOLD);
     drawTextCenter(128, 18, "CYRILLIC ENGINE PREVIEW", GOLD_LT, 1);
-    drawTextCenter(128, 31, "SMALL TEST DICTIONARY ONLY", DIM_TEXT, 1);
+    // The first Russian/Ukrainian shelves both say "КНИГИ". Show the
+    // active language explicitly so switching remains unambiguous and testable.
+    drawTextCenter(128, 31, scriptPreviewLanguage ?
+                   "УКРАЇНСЬКА - TEST WORDS" : "РУССКИЙ - TEST WORDS", DIM_TEXT, 1);
     const ScriptBoard *b = &scriptPreviewBoard;
     const char *theme = v4PoolsName(&scriptPreviewPools, b->passTheme);
     drawTextCenter(128, 47, theme, ACCENT, 2);
