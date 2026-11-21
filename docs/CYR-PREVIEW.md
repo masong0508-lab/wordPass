@@ -2,8 +2,10 @@
 
 This project now builds a **separate, experimental Cyrillic DS ROM** alongside
 the ordinary 11-language wordPass.nds. This is **not** a complete Russian or
-Ukrainian release: the test lexicons contain only 16 words and 3 themes per
-language and must not appear in the normal language selector.
+Ukrainian release: the draft lexicons contain about 170 words and all 40
+theme headings, but only FOUR starter passwords per theme. These are not
+full dictionaries or production-ready pools and must not appear in the
+normal language selector.
 
 ## Real handheld controls
 
@@ -28,7 +30,11 @@ shows the masked password, theme name, current Cyrillic chain and preview score.
 
 Standard: run "make". The ordinary ROM has no hidden preview code or sample
 packs. Separate preview: run "make clean" followed by "make WP_CYR_PREVIEW=1".
-Its test-only NitroFS assets are generated from source-controlled fixtures at
+Its test-only NitroFS assets are generated from the 40-theme draft catalogs
+in data/cyrlex/ru_themes.json and data/cyrlex/uk_themes.json, plus the
+original tiny word fixtures; every candidate pass is dictionary-validated.
+The 40 themes retain the original English shelf order, not an alphabetical
+sort order. Files are written at
 nitrofiles/cyrpreview/{ru,uk}/{dict,tiles,pools}.bin.
 
 CI publishes both ROMs in separate artifacts. The preview emulator job
@@ -40,8 +46,9 @@ emulator suite continues to test the standard ROM independently.
 
 1. Obtain legally redistributable and native-speaker reviewed dictionaries
    for each language with broad vocabulary and inflections.
-2. Curate **40 complete themed password pools in Russian** and **40 in
-   Ukrainian**, all words validated against WPD4.
+2. Expand the 40 **starter** themed pools in Russian and Ukrainian from
+   four words each to complete reviewed word collections, balancing word
+   length and frequency. Every candidate must remain valid in WPD4.
 3. Localize and review all 385 UI messages, the guide, score/bonus text,
    examples and interface geometry, including long Cyrillic strings.
 4. Integrate WPD4/WPL2/WPP2 into the **full** Classic and Daily game rules

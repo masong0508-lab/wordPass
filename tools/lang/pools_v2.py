@@ -88,14 +88,15 @@ def canonical_name(name):
     return encoded
 
 
-def build(code, dictionary, themes):
+def build(code, dictionary, themes, preserve_order=False):
     symbols, counts, offsets = dictionary_info(dictionary, code)
     if not isinstance(themes, dict) or not 1 <= len(themes) <= MAX_THEMES:
         raise ValueError("WPP2 requires 1..48 named themes")
     idx = {cp: i for i, cp in enumerate(symbols)}
     theme_headers, word_payload = bytearray(), bytearray()
     seen_words, seen_names = set(), set()
-    for name in sorted(themes, key=lambda s: str(s).encode("utf-8")):
+    names = list(themes) if preserve_order else sorted(themes, key=lambda s: str(s).encode("utf-8"))
+    for name in names:
         raw_name = canonical_name(name)
         if raw_name in seen_names:
             raise ValueError("duplicate theme name")

@@ -13,6 +13,7 @@ extern V4Tiles scriptPreviewTiles;
 extern V4Pools scriptPreviewPools;
 extern int scriptPreviewLanguage;  // 0 Russian, 1 Ukrainian
 extern int scriptPreviewScore;
+extern int scriptPreviewThemeCount; // inspect 40 draft themes in emulator regression
 extern int scriptPreviewTurns;
 extern int scriptPreviewPeels;
 extern int scriptPreviewLastTier;

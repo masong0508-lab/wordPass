@@ -13,6 +13,7 @@ V4Tiles scriptPreviewTiles;
 V4Pools scriptPreviewPools;
 int scriptPreviewLanguage;
 int scriptPreviewScore, scriptPreviewTurns, scriptPreviewPeels;
+int scriptPreviewThemeCount;
 int scriptPreviewLastTier, scriptPreviewLastScore;
 uint32_t scriptPreviewSeed;
 
@@ -49,6 +50,7 @@ void scriptPreviewClose(void)
     memset(&scriptPreviewPools, 0, sizeof scriptPreviewPools);
     memset(&scriptPreviewBoard, 0, sizeof scriptPreviewBoard);
     scriptPreviewScore = scriptPreviewTurns = scriptPreviewPeels = 0;
+    scriptPreviewThemeCount = 0;
     scriptPreviewLastTier = scriptPreviewLastScore = 0;
 }
 bool scriptPreviewNewPass(uint32_t seed)
@@ -97,6 +99,7 @@ bool scriptPreviewOpen(int language, uint32_t seed)
         return false;
     }
     scriptPreviewLanguage = language;
+    scriptPreviewThemeCount = scriptPreviewPools.themes;
     scriptPreviewScore = 0;
     if (!scriptPreviewNewPass(seed)) { scriptPreviewClose(); return false; }
     return true;
