@@ -107,7 +107,7 @@ jobs:
           name: wordPass-cyr-preview
       - name: Smoke test
         run: python3 tools/emu/smoke.py wordPass.nds smoke-out
-      - name: Real DS Cyrillic preview: touch, chain, peel, switch and exit
+      - name: Real DS Cyrillic preview touch, chain, peel, switch and exit
         run: python3 tools/emu/test_cyr_preview.py wordPass-cyr-preview.nds cyr-preview-out
       - name: All-language ROM gameplay and layout smoke
         # The full rule-scenario suite remains opt-in below. These two existing
