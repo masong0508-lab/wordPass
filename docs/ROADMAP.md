@@ -65,9 +65,15 @@ as available in the in-game language picker.
 - [x] Add an isolated 7×8 hex-grid prototype using WPD4/WPL2 symbol IDs,
       stylus-style chain/backtracking, Cyrillic word scoring and deterministic
       submit/refill, with Russian and Ukrainian native gameplay tests.
-- [ ] Integrate WPD4/WPL2 and script-aware pass pools into the **live DS board**
-      and every gameplay system, preserving the existing 26-letter path; do
-      not advertise incomplete Cyrillic packs in the language picker.
+- [x] Implement **WPP2** script-aware themed password pools, with
+      exact WPD4 alphabet parity, Unicode theme names, validated dictionary
+      words, deterministic sample themes and corrupt-file regression tests.
+- [x] Extend the independent Cyrillic hex-board prototype with deterministic
+      hidden-password placement, peel/reveal, permanent diamonds, pass
+      completion and gravity barriers.
+- [ ] Integrate WPD4/WPL2/WPP2 into the **live DS board** and every gameplay
+      system, preserving the existing 26-letter path; do not advertise
+      incomplete Cyrillic packs in the language picker.
 - [ ] Define Qu-free vowel floors, tile distribution and word lengths for
       Cyrillic; balance with competent and weak bots.
 - [ ] Translate 385 UI messages, game guide and 40 theme names into Russian;

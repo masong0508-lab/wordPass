@@ -140,17 +140,28 @@ int scriptBoardSubmit(ScriptBoard *b, const V4Dict *dict,
     // subsequent refills draw a new deterministic bag (no heap allocations).
     for (int c = 0; c < SCRIPT_COLS; c++) {
         int dst = SCRIPT_ROWS - 1;
-        for (int r = SCRIPT_ROWS - 1; r >= 0; r--) {
-            if (used[c][r]) continue;
-            b->tile[c][dst] = b->tile[c][r];
-            b->state[c][dst] = b->state[c][r];
-            dst--;
-        }
-        for (; dst >= 0; dst--) {
-            uint8_t sym;
-            if (!take(b, tiles, &sym)) return 0;
-            b->tile[c][dst] = sym;
-            b->state[c][dst] = SCRIPT_TILE;
+        // Holes, revealed password diamonds and unconsumed fire split a
+        // column into segments. Each segment settles within its own bounds:
+        // no tiles can phase through a revealed secret or permanent hole.
+        for (int r = SCRIPT_ROWS - 1; r >= -1; r--) {
+            int state = r >= 0 ? b->state[c][r] : -1;
+            bool consumed = r >= 0 && used[c][r] && state != SCRIPT_DIAMOND;
+            bool floor = (r < 0 || state == SCRIPT_HOLE ||
+                          state == SCRIPT_DIAMOND ||
+                          (state == SCRIPT_BURN && !consumed));
+            if (floor) {
+                for (int fill = dst; fill > r; fill--) {
+                    uint8_t sym;
+                    if (!take(b, tiles, &sym)) return 0;
+                    b->tile[c][fill] = sym;
+                    b->state[c][fill] = SCRIPT_TILE;
+                }
+                dst = r - 1;
+            } else if (!consumed) {
+                b->tile[c][dst] = b->tile[c][r];
+                b->state[c][dst] = b->state[c][r];
+                dst--;
+            }
         }
     }
     b->chainLen = 0;
@@ -176,22 +187,122 @@ static unsigned encode(uint32_t cp, char *out)
     out[3] = (char)(0x80u | (cp & 63u));
     return 4;
 }
+static bool idsToUtf8(const uint8_t *ids, unsigned length,
+                      const V4Dict *dict, char *out, size_t capacity)
+{
+    if (!out || !capacity) return false;
+    out[0] = 0;
+    if (!dict || !dict->image || !ids) return false;
+    size_t written = 0;
+    for (unsigned i = 0; i < length; i++) {
+        if (ids[i] >= dict->symbols) { out[0] = 0; return false; }
+        char glyph[4];
+        unsigned bytes = encode(dict->alphabet[ids[i]], glyph);
+        if (written + bytes >= capacity) { out[0] = 0; return false; }
+        memcpy(out + written, glyph, bytes);
+        written += bytes;
+    }
+    out[written] = 0;
+    return true;
+}
 bool scriptBoardChainUtf8(const ScriptBoard *b, const V4Dict *dict,
                           char *out, size_t capacity)
 {
     if (!out || !capacity) return false;
     out[0] = 0;
-    if (!b || !dict || !dict->image) return false;
-    size_t n = 0;
+    if (!b || b->chainLen > SCRIPT_MAX_CHAIN) return false;
+    uint8_t ids[SCRIPT_MAX_CHAIN];
     for (unsigned i = 0; i < b->chainLen; i++) {
         int c = b->chainC[i], r = b->chainR[i];
-        if (!inside(c, r) || b->tile[c][r] >= dict->symbols) return false;
-        char buf[4];
-        unsigned count = encode(dict->alphabet[b->tile[c][r]], buf);
-        if (n + count >= capacity) { out[0] = 0; return false; }
-        memcpy(out + n, buf, count);
-        n += count;
+        if (!inside(c, r)) return false;
+        ids[i] = b->tile[c][r];
     }
-    out[n] = 0;
+    return idsToUtf8(ids, b->chainLen, dict, out, capacity);
+}
+bool scriptBoardPassUtf8(const ScriptBoard *b, const V4Dict *dict,
+                         char *out, size_t capacity)
+{
+    if (!out || !capacity) return false;
+    out[0] = 0;
+    if (!b || !b->passLen || b->passLen > WPP2_MAX_LEN) return false;
+    return idsToUtf8(b->pass, b->passLen, dict, out, capacity);
+}
+
+
+// Hidden password support for the independent script-ID board model.
+// No code in the shipped GAME path uses this until the full Cyrillic
+// dictionary/guide/renderer and port validation are complete.
+bool scriptBoardStartPass(ScriptBoard *b, const V4Dict *dict,
+                          const V4Tiles *tiles, const V4Pools *pools,
+                          uint32_t seed, int requestedLength)
+{
+    if (!b || !sameAlphabet(dict, tiles) || !pools || !pools->image ||
+        !v4PoolsMatches(pools, dict) || !pools->themes ||
+        requestedLength < WPP2_MIN_LEN || requestedLength > WPP2_MAX_LEN)
+        return false;
+    unsigned theme = (seed >> 8) % pools->themes;
+    int len = -1;
+    for (int delta = 0; delta <= WPP2_MAX_LEN - WPP2_MIN_LEN; delta++) {
+        int shorter = requestedLength - delta;
+        int longer = requestedLength + delta;
+        if (shorter >= WPP2_MIN_LEN &&
+            v4PoolsCount(pools, theme, shorter) > 0) { len = shorter; break; }
+        if (longer <= WPP2_MAX_LEN &&
+            v4PoolsCount(pools, theme, longer) > 0) { len = longer; break; }
+    }
+    if (len < 0) return false;
+    uint8_t word[WPP2_MAX_LEN] = {0};
+    int count = v4PoolsCount(pools, theme, len);
+    int pick = (int)((seed >> 16) % (unsigned)count);
+    if (!v4PoolsWord(pools, theme, len, pick, word) ||
+        !v4DictLookupIds(dict, word, len)) return false;
+
+    // At most 9 passwords in the bottom three rows (21 candidate slots).
+    // Their positions are independent of the tiles' 100-letter bag.
+    if (!scriptBoardStart(b, tiles, seed)) return false;
+    b->passLen = (uint8_t)len;
+    b->passTheme = (uint8_t)theme;
+    memcpy(b->pass, word, (size_t)len);
+    uint8_t slots[SCRIPT_COLS * 3];
+    for (unsigned i = 0; i < sizeof slots; i++) slots[i] = (uint8_t)i;
+    uint32_t rng = (seed ? seed : 0x9e3779b9u) ^ 0x6e624eb7u;
+    for (int i = (int)sizeof slots - 1; i > 0; i--) {
+        rng = nextSeed(rng);
+        unsigned j = rng % (unsigned)(i + 1);
+        uint8_t tmp = slots[i]; slots[i] = slots[j]; slots[j] = tmp;
+    }
+    for (int i = 0; i < len; i++) {
+        int c = slots[i] / 3, r = SCRIPT_ROWS - 3 + slots[i] % 3;
+        b->back[c][r] = (uint8_t)(i + 1);
+    }
+    return true;
+}
+int scriptBoardPeel(ScriptBoard *b, int col, int row)
+{
+    if (!b || !b->passLen || !inside(col, row) ||
+        (b->state[col][row] != SCRIPT_TILE &&
+         b->state[col][row] != SCRIPT_BURN))
+        return -1;
+    uint8_t index = b->back[col][row];
+    if (index && index > b->passLen) return -1;
+    b->chainLen = 0;
+    if (index) {
+        // Discover this hidden pass symbol, then permanently expose its
+        // actual Cyrillic glyph as a chainable, flame-stopping diamond.
+        int i = index - 1;
+        b->tile[col][row] = b->pass[i];
+        b->state[col][row] = SCRIPT_DIAMOND;
+        b->found[i] = 1;
+        b->back[col][row] = 0;
+        return index;
+    }
+    b->state[col][row] = SCRIPT_HOLE;
+    return 0;
+}
+bool scriptBoardPassComplete(const ScriptBoard *b)
+{
+    if (!b || !b->passLen || b->passLen > WPP2_MAX_LEN) return false;
+    for (unsigned i = 0; i < b->passLen; i++)
+        if (!b->found[i]) return false;
     return true;
 }
