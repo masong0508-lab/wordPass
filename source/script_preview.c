@@ -12,7 +12,7 @@ V4Dict scriptPreviewDict;
 V4Tiles scriptPreviewTiles;
 V4Pools scriptPreviewPools;
 int scriptPreviewLanguage;
-int scriptPreviewScore, scriptPreviewTurns, scriptPreviewPeels;
+int scriptPreviewScore, scriptPreviewTurns, scriptPreviewPeels, scriptPreviewHints;
 int scriptPreviewThemeCount;
 int scriptPreviewShelf;
 ScriptRules scriptPreviewRules;
@@ -51,7 +51,7 @@ void scriptPreviewClose(void)
     memset(&scriptPreviewTiles, 0, sizeof scriptPreviewTiles);
     memset(&scriptPreviewPools, 0, sizeof scriptPreviewPools);
     memset(&scriptPreviewBoard, 0, sizeof scriptPreviewBoard);
-    scriptPreviewScore = scriptPreviewTurns = scriptPreviewPeels = 0;
+    scriptPreviewScore = scriptPreviewTurns = scriptPreviewPeels = scriptPreviewHints = 0;
     scriptPreviewThemeCount = 0;
     scriptPreviewShelf = 0;
     memset(&scriptPreviewRules, 0, sizeof scriptPreviewRules);
@@ -70,7 +70,7 @@ bool scriptPreviewNewPass(uint32_t seed)
     if (!scriptBoardStartPass(&scriptPreviewBoard, &scriptPreviewDict,
                               &scriptPreviewTiles, &scriptPreviewPools,
                               scriptPreviewSeed, 5)) return false;
-    scriptPreviewTurns = scriptPreviewPeels = 0;
+    scriptPreviewTurns = scriptPreviewPeels = scriptPreviewHints = 0;
     scriptPreviewLastTier = scriptPreviewLastScore = 0;
     // Guarantee one real Cyrillic word that can be chained on the DS, even
     // when an external legally sourced Hunspell pack excludes the old
@@ -172,6 +172,20 @@ bool scriptPreviewChain(int c, int r)
     if (!scriptPreviewDict.image || scriptPreviewRules.status != SCRIPT_RUNNING)
         return false;
     return scriptBoardAdd(&scriptPreviewBoard, c, r);
+}
+bool scriptPreviewHint(void)
+{
+    if (!scriptPreviewDict.image || scriptPreviewRules.status != SCRIPT_RUNNING ||
+        scriptPreviewHints) return false;
+    uint8_t c[SCRIPT_HINT_MAX], r[SCRIPT_HINT_MAX];
+    int n = scriptBoardHint(&scriptPreviewBoard, &scriptPreviewDict,
+                             &scriptPreviewTiles, c, r);
+    if (n < WPD4_MIN_WORD) return false;
+    memcpy(scriptPreviewBoard.chainC, c, (size_t)n);
+    memcpy(scriptPreviewBoard.chainR, r, (size_t)n);
+    scriptPreviewBoard.chainLen = (uint8_t)n;
+    scriptPreviewHints++;
+    return true;
 }
 int scriptPreviewSubmit(void)
 {

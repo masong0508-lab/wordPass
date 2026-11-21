@@ -44,6 +44,13 @@ bool scriptBoardIgnite(ScriptBoard *board, uint32_t turnSeed);
 // Returns true when fire escapes the board and the shelf is lost. Flame
 // movement and a tile gravity/refill pass are deterministic, heap-free.
 bool scriptBoardFireStep(ScriptBoard *board, const V4Tiles *tiles);
+// Find an existing valid 3..6-symbol path with bounded prefix-pruned DFS.
+// Returns path length, or zero when none is found within the search budget.
+// Outputs are caller-owned arrays with at least SCRIPT_HINT_MAX glyphs.
+#define SCRIPT_HINT_MAX 6
+int scriptBoardHint(const ScriptBoard *board, const V4Dict *dict,
+                    const V4Tiles *tiles, uint8_t outC[SCRIPT_HINT_MAX],
+                    uint8_t outR[SCRIPT_HINT_MAX]);
 int scriptBoardPreview(const ScriptBoard *board, const V4Dict *dict,
                        const V4Tiles *tiles, int *tier);
 int scriptBoardSubmit(ScriptBoard *board, const V4Dict *dict,
