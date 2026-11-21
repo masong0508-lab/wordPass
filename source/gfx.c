@@ -2237,7 +2237,7 @@ static void drawScriptPreviewBoard(void)
     snprintf(label, sizeof label, "SHELF %d", scriptPreviewShelf);
     drawText(px0 + 6, 20, label, ACCENT, 1);
     hline(px0 + 2, 33, 70, GOLD_DK);
-    drawText(px0 + 7, 40, scriptPreviewLanguage ? "UKRAINIAN" : "RUSSIAN", WHITE, 1);
+    drawText(px0 + 7, 40, scriptPreviewLanguage ? "УКРАЇНСЬКА" : "РУССКИЙ", WHITE, 1);
     char n[16];
     drawText(px0 + 4, 57, "SCORE", DIM_TEXT, 1);
     fmtInt(n, scriptPreviewScore);
