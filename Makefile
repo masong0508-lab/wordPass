@@ -149,6 +149,8 @@ check:
 	$(BUILD)/script_fire_check $(BUILD)/wpd4_ru.bin $(BUILD)/wpd4_uk.bin $(BUILD)/wpl2_ru.bin $(BUILD)/wpl2_uk.bin $(BUILD)/wpp2_ru.bin $(BUILD)/wpp2_uk.bin
 	gcc -std=gnu11 -O2 -Wall -Wextra -Wshadow -I source tools/check/script_ledger_test.c source/script_ledger.c -o $(BUILD)/script_ledger_check
 	$(BUILD)/script_ledger_check
+	gcc -std=gnu11 -O2 -Wall -Wextra -Wshadow -I source tools/check/script_daily_test.c source/script_daily.c -o $(BUILD)/script_daily_check
+	$(BUILD)/script_daily_check
 	gcc -std=gnu11 -Wall -Wextra -Wshadow -I tools/check/stub -I source $(CHECK_SRC) -o $(BUILD)/check
 	$(BUILD)/check
 	gcc -std=gnu11 -O1 -Wall -Wextra -Wshadow -I tools/check/stub -I source $(BOT_SRC) -lm -o $(BUILD)/bot_check
