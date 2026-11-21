@@ -33,6 +33,13 @@ jobs:
         run: make music-check
       - name: Python tools compile
         run: python3 -m py_compile tools/*.py tools/emu/*.py tools/lang/*.py tools/music/*.py tools/check/*.py
+      - name: Generate actionable 11-language audit report
+        run: python3 tools/lang/quality_report.py build/language-quality.md
+      - name: Upload localization QA report
+        uses: actions/upload-artifact@v7
+        with:
+          name: wordPass-language-quality
+          path: build/language-quality.md
 
   nds:
     needs: check

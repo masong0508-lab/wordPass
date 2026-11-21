@@ -29,7 +29,12 @@ def main():
     for s, expected in rejected.items():
         errors = gen_ui.slot_errors(s)
         assert any(expected in e for e in errors), f"expected {expected!r} for {s!r}, got {errors}"
-    print(f"UI SLOT TEST OK: {len(accepted)} valid, {len(rejected)} rejected")
+    for sample, reference in (("@EXISTS|2", {"EXISTS"}), ("-", set()), ("L|R", set())):
+        assert not gen_ui.sample_errors(sample, reference)
+    for sample, reference in (("@MISSING", {"EXISTS"}), ("ABCDEFGHIJKLMNOP", set()), ("X||Y", set())):
+        assert gen_ui.sample_errors(sample, reference), sample
+    assert gen_ui.width(gen_ui.expand("%1$02d-%2$02d", "1|3"), 1) == 29
+    print(f"UI SLOT TEST OK: {len(accepted)} valid, {len(rejected)} rejected, 6 sample cases, padding regression")
 
 
 if __name__ == "__main__":

@@ -45,6 +45,26 @@ their plaque.
 A final language-by-language editorial review
 and playthrough remain necessary before claiming flawless translations.
 
+## Language quality milestone
+
+The game currently ships **11 total languages**, English plus the ten ROM
+language packs below. This milestone adds stronger **runtime protection**
+against broken packs (all three resources must exist with the right headers and
+sizes), strict parsing of letter weights/Qu/vowels/rare letters, rejection of
+malformed dictionary or pool sizes, and recovery to English after a failed
+load. These checks keep a damaged translation pack from corrupting the game.
+
+`python3 tools/lang/quality_report.py build/language-quality.md` creates an
+actionable per-language review report: translated-string coverage, tight pixel
+budgets, dictionary and pass-pool sizes, and UI labels that might need a
+native-speaker review. Every PR run attaches this Markdown file as the
+`wordPass-language-quality` artifact alongside the ROM artifact.
+
+The report is intentionally a **review aid**, not proof that each dictionary
+entry or translated sentence is linguistically correct. Unsupported language
+packs are not advertised as playable; adding a new language requires a
+dictionary, pass pools, tiles, complete UI, and console testing together.
+
 ## The ten languages
 
 All ten of the preferred set were buildable; there are no substitutions. Two of them needed a

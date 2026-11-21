@@ -60,6 +60,24 @@ def slot_errors(s):
     return problems
 
 
+def sample_errors(sample, known_ids):
+    """Samples must match the eight-slot native test and resolve their references."""
+    if sample == "-":
+        return []
+    problems = []
+    tokens = sample.split("|")
+    if len(tokens) > MAX_SLOTS:
+        problems.append(f"{len(tokens)} samples exceeds {MAX_SLOTS}")
+    for token in tokens:
+        if not token:
+            problems.append("empty sample item")
+        if len(token) > 15:
+            problems.append(f"sample {token!r} exceeds the native test's 15-character slot")
+        if token.startswith("@") and token[1:] not in known_ids:
+            problems.append(f"unknown referenced UI text {token!r}")
+    return problems
+
+
 def slots(s):
     out, seq = {}, 1
     for m in SLOT.finditer(s):
@@ -82,9 +100,16 @@ def expand(s, samp, lang=0, rows=None):
         if pos - 1 < len(toks):
             t = toks[pos - 1]
             if t.startswith("@") and rows is not None:      # another id's text in the same language (a name that goes in this slot)
-                return CODE.sub('', rows[t[1:]][lang])
-            return t
-        return "99" if m.group(3) == "d" else "WWWW"
+                t = CODE.sub('', rows[t[1:]][lang])
+        else:
+            t = "99" if m.group(3) == "d" else "WWWW"
+        # Match the runtime formatter's integer field width. Without this,
+        # a future %08d might fit its sample yet overflow the rendered slot.
+        count = int(m.group(2)) if m.group(2) else 0
+        if count > len(t):
+            pad = "0" if m.group(2).startswith("0") and m.group(3) == "d" else " "
+            t = pad * (count - len(t)) + t
+        return t
     return SLOT.sub(rep, s)
 
 
@@ -147,6 +172,15 @@ def validate(rows):
     bad, seen = example_words(rows), set()
     byid = {r[1]: r[5] for r in rows}
     for ln, id_, scale, budget, samp, txt in rows:
+        for problem in sample_errors(samp, byid):
+            bad.append(f"{id_} sample: {problem}")
+        # Unsupported printf-like syntax may otherwise be mistaken for text.
+        # Literal percentages (100%, % PER) stay allowed.
+        malformed = re.compile(r"%(?:[0-9$.]+)?[ds]")
+        for lang, s in zip(LANGS, txt):
+            for m in malformed.finditer(s):
+                if not SLOT.fullmatch(m.group()):
+                    bad.append(f"{id_} {lang}: malformed format slot {m.group()!r}")
         if id_ in seen:
             bad.append(f"line {ln}: duplicate id {id_}")
         seen.add(id_)
