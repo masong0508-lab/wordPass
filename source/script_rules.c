@@ -91,6 +91,11 @@ int scriptRulesTurn(ScriptRules *rules, ScriptBoard *board,
 int scriptRulesRescueTurn(ScriptRules *rules, ScriptBoard *board,
                           const V4Tiles *tiles)
 {
+    // Reject an already recovered password even if a caller has not yet
+    // advanced the status flag. A rescue must never award a pass bonus.
+    if (!rules || !board || !tiles || !tiles->valid ||
+        rules->status != SCRIPT_RUNNING || scriptBoardPassComplete(board))
+        return 0;
     // Recovering a legal move is not a word or a peel and never awards
     // points; it still advances flame, heat and overtime once.
     return rulesTurnCore(rules, board, tiles, 2, false, true, false);
