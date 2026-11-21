@@ -366,3 +366,66 @@ bool scriptBoardPassComplete(const ScriptBoard *b)
         if (!b->found[i]) return false;
     return true;
 }
+
+// Bounded DFS: unlike a naive 56*(6^6) brute force, reject impossible
+// Unicode prefixes via WPD4 binary searches. This is run ONLY when the
+// user presses R, never from the frame renderer. A 12k-node limit protects
+// the original DS's single-core 60 Hz budget on large imported word lists.
+typedef struct {
+    const ScriptBoard *b;
+    const V4Dict *dict;
+    const V4Tiles *tiles;
+    uint8_t pathC[SCRIPT_HINT_MAX], pathR[SCRIPT_HINT_MAX];
+    uint8_t ids[SCRIPT_HINT_MAX];
+    bool used[SCRIPT_COLS][SCRIPT_ROWS];
+    int target, nodes;
+} HintSearch;
+static bool hintWalk(HintSearch *h, int col, int row, int depth)
+{
+    if (h->nodes >= 12000 || !inside(col, row) || h->used[col][row])
+        return false;
+    int state = h->b->state[col][row];
+    int id = h->b->tile[col][row];
+    if ((state != SCRIPT_TILE && state != SCRIPT_BURN &&
+         state != SCRIPT_DIAMOND) ||
+        id >= h->tiles->symbols || !h->tiles->weight[id])
+        return false;
+    h->nodes++;
+    h->used[col][row] = true;
+    h->pathC[depth] = (uint8_t)col;
+    h->pathR[depth] = (uint8_t)row;
+    h->ids[depth] = (uint8_t)id;
+    int n = depth + 1;
+    if (n == h->target) {
+        if (v4DictLookupIds(h->dict, h->ids, n) != 0) return true;
+    } else if (n < 2 || v4DictHasPrefixIds(h->dict, h->ids, n)) {
+        int nc[6] = {col, col, col - 1, col - 1, col + 1, col + 1};
+        int nr[6] = {row + 1, row - 1, row, row + ((col & 1) ? 1 : -1),
+                     row, row + ((col & 1) ? 1 : -1)};
+        for (int i = 0; i < 6; i++) {
+            if (hintWalk(h, nc[i], nr[i], n)) return true;
+        }
+    }
+    h->used[col][row] = false;
+    return false;
+}
+int scriptBoardHint(const ScriptBoard *b, const V4Dict *dict,
+                    const V4Tiles *tiles, uint8_t outC[SCRIPT_HINT_MAX],
+                    uint8_t outR[SCRIPT_HINT_MAX])
+{
+    if (!b || !sameAlphabet(dict, tiles) || !outC || !outR) return 0;
+    for (int length = SCRIPT_HINT_MAX; length >= WPD4_MIN_WORD; length--) {
+        HintSearch search;
+        memset(&search, 0, sizeof search);
+        search.b = b; search.dict = dict; search.tiles = tiles;
+        search.target = length;
+        for (int c = 0; c < SCRIPT_COLS; c++)
+            for (int r = 0; r < SCRIPT_ROWS; r++)
+                if (hintWalk(&search, c, r, 0)) {
+                    memcpy(outC, search.pathC, (size_t)length);
+                    memcpy(outR, search.pathR, (size_t)length);
+                    return length;
+                }
+    }
+    return 0;
+}

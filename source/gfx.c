@@ -2252,7 +2252,7 @@ static void drawScriptPreviewBoard(void)
     hline(px0 + 2, 107, 70, GOLD_DK);
     drawText(px0 + 4, 113, "L+TAP PEEL", WHITE, 1);
     drawText(px0 + 4, 124, "A  SUBMIT", WHITE, 1);
-    drawText(px0 + 4, 135, "Y  CLEAR", WHITE, 1);
+    drawText(px0 + 4, 135, "Y CLR R HINT", WHITE, 1);
     drawText(px0 + 4, 146, "X  LANG", WHITE, 1);
     drawText(px0 + 4, 157, "SEL  NEXT", WHITE, 1);
     drawText(px0 + 4, 170, "START EXIT", ACCENT, 1);
@@ -2311,7 +2311,7 @@ static void drawScriptPreviewTop(void)
         drawTextCenter(128, 169, msg, GOLD_LT, 1);
     } else if (scriptPreviewRules.status == SCRIPT_FAILED)
         drawTextCenter(128, 169, "FIRE WON - A: RETRY / START: EXIT", FIRE2, 1);
-    else drawTextCenter(128, 169, "HOLD L + TAP TO REVEAL LETTERS", ACCENT, 1);
+    else drawTextCenter(128, 169, "R: HINT  L+TAP: REVEAL", ACCENT, 1);
 }
 #endif
 

@@ -43,6 +43,36 @@ static void exercise(const char *dbFile,const char *tbFile,const char *pbFile, b
 
     ScriptBoard b, repeat;
     CHECK(scriptBoardStart(&b,&tiles,2718),"create Cyrillic fire test board");
+    // Keep the seeded fire fixture pristine: hint assertions mutate only
+    // a disposable copy, so fire determinism still compares equal seeds.
+    ScriptBoard hintBoard = b;
+    // The intentionally small lexicon is still hintable because one real
+    // six-symbol word is planted on adjacent touchscreen gems.
+    const uint32_t greeting[] = {
+        0x041f, 0x0420, 0x0418, 0x0412, uk ? 0x0406u : 0x0415u, 0x0422
+    };
+    for (int row=0; row<6; row++) {
+        int symbol = v4DictSymbol(&dict, greeting[row]);
+        CHECK(symbol >= 0, "seeded hint symbol in alphabet");
+        hintBoard.tile[0][row] = (uint8_t)(symbol < 0 ? 0 : symbol);
+    }
+    uint8_t hintC[SCRIPT_HINT_MAX], hintR[SCRIPT_HINT_MAX];
+    int hintLen = scriptBoardHint(&hintBoard, &dict, &tiles, hintC, hintR);
+    CHECK(hintLen >= 3 && hintLen <= SCRIPT_HINT_MAX,
+          "bounded solver discovers at least one Cyrillic word path");
+    hintBoard.chainLen = (uint8_t)hintLen;
+    for (int i=0; i<hintLen; i++) {
+        hintBoard.chainC[i] = hintC[i];
+        hintBoard.chainR[i] = hintR[i];
+    }
+    CHECK(scriptBoardPreview(&hintBoard,&dict,&tiles,NULL) > 0,
+          "hint path is geometrically adjacent and a valid real word");
+    scriptBoardClearChain(&hintBoard);
+    for (int c=0;c<SCRIPT_COLS;c++)
+        for(int row=0;row<SCRIPT_ROWS;row++)
+            hintBoard.state[c][row] = SCRIPT_HOLE;
+    CHECK(scriptBoardHint(&hintBoard,&dict,&tiles,hintC,hintR)==0,
+          "bounded hint solver refuses a board with no chainable tiles");
     CHECK(scriptBoardStart(&repeat,&tiles,2718) &&
           !memcmp(&b,&repeat,sizeof b),"seeded fire boards reproducible");
     CHECK(scriptBoardIgnite(&b,1784) && scriptBoardIgnite(&repeat,1784) &&
