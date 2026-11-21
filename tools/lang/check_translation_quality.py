@@ -85,6 +85,97 @@ def check_meaning(rows, problems):
                 issue(problems, f"{key} {lang}: controller button {button} is missing")
 
 
+# Distinct actions and statuses must never collapse to the same localized
+# string. This is an objective check; it does not claim to judge prose quality.
+# Use only pairs that are meaningful opposites in the actual DS interface.
+CONTRASTS = (
+    ("V_ON", "V_OFF"),
+    ("V_LEFT", "V_RIGHT"),
+    ("V_FULL", "V_COMMON"),
+    ("V_AMERICAN", "V_BRITISH"),
+    ("V_RELAXED", "V_FAST"),
+    ("T_CLASSIC", "T_DAILY"),
+    ("OP_SAVED", "OP_SAVEFAIL"),
+    ("OP_NOSAVE", "OP_SAVED"),
+    ("MS_HINT", "MS_NOHINT"),
+    ("V_GOLD", "V_SILVER"),
+    ("V_CANDY", "V_EMBER"),
+    ("CO_GOOD", "CO_NOTWORD"),
+    ("MS_BRIT", "MS_AMER"),
+    ("R_TAPRETRY", "R_TAPTITLE"),
+)
+
+# Hardware button symbols must remain literal when they introduce a control
+# instruction; the translated prose after ':' is free to vary.
+CONTROL_LEGENDS = {
+    "G_C_A": "A",
+    "G_C_B": "B",
+    "G_C_X": "X",
+    "G_C_Y": "Y",
+    "G_C_START": "START",
+}
+SHOULDER_LEGENDS = ("G_HOLDLR", "G_C_LR")
+
+
+def check_contrasts(rows, problems):
+    for left, right in CONTRASTS:
+        if left not in rows or right not in rows:
+            issue(problems, f"missing contrast pair {left}/{right}")
+            continue
+        for lang in LANGS:
+            a = " ".join(rows[left][lang].split()).casefold()
+            b = " ".join(rows[right][lang].split()).casefold()
+            if a == b:
+                issue(problems, f"{lang}: {left} and {right} share the same translation")
+
+
+def check_controls(rows, problems):
+    for key, button in CONTROL_LEGENDS.items():
+        if key not in rows:
+            issue(problems, f"{key}: missing control legend")
+            continue
+        for lang in LANGS:
+            if not rows[key][lang].startswith(button + ":"):
+                issue(problems, f"{key} {lang}: controller label must begin {button}:")
+    for key in SHOULDER_LEGENDS:
+        if key not in rows:
+            issue(problems, f"{key}: missing shoulder instruction")
+            continue
+        for lang in LANGS:
+            for button in ("L", "R"):
+                if not re.search(r"(?<![A-Z])" + button + r"(?![A-Z])", rows[key][lang]):
+                    issue(problems, f"{key} {lang}: missing literal {button} shoulder button")
+
+
+def selftest():
+    # Assert that each negative case is *detected*, not just that existing
+    # translation rows happen to pass. Never modify the committed TSV.
+    problems = []
+    baseline = read_ui(problems)
+    check_meaning(baseline, problems)
+    check_contrasts(baseline, problems)
+    check_controls(baseline, problems)
+    if problems:
+        print("\\n".join("FAIL " + p for p in problems))
+        return 1
+
+    def altered(key, lang, value, check, marker):
+        rows = {name: translations.copy() for name, translations in baseline.items()}
+        rows[key][lang] = value
+        failures = []
+        check(rows, failures)
+        if not any(marker in item for item in failures):
+            raise AssertionError(f"regression missed for {key} {lang}: {marker}")
+
+    altered("V_ON", "fi", baseline["V_OFF"]["fi"], check_contrasts, "V_ON and V_OFF")
+    altered("OP_SAVED", "fr", baseline["OP_SAVEFAIL"]["fr"], check_contrasts, "OP_SAVED and OP_SAVEFAIL")
+    altered("G_C_A", "fr", "B: WRONG BUTTON", check_controls, "G_C_A fr")
+    altered("G_C_LR", "en", "HOLD L: PEEK", check_controls, "missing literal R")
+    altered("CO_PASSLETTER", "fr", "SCORE!", check_meaning, "CO_PASSLETTER fr")
+    print("TRANSLATION REGRESSION SELFTEST OK: opposite actions, controls and critical meanings")
+    return 0
+
+
 def check_themes(problems):
     if len(ORDER) != 40:
         issue(problems, f"theme source contains {len(ORDER)} names, not 40")
@@ -115,6 +206,8 @@ def main():
     problems = []
     rows = read_ui(problems)
     check_meaning(rows, problems)
+    check_contrasts(rows, problems)
+    check_controls(rows, problems)
     check_themes(problems)
     for problem in problems:
         print("FAIL", problem)
@@ -123,9 +216,10 @@ def main():
         return 1
     print(f"TRANSLATION QUALITY OK: {len(rows)} UI entries x {len(LANGS)} languages,"
           f" {len(REQUIRED)} vital-message meanings x {len(LANGS)} languages,"
+          f" {len(CONTRASTS)} contrast pairs and {len(CONTROL_LEGENDS) + len(SHOULDER_LEGENDS)} control legends,"
           f" 40 themes x 10 non-English languages")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(selftest() if "--selftest" in sys.argv else main())
