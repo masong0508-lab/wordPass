@@ -77,6 +77,28 @@ language isolation in the actual emulator. This is one step toward retail
 scoring parity, **not** a claim that the remaining Classic/Daily economy,
 password balancing and full 385-message localization are finished.
 
+## Daily Practice (unranked, experimental)
+
+In the Russian or Ukrainian demo press **L+SELECT** to switch between
+ordinary test shelves and **Daily Practice**. The practice puzzle uses the DS
+calendar date and a different stable seed for each language. On the same
+date and language, reloading the ROM, pressing SELECT to retry, or switching
+to Ukrainian and back restores the same board and password. The replay score
+is reset to zero, so retries cannot inflate it.
+
+This is **NOT** the retail scored Daily. There are no streak records,
+achievements, completed-day flags or save writes, and finishing the single
+daily shelf does not advance to the next one. Press **SELECT** to retry or
+**L+SELECT** to return to experimental Classic-style shelves. A missing/invalid
+DS clock refuses entry and displays a clock warning rather than making a
+fake date. Russian and Ukrainian do not share the date's board or word ledger.
+
+The small, allocation-free `scriptDailySeed` helper is also exercised
+natively for calendar validity (including leap years), deterministic replay,
+and per-language isolation. The DeSmuME scenario checks live menu controls,
+same-date retry and safe exit; if the emulator's RTC is unset, it instead
+checks that the mode is safely refused.
+
 ## Remaining work before playable new locales
 
 1. Obtain legally redistributable and native-speaker reviewed dictionaries
