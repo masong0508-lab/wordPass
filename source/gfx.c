@@ -2263,8 +2263,45 @@ static void drawScriptPreviewBoard(void)
              (scriptPreviewLanguage ? "SEL НОВА" : "SEL НОВАЯ"), WHITE, 1);
     drawText(px0 + 4, 179, scriptPreviewLanguage ? "START ВИХІД" : "START ВЫХОД", ACCENT, 1);
 }
+// A readable, fully native-language manual for the experimental script
+// engine. Drawn only when explicitly requested, on the existing top LCD;
+// never allocates memory or changes the bottom-board touch geometry.
+static void drawScriptPreviewHelp(void)
+{
+    const bool uk = scriptPreviewLanguage != 0;
+    fillRect(0, 0, SCREEN_W, SCREEN_H, BLACK);
+    rectOutline(7, 7, 242, 178, GOLD_DK);
+    rectOutline(8, 8, 240, 176, GOLD);
+    drawTextCenter(128, 16, uk ? "УКРАЇНСЬКА / ПРАВИЛА" :
+                              "РУССКИЙ / ПРАВИЛА", GOLD_LT, 1);
+    hline(25, 28, 206, GOLD_DK);
+    drawTextCenter(128, 34, uk ? "З'ЄДНУЙТЕ СУСІДНІ ЛІТЕРИ" :
+                              "СОЕДИНЯЙТЕ СОСЕДНИЕ БУКВЫ", ACCENT, 1);
+    drawTextCenter(128, 48, uk ? "A: ПРИЙНЯТИ СЛОВО" :
+                              "A: ПРИНЯТЬ СЛОВО", WHITE, 1);
+    drawTextCenter(128, 61, uk ? "Y: ОЧИСТИТИ ЛАНЦЮЖОК" :
+                              "Y: ОЧИСТИТЬ ЦЕПОЧКУ", INK, 1);
+    drawTextCenter(128, 74, uk ? "L+ДОТИК: ВІДКРИТИ ЛІТЕРУ" :
+                              "L+КАСАНИЕ: ОТКРЫТЬ БУКВУ", INK, 1);
+    drawTextCenter(128, 87, uk ? "R: ОДНА ПІДКАЗКА НА ПОЛИЦЮ" :
+                              "R: ОДНА ПОДСКАЗКА НА ПОЛКУ", INK, 1);
+    drawTextCenter(128, 100, uk ? "X: ІНША МОВА" :
+                               "X: СМЕНИТЬ ЯЗЫК", WHITE, 1);
+    drawTextCenter(128, 113, uk ? "SELECT: НОВИЙ ПАРОЛЬ" :
+                               "SELECT: НОВЫЙ ПАРОЛЬ", INK, 1);
+    drawTextCenter(128, 126, uk ? "L+SELECT: ДЕНЬ БЕЗ РЕКОРДУ" :
+                               "L+SELECT: ДЕНЬ БЕЗ РЕКОРДА", INK, 1);
+    drawTextCenter(128, 139, uk ? "ПОВТОР: МЕНШЕ БАЛІВ" :
+                               "ПОВТОР: МЕНЬШЕ ОЧКОВ", DIM_TEXT, 1);
+    drawTextCenter(128, 152, uk ? "СЕРІЯ: БОНУС БАЛІВ" :
+                               "СЕРИЯ: БОНУС ОЧКОВ", DIM_TEXT, 1);
+    hline(25, 164, 206, GOLD_DK);
+    drawTextCenter(128, 170, uk ? "B: НАЗАД / START: ВИХІД" :
+                               "B: НАЗАД / START: ВЫХОД", GOLD_LT, 1);
+}
 static void drawScriptPreviewTop(void)
 {
+    if (scriptPreviewHelp) { drawScriptPreviewHelp(); return; }
     fillRect(0, 0, SCREEN_W, SCREEN_H, BLACK);
     rectOutline(7, 7, 242, 178, GOLD_DK);
     rectOutline(8, 8, 240, 176, GOLD);
@@ -2349,8 +2386,8 @@ static void drawScriptPreviewTop(void)
                        "R: ПІДКАЗКА / SEL: ЗНОВУ" :
                        "R: ПОДСКАЗКА / SEL: ЗАНОВО", ACCENT, 1);
     else drawTextCenter(128, 169, scriptPreviewLanguage ?
-                        "L+SEL: ДЕНЬ / R: ПІДКАЗКА" :
-                        "L+SEL: ДЕНЬ / R: ПОДСКАЗКА", ACCENT, 1);
+                        "L+Y: ПРАВИЛА / L+SEL: ДЕНЬ" :
+                        "L+Y: ПРАВИЛА / L+SEL: ДЕНЬ", ACCENT, 1);
 }
 #endif
 
@@ -3167,6 +3204,11 @@ static void topSigs(const Game *g, u32 sig[4])
         h0 = hmix(h0, scriptPreviewLanguage);
         h0 = hmix(h0, scriptPreviewDaily);
         h0 = hmix(h0, scriptPreviewDailyDate);
+        h0 = hmix(h0, scriptPreviewHelp);
+        // Switching the manual on/off invalidates every 48-row top LCD slice.
+        h1 = hmix(h1, scriptPreviewHelp);
+        h2 = hmix(h2, scriptPreviewHelp);
+        h3 = hmix(h3, scriptPreviewHelp);
         // Language alters glyphs and theme words outside the first slice.
         // Invalidate the full top HUD, not only its unchanged heading strip.
         h1 = hmix(h1, scriptPreviewLanguage);
