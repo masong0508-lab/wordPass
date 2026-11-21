@@ -215,7 +215,8 @@ def main():
         print(f"TRANSLATION QUALITY FAILED: {len(problems)} problem(s)")
         return 1
     print(f"TRANSLATION QUALITY OK: {len(rows)} UI entries x {len(LANGS)} languages,"
-          f" {len(REQUIRED)} vital-message meanings x {len(LANGS)} languages,"\n          f" {len(CONTRASTS)} contrast pairs and {len(CONTROL_LEGENDS) + len(SHOULDER_LEGENDS)} control legends,"
+          f" {len(REQUIRED)} vital-message meanings x {len(LANGS)} languages,"
+          f" {len(CONTRASTS)} contrast pairs and {len(CONTROL_LEGENDS) + len(SHOULDER_LEGENDS)} control legends,"
           f" 40 themes x 10 non-English languages")
     return 0
 
