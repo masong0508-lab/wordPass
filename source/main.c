@@ -794,14 +794,24 @@ int main(void)
                 }
                 if (down & KEY_X) {
                     int next = scriptPreviewLanguage ^ 1;
+                    bool wasDaily = scriptPreviewDaily != 0;
+                    int date = scriptPreviewDailyDate;
                     if (!scriptPreviewOpen(next, seedCounter)) {
                         scriptPreviewClose();
                         G.state = ST_TITLE;
+                    } else if (wasDaily) {
+                        // Keep deterministic practice in the newly selected
+                        // language, but never carry score/ledger across it.
+                        (void)scriptPreviewToggleDaily(date, seedCounter);
                     }
                     break;
                 }
                 if (down & KEY_SELECT) {
-                    (void)scriptPreviewNewPass(seedCounter);
+                    if (held & KEY_L) {
+                        // Deliberate two-key action, leaving normal SELECT
+                        // re-deal and stylus-peel control unmodified.
+                        (void)scriptPreviewToggleDaily(settingsToday(), seedCounter);
+                    } else (void)scriptPreviewNewPass(seedCounter);
                     break;
                 }
                 if (down & KEY_Y) scriptBoardClearChain(&scriptPreviewBoard);
