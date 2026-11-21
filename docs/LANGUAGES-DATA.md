@@ -34,7 +34,14 @@ make Italian/Portuguese pass-letter messages explicit.
 **Scope:** these automatic checks verify completeness, ROM/source parity,
 critical gameplay meaning and technical display constraints. They cannot
 prove every dictionary entry or all 4,235 strings idiomatic or semantically
-correct to a native speaker. A final language-by-language editorial review
+correct to a native speaker. The Daily date shown on the title and in the best-score record now uses
+month/day in English and day/month in the ten translated languages. Only
+display formatting changes: the **YYYYMMDD deterministic seed**, the shared
+Daily puzzle, and saved score dates remain unchanged. Native UI tests check
+all 11 date formats and the emulator checks that rendered records stay inside
+their plaque.
+
+A final language-by-language editorial review
 and playthrough remain necessary before claiming flawless translations.
 
 ## The ten languages
