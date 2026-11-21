@@ -71,9 +71,13 @@ as available in the in-game language picker.
 - [x] Extend the independent Cyrillic hex-board prototype with deterministic
       hidden-password placement, peel/reveal, permanent diamonds, pass
       completion and gravity barriers.
-- [ ] Integrate WPD4/WPL2/WPP2 into the **live DS board** and every gameplay
-      system, preserving the existing 26-letter path; do not advertise
-      incomplete Cyrillic packs in the language picker.
+- [x] Build an opt-in **real DS Cyrillic engineering preview** with
+      touch/stylus input, bitmap glyph rendering, WPD4/WPL2/WPP2 resource
+      loading, Russian/Ukrainian switching and real-word scoring, with a
+      separate ROM and dedicated emulator scenario in CI.
+- [ ] Integrate complete Cyrillic packs into the **normal DS Classic and
+      Daily systems** including fire, hints, stats, pass bonuses, progression,
+      saves and native speaker reviewed content. Keep 11 locales compatible.
 - [ ] Define Qu-free vowel floors, tile distribution and word lengths for
       Cyrillic; balance with competent and weak bots.
 - [ ] Translate 385 UI messages, game guide and 40 theme names into Russian;
