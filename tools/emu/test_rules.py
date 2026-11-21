@@ -3075,7 +3075,7 @@ def _():
     assert best >= 52, f'STANDAARD on the calendar tile is only {best} px wide (53 expected)'
     e.press('B', settle=20); lang_title(0)
 
-@scenario('options: the best Daily line shows the date as MM-DD, not as YYYYMMDD, inside the plaque, in the wordiest languages')
+@scenario('options: best Daily uses the localized date order, not YYYYMMDD, inside the plaque')
 def _():
     o = abi_offsets(); S = sym('S')
     for i in (8, 3, 10, 0):
@@ -3083,7 +3083,20 @@ def _():
         e.mem.write_long(S + o['o3'], 23456); e.mem.write_long(S + o['o4'], 20271101)
         e.tap(e.bx + 86, 170, settle=30); assert e.state()['state'] == ST_OPTIONS
         px = e.pixels(); e.shot(f'{out}/rules_options_bestdaily_{code}.png')
-        want = ui_text(code, 'O_BESTDAILY').replace('%d', '23456', 1).replace('%02d', '11', 1).replace('%02d', '01', 1)
+        # The ROM's UI formatter supports %3$02d, unlike Python's old
+        # one-by-one string replacement. Check the real rendered width for
+        # both native English MM-DD and localized DD-MM date orders.
+        fmt = ui_text(code, 'O_BESTDAILY')
+        import re
+        sequential = [0]
+        def number(m):
+            pos = int(m.group(1)) - 1 if m.group(1) else sequential[0]
+            if not m.group(1): sequential[0] += 1
+            value = (23456, 11, 1)[pos]
+            return f'{value:02d}' if m.group(2) else str(value)
+        want = re.sub(r'%(?:([1-9])\\$)?(02)?d', number, fmt)
+        date = '11-01' if code == 'en' else '01-11'
+        assert date in want, f'{code}: expected localized {date} in {want}'
         w = len(want) * 6 - 1
         ext = lit_extent(px, 12, 159, 244, 168, thr=200)
         assert ext and abs((ext[1] - ext[0] + 1) - w) <= 2, f'{code}: the best Daily line is {ext} wide, wanted {w} px ({want})'
