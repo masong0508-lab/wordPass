@@ -2378,9 +2378,18 @@ def _():
     assert e.state()['state'] == ST_LANGPICK
     e.press('B', settle=10)
     assert e.state()['state'] == ST_TITLE and e.state()['language'] == 0, 'B cancels language switching'
-    e.tap(40, 15, settle=10); e.press('UP', settle=4)
-    e.press('A', settle=10)
-    assert e.state()['state'] == ST_TITLE and e.state()['language'] == 10, 'UP from English wraps to Finnish'
+    e.tap(40, 15, settle=10)
+    assert e.state()['state'] == ST_LANGPICK, 'language tag did not reopen the chooser after B'
+    e.press('UP', settle=10)
+    assert e.state()['state'] == ST_LANGPICK, 'UP unexpectedly closed the chooser'
+    e.press('A', settle=20)
+    n = 0
+    while (e.state()['state'] != ST_TITLE or e.state()['language'] != 10) and n < 400:
+        e.run(5); n += 5       # loading a full Finnish dictionary can stall emulator frames
+    g = e.state()
+    assert g['state'] == ST_TITLE and g['language'] == 10, (
+        f'UP from English should wrap to Finnish, state={g["state"]}, '
+        f'language={g["language"]}, mask={g["langMask"]:#x}, loadMs={g["loadMs"]}')
     lang_title(0)
 
 @scenario('languages: a shelf of each language, both hands, a nine-letter pass and long theme names stay inside the plaque and HUD')
