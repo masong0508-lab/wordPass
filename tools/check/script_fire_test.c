@@ -160,6 +160,44 @@ static void exercise(const char *dbFile,const char *tbFile,const char *pbFile, b
     CHECK(!scriptRulesTurn(&rules,&b,&tiles,1,false,false) &&
           rules.turns==1,"lost shelves cannot accumulate new turns");
 
+    // A recovery word can be placed around holes/flames without touching
+    // passwords. Spending it is a real heat/fire turn but not a word or peel.
+    scriptRulesStart(&rules,1,217);
+    CHECK(scriptBoardStartPass(&b,&dict,&tiles,&pools,217,5),
+          "create a real draft themed shelf for rescue");
+    for (int col=0;col<SCRIPT_COLS;col+=2)
+        b.state[col][0]=SCRIPT_HOLE; // obstruct preferred paths
+    b.state[1][0]=SCRIPT_BURN;
+    ScriptBoard obstructed = b;
+    CHECK(scriptBoardPlantThemeWord(&b,&dict,&tiles,&pools,217^0x31415926u),
+          "rescue reroutes around obstructed top-row columns");
+    CHECK(!memcmp(b.back,obstructed.back,sizeof b.back) &&
+          !memcmp(b.found,obstructed.found,sizeof b.found) &&
+          !memcmp(b.bag,obstructed.bag,sizeof b.bag) &&
+          b.seed==obstructed.seed && b.bagPos==obstructed.bagPos,
+          "rescue does not alter hidden password, bag or RNG state");
+    for (int col=0;col<SCRIPT_COLS;col++)
+        if (obstructed.state[col][0]!=SCRIPT_TILE)
+            CHECK(b.state[col][0]==obstructed.state[col][0] &&
+                  b.tile[col][0]==obstructed.tile[col][0],
+                  "rescue cannot overwrite burns or holes");
+    uint8_t rescueC[SCRIPT_HINT_MAX],rescueR[SCRIPT_HINT_MAX];
+    CHECK(scriptBoardHint(&b,&dict,&tiles,rescueC,rescueR)>=3,
+          "rerouted rescue keeps a scoreable valid Cyrillic chain");
+    CHECK(scriptRulesRescueTurn(&rules,&b,&tiles)==0 &&
+          rules.turns==1 && rules.words==0 && rules.peels==0 &&
+          rules.heat==2 && rules.status==SCRIPT_RUNNING,
+          "recovery costs a real turn and two heat, no word/peel statistics");
+    // No placement possible: must fail atomically, not remove obstacles.
+    CHECK(scriptBoardStartPass(&b,&dict,&tiles,&pools,218,5),
+          "create fully blocked recovery fixture");
+    for (int col=0;col<SCRIPT_COLS;col++)
+        b.state[col][0]=SCRIPT_HOLE;
+    obstructed=b;
+    CHECK(!scriptBoardPlantThemeWord(&b,&dict,&tiles,&pools,218^0x31415926u) &&
+          !memcmp(&b,&obstructed,sizeof b),
+          "impossible rescue preserves blocked board byte for byte");
+
     CHECK(scriptBoardStartPass(&b,&dict,&tiles,&pools,77,5),
           "start pass for completion and bonus");
     scriptRulesStart(&rules,2,77);
@@ -186,6 +224,6 @@ int main(int argc,char **argv)
     exercise(argv[1],argv[3],argv[5],false);
     exercise(argv[2],argv[4],argv[6],true);
     printf(failures?"SCRIPT FIRE FAILED: %d failure(s)\n":
-                   "SCRIPT FIRE OK: Cyrillic flames, barriers, scorch, heat, loss and shelf completion\n",failures);
+                   "SCRIPT FIRE OK: Cyrillic flames, rescue, heat, loss and shelf completion\n",failures);
     return failures?1:0;
 }
