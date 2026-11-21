@@ -26,9 +26,11 @@ setting; after leaving a demo, the selected retail locale is unchanged.
 The old **hold L+R and press Y** developer shortcut from the title still
 opens Russian for debugging, but is no longer needed to find these modes.
 
-- Draw a word chain with the stylus; the first column is deliberately seeded
-  with **ПРИВЕТ** in Russian or **ПРИВІТ** in Ukrainian to demonstrate scoring
-  even with the small fixture dictionary
+- Draw a word chain with the stylus; every generated shelf now plants
+  **one real, dictionary-validated 4–6-letter word** from that shelf's theme
+  (or a nearby theme for a sparse draft pool). The word and its column
+  change with the seed instead of always showing ПРИВЕТ / ПРИВІТ.
+  Press **R** for a hint to discover a playable chain.
 - Press A to submit, Y to clear the chain, **R for one free word hint per shelf**,
   X to switch the language
 - Hold L and tap a letter to peel it: hidden pass letters become permanent
@@ -76,6 +78,26 @@ repeat penalties, combo cap, ring rollover, invalid words, peel reset and
 language isolation in the actual emulator. This is one step toward retail
 scoring parity, **not** a claim that the remaining Classic/Daily economy,
 password balancing and full 385-message localization are finished.
+
+## Varied, genuinely playable themed shelves
+
+The earlier emulator prototype stamped the same Russian/Ukrainian greeting
+onto every board. That made the tiny proof-of-concept playable but created
+repetitive, artificial-looking puzzles. The new generator chooses a validated
+word **from the current shelf's theme whenever possible**, varies the
+4–6-symbol word and its starting column by seed, and plants it along an
+adjacent top-row path. If a draft theme contains only longer words, it
+falls back to an eligible word from another existing theme rather than
+inventing a word or leaving the shelf without a hintable chain.
+
+This runs only when starting a shelf, uses fixed-size buffers, and never
+alters hidden pass cells, the tile bag, retail settings, or the date/language
+Daily Practice seed. Native tests cover every draft theme in Russian and
+Ukrainian across multiple seeds, scoreable hinted chains, deterministic
+replays and protection of all hidden password locations. The DS emulator
+uses the actual on-board hint path rather than assuming a six-tile word in
+column zero. The limited dictionaries and professional translation gates
+still apply.
 
 ## On-device language-specific controls help
 
