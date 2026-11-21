@@ -37,6 +37,13 @@ def main(rom, output):
     check(get_int(e, "scriptPreviewShelf") == 1, "Cyrillic first shelf should start at 1")
     e.shot(str(out / "ru-board.png"))
     check(get_int(e, "scriptPreviewScore") == 0, "initial score is zero")
+    e.press("R", settle=12)
+    check(get_int(e, "scriptPreviewHints") == 1,
+          "R should find one real Cyrillic word path with bounded DFS")
+    e.press("Y", settle=6)  # clear hint, then manually score the greeting
+    e.press("R", settle=5)
+    check(get_int(e, "scriptPreviewHints") == 1,
+          "a single preview shelf cannot silently grant endless free hints")
     # The development fixture guarantees ПРИВЕТ in the first column (six
     # adjacent actual touch-screen gem positions), not merely dictionary data.
     e.chain([(0, r) for r in range(6)])

@@ -130,6 +130,16 @@ static void exercise(const char *file, bool uk)
         ids[n++] = (uint8_t)(id < 0 ? 0 : id);
     }
     CHECK(v4DictLookupIds(&d, ids, n) == 1, "fast symbol-ID lookup matches UTF-8 lookup");
+    CHECK(v4DictHasPrefixIds(&d, ids, 1) &&
+          v4DictHasPrefixIds(&d, ids, 2) &&
+          v4DictHasPrefixIds(&d, ids, 3) &&
+          v4DictHasPrefixIds(&d, ids, n),
+          "Unicode Cyrillic prefix lookup works for short and whole words");
+    uint8_t badPrefix[] = { 255, 0, 0 };
+    CHECK(!v4DictHasPrefixIds(&d, badPrefix, 3) &&
+          !v4DictHasPrefixIds(&d, NULL, 2) &&
+          !v4DictHasPrefixIds(&d, ids, 0),
+          "Unicode prefix lookup rejects invalid lengths, symbols and pointers");
     CHECK(v4DictSymbol(&d, 0x1f600) == -1, "not an alphabet character");
     for (size_t cut = 0; cut < bytes; cut++) {
         V4Dict broken;

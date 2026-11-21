@@ -16,7 +16,8 @@ On the title screen hold **L+R** and press **Y**.
 - Draw a word chain with the stylus; the first column is deliberately seeded
   with **ПРИВЕТ** in Russian or **ПРИВІТ** in Ukrainian to demonstrate scoring
   even with the small fixture dictionary
-- Press A to submit, Y to clear the chain, X to switch the language
+- Press A to submit, Y to clear the chain, **R for one free word hint per shelf**,
+  X to switch the language
 - Hold L and tap a letter to peel it: hidden pass letters become permanent
   diamonds; a miss leaves a permanent hole
 - Press Select for another password, Start or B to leave the preview

@@ -50,3 +50,19 @@ emulator suite.
 **Do not mistake technical parity for completed language content.** The
 40 starter themes still need native proofreading, extensive vocabulary,
 licensed source review and complete translation before a release.
+
+## Unicode prefix-aware hint (preview only)
+
+Press **R** during an active Cyrillic shelf to automatically select a real
+3–6-symbol adjacent word path. Only one free hint is allowed per preview
+shelf, and the user still needs to submit the word. It neither reveals a
+hidden password position nor skips turns.
+
+The solver uses heap-free, 12,000-node-capped depth-first search of the
+7×8 hex-grid. It prunes impossible paths with WPD4's new
+`v4DictHasPrefixIds()` binary search over the already validated, sorted
+packed word groups. The search is only run on a key press, never per frame.
+The standard game's paid-hint economy and dictionary remain unchanged.
+Native tests cover Russian and Ukrainian hint paths, corrupt prefix IDs and
+empty boards; the optional DeSmuME scenario exercises R and the one-hint
+limit on ARM9.
