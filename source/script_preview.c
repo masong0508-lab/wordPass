@@ -156,6 +156,7 @@ int scriptPreviewPeel(int c, int r)
         return -1;
     int result = scriptBoardPeel(&scriptPreviewBoard, c, r);
     if (result >= 0 || result == -2) {
+        scriptPreviewRescueError = 0; // dismiss stale recovery warnings
         scriptPreviewPeels++;
         scriptLedgerPeel(&scriptPreviewLedger); // a peel breaks the retail combo
         scriptPreviewLastTier = scriptPreviewLastScore = 0;
@@ -170,7 +171,9 @@ bool scriptPreviewChain(int c, int r)
 {
     if (!scriptPreviewDict.image || scriptPreviewRules.status != SCRIPT_RUNNING)
         return false;
-    return scriptBoardAdd(&scriptPreviewBoard, c, r);
+    bool added = scriptBoardAdd(&scriptPreviewBoard, c, r);
+    if (added) scriptPreviewRescueError = 0;
+    return added;
 }
 bool scriptPreviewHint(void)
 {
@@ -183,6 +186,7 @@ bool scriptPreviewHint(void)
     memcpy(scriptPreviewBoard.chainC, c, (size_t)n);
     memcpy(scriptPreviewBoard.chainR, r, (size_t)n);
     scriptPreviewBoard.chainLen = (uint8_t)n;
+    scriptPreviewRescueError = 0;
     scriptPreviewHints++;
     return true;
 }
@@ -253,6 +257,7 @@ int scriptPreviewSubmit(void)
                                    &scriptPreviewTiles, &tier);
     scriptPreviewLastTier = tier;
     if (points > 0) {
+        scriptPreviewRescueError = 0;
         points = scriptLedgerCommit(&scriptPreviewLedger, ids, length, points);
         scriptPreviewScore += points;
         scriptPreviewScore += scriptRulesTurn(&scriptPreviewRules,
