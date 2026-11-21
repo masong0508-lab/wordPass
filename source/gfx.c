@@ -2234,7 +2234,9 @@ static void drawScriptPreviewBoard(void)
     rectOutline(panelX, 2, 78, 188, GOLD_DK);
     drawText(px0 + 6, 10, "RU/UK DEMO", GOLD_LT, 1);
     char label[20];
-    snprintf(label, sizeof label, scriptPreviewLanguage ? "ПОЛИЦЯ %d" : "ПОЛКА %d", scriptPreviewShelf);
+    if (scriptPreviewDaily)
+        snprintf(label, sizeof label, scriptPreviewLanguage ? "ДЕНЬ" : "ДЕНЬ");
+    else snprintf(label, sizeof label, scriptPreviewLanguage ? "ПОЛИЦЯ %d" : "ПОЛКА %d", scriptPreviewShelf);
     drawText(px0 + 6, 20, label, ACCENT, 1);
     hline(px0 + 2, 33, 70, GOLD_DK);
     drawText(px0 + 7, 40, scriptPreviewLanguage ? "УКРАЇНСЬКА" : "РУССКИЙ", WHITE, 1);
@@ -2254,7 +2256,9 @@ static void drawScriptPreviewBoard(void)
     drawText(px0 + 4, 124, "A  SUBMIT", WHITE, 1);
     drawText(px0 + 4, 135, "Y CLR R HINT", WHITE, 1);
     drawText(px0 + 4, 146, scriptPreviewLanguage ? "X МОВА" : "X ЯЗЫК", WHITE, 1);
-    drawText(px0 + 4, 157, scriptPreviewLanguage ? "SEL ДАЛІ" : "SEL ДАЛЕЕ", WHITE, 1);
+    drawText(px0 + 4, 157, scriptPreviewDaily ?
+             (scriptPreviewLanguage ? "SEL ЗНОВУ" : "SEL ЗАНОВО") :
+             (scriptPreviewLanguage ? "SEL ДАЛІ" : "SEL ДАЛЕЕ"), WHITE, 1);
     drawText(px0 + 4, 170, scriptPreviewLanguage ? "START ВИХІД" : "START ВЫХОД", ACCENT, 1);
     if (scriptPreviewRules.status == SCRIPT_PASSED)
         drawText(px0 + 2, 181, scriptPreviewLanguage ? "ЗНАЙДЕНО" : "НАЙДЕНО", GOLD_LT, 1);
@@ -2269,8 +2273,15 @@ static void drawScriptPreviewTop(void)
     drawTextCenter(128, 18, "RUSSIAN / UKRAINIAN PREVIEW", GOLD_LT, 1);
     // The first Russian/Ukrainian shelves both say "КНИГИ". Show the
     // active language explicitly so switching remains unambiguous and testable.
-    drawTextCenter(128, 31, scriptPreviewLanguage ?
-                   "УКРАЇНСЬКА - ДЕМО" : "РУССКИЙ - ДЕМО", DIM_TEXT, 1);
+    if (scriptPreviewDaily) {
+        char dateLabel[48];
+        int ymd = scriptPreviewDailyDate;
+        snprintf(dateLabel, sizeof dateLabel, scriptPreviewLanguage ?
+                 "УКРАЇНСЬКА %04d-%02d-%02d" : "РУССКИЙ %04d-%02d-%02d",
+                 ymd / 10000, ymd / 100 % 100, ymd % 100);
+        drawTextCenter(128, 31, dateLabel, DIM_TEXT, 1);
+    } else drawTextCenter(128, 31, scriptPreviewLanguage ?
+                         "УКРАЇНСЬКА - ДЕМО" : "РУССКИЙ - ДЕМО", DIM_TEXT, 1);
     const ScriptBoard *b = &scriptPreviewBoard;
     const char *theme = v4PoolsName(&scriptPreviewPools, b->passTheme);
     drawTextCenter(128, 47, theme, ACCENT, 2);
@@ -2322,16 +2333,26 @@ static void drawScriptPreviewTop(void)
     }
     if (scriptPreviewRules.status == SCRIPT_PASSED) {
         char msg[96];
-        snprintf(msg, sizeof msg, scriptPreviewLanguage ?
-                 "ПОЛИЦЮ ВРЯТОВАНО +%d - A: ДАЛІ" :
-                 "ПОЛКА СПАСЕНА +%d - A: ДАЛЬШЕ", scriptPreviewRules.lastBonus);
+        if (scriptPreviewDaily)
+            snprintf(msg, sizeof msg, scriptPreviewLanguage ?
+                     "ДЕНЬ ЗАВЕРШЕНО +%d" : "ДЕНЬ ЗАВЕРШЁН +%d", scriptPreviewRules.lastBonus);
+        else snprintf(msg, sizeof msg, scriptPreviewLanguage ?
+                      "ПОЛИЦЮ ВРЯТОВАНО +%d - A: ДАЛІ" :
+                      "ПОЛКА СПАСЕНА +%d - A: ДАЛЬШЕ", scriptPreviewRules.lastBonus);
         drawTextCenter(128, 169, msg, GOLD_LT, 1);
     } else if (scriptPreviewRules.status == SCRIPT_FAILED)
         drawTextCenter(128, 169, scriptPreviewLanguage ?
                        "ВОГОНЬ - A: ЗНОВУ" : "ПОЖАР - A: СНОВА", FIRE2, 1);
+    else if (scriptPreviewDailyClockError)
+        drawTextCenter(128, 169, scriptPreviewLanguage ?
+                       "ВСТАНОВІТЬ ДАТУ НА DS" : "УСТАНОВИТЕ ДАТУ НА DS", FIRE2, 1);
+    else if (scriptPreviewDaily)
+        drawTextCenter(128, 169, scriptPreviewLanguage ?
+                       "R: ПІДКАЗКА / SEL: ЗНОВУ" :
+                       "R: ПОДСКАЗКА / SEL: ЗАНОВО", ACCENT, 1);
     else drawTextCenter(128, 169, scriptPreviewLanguage ?
-                        "R: ПІДКАЗКА L+TAP: ВІДКРИТИ" :
-                        "R: ПОДСКАЗКА L+TAP: ОТКРЫТЬ", ACCENT, 1);
+                        "L+SEL: ДЕНЬ / R: ПІДКАЗКА" :
+                        "L+SEL: ДЕНЬ / R: ПОДСКАЗКА", ACCENT, 1);
 }
 #endif
 
@@ -3146,6 +3167,8 @@ static void topSigs(const Game *g, u32 sig[4])
         h0 = hmix(h0, g->state);
         h0 = hmix(h0, scriptPreviewShelf);
         h0 = hmix(h0, scriptPreviewLanguage);
+        h0 = hmix(h0, scriptPreviewDaily);
+        h0 = hmix(h0, scriptPreviewDailyDate);
         // Language alters glyphs and theme words outside the first slice.
         // Invalidate the full top HUD, not only its unchanged heading strip.
         h1 = hmix(h1, scriptPreviewLanguage);
@@ -3166,6 +3189,10 @@ static void topSigs(const Game *g, u32 sig[4])
         h2 = hmix(h2, scriptPreviewLastTier);
         h3 = hmix(h3, scriptPreviewRules.status);
         h3 = hmix(h3, scriptPreviewRules.lastBonus);
+        h3 = hmix(h3, scriptPreviewDaily);
+        h3 = hmix(h3, scriptPreviewDailyClockError);
+        h3 = hmix(h3, scriptPreviewLedger.combo);
+        h3 = hmix(h3, scriptPreviewLedger.lastRepeat);
         topSigNow[0] = sig[0] = h0;
         topSigNow[1] = sig[1] = h1;
         topSigNow[2] = sig[2] = h2;
