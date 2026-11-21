@@ -17,6 +17,7 @@ extern int scriptPreviewScore;
 extern int scriptPreviewThemeCount; // inspect 40 draft themes in emulator regression
 extern int scriptPreviewTurns;
 extern int scriptPreviewPeels;
+extern int scriptPreviewHints;
 extern int scriptPreviewShelf;
 extern ScriptRules scriptPreviewRules;
 extern int scriptPreviewLastTier;
@@ -30,6 +31,8 @@ bool scriptPreviewNewPass(uint32_t seed);
 bool scriptPreviewAdvance(uint32_t seed);
 int scriptPreviewPeel(int c, int r);
 bool scriptPreviewChain(int c, int r);
+// One free, bounded path hint per engineering shelf (retail hint economy TBD).
+bool scriptPreviewHint(void);
 int scriptPreviewSubmit(void);
 #endif
 #endif
