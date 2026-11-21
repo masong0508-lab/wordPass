@@ -65,7 +65,7 @@ DS engineering ROM:
 
 ```sh
 python3 tools/lang/install_cyr_preview.py \
-  --input-root build/cyr-sourced \
+  --input-root ../wordpass-cyr-sourced \
   --output-root nitrofiles/cyrpreview
 ```
 
