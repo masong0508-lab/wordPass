@@ -2383,8 +2383,8 @@ static void drawScriptPreviewTop(void)
                        "ВСТАНОВІТЬ ДАТУ НА DS" : "УСТАНОВИТЕ ДАТУ НА DS", FIRE2, 1);
     else if (scriptPreviewDaily)
         drawTextCenter(128, 169, scriptPreviewLanguage ?
-                       "R: ПІДКАЗКА / SEL: ЗНОВУ" :
-                       "R: ПОДСКАЗКА / SEL: ЗАНОВО", ACCENT, 1);
+                       "L+Y: ПРАВИЛА / SEL: ЗНОВУ" :
+                       "L+Y: ПРАВИЛА / SEL: ЗАНОВО", ACCENT, 1);
     else drawTextCenter(128, 169, scriptPreviewLanguage ?
                         "L+Y: ПРАВИЛА / L+SEL: ДЕНЬ" :
                         "L+Y: ПРАВИЛА / L+SEL: ДЕНЬ", ACCENT, 1);
