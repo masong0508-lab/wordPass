@@ -330,6 +330,75 @@ bool scriptBoardStartPass(ScriptBoard *b, const V4Dict *dict,
     }
     return true;
 }
+
+// The tiny engineering word pools do not guarantee that the random 56-tile
+// board contains a playable Cyrillic word. The original preview solved that
+// by stamping ПРИВЕТ / ПРИВІТ into column zero on every shelf. Instead plant
+// a real pool word selected by this seed and shelf theme, while keeping all
+// hidden pass cells (bottom three rows) and the board's tile bag intact.
+// The chosen 4..6-symbol path is guaranteed geometrically adjacent and safe
+// for the six-symbol hint solver. All loops and buffers have fixed bounds.
+bool scriptBoardPlantThemeWord(ScriptBoard *b, const V4Dict *dict,
+                               const V4Tiles *tiles, const V4Pools *pools,
+                               uint32_t seed)
+{
+    if (!b || !b->passLen || b->passLen > WPP2_MAX_LEN ||
+        !sameAlphabet(dict, tiles) || !pools || !pools->image ||
+        !v4PoolsMatches(pools, dict) || !pools->themes ||
+        b->passTheme >= pools->themes) return false;
+
+    uint32_t choice = nextSeed(seed ^ 0x7f4a7c15u ^
+                               ((uint32_t)b->passTheme * 0x9e3779b9u));
+    const int col = (int)((choice >> 5) % SCRIPT_COLS);
+    const int beside = col == 0 ? 1 :
+                       col == SCRIPT_COLS - 1 ? col - 1 :
+                       ((choice >> 13) & 1u) ? col - 1 : col + 1;
+    const int reverse = (int)((choice >> 10) & 1u);
+
+    // Theme-first, with fallback only when a tiny draft pool lacks any
+    // four-to-six-letter entry. Source packs may have fewer than 40 themes.
+    for (int step = 0; step < pools->themes; step++) {
+        int theme = (b->passTheme + step) % pools->themes;
+        for (int lengthStep = 0; lengthStep < 3; lengthStep++) {
+            int length = 4 + (int)((choice + (uint32_t)lengthStep) % 3u);
+            int count = v4PoolsCount(pools, theme, length);
+            if (count <= 0) continue;
+            int first = (int)((choice >> 16) % (unsigned)count);
+            for (int attempt = 0; attempt < count; attempt++) {
+                int pick = (first + attempt) % count;
+                uint8_t ids[WPP2_MAX_LEN];
+                if (!v4PoolsWord(pools, theme, length, pick, ids) ||
+                    !v4DictLookupIds(dict, ids, length)) continue;
+                // Prefer another valid shelf word over simply showing the
+                // exact secret in an immediately playable tile chain.
+                if (count > 1 && length == b->passLen &&
+                    memcmp(ids, b->pass, (size_t)length) == 0) continue;
+                bool eligible = true;
+                for (int i = 0; i < length; i++) {
+                    int order = reverse ? length - 1 - i : i;
+                    int c = order == 5 ? beside : col;
+                    int r = order == 5 ? 4 : order;
+                    if (ids[i] >= tiles->symbols || !tiles->weight[ids[i]] ||
+                        b->state[c][r] != SCRIPT_TILE || b->back[c][r]) {
+                        eligible = false;
+                        break;
+                    }
+                }
+                if (!eligible) continue;
+                // Write the selected word in reading order along a simple
+                // vertical/hex turn path. No per-frame search or malloc.
+                for (int i = 0; i < length; i++) {
+                    int order = reverse ? length - 1 - i : i;
+                    int c = order == 5 ? beside : col;
+                    int r = order == 5 ? 4 : order;
+                    b->tile[c][r] = ids[i];
+                }
+                return true;
+            }
+        }
+    }
+    return false; // fail closed, never silently start an unsolvable shelf
+}
 int scriptBoardPeel(ScriptBoard *b, int col, int row)
 {
     if (!b || !b->passLen || !inside(col, row) ||
