@@ -84,3 +84,124 @@ int fontIndex(char ch)
         default:  return 36;
     }
 }
+
+// Strict UTF-8 / uppercase Cyrillic UI foundation. Game tiles and dictionaries
+// still use A-Z; rendering a Cyrillic heading does NOT enable a new language.
+// Each of these hand-drawn 5x7 glyphs consumes seven ROM bytes, zero heap.
+enum {
+    CY_BE, CY_GE, CY_DE, CY_ZHE, CY_ZE, CY_I, CY_J, CY_EL, CY_PE,
+    CY_EF, CY_TSE, CY_CHE, CY_SHA, CY_SHCHA, CY_HARD, CY_YERU,
+    CY_SOFT, CY_EH, CY_YU, CY_YA, CY_YO, CY_GHE_UA, CY_YE_UA, CY_YI_UA
+};
+static const u8 cyr5x7[][7] = {
+    {31,16,30,17,17,17,30}, // Б
+    {31,16,16,16,16,16,16}, // Г
+    {14,10,10,10,31,17,17}, // Д
+    {21,21,14,31,14,21,21}, // Ж
+    {14,17, 1, 6, 1,17,14}, // З
+    {17,19,21,21,21,25,17}, // И
+    {10, 4,17,19,21,25,17}, // Й
+    { 7, 9, 9, 9,17,17,17}, // Л
+    {31,17,17,17,17,17,17}, // П
+    { 4,14,21,21,21,14, 4}, // Ф
+    {17,17,17,17,17,31, 1}, // Ц
+    {17,17,17,15, 1, 1, 1}, // Ч
+    {21,21,21,21,21,21,31}, // Ш
+    {21,21,21,21,21,31, 1}, // Щ
+    {24, 8,14, 9, 9, 9,14}, // Ъ
+    {17,17,25,21,21,21,25}, // Ы
+    {16,16,30,17,17,17,30}, // Ь
+    {14,17, 1,15, 1,17,14}, // Э
+    {18,21,21,29,21,21,18}, // Ю
+    {15,17,17,15, 5, 9,17}, // Я
+    {10, 0,31,16,30,16,31}, // Ё
+    {31, 4,28,16,16,16,16}, // Ґ
+    {14,17,16,30,16,17,14}, // Є
+    {10, 0,14, 4, 4, 4,14}, // Ї
+};
+
+static const u8 *fontUnicodeGlyph(unsigned cp)
+{
+    if (cp >= 0x0430 && cp <= 0x044F) cp -= 32;
+    // Cyrillic letters that have the same recognizable form as Latin letters
+    switch (cp) {
+        case 0x0410: return font5x7[0];  // А
+        case 0x0412: return font5x7[1];  // В
+        case 0x0415: return font5x7[4];  // Е
+        case 0x041A: return font5x7[10]; // К
+        case 0x041C: return font5x7[12]; // М
+        case 0x041D: return font5x7[7];  // Н
+        case 0x041E: return font5x7[14]; // О
+        case 0x0420: return font5x7[15]; // Р
+        case 0x0421: return font5x7[2];  // С
+        case 0x0422: return font5x7[19]; // Т
+        case 0x0423: return font5x7[24]; // У
+        case 0x0425: return font5x7[23]; // Х
+        case 0x0411: return cyr5x7[CY_BE];
+        case 0x0413: return cyr5x7[CY_GE];
+        case 0x0414: return cyr5x7[CY_DE];
+        case 0x0416: return cyr5x7[CY_ZHE];
+        case 0x0417: return cyr5x7[CY_ZE];
+        case 0x0418: return cyr5x7[CY_I];
+        case 0x0419: return cyr5x7[CY_J];
+        case 0x041B: return cyr5x7[CY_EL];
+        case 0x041F: return cyr5x7[CY_PE];
+        case 0x0424: return cyr5x7[CY_EF];
+        case 0x0426: return cyr5x7[CY_TSE];
+        case 0x0427: return cyr5x7[CY_CHE];
+        case 0x0428: return cyr5x7[CY_SHA];
+        case 0x0429: return cyr5x7[CY_SHCHA];
+        case 0x042A: return cyr5x7[CY_HARD];
+        case 0x042B: return cyr5x7[CY_YERU];
+        case 0x042C: return cyr5x7[CY_SOFT];
+        case 0x042D: return cyr5x7[CY_EH];
+        case 0x042E: return cyr5x7[CY_YU];
+        case 0x042F: return cyr5x7[CY_YA];
+        case 0x0401: case 0x0451: return cyr5x7[CY_YO];
+        case 0x0490: case 0x0491: return cyr5x7[CY_GHE_UA];
+        case 0x0404: case 0x0454: return cyr5x7[CY_YE_UA];
+        case 0x0406: case 0x0456: return font5x7[8]; // І/і
+        case 0x0407: case 0x0457: return cyr5x7[CY_YI_UA];
+        default: return font5x7[39];  // unsupported script: '?' not blank
+    }
+}
+
+// Decode a strict Unicode scalar without allocating. On malformed UTF-8
+// consume one byte and display '?', never read beyond the terminating NUL.
+const u8 *fontGlyphNext(const char **text)
+{
+    const unsigned char *p = (const unsigned char *)*text;
+    unsigned b = p[0], cp, need, min;
+    if (b < 0x80) {
+        if (b) *text = (const char *)(p + 1);
+        return font5x7[fontIndex((char)b)];
+    }
+    if (b >= 0xC2 && b <= 0xDF) { need = 2; cp = b & 31; min = 0x80; }
+    else if (b >= 0xE0 && b <= 0xEF) { need = 3; cp = b & 15; min = 0x800; }
+    else if (b >= 0xF0 && b <= 0xF4) { need = 4; cp = b & 7; min = 0x10000; }
+    else { *text = (const char *)(p + 1); return font5x7[39]; }
+    for (unsigned i = 1; i < need; i++) {
+        if (!p[i] || (p[i] & 0xC0) != 0x80) {
+            *text = (const char *)(p + 1);
+            return font5x7[39];
+        }
+        cp = (cp << 6) | (p[i] & 63);
+    }
+    *text = (const char *)(p + need);
+    if (cp < min || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF))
+        return font5x7[39];
+    return fontUnicodeGlyph(cp);
+}
+
+// Count rendered glyphs, not UTF-8 bytes. ASCII retains its single-byte path.
+int fontTextColumns(const char *text)
+{
+    int count = 0;
+    if (!text) return 0;
+    while (*text) {
+        if ((unsigned char)*text < 0x80) text++;
+        else (void)fontGlyphNext(&text);
+        count++;
+    }
+    return count;
+}

@@ -281,7 +281,11 @@ static void drawChar(int x, int y, char ch, u16 col, int scale) { drawGlyph(x, y
 static void drawText(int x, int y, const char *s, u16 col, int scale)
 {
     if (y >= clipY1 || y + 7 * scale <= clipY0) return;   // whole line outside the slice
-    for (; *s; s++) { drawChar(x, y, *s, col, scale); x += 6 * scale; }
+    while (*s) {
+        if ((unsigned char)*s < 0x80) drawChar(x, y, *s++, col, scale);
+        else drawGlyph(x, y, fontGlyphNext(&s), col, scale);
+        x += 6 * scale;
+    }
 }
 
 // decimal itoa for the per-frame HUD counters (siprintf, the integer-only newlib formatter,
@@ -298,7 +302,7 @@ static char *fmtInt(char *buf, int v)
     return buf;
 }
 
-static int textWidth(const char *s, int scale) { return (int)strlen(s) * 6 * scale - scale; }
+static int textWidth(const char *s, int scale) { return fontTextColumns(s) * 6 * scale - scale; }
 
 // a score for a tight spot: below 100000 in full, then in thousands ("123K")
 static char *fmtScoreShort(char *buf, int v)
