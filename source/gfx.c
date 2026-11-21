@@ -2299,7 +2299,7 @@ static void drawScriptPreviewTop(void)
         drawTextCenter(128, 122, chain, WHITE, fontTextColumns(chain) > 16 ? 1 : 2);
         int tier = 0;
         int points = scriptBoardPreview(b, &scriptPreviewDict, &scriptPreviewTiles, &tier);
-        char pts[24];
+        char pts[52]; // UTF-8 Cyrillic labels can use two bytes per glyph
         if (points) {
             snprintf(pts, sizeof pts, "+%d %s", points,
                      scriptPreviewLanguage ? (tier == 1 ? "ЗВИЧАЙНЕ" : "РІДКІСНЕ")
@@ -2310,7 +2310,7 @@ static void drawScriptPreviewTop(void)
                            "НЕМАЄ В СЛОВНИКУ" : "НЕТ В СЛОВАРЕ", FIRE2, 1);
     }
     if (scriptPreviewRules.status == SCRIPT_PASSED) {
-        char msg[52];
+        char msg[96];
         snprintf(msg, sizeof msg, scriptPreviewLanguage ?
                  "ПОЛИЦЮ ВРЯТОВАНО +%d - A: ДАЛІ" :
                  "ПОЛКА СПАСЕНА +%d - A: ДАЛЬШЕ", scriptPreviewRules.lastBonus);
