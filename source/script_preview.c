@@ -63,6 +63,18 @@ bool scriptPreviewNewPass(uint32_t seed)
                               scriptPreviewSeed, 5)) return false;
     scriptPreviewTurns = scriptPreviewPeels = 0;
     scriptPreviewLastTier = scriptPreviewLastScore = 0;
+    // A real Russian/Ukrainian common word is laid vertically along the
+    // first column so this tiny engineering lexicon is actually playable
+    // by stylus, rather than relying on a chance arrangement of 16 words.
+    static const uint32_t ru[] = {0x041f,0x0420,0x0418,0x0412,0x0415,0x0422};
+    static const uint32_t uk[] = {0x041f,0x0420,0x0418,0x0412,0x0406,0x0422};
+    const uint32_t *word = scriptPreviewLanguage ? uk : ru;
+    for (unsigned r = 0; r < 6; r++) {
+        int id = v4DictSymbol(&scriptPreviewDict, word[r]);
+        if (id < 0) return false;
+        scriptPreviewBoard.tile[0][r] = (uint8_t)id;
+        scriptPreviewBoard.state[0][r] = SCRIPT_TILE;
+    }
     return true;
 }
 bool scriptPreviewOpen(int language, uint32_t seed)

@@ -1,6 +1,7 @@
 // wordPass: Bookworm chaining on a hex grid, a hidden pass behind the board,
 // and fire that punishes lazy words and careless peeling.
 #include "game.h"
+#include "script_preview.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -668,6 +669,16 @@ int main(void)
 
         switch (G.state) {
             case ST_TITLE:
+#ifdef WP_CYR_PREVIEW
+                // Hold L+R, press Y: engineering-only Russian/Ukrainian DS
+                // preview. Never enters the production language selector or
+                // writes a partially translated locale into the save card.
+                if ((down & KEY_Y) && (held & (KEY_L | KEY_R)) == (KEY_L | KEY_R)) {
+                    if (scriptPreviewOpen(0, seedCounter)) G.state = ST_SCRIPT_PREVIEW;
+                    else setMsg("CYRILLIC DEMO FILES MISSING", 110);
+                    break;
+                }
+#endif
                 if (seedCounter % 60 == 0) refreshClock();   // midnight passes under an idle title
                 if (down & KEY_TOUCH) {
                     // only the drawn buttons do anything; a stray tap elsewhere is ignored
@@ -731,6 +742,40 @@ int main(void)
                 if (down & KEY_LEFT)  { cycleOption(G.optRow, -1); gfxOptionNudge(-1); }
                 break;
             }
+
+#ifdef WP_CYR_PREVIEW
+            case ST_SCRIPT_PREVIEW: {
+                if (down & (KEY_B | KEY_START)) {
+                    scriptPreviewClose();
+                    G.state = ST_TITLE;
+                    musicMenu();
+                    break;
+                }
+                if (down & KEY_X) {
+                    int next = scriptPreviewLanguage ^ 1;
+                    if (!scriptPreviewOpen(next, seedCounter)) {
+                        scriptPreviewClose();
+                        G.state = ST_TITLE;
+                    }
+                    break;
+                }
+                if (down & KEY_SELECT) {
+                    (void)scriptPreviewNewPass(seedCounter);
+                    break;
+                }
+                if (down & KEY_Y) scriptBoardClearChain(&scriptPreviewBoard);
+                if (down & KEY_A) (void)scriptPreviewSubmit();
+                if (held & KEY_TOUCH) {
+                    int col, row;
+                    if (gfxCellAt(t.px, t.py, &col, &row)) {
+                        if (held & KEY_L) {
+                            if (down & KEY_TOUCH) (void)scriptPreviewPeel(col, row);
+                        } else (void)scriptPreviewChain(col, row);
+                    }
+                }
+                break;
+            }
+#endif
             case ST_PLAY:
                 handlePlay(down, held, &t);
                 updateCue(held);
