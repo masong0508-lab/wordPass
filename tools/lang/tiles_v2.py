@@ -101,7 +101,7 @@ def verify(data, dictionary=None):
                 for w, v in zip(weights, values)) or
             sum(w for i, w in enumerate(weights) if mask & (1 << i)) < 10):
         raise ValueError("invalid tile distribution")
-    return {"symbols": n, "rares": rares, "vowels": mask.bit_count(),
+    return {"symbols": n, "rares": rares, "vowels": bin(mask).count("1"),
             "bytes": len(data), "weights": weights}
 
 
