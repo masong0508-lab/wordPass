@@ -147,7 +147,47 @@ def main(rom, output):
           "D-pad UP wrapping / A should choose Українська DEMO")
     e.press("START", settle=16)
     check(e.state()["state"] == 0, "controller-selected Ukrainian DEMO must exit safely")
-    print("RUSSIAN AND UKRAINIAN DS OPTIONS OK: touch + D-pad picker, bilingual gameplay, full shelf and safe exit")
+    # L+SELECT offers UNRANKED Daily practice in the separate demo ROM.
+    # On an emulator with no valid DS RTC, it must refuse the mode safely.
+    e.tap(55, 14, settle=12)
+    e.tap(80, 161, settle=20)
+    check(e.state()["state"] == 9 and get_int(e, "scriptPreviewLanguage") == 0,
+          "Daily practice requires a real Russian menu-selected board")
+    e.hold("L")
+    e.press("SELECT", settle=12)
+    e.hold("L", False)
+    if get_int(e, "scriptPreviewDaily"):
+        first_date = get_int(e, "scriptPreviewDailyDate")
+        first_seed = get_int(e, "scriptPreviewSeed")
+        check(first_date >= 20250101 and first_seed,
+              "Daily practice should use a nonzero, plausible DS date seed")
+        e.shot(str(out / "russian-daily-practice.png"))
+        # SELECT is a safe deterministic re-deal, not a new puzzle or a
+        # route to farming the same day's cumulative score.
+        e.press("SELECT", settle=12)
+        check(get_int(e, "scriptPreviewSeed") == first_seed and
+              get_int(e, "scriptPreviewScore") == 0,
+              "Daily practice retry must preserve seed and clear score")
+        e.press("X", settle=18)
+        check(get_int(e, "scriptPreviewDaily") == 1 and
+              get_int(e, "scriptPreviewDailyDate") == first_date and
+              get_int(e, "scriptPreviewSeed") != first_seed,
+              "Ukrainian Daily must preserve the day but use its own board")
+        e.press("X", settle=18)
+        check(get_int(e, "scriptPreviewDaily") == 1 and
+              get_int(e, "scriptPreviewSeed") == first_seed,
+              "switching back to Russian on the same date restores daily seed")
+        e.hold("L")
+        e.press("SELECT", settle=12)
+        e.hold("L", False)
+        check(get_int(e, "scriptPreviewDaily") == 0,
+              "L+SELECT must return to ordinary experimental free shelves")
+    else:
+        check(get_int(e, "scriptPreviewDailyClockError") == 1,
+              "invalid RTC must prevent Daily practice and show clock feedback")
+    e.press("START", settle=18)
+    check(e.state()["state"] == 0, "Daily demo exits safely without changing retail Daily")
+    print("RUSSIAN/UKRAINIAN DS OK: menu, hints, scores, combo, Daily practice seed and safe exit")
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
