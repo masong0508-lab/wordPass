@@ -2251,18 +2251,17 @@ static void drawScriptPreviewBoard(void)
     snprintf(n, sizeof n, scriptPreviewLanguage ? "ХІД %u" : "ХОД %u", scriptPreviewRules.turns);
     drawText(px0 + 4, 94, n, WHITE, 1);
     hline(px0 + 2, 107, 70, GOLD_DK);
-    drawText(px0 + 4, 113, "L+TAP PEEL", WHITE, 1);
-    drawText(px0 + 4, 124, "A  SUBMIT", WHITE, 1);
-    drawText(px0 + 4, 135, "Y CLR R HINT", WHITE, 1);
-    drawText(px0 + 4, 146, scriptPreviewLanguage ? "X МОВА" : "X ЯЗЫК", WHITE, 1);
-    drawText(px0 + 4, 157, scriptPreviewDaily ?
+    // Give each action its own readable row instead of an English
+    // controller-code cram. Full outcome text already lives on the top LCD.
+    drawText(px0 + 4, 113, scriptPreviewLanguage ? "L+TAP ВІДК" : "L+TAP ОТКР", WHITE, 1);
+    drawText(px0 + 4, 124, scriptPreviewLanguage ? "A ПРИЙНЯТИ" : "A ПРИНЯТЬ", WHITE, 1);
+    drawText(px0 + 4, 135, scriptPreviewLanguage ? "Y ОЧИСТИТИ" : "Y СБРОС", WHITE, 1);
+    drawText(px0 + 4, 146, scriptPreviewLanguage ? "R ПІДКАЗКА" : "R ПОДСКАЗКА", WHITE, 1);
+    drawText(px0 + 4, 157, scriptPreviewLanguage ? "X МОВА" : "X ЯЗЫК", WHITE, 1);
+    drawText(px0 + 4, 168, scriptPreviewDaily ?
              (scriptPreviewLanguage ? "SEL ЗНОВУ" : "SEL ЗАНОВО") :
-             (scriptPreviewLanguage ? "SEL ДАЛІ" : "SEL ДАЛЕЕ"), WHITE, 1);
-    drawText(px0 + 4, 170, scriptPreviewLanguage ? "START ВИХІД" : "START ВЫХОД", ACCENT, 1);
-    if (scriptPreviewRules.status == SCRIPT_PASSED)
-        drawText(px0 + 2, 181, scriptPreviewLanguage ? "ЗНАЙДЕНО" : "НАЙДЕНО", GOLD_LT, 1);
-    else if (scriptPreviewRules.status == SCRIPT_FAILED)
-        drawText(px0 + 2, 181, scriptPreviewLanguage ? "ВОГОНЬ" : "ПОЖАР", FIRE2, 1);
+             (scriptPreviewLanguage ? "SEL НОВА" : "SEL НОВАЯ"), WHITE, 1);
+    drawText(px0 + 4, 179, scriptPreviewLanguage ? "START ВИХІД" : "START ВЫХОД", ACCENT, 1);
 }
 static void drawScriptPreviewTop(void)
 {
