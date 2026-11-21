@@ -1,11 +1,9 @@
 name: Refresh soundtrack previews
 
-# A one-time repair run for the 2026-11-21 music drift, plus a reusable
-# manual refresh action for when the authored song tables change again.
+# Explicitly refresh generated WAV/MIDI previews whenever the authored
+# song tables change. The strict build workflow still checks for drift.
+# Manual-only by design: this action writes tracked binary previews.
 on:
-  push:
-    branches:
-      - fix/wordpass-music-hints-20261121
   workflow_dispatch:
 
 permissions:
