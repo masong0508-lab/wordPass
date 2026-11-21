@@ -2150,10 +2150,28 @@ int main(int argc, char **argv)
                 free(b);
             }
             bool chd = chdir("build/langdmg") == 0;
+            bool packAvailable = chd;
+            if (chd) {
+                // One missing file at a time in the scratch tree: previously the
+                // chooser looked only for letters.bin and advertised broken packs.
+                for (int k = 0; k < 3; k++) {
+                    char src[64], gone[80];
+                    snprintf(src, sizeof src, "data/lang/es/%s", F[k]);
+                    snprintf(gone, sizeof gone, "data/lang/es/held-%s", F[k]);
+                    if (rename(src, gone) != 0) { packAvailable = false; break; }
+                    langInit();
+                    if (langAvailable(LANG_ES)) packAvailable = false;
+                    if (rename(gone, src) != 0) { packAvailable = false; break; }
+                }
+                langInit();
+                if (!langAvailable(LANG_ES)) packAvailable = false;
+            }
+            CHECK("the chooser hides a language missing any one of its three resources", chd && packAvailable);
             bool loaded = chd ? langLoad(LANG_ES) : true;
             bool failed = langLoadFailed();
             bool eng = STAYS_ENGLISH();
             if (chd && chdir(cwd) != 0) printf("cannot return to %s\n", cwd);
+            langInit();            // restore the actual ROM-equivalent language tree after the scratch test
             CHECK("langLoad of a Spanish with a short pools.bin fails, English is active and langLoadFailed says so", chd && !loaded && failed && eng);
             CHECK("the next good load (from the real tree) succeeds and clears the failure", langLoad(LANG_ES) && !langLoadFailed() && langCur() == LANG_ES);
             CHECK("... and back to English", langLoad(LANG_EN) && STAYS_ENGLISH() && !langLoadFailed());
