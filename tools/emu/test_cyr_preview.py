@@ -76,6 +76,8 @@ def main(rom, output):
     check(get_int(e, "scriptPreviewTurns") == 1,
           "a valid Russian themed word must consume exactly one shelf turn")
     e.shot(str(out / "ru-scored.png"))
+    check(get_int(e, "scriptPreviewLastScore") > 0,
+          "awarded Russian score must record a real submitted word")
     # L+R repairs a thin draft vocabulary board once after the first turn.
     # It must spend a real turn, avoid granting points, and reset combo.
     scored = get_int(e, "scriptPreviewScore")
@@ -100,8 +102,8 @@ def main(rom, output):
     ledger_bytes = bytes(e.mem.unsigned[ledger:ledger + 194])
     check(ledger_bytes[184] == 1 and struct.unpack_from("<H", ledger_bytes, 186)[0] == 0,
           "rescue must keep Russian word history and break the earned combo")
-    check(get_int(e, "scriptPreviewLastScore") > 0,
-          "awarded Russian score must record a real submitted word")
+    check(get_int(e, "scriptPreviewLastScore") == 0,
+          "rescue should clear the stale last-word score display")
     e.hold("L")
     e.tap(*e.center(1, 6), settle=8)
     e.hold("L", False)
