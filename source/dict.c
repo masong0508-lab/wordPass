@@ -35,7 +35,7 @@ static bool tableInit(Table *t, const u8 *p, size_t bytes, const char *magic)
         total += (unsigned long long)counts[n] * recLen[n];
         words += counts[n];
     }
-    if (bytes != IMAGE_TRUSTED && (total > bytes || words == 0)) return false;
+    if (bytes != IMAGE_TRUSTED && (total != bytes || words == 0)) return false;
     for (int n = MIN_LEN; n <= MAX_LEN; n++) {
         t->base[n] = q;
         t->count[n] = counts[n];

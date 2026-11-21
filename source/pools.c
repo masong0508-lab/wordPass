@@ -46,7 +46,7 @@ static bool poolsParse(PoolSet *s, const u8 *p, size_t bytes)
             body += (size_t)s->count[t][k] * (POOL_MIN_LEN + k);
             used += (unsigned long long)s->count[t][k] * (POOL_MIN_LEN + k);
         }
-    if (!trusted && used > bytes) return false;
+    if (!trusted && used != bytes) return false;
     s->n = n;
     return true;
 }

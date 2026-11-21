@@ -123,6 +123,10 @@ static bool rawLocate(const char *path, u32 *start, u32 *size)
 
 static void rawInit(void)
 {
+    // langInit is also invoked when a language tree is refreshed. Do not leak
+    // the old filename table across repeated initialization.
+    free(fnt);
+    fnt = NULL;
     rawOk = false;
     // Decide from what libfilesystem did, not from whether argv and FAT exist: when it opens the .nds through FAT it
     // leaves the working directory on that device, when it reads the card itself (no argv, or argv[0] is not a file on
@@ -200,25 +204,37 @@ static void freeBuffers(void)
 static bool hasLanguageFiles(int idx)
 {
     static const char *const files[3] = { "dict.bin", "pools.bin", "letters.bin" };
+    static const char *const magic[3] = { "WPD3", "WPP1", "WPL1" };
     static const size_t minSize[3] = { 76, 808, LANG_LETTERS_BYTES };
+    static const size_t maxSize[3] = { 2u << 20, 256u << 10, LANG_LETTERS_BYTES };
     for (int k = 0; k < 3; k++) {
+        u8 head[8];
 #ifdef ARM9
         if (rawOk) {
             char rel[40];
             u32 st, sz;
             strcpy(rel, "lang/"); strcat(rel, langCode(idx)); strcat(rel, "/"); strcat(rel, files[k]);
-            if (!rawLocate(rel, &st, &sz) || sz < minSize[k] ||
-                (k == 2 && sz != LANG_LETTERS_BYTES)) return false;
-            continue;
-        }
+            if (!rawLocate(rel, &st, &sz) || sz < minSize[k] || sz > maxSize[k]) return false;
+            rawRead(st, head, sizeof(head));
+        } else
 #endif
-        char p[48];
-        path(p, idx, files[k]);
-        int fd = open(p, O_RDONLY);
-        if (fd < 0) return false;
-        off_t size = lseek(fd, 0, SEEK_END);
-        close(fd);
-        if (size < (off_t)minSize[k] || (k == 2 && size != LANG_LETTERS_BYTES)) return false;
+        {
+            char p[48];
+            path(p, idx, files[k]);
+            int fd = open(p, O_RDONLY);
+            if (fd < 0) return false;
+            off_t size = lseek(fd, 0, SEEK_END);
+            bool sizeOk = size >= (off_t)minSize[k] && size <= (off_t)maxSize[k] &&
+                          lseek(fd, 0, SEEK_SET) == 0;
+            ssize_t got = sizeOk ? read(fd, head, sizeof(head)) : -1;
+            close(fd);
+            if (got != (ssize_t)sizeof(head)) return false;
+        }
+        // Existence alone is not enough: detect corrupted magic and pool
+        // headers before presenting a broken pack as a selectable language.
+        if (memcmp(head, magic[k], 4) != 0) return false;
+        if (k == 1 && !(head[4] == 40 && head[5] == 0 && head[6] == 0 && head[7] == 0)) return false;
+        if (k == 2 && (head[4] > 1 || head[5])) return false;
     }
     return true;
 }
@@ -263,7 +279,7 @@ bool langLoad(int idx)
     lastMs = 0;
     loadFailed = false;
     if (idx == LANG_EN) return true;
-    if (!langAvailable(idx)) return false;
+    if (!langAvailable(idx)) { loadFailed = true; return false; }
     musicHush();                      // the load blocks for 0.2 s to 7 s with no musicTick: no frozen chord meanwhile
     gfxLoading(langName(idx));
 #ifdef ARM9
