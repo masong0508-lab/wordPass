@@ -2233,16 +2233,22 @@ static void drawScriptPreviewBoard(void)
     const int px0 = panelX + 2;
     rectOutline(panelX, 2, 78, 188, GOLD_DK);
     drawText(px0 + 6, 10, "CYRILLIC", GOLD_LT, 1);
-    drawText(px0 + 6, 20, "DS TEST", ACCENT, 1);
+    char label[20];
+    snprintf(label, sizeof label, "SHELF %d", scriptPreviewShelf);
+    drawText(px0 + 6, 20, label, ACCENT, 1);
     hline(px0 + 2, 33, 70, GOLD_DK);
     drawText(px0 + 7, 40, scriptPreviewLanguage ? "UKRAINIAN" : "RUSSIAN", WHITE, 1);
     char n[16];
     drawText(px0 + 4, 57, "SCORE", DIM_TEXT, 1);
     fmtInt(n, scriptPreviewScore);
     drawText(px0 + 4, 67, n, GOLD_LT, 1);
-    drawText(px0 + 4, 81, "PEELS", DIM_TEXT, 1);
-    fmtInt(n, scriptPreviewPeels);
-    drawText(px0 + 4, 91, n, WHITE, 1);
+    snprintf(n, sizeof n, "HEAT %d/%d",
+             scriptPreviewRules.heat, scriptPreviewRules.heatThreshold);
+    drawText(px0 + 4, 81, n,
+             scriptPreviewRules.heat >= scriptPreviewRules.heatThreshold - 2 ?
+             FIRE2 : DIM_TEXT, 1);
+    snprintf(n, sizeof n, "TURN %u", scriptPreviewRules.turns);
+    drawText(px0 + 4, 94, n, WHITE, 1);
     hline(px0 + 2, 107, 70, GOLD_DK);
     drawText(px0 + 4, 113, "L+TAP PEEL", WHITE, 1);
     drawText(px0 + 4, 124, "A  SUBMIT", WHITE, 1);
@@ -2250,8 +2256,10 @@ static void drawScriptPreviewBoard(void)
     drawText(px0 + 4, 146, "X  LANG", WHITE, 1);
     drawText(px0 + 4, 157, "SEL  NEXT", WHITE, 1);
     drawText(px0 + 4, 170, "START EXIT", ACCENT, 1);
-    if (scriptBoardPassComplete(b))
+    if (scriptPreviewRules.status == SCRIPT_PASSED)
         drawText(px0 + 2, 181, "PASS FOUND", GOLD_LT, 1);
+    else if (scriptPreviewRules.status == SCRIPT_FAILED)
+        drawText(px0 + 2, 181, "FIRE LOST", FIRE2, 1);
 }
 static void drawScriptPreviewTop(void)
 {
@@ -2294,8 +2302,12 @@ static void drawScriptPreviewTop(void)
             drawTextCenter(128, 147, pts, GOLD_LT, 1);
         } else if (b->chainLen >= 3) drawTextCenter(128, 147, "NOT IN TEST DICTIONARY", FIRE2, 1);
     }
-    if (scriptBoardPassComplete(b))
-        drawTextCenter(128, 169, "PASS DISCOVERED! SELECT: NEXT", GOLD_LT, 1);
+    if (scriptPreviewRules.status == SCRIPT_PASSED) {
+        char msg[52];
+        snprintf(msg, sizeof msg, "SHELF SAVED +%d - A: NEXT", scriptPreviewRules.lastBonus);
+        drawTextCenter(128, 169, msg, GOLD_LT, 1);
+    } else if (scriptPreviewRules.status == SCRIPT_FAILED)
+        drawTextCenter(128, 169, "FIRE WON - A: RETRY / START: EXIT", FIRE2, 1);
     else drawTextCenter(128, 169, "HOLD L + TAP TO REVEAL LETTERS", ACCENT, 1);
 }
 #endif
@@ -3078,6 +3090,37 @@ static void topSigs(const Game *g, u32 sig[4])
 {
     bool play = !menuState(g->state);
     u32 h0 = 2166136261u, h1 = h0, h2 = h0, h3 = h0;
+#ifdef WP_CYR_PREVIEW
+    if (g->state == ST_SCRIPT_PREVIEW) {
+        // This preview owns independent state, so hashing the retail Game
+        // would leave the password and live chain visibly stale. Slice-based
+        // signatures update only changed top-screen regions in vblank.
+        const ScriptBoard *b = &scriptPreviewBoard;
+        h0 = hmix(h0, g->state);
+        h0 = hmix(h0, scriptPreviewShelf);
+        h0 = hmix(h0, scriptPreviewLanguage);
+        h1 = hmix(h1, b->passLen);
+        h1 = hmix(h1, b->passTheme);
+        for (int i = 0; i < b->passLen; i++) {
+            h1 = hmix(h1, b->pass[i]);
+            h1 = hmix(h1, b->found[i]);
+        }
+        h2 = hmix(h2, b->chainLen);
+        for (int i = 0; i < b->chainLen; i++) {
+            int c = b->chainC[i], r = b->chainR[i];
+            if (c < SCRIPT_COLS && r < SCRIPT_ROWS)
+                h2 = hmix(h2, b->tile[c][r]);
+        }
+        h2 = hmix(h2, scriptPreviewLastTier);
+        h3 = hmix(h3, scriptPreviewRules.status);
+        h3 = hmix(h3, scriptPreviewRules.lastBonus);
+        topSigNow[0] = sig[0] = h0;
+        topSigNow[1] = sig[1] = h1;
+        topSigNow[2] = sig[2] = h2;
+        topSigNow[3] = sig[3] = h3;
+        return;
+    }
+#endif
     if (!play) {                           // title, options, ledger: the tip card is the only thing that changes by itself
         h0 = hmix(h0, tipIndex + 1); h1 = hmix(h1, tipIndex + 1); h2 = hmix(h2, tipIndex + 1); h3 = hmix(h3, tipIndex + 1);
         h0 = hmix(h0, g->state); h1 = hmix(h1, g->state); h2 = hmix(h2, g->state); h3 = hmix(h3, g->state);
