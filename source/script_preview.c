@@ -16,6 +16,7 @@ int scriptPreviewScore, scriptPreviewTurns, scriptPreviewPeels, scriptPreviewHin
 int scriptPreviewThemeCount;
 int scriptPreviewShelf;
 ScriptRules scriptPreviewRules;
+ScriptLedger scriptPreviewLedger;
 int scriptPreviewLastTier, scriptPreviewLastScore;
 uint32_t scriptPreviewSeed;
 
@@ -55,6 +56,7 @@ void scriptPreviewClose(void)
     scriptPreviewThemeCount = 0;
     scriptPreviewShelf = 0;
     memset(&scriptPreviewRules, 0, sizeof scriptPreviewRules);
+    scriptLedgerReset(&scriptPreviewLedger);
     scriptPreviewLastTier = scriptPreviewLastScore = 0;
 }
 bool scriptPreviewNewPass(uint32_t seed)
@@ -72,6 +74,7 @@ bool scriptPreviewNewPass(uint32_t seed)
                               scriptPreviewSeed, 5)) return false;
     scriptPreviewTurns = scriptPreviewPeels = scriptPreviewHints = 0;
     scriptPreviewLastTier = scriptPreviewLastScore = 0;
+    scriptLedgerReset(&scriptPreviewLedger);
     // Guarantee one real Cyrillic word that can be chained on the DS, even
     // when an external legally sourced Hunspell pack excludes the old
     // sample ПРИВЕТ / ПРИВІТ. The tiny built-in fixtures retain that exact
@@ -159,6 +162,7 @@ int scriptPreviewPeel(int c, int r)
     int result = scriptBoardPeel(&scriptPreviewBoard, c, r);
     if (result >= 0 || result == -2) {
         scriptPreviewPeels++;
+        scriptLedgerPeel(&scriptPreviewLedger); // a peel breaks the retail combo
         scriptPreviewLastTier = scriptPreviewLastScore = 0;
         int bonus = scriptRulesTurn(&scriptPreviewRules, &scriptPreviewBoard,
                                     &scriptPreviewTiles, 1, true, result == -2);
@@ -187,23 +191,51 @@ bool scriptPreviewHint(void)
     scriptPreviewHints++;
     return true;
 }
+// Words live as compact alphabet IDs, never as variable-length UTF-8 bytes.
+// This read-only quote is used only to show the score of a selected chain.
+int scriptPreviewQuote(void)
+{
+    int raw = scriptBoardPreview(&scriptPreviewBoard, &scriptPreviewDict,
+                                 &scriptPreviewTiles, NULL);
+    int length = scriptPreviewBoard.chainLen;
+    if (raw <= 0 || length < WPD4_MIN_WORD || length > SCRIPT_MAX_CHAIN)
+        return 0;
+    uint8_t ids[SCRIPT_MAX_CHAIN];
+    for (int i = 0; i < length; i++) {
+        int col = scriptPreviewBoard.chainC[i], row = scriptPreviewBoard.chainR[i];
+        if (col >= SCRIPT_COLS || row >= SCRIPT_ROWS) return 0;
+        ids[i] = scriptPreviewBoard.tile[col][row];
+    }
+    return scriptLedgerQuote(&scriptPreviewLedger, ids, length, raw);
+}
+
 int scriptPreviewSubmit(void)
 {
     if (!scriptPreviewDict.image || scriptPreviewRules.status != SCRIPT_RUNNING)
         return 0;
     int length = scriptPreviewBoard.chainLen;
+    uint8_t ids[SCRIPT_MAX_CHAIN] = {0};
+    // Capture the current word before Submit removes and refills tiles.
+    // The board scorer has authority to reject malformed/invalid chains.
+    if (length >= WPD4_MIN_WORD && length <= SCRIPT_MAX_CHAIN)
+        for (int i = 0; i < length; i++) {
+            int col = scriptPreviewBoard.chainC[i], row = scriptPreviewBoard.chainR[i];
+            if (col >= SCRIPT_COLS || row >= SCRIPT_ROWS) return 0;
+            ids[i] = scriptPreviewBoard.tile[col][row];
+        }
     int tier = 0;
     int points = scriptBoardSubmit(&scriptPreviewBoard, &scriptPreviewDict,
                                    &scriptPreviewTiles, &tier);
     scriptPreviewLastTier = tier;
-    scriptPreviewLastScore = points;
     if (points > 0) {
+        points = scriptLedgerCommit(&scriptPreviewLedger, ids, length, points);
         scriptPreviewScore += points;
         scriptPreviewScore += scriptRulesTurn(&scriptPreviewRules,
                                 &scriptPreviewBoard, &scriptPreviewTiles,
                                 scriptRulesWordHeat(length), false, false);
         scriptPreviewTurns = scriptPreviewRules.turns;
     }
+    scriptPreviewLastScore = points;
     return points;
 }
 #endif
