@@ -5,6 +5,7 @@ The preview's 40 *four-word* RU/UK theme seeds are NOT full language packs.
 The production ROM has no developer preview and still exposes 11 locales.
 """
 from pathlib import Path
+from PIL import Image, ImageChops
 import struct
 import sys
 from wp import Emu, symbol
@@ -33,6 +34,7 @@ def main(rom, output):
     check(e.state()["state"] == 9, "L+R+Y did not open real DS Cyrillic preview")
     check(get_int(e, "scriptPreviewLanguage") == 0, "preview should start in Russian")
     check(get_int(e, "scriptPreviewThemeCount") == 40, "Russian preview should contain 40 seeded themes")
+    check(get_int(e, "scriptPreviewShelf") == 1, "Cyrillic first shelf should start at 1")
     e.shot(str(out / "ru-board.png"))
     check(get_int(e, "scriptPreviewScore") == 0, "initial score is zero")
     # The development fixture guarantees ПРИВЕТ in the first column (six
@@ -40,24 +42,69 @@ def main(rom, output):
     e.chain([(0, r) for r in range(6)])
     e.press("A", settle=24)
     check(get_int(e, "scriptPreviewScore") > 0, "real Cyrillic chain did not score")
+    check(get_int(e, "scriptPreviewTurns") == 1,
+          "a valid six-letter Russian word must consume exactly one shelf turn")
     e.shot(str(out / "ru-scored.png"))
     e.hold("L")
     e.tap(*e.center(1, 6), settle=8)
     e.hold("L", False)
     check(get_int(e, "scriptPreviewPeels") == 1, "touch-screen peel did not register")
+    check(get_int(e, "scriptPreviewTurns") == 2,
+          "a successful peel must cost another turn and trigger fire rules")
     e.press("X", settle=20)
     check(e.state()["state"] == 9 and get_int(e, "scriptPreviewLanguage") == 1,
           "X should switch to Ukrainian without changing the release locale")
     check(get_int(e, "scriptPreviewThemeCount") == 40, "Ukrainian preview should contain 40 seeded themes")
     e.shot(str(out / "uk-board.png"))
+    # The first two language packs legitimately share the theme "КНИГИ",
+    # and hidden passwords can have the same placeholder pattern. Compare
+    # the explicit translated language label on the ACTUAL top LCD instead
+    # of falsely requiring otherwise identical theme artwork to change.
+    with Image.open(out / "ru-board.png") as russian, Image.open(out / "uk-board.png") as ukrainian:
+        delta = ImageChops.difference(
+            russian.convert("RGB").crop((16, 26, 240, 42)),
+            ukrainian.convert("RGB").crop((16, 26, 240, 42)))
+        check(delta.getbbox() is not None,
+              "Cyrillic top-screen language label did not change")
     e.chain([(0, r) for r in range(6)])
     e.press("A", settle=20)
     check(get_int(e, "scriptPreviewScore") > 0, "Ukrainian ПРИВІТ should score")
+    check(get_int(e, "scriptPreviewTurns") == 1,
+          "Ukrainian scripted board should share shelf-turn semantics")
     e.press("SELECT", settle=8)
     check(get_int(e, "scriptPreviewTurns") == 0, "new pass did not reset turn counter")
+    # Exercise a complete secret-finding shelf through REAL stylus taps,
+    # reading hidden pass coordinates from the ARM9 game's independent
+    # ScriptBoard memory. This is an emulator-only diagnostic: it does not
+    # put solutions on screen or in a production language pack. The first
+    # 153 bytes are tile[56], state[56], chainC[20], chainR[20], chainLen[1].
+    board = symbol(e.rom_elf, "scriptPreviewBoard")
+    pass_len = int(e.mem.unsigned[board + 227])
+    check(4 <= pass_len <= 9, "Cyrillic shelf password length is out of range")
+    secrets = {}
+    for col in range(7):
+        for row in range(8):
+            index = int(e.mem.unsigned[board + 153 + col * 8 + row])
+            if index:
+                check(1 <= index <= pass_len and index not in secrets,
+                      "hidden Cyrillic password index corrupted or duplicated")
+                secrets[index] = (col, row)
+    check(len(secrets) == pass_len, "every hidden password symbol must have a tile")
+    e.hold("L")
+    for index in range(1, pass_len + 1):
+        e.tap(*e.center(*secrets[index]), settle=5)
+    e.hold("L", False)
+    check(get_int(e, "scriptPreviewTurns") == pass_len,
+          "every revealed secret must consume a single shelf turn")
+    e.shot(str(out / "uk-shelf-won.png"))
+    e.press("A", settle=18)
+    check(get_int(e, "scriptPreviewShelf") == 2,
+          "a completed Cyrillic password must advance to the next shelf")
+    check(get_int(e, "scriptPreviewTurns") == 0,
+          "new Cyrillic shelf must reset heat/turn pacing")
     e.press("START", settle=20)
     check(e.state()["state"] == 0, "START should return to the untouched 11-language title")
-    print("CYRILLIC DS PREVIEW OK: Russian and Ukrainian touch chains, score, peel, reset, exit")
+    print("CYRILLIC DS PREVIEW OK: bilingual stylus scoring, heat turns, top HUD, full password clear and next shelf")
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:

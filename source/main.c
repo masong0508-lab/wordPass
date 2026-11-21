@@ -764,7 +764,13 @@ int main(void)
                     break;
                 }
                 if (down & KEY_Y) scriptBoardClearChain(&scriptPreviewBoard);
-                if (down & KEY_A) (void)scriptPreviewSubmit();
+                if (down & KEY_A) {
+                    if (scriptPreviewRules.status == SCRIPT_PASSED)
+                        (void)scriptPreviewAdvance(seedCounter);
+                    else if (scriptPreviewRules.status == SCRIPT_FAILED)
+                        (void)scriptPreviewNewPass(seedCounter);
+                    else (void)scriptPreviewSubmit();
+                }
                 if (held & KEY_TOUCH) {
                     int col, row;
                     if (gfxCellAt(t.px, t.py, &col, &row)) {
