@@ -20,6 +20,8 @@ extern int scriptPreviewThemeCount; // inspect 40 draft themes in emulator regre
 extern int scriptPreviewTurns;
 extern int scriptPreviewPeels;
 extern int scriptPreviewHints;
+extern int scriptPreviewRescues;      // 0 or 1 successful word recovery per shelf
+extern int scriptPreviewRescueError;  // 0 none, 1 too early, 2 used, 3 blocked
 extern int scriptPreviewShelf;
 extern ScriptRules scriptPreviewRules;
 extern ScriptLedger scriptPreviewLedger;
@@ -43,6 +45,9 @@ int scriptPreviewPeel(int c, int r);
 bool scriptPreviewChain(int c, int r);
 // One free, bounded path hint per engineering shelf (retail hint economy TBD).
 bool scriptPreviewHint(void);
+// L+R after a game turn plants a fresh valid word around existing hazards,
+// charges heat/time and breaks the combo. Never affects retail saves.
+bool scriptPreviewRescue(void);
 // Score the current valid word with repeat penalty and combo before submit.
 int scriptPreviewQuote(void);
 int scriptPreviewSubmit(void);
