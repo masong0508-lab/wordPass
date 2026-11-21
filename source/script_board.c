@@ -128,44 +128,97 @@ int scriptBoardPreview(const ScriptBoard *b, const V4Dict *dict,
 {
     return preview(b, dict, tiles, tier);
 }
-int scriptBoardSubmit(ScriptBoard *b, const V4Dict *dict,
-                      const V4Tiles *tiles, int *tier)
+// Compact plain tiles separately between permanent holes, diamonds and
+// flames. SCRIPT_EMPTY is a *temporary* vacancy, unlike a peeled hole.
+// Position-anchored hidden password indexes never slide with the tiles.
+// Each vertical segment refills from the fixed 100-symbol bag in O(7*8).
+static bool compact(ScriptBoard *b, const V4Tiles *tiles)
 {
-    int pts = preview(b, dict, tiles, tier);
-    if (!pts) return 0; // rejected words leave the board and chain untouched
-    bool used[SCRIPT_COLS][SCRIPT_ROWS] = {{false}};
-    for (unsigned i = 0; i < b->chainLen; i++)
-        used[b->chainC[i]][b->chainR[i]] = true;
-    // First refill uses the 44 tiles left in the current 100-tile bag;
-    // subsequent refills draw a new deterministic bag (no heap allocations).
     for (int c = 0; c < SCRIPT_COLS; c++) {
         int dst = SCRIPT_ROWS - 1;
-        // Holes, revealed password diamonds and unconsumed fire split a
-        // column into segments. Each segment settles within its own bounds:
-        // no tiles can phase through a revealed secret or permanent hole.
         for (int r = SCRIPT_ROWS - 1; r >= -1; r--) {
             int state = r >= 0 ? b->state[c][r] : -1;
-            bool consumed = r >= 0 && used[c][r] && state != SCRIPT_DIAMOND;
-            bool floor = (r < 0 || state == SCRIPT_HOLE ||
-                          state == SCRIPT_DIAMOND ||
-                          (state == SCRIPT_BURN && !consumed));
+            bool floor = r < 0 || state == SCRIPT_HOLE ||
+                         state == SCRIPT_DIAMOND || state == SCRIPT_BURN;
             if (floor) {
                 for (int fill = dst; fill > r; fill--) {
                     uint8_t sym;
-                    if (!take(b, tiles, &sym)) return 0;
+                    if (!take(b, tiles, &sym)) return false;
                     b->tile[c][fill] = sym;
                     b->state[c][fill] = SCRIPT_TILE;
                 }
                 dst = r - 1;
-            } else if (!consumed) {
+            } else if (state == SCRIPT_TILE) {
                 b->tile[c][dst] = b->tile[c][r];
-                b->state[c][dst] = b->state[c][r];
+                b->state[c][dst] = SCRIPT_TILE;
                 dst--;
-            }
+            } // SCRIPT_EMPTY is dropped, then replaced at the segment top
         }
     }
+    return true;
+}
+int scriptBoardSubmit(ScriptBoard *b, const V4Dict *dict,
+                      const V4Tiles *tiles, int *tier)
+{
+    int pts = preview(b, dict, tiles, tier);
+    if (!pts) return 0;
+    for (unsigned i = 0; i < b->chainLen; i++) {
+        int c = b->chainC[i], r = b->chainR[i];
+        if (b->state[c][r] == SCRIPT_TILE || b->state[c][r] == SCRIPT_BURN)
+            b->state[c][r] = SCRIPT_EMPTY;
+    }
+    if (!compact(b, tiles)) return 0;
     b->chainLen = 0;
     return pts;
+}
+// Start a flame at the highest unprotected tile, favoring columns without
+// existing fire. This keeps early turns spread across the board.
+bool scriptBoardIgnite(ScriptBoard *b, uint32_t turnSeed)
+{
+    if (!b) return false;
+    int start = (int)(nextSeed(turnSeed ? turnSeed : b->seed) % SCRIPT_COLS);
+    for (int pass = 0; pass < 2; pass++)
+        for (int step = 0; step < SCRIPT_COLS; step++) {
+            int c = (start + step) % SCRIPT_COLS;
+            bool burning = false;
+            for (int r = 0; r < SCRIPT_ROWS; r++)
+                if (b->state[c][r] == SCRIPT_BURN) burning = true;
+            if (pass == 0 && burning) continue;
+            for (int r = 0; r < SCRIPT_ROWS; r++)
+                if (b->state[c][r] == SCRIPT_TILE) {
+                    b->state[c][r] = SCRIPT_BURN;
+                    b->chainLen = 0;
+                    return true;
+                }
+        }
+    return false;
+}
+// Each flame moves down by ONE playable tile per tick. Holes are chimneys,
+// never destroyed or converted back into ordinary tiles; exposed password
+// diamonds and other flames stop movement. A bottom flame, or one escaping
+// past the bottom through empty cells, ends the shelf.
+bool scriptBoardFireStep(ScriptBoard *b, const V4Tiles *tiles)
+{
+    if (!b || !tiles || !tiles->valid) return false;
+    bool moved[SCRIPT_COLS][SCRIPT_ROWS] = {{false}};
+    for (int c = 0; c < SCRIPT_COLS; c++)
+        if (b->state[c][SCRIPT_ROWS - 1] == SCRIPT_BURN) return true;
+    for (int c = 0; c < SCRIPT_COLS; c++)
+        for (int r = SCRIPT_ROWS - 2; r >= 0; r--) {
+            if (b->state[c][r] != SCRIPT_BURN || moved[c][r]) continue;
+            int rr = r + 1;
+            while (rr < SCRIPT_ROWS &&
+                   (b->state[c][rr] == SCRIPT_HOLE ||
+                    b->state[c][rr] == SCRIPT_EMPTY)) rr++;
+            if (rr >= SCRIPT_ROWS) return true;
+            if (b->state[c][rr] != SCRIPT_TILE) continue;
+            // Secret locations remain fixed to board coordinates, so a later
+            // peel of a burning pass spot can be recognized as scorched.
+            b->state[c][r] = SCRIPT_EMPTY;
+            b->state[c][rr] = SCRIPT_BURN;
+            moved[c][rr] = true;
+        }
+    return !compact(b, tiles);
 }
 static unsigned encode(uint32_t cp, char *out)
 {
@@ -286,6 +339,13 @@ int scriptBoardPeel(ScriptBoard *b, int col, int row)
     uint8_t index = b->back[col][row];
     if (index && index > b->passLen) return -1;
     b->chainLen = 0;
+    // As in Classic, a burning tile (or a flame immediately above it)
+    // scorches the hidden letter: a fatal guess rather than a free reveal.
+    if (b->state[col][row] == SCRIPT_BURN ||
+        (row > 0 && b->state[col][row - 1] == SCRIPT_BURN)) {
+        b->state[col][row] = SCRIPT_HOLE;
+        return index ? -2 : 0;
+    }
     if (index) {
         // Discover this hidden pass symbol, then permanently expose its
         // actual Cyrillic glyph as a chainable, flame-stopping diamond.

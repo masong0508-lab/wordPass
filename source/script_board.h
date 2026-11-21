@@ -10,7 +10,8 @@
 #define SCRIPT_COLS 7
 #define SCRIPT_ROWS 8
 #define SCRIPT_MAX_CHAIN 20
-enum { SCRIPT_HOLE = 0, SCRIPT_TILE = 1, SCRIPT_BURN = 2, SCRIPT_DIAMOND = 3 };
+enum { SCRIPT_HOLE = 0, SCRIPT_TILE = 1, SCRIPT_BURN = 2, SCRIPT_DIAMOND = 3,
+       SCRIPT_EMPTY = 4 };  // temporary vacated cell, distinct from a permanent peeled hole
 typedef struct {
     uint8_t tile[SCRIPT_COLS][SCRIPT_ROWS];    // 0..63, dictionary alphabet index
     uint8_t state[SCRIPT_COLS][SCRIPT_ROWS];
@@ -39,6 +40,10 @@ bool scriptBoardPassUtf8(const ScriptBoard *board, const V4Dict *dictionary,
                          char *out, size_t capacity);
 bool scriptBoardAdd(ScriptBoard *board, int col, int row); // append, undo, or truncate
 void scriptBoardClearChain(ScriptBoard *board);
+bool scriptBoardIgnite(ScriptBoard *board, uint32_t turnSeed);
+// Returns true when fire escapes the board and the shelf is lost. Flame
+// movement and a tile gravity/refill pass are deterministic, heap-free.
+bool scriptBoardFireStep(ScriptBoard *board, const V4Tiles *tiles);
 int scriptBoardPreview(const ScriptBoard *board, const V4Dict *dict,
                        const V4Tiles *tiles, int *tier);
 int scriptBoardSubmit(ScriptBoard *board, const V4Dict *dict,
