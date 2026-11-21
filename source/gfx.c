@@ -2232,45 +2232,54 @@ static void drawScriptPreviewBoard(void)
     }
     const int px0 = panelX + 2;
     rectOutline(panelX, 2, 78, 188, GOLD_DK);
-    drawText(px0 + 6, 10, "CYRILLIC", GOLD_LT, 1);
+    drawText(px0 + 6, 10, "RU/UK DEMO", GOLD_LT, 1);
     char label[20];
-    snprintf(label, sizeof label, "SHELF %d", scriptPreviewShelf);
+    if (scriptPreviewDaily) strcpy(label, "ДЕНЬ");
+    else snprintf(label, sizeof label, scriptPreviewLanguage ? "ПОЛИЦЯ %d" : "ПОЛКА %d", scriptPreviewShelf);
     drawText(px0 + 6, 20, label, ACCENT, 1);
     hline(px0 + 2, 33, 70, GOLD_DK);
-    drawText(px0 + 7, 40, scriptPreviewLanguage ? "UKRAINIAN" : "RUSSIAN", WHITE, 1);
-    char n[16];
-    drawText(px0 + 4, 57, "SCORE", DIM_TEXT, 1);
+    drawText(px0 + 7, 40, scriptPreviewLanguage ? "УКРАЇНСЬКА" : "РУССКИЙ", WHITE, 1);
+    char n[28];
+    drawText(px0 + 4, 57, scriptPreviewLanguage ? "БАЛИ" : "СЧЁТ", DIM_TEXT, 1);
     fmtInt(n, scriptPreviewScore);
     drawText(px0 + 4, 67, n, GOLD_LT, 1);
-    snprintf(n, sizeof n, "HEAT %d/%d",
+    snprintf(n, sizeof n, scriptPreviewLanguage ? "СПЕКА %d/%d" : "ЖАР %d/%d",
              scriptPreviewRules.heat, scriptPreviewRules.heatThreshold);
     drawText(px0 + 4, 81, n,
              scriptPreviewRules.heat >= scriptPreviewRules.heatThreshold - 2 ?
              FIRE2 : DIM_TEXT, 1);
-    snprintf(n, sizeof n, "TURN %u", scriptPreviewRules.turns);
+    snprintf(n, sizeof n, scriptPreviewLanguage ? "ХІД %u" : "ХОД %u", scriptPreviewRules.turns);
     drawText(px0 + 4, 94, n, WHITE, 1);
     hline(px0 + 2, 107, 70, GOLD_DK);
-    drawText(px0 + 4, 113, "L+TAP PEEL", WHITE, 1);
-    drawText(px0 + 4, 124, "A  SUBMIT", WHITE, 1);
-    drawText(px0 + 4, 135, "Y CLR R HINT", WHITE, 1);
-    drawText(px0 + 4, 146, "X  LANG", WHITE, 1);
-    drawText(px0 + 4, 157, "SEL  NEXT", WHITE, 1);
-    drawText(px0 + 4, 170, "START EXIT", ACCENT, 1);
-    if (scriptPreviewRules.status == SCRIPT_PASSED)
-        drawText(px0 + 2, 181, "PASS FOUND", GOLD_LT, 1);
-    else if (scriptPreviewRules.status == SCRIPT_FAILED)
-        drawText(px0 + 2, 181, "FIRE LOST", FIRE2, 1);
+    // Give each action its own readable row instead of an English
+    // controller-code cram. Full outcome text already lives on the top LCD.
+    drawText(px0 + 4, 113, scriptPreviewLanguage ? "L+TAP ВІДК" : "L+TAP ОТКР", WHITE, 1);
+    drawText(px0 + 4, 124, scriptPreviewLanguage ? "A ПРИЙНЯТИ" : "A ПРИНЯТЬ", WHITE, 1);
+    drawText(px0 + 4, 135, scriptPreviewLanguage ? "Y ОЧИСТИТИ" : "Y СБРОС", WHITE, 1);
+    drawText(px0 + 4, 146, scriptPreviewLanguage ? "R ПІДКАЗКА" : "R ПОДСКАЗКА", WHITE, 1);
+    drawText(px0 + 4, 157, scriptPreviewLanguage ? "X МОВА" : "X ЯЗЫК", WHITE, 1);
+    drawText(px0 + 4, 168, scriptPreviewDaily ?
+             (scriptPreviewLanguage ? "SEL ЗНОВУ" : "SEL ЗАНОВО") :
+             (scriptPreviewLanguage ? "SEL НОВА" : "SEL НОВАЯ"), WHITE, 1);
+    drawText(px0 + 4, 179, scriptPreviewLanguage ? "START ВИХІД" : "START ВЫХОД", ACCENT, 1);
 }
 static void drawScriptPreviewTop(void)
 {
     fillRect(0, 0, SCREEN_W, SCREEN_H, BLACK);
     rectOutline(7, 7, 242, 178, GOLD_DK);
     rectOutline(8, 8, 240, 176, GOLD);
-    drawTextCenter(128, 18, "CYRILLIC ENGINE PREVIEW", GOLD_LT, 1);
+    drawTextCenter(128, 18, "RUSSIAN / UKRAINIAN PREVIEW", GOLD_LT, 1);
     // The first Russian/Ukrainian shelves both say "КНИГИ". Show the
     // active language explicitly so switching remains unambiguous and testable.
-    drawTextCenter(128, 31, scriptPreviewLanguage ?
-                   "УКРАЇНСЬКА - TEST WORDS" : "РУССКИЙ - TEST WORDS", DIM_TEXT, 1);
+    if (scriptPreviewDaily) {
+        char dateLabel[48];
+        int ymd = scriptPreviewDailyDate;
+        snprintf(dateLabel, sizeof dateLabel, scriptPreviewLanguage ?
+                 "УКРАЇНСЬКА %04d-%02d-%02d" : "РУССКИЙ %04d-%02d-%02d",
+                 ymd / 10000, ymd / 100 % 100, ymd % 100);
+        drawTextCenter(128, 31, dateLabel, DIM_TEXT, 1);
+    } else drawTextCenter(128, 31, scriptPreviewLanguage ?
+                         "УКРАЇНСЬКА - ДЕМО" : "РУССКИЙ - ДЕМО", DIM_TEXT, 1);
     const ScriptBoard *b = &scriptPreviewBoard;
     const char *theme = v4PoolsName(&scriptPreviewPools, b->passTheme);
     drawTextCenter(128, 47, theme, ACCENT, 2);
@@ -2295,23 +2304,53 @@ static void drawScriptPreviewTop(void)
     hline(26, 96, 204, DIM);
     char chain[88] = {0};
     if (scriptBoardChainUtf8(b, &scriptPreviewDict, chain, sizeof chain)) {
-        drawTextCenter(128, 106, "CURRENT WORD", DIM_TEXT, 1);
+        drawTextCenter(128, 106, scriptPreviewLanguage ? "ПОТОЧНЕ СЛОВО" : "ТЕКУЩЕЕ СЛОВО", DIM_TEXT, 1);
         drawTextCenter(128, 122, chain, WHITE, fontTextColumns(chain) > 16 ? 1 : 2);
         int tier = 0;
-        int points = scriptBoardPreview(b, &scriptPreviewDict, &scriptPreviewTiles, &tier);
-        char pts[24];
+        (void)scriptBoardPreview(b, &scriptPreviewDict, &scriptPreviewTiles, &tier);
+        int points = scriptPreviewQuote(); // exactly what submit awards, including repeats and combo
+        char pts[52]; // UTF-8 Cyrillic labels can use two bytes per glyph
         if (points) {
-            snprintf(pts, sizeof pts, "+%d %s", points, tier == 1 ? "COMMON" : "RARE");
+            snprintf(pts, sizeof pts, "+%d %s", points,
+                     scriptPreviewLanguage ? (tier == 1 ? "ЗВИЧАЙНЕ" : "РІДКІСНЕ")
+                                           : (tier == 1 ? "ЧАСТОЕ" : "РЕДКОЕ"));
             drawTextCenter(128, 147, pts, GOLD_LT, 1);
-        } else if (b->chainLen >= 3) drawTextCenter(128, 147, "NOT IN TEST DICTIONARY", FIRE2, 1);
+        } else if (b->chainLen >= 3)
+            drawTextCenter(128, 147, scriptPreviewLanguage ?
+                           "НЕМАЄ В СЛОВНИКУ" : "НЕТ В СЛОВАРЕ", FIRE2, 1);
+    }
+    // Word-history HUD is purely diagnostic in this engineering ROM.
+    // All character IDs and combo state remain fixed-size, not heap strings.
+    if (scriptPreviewLedger.combo > 0) {
+        char combo[48];
+        snprintf(combo, sizeof combo, scriptPreviewLedger.lastRepeat ?
+                 (scriptPreviewLanguage ? "СЕРІЯ %u / ПОВТОР" : "СЕРИЯ %u / ПОВТОР") :
+                 (scriptPreviewLanguage ? "СЕРІЯ %u" : "СЕРИЯ %u"),
+                 (unsigned)scriptPreviewLedger.combo);
+        drawTextCenter(128, 158, combo, ACCENT, 1);
     }
     if (scriptPreviewRules.status == SCRIPT_PASSED) {
-        char msg[52];
-        snprintf(msg, sizeof msg, "SHELF SAVED +%d - A: NEXT", scriptPreviewRules.lastBonus);
+        char msg[96];
+        if (scriptPreviewDaily)
+            snprintf(msg, sizeof msg, scriptPreviewLanguage ?
+                     "ДЕНЬ ЗАВЕРШЕНО +%d" : "ДЕНЬ ЗАВЕРШЁН +%d", scriptPreviewRules.lastBonus);
+        else snprintf(msg, sizeof msg, scriptPreviewLanguage ?
+                      "ПОЛИЦЮ ВРЯТОВАНО +%d - A: ДАЛІ" :
+                      "ПОЛКА СПАСЕНА +%d - A: ДАЛЬШЕ", scriptPreviewRules.lastBonus);
         drawTextCenter(128, 169, msg, GOLD_LT, 1);
     } else if (scriptPreviewRules.status == SCRIPT_FAILED)
-        drawTextCenter(128, 169, "FIRE WON - A: RETRY / START: EXIT", FIRE2, 1);
-    else drawTextCenter(128, 169, "R: HINT  L+TAP: REVEAL", ACCENT, 1);
+        drawTextCenter(128, 169, scriptPreviewLanguage ?
+                       "ВОГОНЬ - A: ЗНОВУ" : "ПОЖАР - A: СНОВА", FIRE2, 1);
+    else if (scriptPreviewDailyClockError)
+        drawTextCenter(128, 169, scriptPreviewLanguage ?
+                       "ВСТАНОВІТЬ ДАТУ НА DS" : "УСТАНОВИТЕ ДАТУ НА DS", FIRE2, 1);
+    else if (scriptPreviewDaily)
+        drawTextCenter(128, 169, scriptPreviewLanguage ?
+                       "R: ПІДКАЗКА / SEL: ЗНОВУ" :
+                       "R: ПОДСКАЗКА / SEL: ЗАНОВО", ACCENT, 1);
+    else drawTextCenter(128, 169, scriptPreviewLanguage ?
+                        "L+SEL: ДЕНЬ / R: ПІДКАЗКА" :
+                        "L+SEL: ДЕНЬ / R: ПОДСКАЗКА", ACCENT, 1);
 }
 #endif
 
@@ -2923,14 +2962,23 @@ static void drawPauseCard(const Game *g)
     }
 }
 
-// the language chooser: the eleven names in a list like the options, the highlighted one boxed
+// Normal releases retain the same 11-language chooser and its geometry.
+// Only the separate engineering ROM exposes two extra, NON-persistent test
+// destinations. Compact the rows there so all 13 choices fit without scroll.
+#ifdef WP_CYR_PREVIEW
+#define PICK_Y0 23
+#define PICK_DY 12
+#define PICK_COUNT (LANG_COUNT + 2)
+#else
 #define PICK_Y0 22
 #define PICK_DY 13
+#define PICK_COUNT LANG_COUNT
+#endif
 int gfxLangPickRowAt(int x, int y)
 {
     if (x < 12 || x >= 160 || y < PICK_Y0) return -1;
     int r = (y - PICK_Y0) / PICK_DY;
-    return r < LANG_COUNT ? r : -1;
+    return r < PICK_COUNT ? r : -1;
 }
 
 static void drawLangPick(const Game *g)
@@ -2942,15 +2990,30 @@ static void drawLangPick(const Game *g)
     drawBoardFrame();
     boardX0 = savedX0;
     drawTextShadow(86 - textWidth(ui(UI_LP_TITLE), 2) / 2, 7, ui(UI_LP_TITLE), GOLD_LT, 2);
-    for (int i = 0; i < LANG_COUNT; i++) {
+    for (int i = 0; i < PICK_COUNT; i++) {
         int y = PICK_Y0 + i * PICK_DY;
-        bool on = i == g->langPick, ok = langAvailable(i);
+        bool on = i == g->langPick;
+        bool ok = i < LANG_COUNT ? langAvailable(i) : true;
         if (on) { fillRect(12, y, 148, PICK_DY - 1, lerp15(BLACK, ACCENT, 4)); rectOutline(12, y, 148, PICK_DY - 1, ACCENT); }
+#ifdef WP_CYR_PREVIEW
+        if (i >= LANG_COUNT) {
+            // Native Cyrillic script and unmistakable beta status; never
+            // misrepresent these starter packs as fully translated locales.
+            const char *name = i == LANG_COUNT ? "РУССКИЙ" : "УКРАЇНСЬКА";
+            drawText(21, y + 2, name, on ? WHITE : INK, 1);
+            drawText(122, y + 2, "DEMO", on ? GOLD_LT : DIM_TEXT, 1);
+            continue;
+        }
+#endif
         drawText(86 - textWidth(langName(i), 1) / 2, y + 3, langName(i), on ? WHITE : ok ? INK : DIM2, 1);
         if (i == langCur()) drawChar(18, y + 3, '*', GOLD_LT, 1);
     }
+#ifdef WP_CYR_PREVIEW
+    drawTextCenter(86, 181, "RU/UK: TEST WORDS", DIM_TEXT, 1);
+#else
     if (langLoadFailed()) drawTextCenter(86, 172, ui(UI_OP_LANGFAIL), FIRE2, 1);
     else drawTextCenter(86, 172, ui(UI_LP_HINT), DIM_TEXT, 1);
+#endif
 }
 
 static void drawOverlay(const Game *g)
@@ -3102,6 +3165,8 @@ static void topSigs(const Game *g, u32 sig[4])
         h0 = hmix(h0, g->state);
         h0 = hmix(h0, scriptPreviewShelf);
         h0 = hmix(h0, scriptPreviewLanguage);
+        h0 = hmix(h0, scriptPreviewDaily);
+        h0 = hmix(h0, scriptPreviewDailyDate);
         // Language alters glyphs and theme words outside the first slice.
         // Invalidate the full top HUD, not only its unchanged heading strip.
         h1 = hmix(h1, scriptPreviewLanguage);
@@ -3122,6 +3187,10 @@ static void topSigs(const Game *g, u32 sig[4])
         h2 = hmix(h2, scriptPreviewLastTier);
         h3 = hmix(h3, scriptPreviewRules.status);
         h3 = hmix(h3, scriptPreviewRules.lastBonus);
+        h3 = hmix(h3, scriptPreviewDaily);
+        h3 = hmix(h3, scriptPreviewDailyClockError);
+        h3 = hmix(h3, scriptPreviewLedger.combo);
+        h3 = hmix(h3, scriptPreviewLedger.lastRepeat);
         topSigNow[0] = sig[0] = h0;
         topSigNow[1] = sig[1] = h1;
         topSigNow[2] = sig[2] = h2;
