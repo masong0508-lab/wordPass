@@ -32,6 +32,34 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 TSV = os.path.join(ROOT, "tools", "lang", "ui_strings.tsv")
 
 
+# Keep positional argument numbers within source/game.h's UI_MAX_SLOTS.
+# The generated text is data, but uiFmtV reads varargs based on these slots.
+MAX_SLOTS = 8
+
+
+def slot_errors(s):
+    problems, positions = [], set()
+    seq = 1
+    positional = sequential = False
+    for m in SLOT.finditer(s):
+        explicit = m.group(1) is not None
+        positional |= explicit
+        sequential |= not explicit
+        pos = int(m.group(1)) if explicit else seq
+        if not explicit:
+            seq += 1
+        if pos > MAX_SLOTS or pos < 1:
+            problems.append(f"argument position {pos} outside 1..{MAX_SLOTS}")
+        if pos in positions:
+            problems.append(f"argument position {pos} used twice")
+        positions.add(pos)
+    if positions and positions != set(range(1, len(positions) + 1)):
+        problems.append(f"argument positions must be contiguous from 1: {sorted(positions)}")
+    if positional and sequential:
+        problems.append("cannot mix positional and sequential format slots")
+    return problems
+
+
 def slots(s):
     out, seq = {}, 1
     for m in SLOT.finditer(s):
@@ -87,7 +115,8 @@ def example_words(rows):
         d = os.path.join(ROOT, "data") if lang == "en" else os.path.join(ROOT, "data", "lang", lang)
         try:
             dic = open(os.path.join(d, "dict.bin"), "rb").read()
-        except OSError:
+        except OSError as exc:
+            bad.append(f"{lang}: guide example dictionary unavailable: {exc}")
             continue
         if lang == "en":
             weight, qu = [1] * 26, True
@@ -123,6 +152,8 @@ def validate(rows):
         seen.add(id_)
         base = slots(txt[0])
         for lang, s in zip(LANGS, txt):
+            for problem in slot_errors(s):
+                bad.append(f"{id_} {lang}: {problem}")
             if not s:
                 bad.append(f"{id_} {lang}: empty")
             for ch in SLOT.sub('', CODE.sub('', s)):
@@ -178,4 +209,5 @@ def main():
     print(f"wrote {len(rows)} ids")
 
 
-main()
+if __name__ == "__main__":
+    main()

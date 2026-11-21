@@ -34,7 +34,10 @@ static int uiScan(const char *f, UiSlot *sl)
         if (*p != 'd' && *p != 's') continue;
         s.kind = *p;
         if (!s.pos) s.pos = seq++;
-        if (n < UI_MAX_SLOTS) sl[n++] = s;
+        // Never index the vararg tables past UI_MAX_SLOTS, even if a bad
+        // translation somehow bypasses the generator's slot validation.
+        if (s.pos < 1 || s.pos > UI_MAX_SLOTS || n >= UI_MAX_SLOTS) continue;
+        sl[n++] = s;
         f = p;
     }
     return n;
@@ -48,6 +51,7 @@ static int uiPut(char *out, int cap, int len, const char *s)
 
 int uiFmtV(char *out, int cap, const char *f, va_list ap)
 {
+    if (!out || cap <= 0 || !f) return 0;
     UiSlot sl[UI_MAX_SLOTS];
     int n = uiScan(f, sl);
     int ival[UI_MAX_SLOTS + 1] = { 0 };
@@ -67,7 +71,7 @@ int uiFmtV(char *out, int cap, const char *f, va_list ap)
         const char *t;
         if (s.kind == 'd') {
             int v = ival[s.pos], i = 15, neg = v < 0;
-            unsigned u = neg ? (unsigned)-v : (unsigned)v;
+            unsigned u = neg ? 0u - (unsigned)v : (unsigned)v; // also handles INT_MIN safely
             tmp[i] = 0;
             do { tmp[--i] = (char)('0' + u % 10); u /= 10; } while (u);
             int digits = 15 - i;

@@ -154,6 +154,13 @@ int main(void)
     // positional slots reorder the output, the arguments stay in position order
     fmt(o, sizeof o, "%2$s=%1$d", 7, "X");
     CHECK(!strcmp(o, "X=7"), "positional: %s", o);
+    fmt(o, sizeof o, "%9$d", 17);
+    CHECK(!strcmp(o, "%9$d"), "out-of-range positional slot is harmless literal text: %s", o);
+    fmt(o, sizeof o, "%d", (-2147483647 - 1));
+    CHECK(!strcmp(o, "-2147483648"), "minimum signed integer formats without overflow: %s", o);
+    char guard = 'Q';
+    fmt(&guard, 0, "%d", 6);
+    CHECK(guard == 'Q', "zero-capacity buffer remains unchanged");
     fmt(o, sizeof o, "%d/%d", 3, 4);
     CHECK(!strcmp(o, "3/4"), "sequential: %s", o);
 
