@@ -6,6 +6,7 @@
 #ifdef WP_CYR_PREVIEW
 #include "script_board.h"
 #include "script_rules.h"
+#include "script_ledger.h"
 #include <stdint.h>
 #include <stdbool.h>
 extern ScriptBoard scriptPreviewBoard;
@@ -20,6 +21,7 @@ extern int scriptPreviewPeels;
 extern int scriptPreviewHints;
 extern int scriptPreviewShelf;
 extern ScriptRules scriptPreviewRules;
+extern ScriptLedger scriptPreviewLedger;
 extern int scriptPreviewLastTier;
 extern int scriptPreviewLastScore;
 extern uint32_t scriptPreviewSeed;
@@ -33,6 +35,8 @@ int scriptPreviewPeel(int c, int r);
 bool scriptPreviewChain(int c, int r);
 // One free, bounded path hint per engineering shelf (retail hint economy TBD).
 bool scriptPreviewHint(void);
+// Score the current valid word with repeat penalty and combo before submit.
+int scriptPreviewQuote(void);
 int scriptPreviewSubmit(void);
 #endif
 #endif
