@@ -22,6 +22,77 @@ static uint8_t *readFile(const char *name, size_t *length)
     *length = (size_t)n;
     return p;
 }
+static uint32_t readLE32(const uint8_t *p)
+{
+    return (uint32_t)p[0] | (uint32_t)p[1] << 8 |
+           (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
+}
+static void fixChecksum(uint8_t *p, size_t n)
+{
+    uint32_t h = 2166136261u;
+    for (size_t i = 20; i < n; i++) h = (h ^ p[i]) * 16777619u;
+    for (int i = 0; i < 4; i++) p[16 + i] = (uint8_t)(h >> (i * 8));
+}
+static void testRechecks(const uint8_t *p, size_t n, const V4Dict *dict)
+{
+    uint8_t *badData = malloc(n);
+    CHECK(badData != NULL, "checksum-preserving mutation buffer");
+    if (!badData) return;
+    V4Dict bad;
+    size_t countOffset = 20u + 4u * dict->symbols;
+    size_t off = countOffset + 18u * 4u;
+    bool foundGroup = false;
+    for (int len = WPD4_MIN_WORD; len <= WPD4_MAX_WORD; len++) {
+        uint32_t count = readLE32(p + countOffset + (len - WPD4_MIN_WORD) * 4u);
+        unsigned rec = ((unsigned)len * dict->bits + 1u + 7u) / 8u;
+        if (count >= 2 && !foundGroup) {
+            foundGroup = true;
+            // All tests recompute a matching checksum. The structural reader
+            // must independently refuse broken bit packing and binary order.
+            memcpy(badData, p, n);
+            badData[off + rec - 1] |= 2u; // nonzero padding above tier bit
+            fixChecksum(badData, n);
+            CHECK(!v4DictOpen(&bad, badData, n) && !bad.image,
+                  "checksum-valid nonzero record padding rejected");
+
+            memcpy(badData, p, n);
+            badData[off] = (uint8_t)((badData[off] & 3u) | 0xfcu); // 63 >= 33 letters
+            fixChecksum(badData, n);
+            CHECK(!v4DictOpen(&bad, badData, n) && !bad.image,
+                  "checksum-valid unrepresentable symbol ID rejected");
+
+            memcpy(badData, p, n);
+            memcpy(badData + off + rec, badData + off, rec);
+            fixChecksum(badData, n);
+            CHECK(!v4DictOpen(&bad, badData, n) && !bad.image,
+                  "checksum-valid duplicate word rejected");
+
+            memcpy(badData, p, n);
+            uint8_t tmp[16];
+            CHECK(rec <= sizeof tmp, "maximum dictionary record width");
+            if (rec <= sizeof tmp) {
+                memcpy(tmp, badData + off, rec);
+                memcpy(badData + off, badData + off + rec, rec);
+                memcpy(badData + off + rec, tmp, rec);
+                fixChecksum(badData, n);
+                CHECK(!v4DictOpen(&bad, badData, n) && !bad.image,
+                      "checksum-valid unsorted word records rejected");
+            }
+        }
+        off += (size_t)count * rec;
+    }
+    CHECK(foundGroup, "test fixture has a multiword length group");
+    memcpy(badData, p, n);
+    for (int byte = 0; byte < 4; byte++) {
+        uint8_t tmp = badData[20 + byte];
+        badData[20 + byte] = badData[24 + byte];
+        badData[24 + byte] = tmp;
+    }
+    fixChecksum(badData, n);
+    CHECK(!v4DictOpen(&bad, badData, n) && !bad.image,
+          "checksum-valid unsorted Unicode alphabet rejected");
+    free(badData);
+}
 static void exercise(const char *file, bool uk)
 {
     size_t bytes = 0;
@@ -82,6 +153,7 @@ static void exercise(const char *file, bool uk)
         CHECK(!v4DictOpen(&bad, copy, bytes), "refuse undersized bits per tile");
         free(copy);
     }
+    testRechecks(p, bytes, &d);
     CHECK(!v4DictOpen(NULL, p, bytes), "NULL destination view");
     free(p);
 }
@@ -90,6 +162,6 @@ int main(int argc, char **argv)
     if (argc != 3) { fprintf(stderr, "usage: %s build/wpd4_ru.bin build/wpd4_uk.bin\n", argv[0]); return 2; }
     exercise(argv[1], false);
     exercise(argv[2], true);
-    printf(fails ? "WPD4 NATIVE FAILED: %d failures\n" : "WPD4 NATIVE OK: Cyrillic words, alphabet IDs, corruption and truncation\n", fails);
+    printf(fails ? "WPD4 NATIVE FAILED: %d failures\n" : "WPD4 NATIVE OK: Cyrillic words, strict records, checksum, corruption and truncation\n", fails);
     return fails ? 1 : 0;
 }
