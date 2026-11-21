@@ -39,8 +39,12 @@ The file checksum detects accidental damage, not intentional tampering.
 The DS loader must still enforce the existing file-size bounds, reject
 unsupported versions, and avoid exposing any half-installed language pack.
 Runtime validation checks sizes, Unicode scalar metadata and checksum before
-storing pointers into the file. The builder also checks every record,
-padding bit, symbol index, strict sorting and duplicate words.
+storing pointers into the file. The runtime reader **also scans all records
+once at load time**, rejecting out-of-range tile indexes, nonzero packed
+padding, duplicate words, and unsorted groups even if an invalid file has
+a matching/recomputed checksum. This keeps binary search safe without adding
+extra work to each word lookup or any new framebuffer allocations. The
+Python builder verifies the same invariants.
 
 ## Current implementation
 
