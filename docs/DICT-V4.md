@@ -91,6 +91,45 @@ save rules. The native test is a contract for integrating those systems
 safely. The original game continues to call the WPD3/26-tile path exclusively.
 The scripted board is under 384 bytes and never allocates a framebuffer.
 
+## WPP2: Unicode-themed hidden password pools
+
+The prototype now has a third versioned resource, **WPP2**, linking password
+themes to the exact same Unicode alphabet as WPD4 and WPL2.
+
+- Header (20 bytes): `WPP2`, version 1, flags 0, 1–48 themes, reserved 0,
+  2–64 alphabet symbols, pass lengths 4–9, reserved 0, exact file length
+  (LE32) and FNV-1a32 of the remaining bytes.
+- Unicode alphabet: `symbol_count × u32 LE`; every codepoint must match
+  the active WPD4 dictionary exactly.
+- Theme headers: each has a 24-byte NUL-padded UTF-8 name and six LE16
+  counts for pass lengths 4 through 9 (36 bytes per theme).
+- Word payload: sorted unique password words as raw alphabet symbol IDs.
+  Every word must be spelled entirely with that alphabet and accepted by
+  WPD4; theme names are checked for correct UTF-8 and nonempty content.
+- Maximum input file 2 MiB. No runtime allocations: themes and word indexes
+  are checked before any pointers into the caller-owned file are published.
+
+`tools/lang/pools_v2.py --selftest build/` builds **three tiny sample themes**
+and eight words per language to prove the format and the hidden-password
+mechanics. These are **not** complete 40-theme language packs.
+
+Production build syntax after obtaining licensed word sources:
+
+```sh
+python3 tools/lang/pools_v2.py --build ru ru.wpd4 themes_ru.json ru.wpp2
+python3 tools/lang/pools_v2.py --verify ru.wpd4 ru.wpp2
+```
+
+The theme JSON maps localized Cyrillic names to arrays of accepted words.
+
+The independent hex-board model now picks a WPP2 theme and a 4–9-symbol
+password deterministically, hides its letters in distinct spots in the
+bottom three rows, supports peeling to reveal persistent diamond letters,
+and keeps holes/diamonds/firebreaks as gravity barriers when other words
+are submitted. `tools/check/script_pass_test.c` checks both Russian and
+Ukrainian with the actual WPD4 and WPL2 mock resources. **The DS's regular
+live `Game` state, menu and main progression do not yet use this model.**
+
 ## Next integration gates
 
 1. **WPL2 groundwork is implemented:** a parallel 33-symbol Unicode
@@ -102,8 +141,10 @@ The scripted board is under 384 bytes and never allocates a framebuffer.
 2. Replace hardwired \`'a' + tile_index\` and 26-glyph caches in the **board**
    only after a symbol-ID bridge and full native regression (fire, pass,
    chain, hints, sound/score and both left/right-hand layouts).
-3. Version themed pass pools to store symbol IDs or UTF-8 plus canonical
-   codepoint mapping and update the guide's example-word tests.
+3. **WPP2 pass pools are implemented** in a parallel format, with
+   exact-alphabet, UTF-8-name, word-in-dictionary and malformed-file tests.
+   The script-board prototype now supports secret placement, peeling,
+   permanent revealed letters and segmented gravity.
 4. Complete source-licensed Russian and Ukrainian dictionary sets, all 40
    themed passes, 385 localized strings, the guide and native-speaker review.
 5. Run full DeSmuME/DS playthroughs and memory/performance measurements;
