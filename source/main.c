@@ -240,6 +240,32 @@ static void cycleLanguage(int dir)
     gameSetLanguage(langNextAvailable(langCur(), dir));
 }
 
+// Experimental ROM: two playable but INCOMPLETE script-ID engines appear as
+// explicit Russian/Ukrainian choices. They do not participate in LANG_COUNT,
+// WPD3 dictionaries, retail option cycling or persisted settings.
+static bool pickerAvailable(int idx)
+{
+#ifdef WP_CYR_PREVIEW
+    if (idx == LANG_COUNT || idx == LANG_COUNT + 1) return true;
+#endif
+    return langAvailable(idx);
+}
+static int pickerNextAvailable(int from, int dir)
+{
+#ifdef WP_CYR_PREVIEW
+    enum { PICK_COUNT = LANG_COUNT + 2 };
+    if (from < 0 || from >= PICK_COUNT) from = LANG_EN;
+    int step = dir < 0 ? -1 : 1;
+    for (int i = 0; i < PICK_COUNT; i++) {
+        from = (from + PICK_COUNT + step) % PICK_COUNT;
+        if (pickerAvailable(from)) return from;
+    }
+    return LANG_EN;
+#else
+    return langNextAvailable(from, dir);
+#endif
+}
+
 static void cycleOption(int row, int dir)
 {
     switch (row) {
@@ -712,12 +738,27 @@ int main(void)
             }
             case ST_LANGPICK: {  // tap a language, or UP/DOWN and A; B backs out once a language has been chosen
                 int hit = (down & KEY_TOUCH) ? gfxLangPickRowAt(t.px, t.py) : -1;
-                if (down & KEY_UP)   G.langPick = langNextAvailable(G.langPick, -1);
-                if (down & KEY_DOWN) G.langPick = langNextAvailable(G.langPick, 1);
+                if (down & KEY_UP)   G.langPick = pickerNextAvailable(G.langPick, -1);
+                if (down & KEY_DOWN) G.langPick = pickerNextAvailable(G.langPick, 1);
                 bool go = (down & (KEY_A | KEY_START)) != 0;
-                if (hit >= 0 && langAvailable(hit)) { G.langPick = hit; go = true; }
+                if (hit >= 0 && pickerAvailable(hit)) { G.langPick = hit; go = true; }
                 if ((down & KEY_B) && S.languageChosen) { G.state = G.langFrom; break; }
-                if (go && langAvailable(G.langPick)) {
+                if (go && pickerAvailable(G.langPick)) {
+#ifdef WP_CYR_PREVIEW
+                    if (G.langPick >= LANG_COUNT) {
+                        // A named beta board, not a release locale. Leave
+                        // S.language and the save format completely untouched.
+                        int which = G.langPick - LANG_COUNT;
+                        if (scriptPreviewOpen(which, seedCounter)) {
+                            G.state = ST_SCRIPT_PREVIEW;
+                            musicSfx(SFX_MENU, 0);
+                        } else {
+                            G.state = G.langFrom;
+                            setMsg("RU/UK PREVIEW FILES MISSING", 110);
+                        }
+                        break;
+                    }
+#endif
                     G.state = G.langFrom;
                     gameSetLanguage(G.langPick);
                     if (langLoadFailed()) {       // a pack may disappear after initial probing
@@ -747,20 +788,30 @@ int main(void)
             case ST_SCRIPT_PREVIEW: {
                 if (down & (KEY_B | KEY_START)) {
                     scriptPreviewClose();
-                    G.state = ST_TITLE;
+                    G.state = G.langFrom == ST_OPTIONS ? ST_OPTIONS : ST_TITLE;
                     musicMenu();
                     break;
                 }
                 if (down & KEY_X) {
                     int next = scriptPreviewLanguage ^ 1;
+                    bool wasDaily = scriptPreviewDaily != 0;
+                    int date = scriptPreviewDailyDate;
                     if (!scriptPreviewOpen(next, seedCounter)) {
                         scriptPreviewClose();
                         G.state = ST_TITLE;
+                    } else if (wasDaily) {
+                        // Keep deterministic practice in the newly selected
+                        // language, but never carry score/ledger across it.
+                        (void)scriptPreviewToggleDaily(date, seedCounter);
                     }
                     break;
                 }
                 if (down & KEY_SELECT) {
-                    (void)scriptPreviewNewPass(seedCounter);
+                    if (held & KEY_L) {
+                        // Deliberate two-key action, leaving normal SELECT
+                        // re-deal and stylus-peel control unmodified.
+                        (void)scriptPreviewToggleDaily(settingsToday(), seedCounter);
+                    } else (void)scriptPreviewNewPass(seedCounter);
                     break;
                 }
                 if (down & KEY_Y) scriptBoardClearChain(&scriptPreviewBoard);
