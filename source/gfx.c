@@ -2291,10 +2291,10 @@ static void drawScriptPreviewHelp(void)
                                "SELECT: НОВЫЙ ПАРОЛЬ", INK, 1);
     drawTextCenter(128, 126, uk ? "L+SELECT: ДЕНЬ БЕЗ РЕКОРДУ" :
                                "L+SELECT: ДЕНЬ БЕЗ РЕКОРДА", INK, 1);
-    drawTextCenter(128, 139, uk ? "ПОВТОР: МЕНШЕ БАЛІВ" :
-                               "ПОВТОР: МЕНЬШЕ ОЧКОВ", DIM_TEXT, 1);
-    drawTextCenter(128, 152, uk ? "СЕРІЯ: БОНУС БАЛІВ" :
-                               "СЕРИЯ: БОНУС ОЧКОВ", DIM_TEXT, 1);
+    drawTextCenter(128, 139, uk ? "ПОВТОР -50% / СЕРІЯ: БОНУС" :
+                               "ПОВТОР -50% / СЕРИЯ: БОНУС", DIM_TEXT, 1);
+    drawTextCenter(128, 152, uk ? "L+R: НОВЕ СЛОВО (1 РАЗ)" :
+                               "L+R: НОВОЕ СЛОВО (1 РАЗ)", ACCENT, 1);
     hline(25, 164, 206, GOLD_DK);
     drawTextCenter(128, 170, uk ? "B: НАЗАД / START: ВИХІД" :
                                "B: НАЗАД / START: ВЫХОД", GOLD_LT, 1);
@@ -2381,6 +2381,17 @@ static void drawScriptPreviewTop(void)
     else if (scriptPreviewDailyClockError)
         drawTextCenter(128, 169, scriptPreviewLanguage ?
                        "ВСТАНОВІТЬ ДАТУ НА DS" : "УСТАНОВИТЕ ДАТУ НА DS", FIRE2, 1);
+    else if (scriptPreviewRescueError)
+        drawTextCenter(128, 169,
+                       scriptPreviewRescueError == 1 ?
+                         (scriptPreviewLanguage ? "СПОЧАТКУ ЗРОБІТЬ ХІД" :
+                                                  "СНАЧАЛА СДЕЛАЙТЕ ХОД") :
+                       scriptPreviewRescueError == 2 ?
+                         (scriptPreviewLanguage ? "ВІДНОВЛЕННЯ ВЖЕ ВИКОРИСТАНО" :
+                                                  "ВОССТАНОВЛЕНИЕ УЖЕ БЫЛО") :
+                         (scriptPreviewLanguage ? "НЕМАЄ ВІЛЬНОГО МІСЦЯ" :
+                                                  "НЕТ СВОБОДНОГО МЕСТА"),
+                       FIRE2, 1);
     else if (scriptPreviewDaily)
         drawTextCenter(128, 169, scriptPreviewLanguage ?
                        "L+Y: ПРАВИЛА / SEL: ЗНОВУ" :
@@ -3233,6 +3244,8 @@ static void topSigs(const Game *g, u32 sig[4])
         h3 = hmix(h3, scriptPreviewDailyClockError);
         h3 = hmix(h3, scriptPreviewLedger.combo);
         h3 = hmix(h3, scriptPreviewLedger.lastRepeat);
+        h3 = hmix(h3, scriptPreviewRescues);
+        h3 = hmix(h3, scriptPreviewRescueError);
         topSigNow[0] = sig[0] = h0;
         topSigNow[1] = sig[1] = h1;
         topSigNow[2] = sig[2] = h2;
