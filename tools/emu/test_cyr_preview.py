@@ -38,6 +38,13 @@ def main(rom, output):
     check(get_int(e, "scriptPreviewShelf") == 1, "Cyrillic first shelf should start at 1")
     e.shot(str(out / "ru-board.png"))
     check(get_int(e, "scriptPreviewScore") == 0, "initial score is zero")
+    # The glyph cache is built when the first Russian frame is drawn and
+    # must not rebuild merely because a 56-tile board is drawn each frame.
+    glyph_builds_ru = get_int(e, "scriptGlyphCacheBuilds")
+    check(glyph_builds_ru >= 1, "Russian glyphs were never cached")
+    check(e.fps() == 120, "Russian preview must retain 120/120 frames while rendering")
+    check(get_int(e, "scriptGlyphCacheBuilds") == glyph_builds_ru,
+          "Russian renderer rebuilt the alphabet on every frame")
     board_ptr = symbol(e.rom_elf, "scriptPreviewBoard")
     clues_offset = member_offsets(e.rom_elf, "scriptPreviewBoard",
                                    ("surveyed", "clueC", "clueR"))
@@ -197,6 +204,11 @@ def main(rom, output):
     check(bytes(e.mem.unsigned[ledger:ledger + 194])[184] == 0,
           "switching languages must not leak Russian word history into Ukrainian")
     e.shot(str(out / "uk-board.png"))
+    check(get_int(e, "scriptGlyphCacheBuilds") == glyph_builds_ru + 1,
+          "Ukrainian glyph cache did not refresh exactly once on switching alphabet")
+    check(e.fps() == 120, "Ukrainian preview must retain 120/120 frames while rendering")
+    check(get_int(e, "scriptGlyphCacheBuilds") == glyph_builds_ru + 1,
+          "Ukrainian renderer rebuilt the alphabet during unchanged frames")
     check(not any(bytes(e.mem.unsigned[
           board_ptr + clues_offset["surveyed"]:
           board_ptr + clues_offset["surveyed"] + 7])),
