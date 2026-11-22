@@ -2375,7 +2375,9 @@ static void drawScriptPreviewBoard(void)
     }
     const int px0 = panelX + 2;
     rectOutline(panelX, 2, 78, 188, GOLD_DK);
-    drawText(px0 + 6, 10, "RU/UK DEMO", GOLD_LT, 1);
+    // Show the active LANGUAGE, never an invented "Cyrillic" locale.
+    drawText(px0 + 6, 10, scriptPreviewLanguage ? "УКР ДЕМО" : "РУС ДЕМО",
+             GOLD_LT, 1);
     char label[20];
     if (scriptPreviewDaily) strcpy(label, "ДЕНЬ");
     else sniprintf(label, sizeof label, scriptPreviewLanguage ? "ПОЛИЦЯ %d" : "ПОЛКА %d", scriptPreviewShelf);
@@ -2450,7 +2452,9 @@ static void drawScriptPreviewTop(void)
     fillRect(0, 0, SCREEN_W, SCREEN_H, BLACK);
     rectOutline(7, 7, 242, 178, GOLD_DK);
     rectOutline(8, 8, 240, 176, GOLD);
-    drawTextCenter(128, 18, "RUSSIAN / UKRAINIAN PREVIEW", GOLD_LT, 1);
+    drawTextCenter(128, 18, scriptPreviewLanguage ?
+                   "WORDPASS / УКРАЇНСЬКА" : "WORDPASS / РУССКИЙ",
+                   GOLD_LT, 1);
     // The first Russian/Ukrainian shelves both say "КНИГИ". Show the
     // active language explicitly so switching remains unambiguous and testable.
     if (scriptPreviewDaily) {
