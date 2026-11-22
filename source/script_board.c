@@ -16,6 +16,56 @@ static bool adjacent(int c1, int r1, int c2, int r2)
     return (c1 & 1) ? (r2 == r1 || r2 == r1 + 1)
                     : (r2 == r1 || r2 == r1 - 1);
 }
+// The clue counts the six shifted-hex neighbors of a fixed back-layer
+// coordinate, regardless of where the falling front gem has moved. Found
+// diamonds count once even after their back index has been cleared by peel.
+// Do not call this for a hidden location: only scriptBoardVisibleClue decides
+// whether an on-screen count is allowed to be shown.
+static int nearbyPasses(const ScriptBoard *b, int c, int r)
+{
+    int count = 0;
+    for (int dc = -1; dc <= 1; dc++)
+        for (int dr = -1; dr <= 1; dr++) {
+            int cc = c + dc, rr = r + dr;
+            if (!inside(cc, rr) || !adjacent(c, r, cc, rr)) continue;
+            if (b->back[cc][rr] || b->state[cc][rr] == SCRIPT_DIAMOND) count++;
+        }
+    return count;
+}
+
+int scriptBoardVisibleClue(const ScriptBoard *b, int c, int r)
+{
+    if (!b || !inside(c, r)) return -1;
+    if (b->state[c][r] != SCRIPT_HOLE &&
+        !(b->surveyed[c] & (1u << r))) return -1;
+    return nearbyPasses(b, c, r);
+}
+
+int scriptBoardClueInference(const ScriptBoard *b, int c, int r,
+                             int *remaining, int *covered)
+{
+    if (remaining) *remaining = 0;
+    if (covered) *covered = 0;
+    int total = scriptBoardVisibleClue(b, c, r);
+    if (total < 0 || total > 6) return SCRIPT_CLUE_UNSEEN;
+    int found = 0, unknown = 0;
+    for (int dc = -1; dc <= 1; dc++)
+        for (int dr = -1; dr <= 1; dr++) {
+            int cc = c + dc, rr = r + dr;
+            if (!inside(cc, rr) || !adjacent(c, r, cc, rr)) continue;
+            int state = b->state[cc][rr];
+            if (state == SCRIPT_DIAMOND) found++;
+            else if (state != SCRIPT_HOLE) unknown++;
+        }
+    int left = total - found;
+    if (remaining) *remaining = left;
+    if (covered) *covered = unknown;
+    if (left < 0 || left > unknown || unknown == 0) return SCRIPT_CLUE_UNKNOWN;
+    if (left == 0) return SCRIPT_CLUE_SAFE;
+    if (left == unknown) return SCRIPT_CLUE_PASS;
+    return SCRIPT_CLUE_UNKNOWN;
+}
+
 static bool sameAlphabet(const V4Dict *d, const V4Tiles *t)
 {
     if (!d || !d->image || !t || !t->valid || d->symbols != t->symbols)
@@ -162,12 +212,19 @@ int scriptBoardSubmit(ScriptBoard *b, const V4Dict *dict,
 {
     int pts = preview(b, dict, tiles, tier);
     if (!pts) return 0;
+    // A successful word earns one fixed location's numbered survey, even if
+    // gravity replaces the gem at its tail. Invalid words publish nothing.
+    const int tail = b->chainLen - 1;
+    const int clueC = b->chainC[tail], clueR = b->chainR[tail];
     for (unsigned i = 0; i < b->chainLen; i++) {
         int c = b->chainC[i], r = b->chainR[i];
         if (b->state[c][r] == SCRIPT_TILE || b->state[c][r] == SCRIPT_BURN)
             b->state[c][r] = SCRIPT_EMPTY;
     }
     if (!compact(b, tiles)) return 0;
+    b->surveyed[clueC] |= (uint8_t)(1u << clueR);
+    b->clueC = (uint8_t)clueC;
+    b->clueR = (uint8_t)clueR;
     b->chainLen = 0;
     return pts;
 }
