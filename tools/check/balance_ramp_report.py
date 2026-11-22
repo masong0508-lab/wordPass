@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Summarize a paired multi-shelf WordPass pressure sweep and enforce controls.
 
-Inputs are from tools/check/balance_sweep.py --baseline REV --first 14 --last 19.
+Inputs are from tools/check/balance_sweep.py --baseline REV --first 14 --last 23.
 The old/current builds share the same player model, dictionary and seed schedule.
 This does not estimate human win rates or Nintendo DS frame rates.
 """
@@ -34,11 +34,11 @@ def main():
     p.add_argument("--input", type=Path, required=True)
     p.add_argument("--languages", nargs="+", required=True)
     p.add_argument("--first", type=int, default=14)
-    p.add_argument("--last", type=int, default=19)
+    p.add_argument("--last", type=int, default=23)
     p.add_argument("--output", type=Path, help="Markdown report path")
     args = p.parse_args()
-    if args.first >= args.last or args.first > 14 or args.last < 19:
-        p.error("study must cover unchanged control shelves 14 and 19")
+    if args.first >= args.last or args.first > 14 or args.last < 23:
+        p.error("study must cover unchanged control shelves 14 and 23")
     if len(set(args.languages)) != len(args.languages):
         p.error("languages must be unique")
     summary = json.loads((args.input / "summary.json").read_text(encoding="utf-8"))
@@ -57,7 +57,7 @@ def main():
         "seed schedule. **These are bot-policy outcomes, not human clear rates.**",
         "Shelves 14 and 19 are unchanged controls and must have identical full CSV rows.",
         "",
-        "| Language | Player | Baseline 14-19 clear rates | Staged 14-19 clear rates | Largest consecutive drop: baseline / staged |",
+        "| Language | Player | Baseline 14-23 clear rates | Staged 14-23 clear rates | Largest consecutive drop: baseline / staged |",
         "| --- | --- | --- | --- | --- |",
     ]
     comparisons = []
@@ -69,7 +69,7 @@ def main():
             keys = [(player, shelf) for shelf in shelves]
             if any(key not in a or key not in b for key in keys):
                 raise ValueError(f"{lang}/{player}: missing shelf in paired CSV")
-            for shelf in (14, 19):
+            for shelf in (14, 23):
                 if a[(player, shelf)] != b[(player, shelf)]:
                     raise AssertionError(
                         f"{lang}/{player}: unchanged control shelf {shelf} differs")
@@ -97,7 +97,7 @@ def main():
         "and adjusted early hazards can change later RNG paths. Inspect every",
         "language and failure category, then repeat with more seeds.",
         "",
-        "The candidate does **not** change classic shelves 1-14 or 19+,",
+        "The candidate does **not** change classic shelves 1-14 or 23+,",
         "Daily rules, save files, tile dictionaries, music or renderer allocations.",
         "",
     ])
@@ -110,7 +110,7 @@ def main():
                     "comparisons": comparisons}, indent=2) + "\n",
         encoding="utf-8")
     print(report)
-    print(f"LOCKDOWN RAMP OK: {len(comparisons)} player/language profiles; controls 14 and 19 match")
+    print(f"LOCKDOWN RAMP OK: {len(comparisons)} player/language profiles; controls 14 and 23 match")
     return 0
 
 
