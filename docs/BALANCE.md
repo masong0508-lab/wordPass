@@ -8,22 +8,34 @@ by the bot at 300 fresh attempts per shelf and language (so a clear rate is good
 NORMAL with the dictionary on FULL; "before" is the rules of commit 92faa05 and "after" is this build, both measured by the
 same bot (build the old rules by checking out that commit's `source/game.h` and `source/board.c`).
 
+**November 22, 2026 — player-model revision:** The historical tables below
+predate WordPass's accepted-word endpoint clues. The bot now reads those
+player-visible clues in addition to opened-hole numbers, so newer clear rates
+will measure a more informed player. Do not compare the old tables to new ones
+as if only the game's difficulty rules changed. For paired comparisons, keep
+the same revised bot, word packs, seeds, settings and profile for both rule
+builds; distinguish modeled play from human play. The `--selftest` now checks
+published zero/forced clues and ensures unknown back cells do not leak to the
+player model.
+
+
 ## The players
 
-Both players read only what a human sees: the letters, the flames, the heat meter, the numbers on holes and the diamonds
+Both players read only what a human sees: the letters, the flames, the heat meter, the clues on opened holes and
+accepted-word endpoints, and the diamonds
 they have found (never the back layer). A shelf is a clear when the pass is found before the shelf ends.
 
 * **Competent.** Looks for every word on the board (a trie of the whole dictionary) and notices a common word of three or
   four letters 95% of the time, five or more 70%, a rare-tier word 10%. It prefers long words (heat 0 at seven letters), and
   it reads the fire: a flame that will reach the floor in three turns or fewer sends it after a word through that flame (92%
   to notice it), and as a last resort it peels a burning gem no word reaches. It peels like a Minesweeper solver: from each
-  hole number it works out which neighbours are safe or certain, it knows the pass is one connected cluster buried below the
+  visible clue it works out which neighbours are safe or certain, it knows the pass is one connected cluster buried below the
   shelf's first pass row and grows from the diamonds it has found, and it peels the most likely cell (never one a flame would
   scorch) whenever no flame is urgent. It looks away from the fire on 10% of turns, and on 5% of turns it slips and peels a
   random gem (counted as a "guess" below).
 * **Weak.** Words of three to five letters only (it notices 55% of the short ones, 20% of the longer), no sense of heat,
   pays attention to a flame 60% of the turns and then only when it is two turns from the floor, and peels beside numbers
-  above zero and beside diamonds without any deduction.
+  above zero (including earned word clues) and beside diamonds without detailed deduction.
 * **Score-seeking** (a table of its own). The competent player, but it peels only when a cell is at least 60% likely (and on
   12% of other turns), so it spends the turn budget on words.
 
