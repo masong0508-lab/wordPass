@@ -1,0 +1,55 @@
+name: WordPass fire-pressure study
+
+on:
+  pull_request:
+    paths:
+      - 'source/board.c'
+      - 'tools/check/bot.c'
+      - 'tools/check/balance_pressure.py'
+      - 'tools/check/balance_sweep.c'
+      - '.github/workflows/balance-pressure.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'source/board.c'
+      - 'tools/check/bot.c'
+      - 'tools/check/balance_pressure.py'
+      - 'tools/check/balance_sweep.c'
+      - '.github/workflows/balance-pressure.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare-pressure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate Python study
+        run: python3 -m py_compile tools/check/balance_pressure.py
+      - name: Paired competent and weak bot experiment (same seeds)
+        run: >
+          python3 tools/check/balance_pressure.py
+          --languages en de fi
+          --attempts 160
+          --seed-base 1000
+          --output build/pressure-study
+      - name: Independent seed batch across all 11 retail languages
+        run: >
+          python3 tools/check/balance_pressure.py
+          --languages en es fr de it pt nl sv pl da fi
+          --attempts 80
+          --seed-base 750001
+          --output build/pressure-broad
+      - name: Upload reproducible report and per-shelf counts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: wordPass-shelf15-pressure-study
+          path: |
+            build/pressure-study/
+            build/pressure-broad/
+          if-no-files-found: warn
+          retention-days: 14
