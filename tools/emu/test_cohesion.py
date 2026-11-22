@@ -119,6 +119,15 @@ def main():
         assert g['hints'] == 0 and g['hintReq'] and g['cueAge'] < 12, 'a new paid hint reused an almost-expired ghost'
         after = submit(path)
         assert after['lastWord'] == 'cat' and after['peels'] == before['peels'], 'following the word hint peeled a gem'
+        # A submitted CAT just earned a word clue, and the HOLE fixture has
+        # many already-visible zero clues. Shoulder+SELECT should navigate
+        # those instead of asking for a word hint. Prove the no-clue fallback
+        # on a separate, fully covered shelf that has earned no survey yet.
+        fixture(keep_word=True, background=TILE)
+        assert not any(clues()) and all(
+            e.state()['cell'][c][r][1] != HOLE
+            for c in range(COLS) for r in range(ROWS)
+        ), 'no-clue shoulder scenario accidentally exposes numbered evidence'
         for shoulder in ('L', 'R'):
             e.set_features(hints=2)
             e.hold(shoulder)
