@@ -68,11 +68,27 @@ def parse_aff(path):
         table.setdefault(flag, (True, []))[1].append((strip, add, flags_of(cont), rx))
     return flagtype, special, pfx, sfx, flags_of
 
-def expand(dic, aff, keep_capitalised=None, verbose=False):
+def expand(dic, aff, keep_capitalised=None, verbose=False,
+           allow_internal_apostrophes=False):
     flagtype, special, pfx, sfx, flags_of = parse_aff(aff)
     need, onlyc, forbid = special.get("NEEDAFFIX") or special.get("PSEUDOROOT"), special.get("ONLYINCOMPOUND"), special.get("FORBIDDENWORD")
     circ = special.get("CIRCUMFIX")
     out, banned = set(), set()
+
+    def stem_allowed(stem):
+        if stem.isalpha():
+            return True
+        if not allow_internal_apostrophes:
+            return False
+        # Ukrainian spelling dictionaries use straight and typographic
+        # apostrophes as well as U+02BC. Accept only an internal separator
+        # between letters; reject hyphens, digits, stray quotes and doubled
+        # marks. This permits an honest orthography audit, NOT a stripped
+        # or misspelled substitute word in the current 33-tile DS model.
+        normalized = stem.replace("’", "ʼ").replace("'", "ʼ")
+        parts = normalized.split("ʼ")
+        return (len(parts) > 1 and all(p and p.isalpha() for p in parts)
+                and not any("ʼ" in p for p in parts))
 
     def apply_sfx(word, flags, depth):
         res = []
@@ -120,7 +136,7 @@ def expand(dic, aff, keep_capitalised=None, verbose=False):
         caps = stem[:1].isupper()
         if caps and keep_capitalised is None:
             continue
-        if not stem.isalpha():
+        if not stem_allowed(stem):
             continue
         loc = set()
         is_only = bool(onlyc and onlyc in flags)
