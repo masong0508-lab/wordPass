@@ -310,6 +310,23 @@ def selftest(folder):
         synthetic = "".join(chr(cp) for cp in d4.alphabet(code)[:4])
         assert synthetic not in seeds
         words = sorted(set(fixtures) | seeds | {synthetic})
+        # Deterministic unranked spelling-sampler regression. All these
+        # artificial tokens are for tests only; they never enter a ROM.
+        cps = [chr(cp) for cp in d4.alphabet(code)]
+        samples = set()
+        for k in range(1000):
+            samples.add("".join(cps[(k // (33 ** j)) % 33] for j in range(4)))
+        required = set(seeds)
+        inputs = samples | required
+        first = sample_sourced_forms(code, inputs, required, 200)
+        assert first == sample_sourced_forms(code, inputs, required, 200)
+        assert len(first) == 200 and required <= first
+        try:
+            sample_sourced_forms(code, inputs, required, 159)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("word sampling discarded mandatory themed passwords")
         dic = root / (code + ".dic")
         # Exercise all three real Ukrainian apostrophe encodings, which
         # must be accounted for but NEVER turned into misspelled DS words.
