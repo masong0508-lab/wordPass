@@ -34,7 +34,14 @@ opens Russian for debugging, but is no longer needed to find these modes.
 - Press A to submit, Y to clear the chain, **R for one free word hint per shelf**,
   X to switch the language
 - Hold L and tap a letter to peel it: hidden pass letters become permanent
-  diamonds; a miss leaves a permanent hole
+  diamonds; a miss leaves a permanent **numbered hole** (0–6) showing how many
+  nearby hex cells hold pass letters, including already revealed diamonds
+- Every accepted word also earns a **numbered clue on its final hex cell**.
+  The number stays at that board position even after front gems fall or refill.
+  Its six neighboring cells are outlined; when a clue logically proves all
+  still-covered neighbors must hide letters they receive a gold +, or a teal
+  - when all remaining neighbors are empty. Burning tiles stay red: a
+  logically empty neighbor can still cost a dangerous peel under fire
 - Press Select for a fresh attempt on the current shelf, Start or B to leave the preview
 
 Replaying a free-play shelf discards the **current attempt's** word points
@@ -44,6 +51,14 @@ pressing Select on the completed shelf instead replays it without banking
 the same bonus repeatedly. Retrying after fire follows the same rule.
 Daily Practice always retries from zero. If a replacement board cannot be
 generated, the current board, selection, score and mode remain intact.
+
+**Fair clue reading:** An earlier engineering renderer painted a tiny gold
+underline on every still-hidden password tile, unintentionally revealing the
+solution. That marker is removed. The preview renderer now reads the hidden
+back layer **only** to count neighboring pass positions when a number is
+publicly earned by a word or revealed by a peel. An unopened, unsurveyed cell
+never gets its own secret-indicating glyph. The player must still choose and
+perform peels; the new cues never grant a free turn, hint or automatic reveal.
 
 The touch screen uses real 7×8 hex-grid coordinates and the same bitmap VRAM
 banks as the production game. Cyrillic glyphs render directly on gems without
@@ -134,6 +149,13 @@ last usable route, recovery leaves the original board, RNG, heat, turn and
 allowance unchanged. An otherwise eligible recovery still loses normally
 if a bottom flame escapes; it cannot undo that loss or revive a finished
 shelf.
+
+The numbered clue system adds seven row masks and two focus coordinates to
+the small experimental board structure, with no separate 56-byte number map,
+new framebuffer, image atlas or dynamic allocation. Its read-only inference
+uses the displayed clue count and revealed diamonds/holes, not the identity of
+unopened password cells. Native tests and the real DS emulator verify the
+hidden-position anti-spoiler invariant in Russian and Ukrainian.
 
 The preview and a translated retail pack never occupy the heap together.
 Entering either demo temporarily releases the active retail dictionary,
