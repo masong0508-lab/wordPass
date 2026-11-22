@@ -105,6 +105,66 @@ static void testPackedWidths(void)
             CHECK(!v4DictLookupIds(&d, missing, length) &&
                   !v4DictHasPrefixLengthIds(&d, missing, 1, length),
                   "bounded packing rejects ID past alphabet");
+            // Differential proof: the optimized narrowing API must match
+            // the original packed-prefix binary search for all four fixture
+            // words at every symbol depth, for each 1..6-bit packing width.
+            for (int word = 0; word < 4; word++) {
+                uint32_t first = 0, past = d.count[length];
+                for (int pos = 0; pos < length; pos++) {
+                    CHECK(v4DictNarrowPrefixLengthId(&d, length, pos,
+                              ids[word][pos], &first, &past) && first < past &&
+                          past <= d.count[length] &&
+                          v4DictHasPrefixLengthIds(&d, ids[word], pos+1, length),
+                          "span narrows real word bits=%u length=%d word=%d position=%d",
+                          bits, length, word, pos);
+                }
+                CHECK(past == first + 1u &&
+                      v4DictLookupIds(&d, ids[word], length) == 1 + (word & 1),
+                      "full-length prefix interval holds exactly one validated word");
+            }
+            // Exhaust every one- and two-symbol prefix of this 4-word group
+            // for small and full 64-symbol alphabets: old and new APIs must
+            // agree on empty ranges, including byte-crossing symbol indexes.
+            for (unsigned a = 0; a < symbols; a++) {
+                uint8_t trial[2] = {(uint8_t)a, 0};
+                uint32_t lo = 0, hi = d.count[length];
+                bool found = v4DictNarrowPrefixLengthId(&d, length, 0,
+                                      trial[0], &lo, &hi);
+                CHECK(found == v4DictHasPrefixLengthIds(&d, trial, 1, length),
+                      "span first letter matches packed prefix bits=%u length=%d id=%u",
+                      bits, length, a);
+                if (!found) continue;
+                for (unsigned b = 0; b < symbols; b++) {
+                    trial[1] = (uint8_t)b;
+                    uint32_t first = lo, past = hi;
+                    bool pair = v4DictNarrowPrefixLengthId(&d, length, 1,
+                                                 trial[1], &first, &past);
+                    CHECK(pair == v4DictHasPrefixLengthIds(&d, trial, 2, length),
+                          "span two letters matches packed prefix bits=%u length=%d a=%u b=%u",
+                          bits, length, a, b);
+                    if (pair) CHECK(first >= lo && past <= hi && first < past,
+                                    "narrowed span remains inside its parent");
+                    else CHECK(first == lo && past == hi,
+                               "an absent next letter must leave interval unchanged");
+                }
+            }
+            uint32_t lo = 0, hi = d.count[length];
+            CHECK(!v4DictNarrowPrefixLengthId(&d, length, 0,
+                                              (uint8_t)symbols, &lo, &hi) &&
+                  !v4DictNarrowPrefixLengthId(&d, length, -1,
+                                              0, &lo, &hi) &&
+                  !v4DictNarrowPrefixLengthId(&d, length, length,
+                                              0, &lo, &hi) &&
+                  !v4DictNarrowPrefixLengthId(NULL, length, 0,
+                                              0, &lo, &hi) &&
+                  !v4DictNarrowPrefixLengthId(&d, length, 0,
+                                              0, NULL, &hi) &&
+                  lo == 0 && hi == d.count[length],
+                  "bad span inputs fail closed and never mutate caller interval");
+            lo = 1; hi = d.count[length] + 1u;
+            CHECK(!v4DictNarrowPrefixLengthId(&d, length, 0, 0, &lo, &hi) &&
+                  lo == 1 && hi == d.count[length] + 1u,
+                  "out-of-bounds prefix span rejected without mutation");
         }
     }
 }
