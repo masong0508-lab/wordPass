@@ -116,6 +116,38 @@ int boardBackNumber(const Game *g, int c, int r)
     return k;
 }
 
+// Read only evidence the player can inspect: word clues surveyed by a
+// successful chain, or the number displayed on an opened hole. A diamond
+// already revealed counts toward the clue but is no longer a covered choice.
+// A flame or empty front cell still covers an unknown back location. This
+// helper never consults the unrevealed back map and never changes the board.
+int boardClueInference(const Game *g, int c, int r, int *remaining, int *covered)
+{
+    if (remaining) *remaining = 0;
+    if (covered) *covered = 0;
+    if (c < 0 || c >= COLS || r < 0 || r >= ROWS) return CLUE_NO_DATA;
+    int total = -1;
+    if (g->cell[c][r].state == CELL_HOLE) total = boardBackNumber(g, c, r);
+    else if (g->wordClue[c][r]) total = g->wordClue[c][r] - 1;
+    if (total < 0 || total > 6) return CLUE_NO_DATA;
+
+    int nc[6], nr[6], n = boardNeighbors(c, r, nc, nr);
+    int known = 0, unknown = 0;
+    for (int i = 0; i < n; i++) {
+        int state = g->cell[nc[i]][nr[i]].state;
+        if (state == CELL_SECRET) known++;
+        else if (state != CELL_HOLE) unknown++;
+    }
+    int left = total - known;
+    if (remaining) *remaining = left;
+    if (covered) *covered = unknown;
+    // A contradictory/fully-explored clue cannot promise a safe peel or pass.
+    if (left < 0 || left > unknown || unknown == 0) return CLUE_UNDECIDED;
+    if (left == 0) return CLUE_SAFE;
+    if (left == unknown) return CLUE_PASS;
+    return CLUE_UNDECIDED;
+}
+
 // Bury the pass: a random walk that starts at or below minRow and never climbs above it,
 // so the whole pass sits in rows minRow..ROWS-1 (the fallback for a stuck walk keeps to
 // the same rows).
