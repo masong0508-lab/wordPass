@@ -104,15 +104,40 @@ def _inspect(source, code, synthetic=False):
     return assets, d, p
 
 
-def install(source, dest, synthetic=False):
-    """Validate BOTH languages before publishing either. On failure leave dest
-    untouched. Images, original notices and manifests stay paired."""
+def install(source, dest, synthetic=False, _test_fail_promotion=False):
+    """Validate both source packs, stage them together and preserve old data.
+
+    A complete old installation moves to a sibling backup rather than being
+    deleted before the new staged image is ready. Failed promotion restores
+    the backup; the next call also recovers an interrupted prior promotion.
+    """
+    destination = Path(dest)
+    origin = Path(source)
+    if origin.resolve() == destination.resolve():
+        raise ValueError("source and destination cannot be the same directory")
     validated = {}
     for code in ("ru", "uk"):
         validated[code] = _inspect(source, code, synthetic)
-    destination = Path(dest)
     destination.parent.mkdir(parents=True, exist_ok=True)
     stage = destination.parent / (destination.name + ".installing")
+    backup = destination.parent / (destination.name + ".previous")
+    # Recover a previously interrupted two-rename promotion. Never discard
+    # the only available copy of a user's prior preview packs.
+    if backup.exists():
+        if not destination.exists():
+            backup.rename(destination)
+        else:
+            # Both directories exist if the new stage was promoted before a
+            # crash during backup cleanup. Keep the newly installed image
+            # only if BOTH languages and attribution are still valid.
+            try:
+                for code in ("ru", "uk"):
+                    _inspect(destination, code, synthetic)
+            except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+                shutil.rmtree(destination)
+                backup.rename(destination)
+            else:
+                shutil.rmtree(backup)
     if stage.exists():
         shutil.rmtree(stage)
     try:
@@ -121,15 +146,24 @@ def install(source, dest, synthetic=False):
             folder.mkdir(parents=True, exist_ok=True)
             for filename, payload in assets.items():
                 (folder / filename).write_bytes(payload)
-        # The pack files are immutable inputs to the ROM builder. We publish
-        # only after both complete sets exist, keeping half-installed languages
-        # out of the preview's folder.
-        if destination.exists():
-            shutil.rmtree(destination)
-        stage.rename(destination)
+        old_exists = destination.exists()
+        if old_exists:
+            destination.rename(backup)
+        try:
+            if _test_fail_promotion:
+                raise OSError("injected staging failure for rollback test")
+            stage.rename(destination)
+        except BaseException:
+            # Directory rename cannot expose a half-written pack. If it
+            # failed, restore the old complete directory before rethrowing.
+            if old_exists and backup.exists() and not destination.exists():
+                backup.rename(destination)
+            raise
     finally:
         if stage.exists():
             shutil.rmtree(stage)
+    if backup.exists():
+        shutil.rmtree(backup)
     for code, (_, d, p) in validated.items():
         print(f"CYR IMPORTED PREVIEW {code}: {d['words']} sourced words, "
               f"{p['themes']} themes, {p['words']} unreviewed candidate passwords "
@@ -147,6 +181,25 @@ def selftest(folder):
         for file in (*RESOURCE_MAX, *META_FILES, EXTRA_FILE):
             assert (dest / code / file).read_bytes() == (source / code / file).read_bytes()
     before = (dest / "ru" / "dict.bin").read_bytes()
+    # Exercise failure after old destination was moved to a recovery backup:
+    # previous RU and UK data must both remain present and no partial stage
+    # may survive. This is a real file-system rollback test, not a mock pass.
+    try:
+        install(source, dest, synthetic=True, _test_fail_promotion=True)
+    except OSError:
+        pass
+    else:
+        raise AssertionError("injected failed pack promotion unexpectedly succeeded")
+    assert (dest / "ru" / "dict.bin").read_bytes() == before
+    assert (dest / "uk" / EXTRA_FILE).is_file()
+    assert not (root / "installed.installing").exists()
+    assert not (root / "installed.previous").exists()
+    # Simulate interruption after moving a valid installation to backup.
+    backup = root / "installed.previous"
+    dest.rename(backup)
+    install(source, dest, synthetic=True)
+    assert (dest / "ru" / "dict.bin").read_bytes() == before
+    assert not backup.exists(), "recovery must clean up stale backup"
     license_path = source / "uk" / "LICENSE-SOURCE.txt"
     original = license_path.read_bytes()
     license_path.write_bytes(original + b"altered")
