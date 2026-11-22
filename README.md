@@ -11,7 +11,8 @@ letters. The slots fill automatically in any discovery order; no password typing
 
 ## Get the ROM
 
-- **From GitHub (no tools needed):** open the repository's **Actions** tab, pick the latest **build** run (or press **Run workflow** to make a fresh one) and download the `wordPass.nds` artifact. Tagged versions (`v*`) also attach the ROM to a release.
+- **Complete ROM set (recommended):** open the latest successful **build** under [GitHub Actions](https://github.com/masong0508-lab/wordPass/actions/workflows/build.yml) and download the `wordPass-complete-ROM-set` artifact. Inside is `wordPass-ROM-set.zip` plus its `.sha256` checksum. The ZIP contains `wordPass.nds` (regular game), `wordPass-cyr-preview.nds` (**experimental Russian/Ukrainian DEMO only**), usage notes, a JSON manifest, ROM checksums and license notices. The two ROMs are intentionally separate; use the retail ROM for normal play.
+- **Single ROM:** the same workflow still uploads `wordPass` (regular ROM and matching ELF) and `wordPass-cyr-preview` (opt-in demo). Tagged versions (`v*`) currently attach the regular ROM to a release.
 - **On your own machine:** install Docker and run `./build.sh`. The ROM appears as `wordPass.nds`. The Docker image is pinned so the ROM boots in DeSmuME, melonDS and on hardware.
 - Play it in melonDS or DeSmuME, or copy it to a flashcart. The ten extra languages live in the ROM's own filesystem, so use a flashcart that runs the ROM normally.
 
