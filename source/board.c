@@ -158,9 +158,9 @@ int boardNextUsefulClue(const Game *g, int afterC, int afterR, int *outC, int *o
 {
     if (outC) *outC = -1;
     if (outR) *outR = -1;
-    int start = afterC >= 0 && afterC < COLS && afterR >= 0 && afterR < ROWS
-              ? afterC * ROWS + afterR : COLS * ROWS - 1;
-    int fallback = -1;
+    bool havePrevious = afterC >= 0 && afterC < COLS && afterR >= 0 && afterR < ROWS;
+    int start = havePrevious ? afterC * ROWS + afterR : COLS * ROWS - 1;
+    int fallback = -1, current = -1, currentKind = CLUE_NO_DATA;
     for (int step = 1; step <= COLS * ROWS; step++) {
         int idx = (start + step) % (COLS * ROWS), c = idx / ROWS, r = idx % ROWS;
         int left = 0, covered = 0;
@@ -178,6 +178,13 @@ int boardNextUsefulClue(const Game *g, int afterC, int afterR, int *outC, int *o
             }
         }
         if (!canInspect) continue;
+        // Visit the current clue last, and only if nothing else qualifies.
+        // Otherwise a single forced clue would trap repeated SELECT presses
+        // even when other informative (but not decisive) clues are available.
+        if (havePrevious && idx == start) {
+            current = idx; currentKind = inference;
+            continue;
+        }
         if (inference == CLUE_PASS || inference == CLUE_SAFE) {
             if (outC) *outC = c;
             if (outR) *outR = r;
@@ -189,6 +196,11 @@ int boardNextUsefulClue(const Game *g, int afterC, int afterR, int *outC, int *o
         if (outC) *outC = fallback / ROWS;
         if (outR) *outR = fallback % ROWS;
         return CLUE_UNDECIDED;
+    }
+    if (current >= 0) {
+        if (outC) *outC = current / ROWS;
+        if (outR) *outR = current % ROWS;
+        return currentKind;
     }
     return CLUE_NO_DATA;
 }
