@@ -912,7 +912,7 @@ Lockdown climbs in **tiers**, every three shelves: the panel reads LOCKDOWN, LOC
 | I | 6 to 8 | 6 turns | 8, 6, 6 | shelf 6 holds one meter step more than the ladder |
 | II | 9 to 11 | 5 turns | 5 | twin ignitions begin at shelf 11 (1 of 8) |
 | III | 12 to 14 | 4 turns | 4 | 1 to 2 ignitions in eight light **two** columns |
-| IV | 15 and up | 3 turns | 4 | 3 of eight at 15, one more every two shelves, all of them from shelf 25 |
+| IV | 15 and up | 4 turns at 15-16; 3 from 17 | 4 | 2 of eight at 15, 3 at 16-17, 4 at 18; all eight from 25 |
 
 ![A Lockdown shelf: LOCKDOWN in red under the logo, a minor-key music cue, a flame about to step.](img/lockdown_shelf.png)
 *Shelf 6, LOCKDOWN. The mode label is red, the six-letter pass is buried in the lower rows, a flame stands on the top row and the pips say NEXT: the fire moves every turn.*
@@ -936,9 +936,9 @@ Lockdown climbs in **tiers**, every three shelves: the panel reads LOCKDOWN, LOC
 | 12 | 4 | 1 | yes | 4 | 5 | 7 | 1 of 8 |
 | 13 | 4 | 1 | yes | 4 | 5 | 8 | 2 of 8 |
 | 14 | 4 | 1 | yes | 4 | 5 | 8 | 2 of 8 |
-| 15 | 4 | 1 | yes | 3 | 5 | 8 | 3 of 8 |
-| 16 | 4 | 1 | yes | 3 | 5 | 8 | 3 of 8 |
-| 17 | 4 | 1 | yes | 3 | 5 | 8 | 4 of 8 |
+| 15 | 4 | 1 | yes | 4 | 5 | 8 | 2 of 8 |
+| 16 | 4 | 1 | yes | 4 | 5 | 8 | 3 of 8 |
+| 17 | 4 | 1 | yes | 3 | 5 | 8 | 3 of 8 |
 | 18 | 4 | 1 | yes | 3 | 5 | 8 | 4 of 8 |
 | 19 | 4 | 1 | yes | 3 | 5 | 8 | 5 of 8 |
 | 20 | 4 | 1 | yes | 3 | 5 | 8 | 5 of 8 |
@@ -952,7 +952,7 @@ The ladder is for FIRE NORMAL with no twist. *First pass row* is the shallowest 
 
 Pass depth is not a clock: measured with the bot (`docs/BALANCE.md`) a deeper pass is a little *easier* to find, because the pass is one connected cluster and a smaller area is a smaller search. What climbs the ladder is the meter, the pulse, the pass length and the twin ignitions; the pass depth only decides how many flames pass over the cells you are peeling.
 
-**Twin ignitions** are the main thing that rises after shelf 10: the last column of the table is how many of every eight ignitions on the shelf light two columns.
+**Twin ignitions** are the main thing that rises after shelf 10: the last column of the table is how many of every eight ignitions on the shelf light two columns. At the tier-IV entrance, shelf 15 holds both the pulse and the twin share steady; shelf 16 increases twins, shelf 17 tightens the pulse, and shelf 18 increases twins again. This removes the simultaneous jump at shelf 15 without changing Daily modes or later shelves.
 
 ---
 
