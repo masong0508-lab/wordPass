@@ -387,6 +387,14 @@ enum {
     UI_MS_NOHINT,
     UI_MS_NOHINTWORD,
     UI_MS_HINTIDLE,
+    UI_P_FOUND,
+    UI_H_GOAL,
+    UI_MS_WORDCLUE,
+    UI_POP_CLUE,
+    UI_P_CLUE,
+    UI_P_NEARBY,
+    UI_TU_FIND,
+    UI_MS_PEEKRELEASE,
     UI_COUNT
 };
 #endif

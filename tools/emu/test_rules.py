@@ -607,7 +607,7 @@ def _():
     want = e.word_score(word, diamonds=1)
     assert g1['lastWord'] == word, f'{word} did not score: {g1["lastWord"]!r}'
     assert preview == gain == want == e.word_score(word) * 3 // 2, f'{word}: preview {preview} gain {gain} want {want}'
-    assert g1['msg'] == 'PASS LINK!', f'msg {g1["msg"]!r}'
+    assert g1['callout'] == 'PASS LINK!', f'pass-link callout {g1["callout"]!r}'
     assert g1['cell'][C][0][1] == SECRET, 'the diamond was cleared by the word'
 
 @scenario('the same word twice: AGAIN and exactly half')
@@ -1402,9 +1402,10 @@ def _():
 
 def check_callouts(tag):
     g = calm()
-    # a five-letter word: GOOD! pops over the board, settles and goes; the message stays for the top screen
+    # A five-letter word: GOOD! pops over the board; a newly earned clue may
+    # take the top message while the spatial reward is explained.
     path = spell_cells('bread'); e.chain(path); e.press('A', settle=3)
-    g = e.state(); assert g['msg'] == 'GOOD!' and g['callout'] == 'GOOD!' and g['calloutLife'] > 30, f'{tag}: msg {g["msg"]!r} callout {g["callout"]!r} life {g["calloutLife"]}'
+    g = e.state(); assert (g['msg'] == 'GOOD!' or g['msg'].startswith('NEW CLUE:')) and g['callout'] == 'GOOD!' and g['calloutLife'] > 30, f'{tag}: msg {g["msg"]!r} callout {g["callout"]!r} life {g["calloutLife"]}'
     px = e.pixels()
     assert count_color(px, e.bx + 20, 192 + 70, e.bx + 150, 192 + 100, GOLD_LT_C, 2) > 60, f'{tag}: no gold callout over the board'
     e.shot(f'{out}/rules_callout_good_{tag}.png')
@@ -1790,22 +1791,23 @@ def _():
 def msg_of(prefix): return e.state()['msg'].startswith(prefix)
 
 def check_tutor(tag):
-    """The guided first shelf on a fresh Classic game: sticky prompts, overridden by callouts, ended by the closing tip."""
+    """Follow the word/clue/reveal loop; only a complete password finishes the lesson."""
     left = e.bx == 82
-    peek = 'HOLD R OR TAP PEEK' if left else 'HOLD L OR TAP PEEK'
+    peek = 'HOLD R:' if left else 'HOLD L:'
     e.set_tutor(0); e.start_classic(); e.set_lives(3)
     e.run(260)                                              # the shelf intro (180 frames) runs out, then the prompt stays
-    g = e.state(); assert g['tutorStep'] == 0 and g['msgTimer'] == -1 and g['msg'].startswith('DRAG 3+ TOUCHING GEMS'), f'{tag}: step 0: {g["tutorStep"]} {g["msgTimer"]} {g["msg"]!r}'
-    e.run(300); assert msg_of('DRAG 3+ TOUCHING GEMS') and e.state()['msgTimer'] == -1, f'{tag}: the prompt must be sticky'
+    g = e.state(); assert g['tutorStep'] == 0 and g['msgTimer'] == -1 and g['msg'].startswith('SPELL A WORD:'), f'{tag}: step 0: {g["tutorStep"]} {g["msgTimer"]} {g["msg"]!r}'
+    e.run(300); assert msg_of('SPELL A WORD:') and e.state()['msgTimer'] == -1, f'{tag}: the prompt must be sticky'
     e.shot(f'{out}/rules_tutor_0_{tag}.png')
     e.set_heat(0); e.set_burn(0, 99); e.set_turn(0)
     path = spell_cells('bed'); e.chain(path); e.press('A', settle=10)
-    g = e.state(); assert g['tutorStep'] == 1 and g['msg'].startswith(peek) and g['msgTimer'] == -1, f'{tag}: after the first word: step {g["tutorStep"]} {g["msg"]!r}'
+    g = e.state(); assert g['tutorStep'] == 1 and g['msg'].startswith('NEW CLUE:') and g['msgTimer'] > 0, f'{tag}: the first word must explain its clue reward: {g["msg"]!r}'
+    e.run(160); g = e.state(); assert g['msg'].startswith(peek) and g['msgTimer'] == -1, f'{tag}: after the first word: step {g["tutorStep"]} {g["msg"]!r}'
     e.shot(f'{out}/rules_tutor_1_{tag}.png')
     # a callout takes the line for its moment, then the prompt returns
     e.set_heat(0); path = spell_cells('bread'); e.chain(path); e.press('A', settle=4)
-    g = e.state(); assert g['msg'] == 'GOOD!' and g['msgTimer'] > 0, f'{tag}: the callout should override the prompt: {g["msg"]!r}'
-    e.run(80); g = e.state(); assert g['msg'].startswith(peek) and g['msgTimer'] == -1, f'{tag}: the prompt did not come back: {g["msg"]!r} {g["msgTimer"]}'
+    g = e.state(); assert g['msg'].startswith('NEW CLUE:') and g['msgTimer'] > 0, f'{tag}: the earned clue should override the prompt: {g["msg"]!r}'
+    e.run(160); g = e.state(); assert g['msg'].startswith(peek) and g['msgTimer'] == -1, f'{tag}: the prompt did not come back: {g["msg"]!r} {g["msgTimer"]}'
     # the first peel: a hole says what its number means (zero the back layer, give (C, 3) exactly one pass-letter neighbour)
     e.set_heat(0); e.set_burn(0, 99)
     for c in range(COLS):
@@ -1815,20 +1817,32 @@ def check_tutor(tag):
     e.peel(*target); g = e.state()
     assert g['peels'] == 1 and g['tutorStep'] == 2 and g['msgTimer'] > 0 and g['msg'].startswith('1: A PASS LETTER TOUCHES'), f'{tag}: hole message: step {g["tutorStep"]} {g["msg"]!r}'
     e.shot(f'{out}/rules_tutor_hole_{tag}.png')
-    e.run(250); g = e.state(); assert g['tutorStep'] == 2 and g['msg'].startswith(peek) and g['msgTimer'] == -1, f'{tag}: after the hole message: {g["msg"]!r}'
-    # the first pass letter found: the closing tip, which ends the guide when it runs out
+    e.run(250); g = e.state(); assert g['tutorStep'] == 2 and g['msg'].startswith('USE CLUES') and g['msgTimer'] == -1, f'{tag}: after the hole message: {g["msg"]!r}'
+    # The first found letter updates progress and leaves the objective active.
     e.set_back(C, 6, 1); e.set_cell(C, 6, TILE, 'e'); e.set_heat(0); e.set_burn(0, 99); e.run(5)
     e.peel(C, 6); g = e.state()
-    assert g['found'][0] == 1 and g['tutorStep'] == 3 and g['msg'].startswith('FIND THE REST.'), f'{tag}: closing tip: step {g["tutorStep"]} found {g["found"]} {g["msg"]!r}'
-    assert g['tutorDone'] == 0, f'{tag}: the guide must not be marked done before the tip has run'
+    assert g['found'][0] == 1 and g['tutorStep'] == 3 and g['msg'].startswith('FOUND 1/'), f'{tag}: progress: step {g["tutorStep"]} found {g["found"]} {g["msg"]!r}'
+    assert g['tutorDone'] == 0, f'{tag}: one found letter must not complete the guide'
     e.shot(f'{out}/rules_tutor_rest_{tag}.png')
     e.run(250); g = e.state()
-    assert g['tutorStep'] == 4 and g['tutorDone'] == 1 and g['msg'] == '' and g['msgTimer'] == 0, f'{tag}: the guide should end: step {g["tutorStep"]} done {g["tutorDone"]} {g["msg"]!r}'
+    assert g['tutorStep'] == 3 and g['tutorDone'] == 0 and g['msgTimer'] == -1, f'{tag}: progress guidance must stay until the shelf clears: {g["tutorStep"]} {g["tutorDone"]}'
+    # Returning players can reach the goal directly from the password tracker.
+    before = e.state(); e.tap(panel_x() + 35, 55, settle=25)
+    g = e.state(); assert g['state'] == ST_GUIDE and g['guidePage'] == 0 and g['guideFrom'] == ST_PAUSE, f'{tag}: tracker must open goal help'
+    for key in ('score', 'turn', 'peels', 'heat', 'found'):
+        assert g[key] == before[key], f'{tag}: opening goal help changed {key}'
+    e.press('B', settle=5); e.press('START', settle=10)
+    assert e.state()['state'] == ST_PLAY and e.state()['tutorDone'] == 0
+    for i in range(2, g['passLen'] + 1):
+        e.set_heat(0); e.set_turn(0); e.set_burn(0, 99)
+        e.set_back(5, i, i); e.set_cell(5, i, TILE, 'e'); e.peel(5, i)
+    g = e.state()
+    assert g['state'] == ST_PASSED and g['tutorStep'] == 4 and g['tutorDone'] == 1, f'{tag}: only the complete password finishes the guide'
     # once done, a new game has no prompts, and the old nudge is back as a fallback
     to_title(); e.start_classic(); e.run(260)
     g = e.state(); assert g['tutorStep'] == 4 and g['msg'] == '', f'{tag}: a finished guide must stay off: {g["tutorStep"]} {g["msg"]!r}'
 
-@scenario('guided first shelf (right hand): drag, peek, the first hole, the first pass letter, then off for good')
+@scenario('guided first shelf (right hand): word clue, peek, hole, progress, goal help and complete password')
 def _():
     set_hand(False); check_tutor('right')
 
@@ -1846,8 +1860,8 @@ def _():
     e.peel(c, r); g = e.state()
     assert g['found'][0] == 1 and g['msg'] == 'A PASS LETTER! PEEL AROUND IT' and g['tutorStep'] == 2, f'secret first: step {g["tutorStep"]} {g["msg"]!r}'
     e.run(250); g = e.state()
-    assert g['tutorStep'] == 3 and g['msg'].startswith('FIND THE REST.'), f'after the first-peel message the closing tip follows: {g["tutorStep"]} {g["msg"]!r}'
-    # clear the shelf before the tip has run out: the guide is done anyway
+    assert g['tutorStep'] == 3 and g['msg'].startswith('FOUND 1/') and g['tutorDone'] == 0, f'after the first-peel message show unfinished password progress: {g["tutorStep"]} {g["msg"]!r}'
+    # Clearing the complete password finishes the guide.
     for i in range(2, g['passLen'] + 1):
         e.set_heat(0); e.set_turn(0); e.set_burn(0, 99)
         g = e.state()
@@ -2167,7 +2181,7 @@ def _():
         g = e.state(); assert g['armed'] == 1 and g['cue'] == 4, f'{tag}: the armed cell should be pointed at: armed {g["armed"]} cue {g["cue"]}'
         e.shot(f'{out}/rules_cue_armed_{tag}.png'); assert e.fps() == 120, f'{tag}: fps with the armed cue'
         e.emu.input.touch_release(); e.run(30); e.hold('L', False); e.run(10)
-        g = e.state(); assert g['cue'] == 0 and g['tutorStep'] >= 2, f'{tag}: after the peel the cue is gone: {g["cue"]} step {g["tutorStep"]}'
+        g = e.state(); assert g['cue'] == 3 and g['tutorStep'] >= 2, f'{tag}: after the peel guidance must continue toward the password: {g["cue"]} step {g["tutorStep"]}'
         # a finished guide shows no cues at all
         to_title(); e.set_tutor(1); e.start_classic(); e.run(500)
         assert e.state()['cue'] == 0, f'{tag}: a finished guide must not point at things'

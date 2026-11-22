@@ -344,6 +344,8 @@ void boardNewShelf(Game *g)
     if (g->mode == MODE_DAILY) boardDailyRules(g->dailyMod, &rules); else boardShelfRules(g->shelf, &rules);
     memset(g->found, 0, sizeof(g->found));
     memset(g->scorched, 0, sizeof(g->scorched));
+    memset(g->wordClue, 0, sizeof(g->wordClue));
+    g->wordClueC = 0; g->wordClueR = 0;
     int minRow = rules.minRow;
     if (g->twist == TWIST_BURIED) minRow = TWIST_BURIED_ROW;
     rareRot = boardRand() & 3;
@@ -876,6 +878,15 @@ int boardSubmit(Game *g)
     int gained = chainScoreDetail(g, w, &len, &tier, &diamonds, &burn, &repeat);
     if (!tier) return 0;
 
+    // A submitted word surveys its final board location. The back layer
+    // stays fixed when the front gems fall or refill, so this clue stays
+    // useful without uncovering the cell or changing the turn's cost.
+    // Store n + 1 so a known zero differs from an uncharted location.
+    int tail = g->chainLen - 1;
+    int clueC = g->chainC[tail], clueR = g->chainR[tail];
+    g->wordClue[clueC][clueR] = (u8)(boardBackNumber(g, clueC, clueR) + 1);
+    g->wordClueC = (u8)clueC; g->wordClueR = (u8)clueR;
+
     for (int i = 0; i < g->chainLen; i++) {
         Cell *cl = &g->cell[g->chainC[i]][g->chainR[i]];
         if (cl->state == CELL_TILE || cl->state == CELL_BURN) {
@@ -990,7 +1001,7 @@ int boardLowestFireRow(const Game *g)
     return low;
 }
 
-// Is any 3- to 5-letter word still spellable? (longer-only boards are rare)
+// Fast path for the usual 3- to 5-letter word.
 // (a chain needs three GEMS: a Qu gem is two letters, so QUE alone is not spellable)
 static bool dfsWords(const Game *g, int c, int r, char *w, int n, int gems, bool used[COLS][ROWS])
 {
@@ -1012,8 +1023,65 @@ static bool dfsWords(const Game *g, int c, int r, char *w, int n, int gems, bool
     return false;
 }
 
+// The short search cannot prove that a shelf is dead: RHYTHM, for example,
+// has no playable short fragment. Search the remaining dictionary prefixes,
+// with an explicit node limit as well as the chain/letter limits. Exhausting
+// this budget must never end a shelf that may still contain a valid word.
+// A hint retains the first allowed rare word while looking for a common one.
+#define WORD_SEARCH_NODES 4096
+typedef struct {
+    int left, max, length;
+    bool preferCommon;
+    u8 pathC[MAX_CHAIN], pathR[MAX_CHAIN];
+    u8 resultC[MAX_CHAIN], resultR[MAX_CHAIN];
+} WordSearch;
+
+static bool extendedDfs(const Game *g, int c, int r, char *w, int n, int depth,
+                        bool used[COLS][ROWS], WordSearch *search)
+{
+    if (!search->left) return false;
+    search->left--;
+    int letters = quGem(&g->cell[c][r]) ? 2 : 1;
+    if (n + letters > MAX_WORD) return false;
+    w[n++] = 'a' + g->cell[c][r].letter;
+    if (letters == 2) w[n++] = 'u';
+    search->pathC[depth] = (u8)c; search->pathR[depth] = (u8)r;
+    depth++;
+    int tier = depth >= 3 ? wordAccepted(w, n) : 0;
+    if (tier && (!search->length || !search->preferCommon || tier == 1)) {
+        search->length = depth;
+        memcpy(search->resultC, search->pathC, (size_t)depth);
+        memcpy(search->resultR, search->pathR, (size_t)depth);
+        if (!search->preferCommon || tier == 1) return true;
+    }
+    if (depth >= search->max || n >= MAX_WORD) return false;
+    int remaining = search->max - depth;
+    int longest = n + remaining * (langQuTile() ? 2 : 1);
+    if (!dictHasPrefix(w, n, n + 1, longest)) return false;
+    used[c][r] = true;
+    int nc[6], nr[6], k = boardNeighbors(c, r, nc, nr);
+    for (int i = 0; i < k && search->left; i++) {
+        if (used[nc[i]][nr[i]] || !boardIsChainable(g, nc[i], nr[i])) continue;
+        if (extendedDfs(g, nc[i], nr[i], w, n, depth, used, search)) {
+            used[c][r] = false;
+            return true;
+        }
+    }
+    used[c][r] = false;
+    return false;
+}
+
+static void extendedWords(const Game *g, WordSearch *search)
+{
+    char w[WORD_BUF];
+    bool used[COLS][ROWS] = {{false}};
+    for (int c = 0; c < COLS && search->left; c++)
+        for (int r = 0; r < ROWS && search->left; r++)
+            if (boardIsChainable(g, c, r) && extendedDfs(g, c, r, w, 0, 0, used, search)) return;
+}
+
 // A common-word route for the tutorial ghost and SELECT hint. Prefer unplayed words; a repeated
-// ledger word still works when there is no alternative. No dynamic memory and at most five gems.
+// ledger word still works when there is no alternative. The preferred short path uses at most five gems.
 // needBurn requests a route that actually extinguishes a flame.
 static bool hintDfs(const Game *g, int c, int r, char *w, int n, int maxLen, int depth, u8 *pc, u8 *pr,
                     bool used[COLS][ROWS], bool needBurn, bool burnSeen, bool freshOnly)
@@ -1024,7 +1092,7 @@ static bool hintDfs(const Game *g, int c, int r, char *w, int n, int maxLen, int
     depth++;
     if (g->cell[c][r].state == CELL_BURN) burnSeen = true;
     if (depth >= 3 && depth == maxLen && (!needBurn || burnSeen) && wordAccepted(w, n) == 1) {
-        w[n] = 0;             // ledgerHas compares NUL-terminated words; max five Qu gems fit w[16]
+        w[n] = 0;             // ledgerHas compares NUL-terminated words
         if (!freshOnly || !ledgerHas(g, w)) return true;
     }
     if (depth >= maxLen) return false;
@@ -1050,8 +1118,10 @@ static bool hintDfs(const Game *g, int c, int r, char *w, int n, int maxLen, int
 // Bounded depth, stack-only state, and no added work in the per-frame renderer.
 int boardHintChain(const Game *g, u8 *outC, u8 *outR, int max)
 {
-    char w[16];
-    u8 pc[8], pr[8];
+    if (max < 3) return 0;
+    if (max > MAX_CHAIN) max = MAX_CHAIN;
+    char w[WORD_BUF];
+    u8 pc[MAX_CHAIN], pr[MAX_CHAIN];
     bool anyFlame = false;
     for (int c = 0; c < COLS; c++) for (int r = 0; r < ROWS; r++) if (g->cell[c][r].state == CELL_BURN) anyFlame = true;
     for (int pass = anyFlame ? 0 : 1; pass < 2; pass++)
@@ -1060,13 +1130,21 @@ int boardHintChain(const Game *g, u8 *outC, u8 *outR, int max)
                 bool used[COLS][ROWS] = {{false}};
                 for (int c = 0; c < COLS; c++)
                     for (int r = 0; r < ROWS; r++)
-                        if ((g->cell[c][r].state == CELL_TILE || g->cell[c][r].state == CELL_BURN) &&
+                        if (boardIsChainable(g, c, r) &&
                             hintDfs(g, c, r, w, 0, len, 0, pc, pr, used, pass == 0, false, fresh != 0)) {
                             for (int i = 0; i < len; i++) { outC[i] = pc[i]; outR[i] = pr[i]; }
                             return len;
                         }
             }
-    return 0;
+    // Preserve every existing short common-word preference before considering
+    // longer paths or an allowed rare word. One budget covers the whole fallback.
+    WordSearch search = { .left = WORD_SEARCH_NODES, .max = max, .preferCommon = true };
+    extendedWords(g, &search);
+    if (search.length) {
+        memcpy(outC, search.resultC, (size_t)search.length);
+        memcpy(outR, search.resultR, (size_t)search.length);
+    }
+    return search.length;
 }
 
 bool boardHasWords(const Game *g)
@@ -1076,5 +1154,7 @@ bool boardHasWords(const Game *g)
     for (int c = 0; c < COLS; c++)
         for (int r = 0; r < ROWS; r++)
             if (boardIsChainable(g, c, r) && dfsWords(g, c, r, w, 0, 0, used)) return true;
-    return false;
+    WordSearch search = { .left = WORD_SEARCH_NODES, .max = MAX_CHAIN };
+    extendedWords(g, &search);
+    return search.length != 0 || search.left == 0;
 }

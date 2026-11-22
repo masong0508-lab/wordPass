@@ -10,7 +10,15 @@
 
 typedef char Page[GUIDE_MAX_LINES][GUIDE_LINE_BUF];
 
-const char *guideTitle(int page) { return ui(UI_GT_BOARD + ((page >= 0 && page < GUIDE_PAGES) ? page : 0)); }
+// Keep the canonical topic IDs stable for text, examples and animation, but
+// show the objective before teaching controls or score arithmetic.
+int guideTopic(int page)
+{
+    static const u8 topics[GUIDE_PAGES] = { 3, 0, 2, 4, 1, 5, 6, 7 };
+    return topics[(page >= 0 && page < GUIDE_PAGES) ? page : 0];
+}
+
+const char *guideTitle(int page) { return ui(UI_GT_BOARD + guideTopic(page)); }
 
 int guideVisibleLen(const char *line)
 {
@@ -159,7 +167,7 @@ static int pageBoard(Page p)
     L(UI_GB_11);
     L(UI_GB_12, SHUFFLE_HEAT);
     L(UI_GB_9, ui(UI_EX_WORD), boardWordPoints(ink, wl, false, 0, false));
-    L(UI_GB_10);
+    L(UI_GA_6);                         // a word's last gem leaves a clue
     return n;
 }
 
@@ -210,30 +218,27 @@ static int pagePeek(Page p)
     L(UI_GE_10);
     L(UI_GE_11, boardPeelHeat(false));
     GAP();
-    L(UI_GE_12);
+    L(UI_GA_10);                        // a covered clue may hide a letter
     return n;
 }
 
 static int pagePass(Page p)
 {
     int n = 0;
-    char runs[GUIDE_LINE_BUF];
     L(UI_GA_1);
     L(UI_GA_2);
     L(UI_GA_3);
-    L(UI_GA_4, poolName(0), poolName(8), poolName(17), poolThemeCount());
+    L(UI_GA_4);
     GAP();
-    runList(runs, 1, 20, boardPassLenFor, "", NULL, "  ", NULL, ":");
     L(UI_GA_5);
-    LS(runs);
-    GAP();
-    L(UI_GA_6, PASS_LETTER_PER_SHELF);
-    L(UI_GA_12, STREAK_PER_SHELF);
+    L(UI_GA_6);
     L(UI_GA_7);
-    L(UI_GA_8, SHELF_BONUS_PER_SHELF, SPEED_PER_SHELF_TURN);
-    L(UI_GA_9, SPEED_TURNS);
-    L(UI_GA_10, PERFECT_PER_SHELF);
-    L(UI_GA_11, CLEAN_EXTRA_PEELS, CLEAN_PER_SHELF);
+    L(UI_GA_8);
+    L(UI_GA_9);
+    L(UI_GA_10);
+    GAP();
+    L(UI_GA_11);
+    L(UI_GA_12);
     return n;
 }
 
@@ -327,7 +332,7 @@ static int pageControls(Page p)
 int guideLines(int page, char out[GUIDE_MAX_LINES][GUIDE_LINE_BUF])
 {
     for (int i = 0; i < GUIDE_MAX_LINES; i++) out[i][0] = 0;
-    switch (page) {
+    switch (guideTopic(page)) {
         case 0: return pageBoard(out);
         case 1: return pageScoring(out);
         case 2: return pagePeek(out);
