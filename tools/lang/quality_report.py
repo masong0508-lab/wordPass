@@ -72,13 +72,15 @@ def main():
             details.append("")
             if tight:
                 details.append("**Tightest rendered labels:**")
+                details.append("")
                 for remaining, key, translated in tight[:8]:
-                    details.append(f"- \`{key}\` — {remaining} px remaining — \`{translated}\`")
+                    details.append(f"- `{key}` — {remaining} px remaining — `{translated}`")
             if same:
                 details.append("")
                 details.append("**Long untranslated-looking labels to review:**")
+                details.append("")
                 for key, translated in same[:8]:
-                    details.append(f"- \`{key}\` — \`{translated}\`")
+                    details.append(f"- `{key}` — `{translated}`")
             details.append("")
     lines.extend([
         "",
@@ -93,7 +95,7 @@ def main():
     lines.extend([
         "## Automated checks",
         "",
-        "- \`make check\` tests all 4,235 locale entries for glyphs, "
+        "- `make check` tests all 4,235 locale entries for glyphs, "
         "pixel bounds, formatting and a critical vocabulary subset.",
         "- Every one of the 400 non-English packed ROM theme names must match its source.",
         "- Native checks cover dictionaries, tiles, language switching and corrupt-pack fallback.",

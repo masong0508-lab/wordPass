@@ -69,11 +69,12 @@ def case(tag, rom, elf, d):
     # power off, boot again: the saved choice loads (no chooser, same theme)
     need(e.state()['state'] == ST_TITLE, 'second boot shows the chooser again: the save did not load (state %d)' % e.state()['state'])
     need(e.S_theme() == t1, 'second boot has theme %d, saved %d' % (e.S_theme(), t1))
-    # a save with a file already there: libfat refuses a rename onto an existing name, so settingsSave removes and renames
+    # libfat refuses an existing destination, so settingsSave rotates through a backup.
     options_theme(e)
     t2 = cfg_fields(read_cfg(img))['theme']
     need(not e.flags()['saveFailed'] and t2 == e.S_theme() and t2 != t1, 'the second save did not reach the card (card %d, game %d)' % (t2, e.S_theme()))
-    need(not any(n.lower() == 'wordpass.cfg.tmp' for n, _ in card_files(img)), 'a temp file was left on the card: %r' % (card_files(img),))
+    need(not any(n.lower() in ('wordpass.cfg.tmp', 'wordpass.cfg.bak') for n, _ in card_files(img)),
+         'a recovery file was left after a successful save: %r' % (card_files(img),))
     e.power_cycle()
     need(e.state()['state'] == ST_TITLE and e.S_theme() == t2, 'third boot did not load the second save')
 
@@ -97,31 +98,42 @@ def case(tag, rom, elf, d):
 
 
 DAMAGE = {
-    'a dictionary with a damaged magic': ('lang/es/dict.bin', lambda b, st, n: b.__setitem__(st + 1, b[st + 1] ^ 1)),
-    'pools in which a theme has no word': ('lang/es/pools.bin', lambda b, st, n: b.__setitem__(slice(st + 16, st + 28), bytes(12))),
+    'a dictionary with a damaged magic': ('lang/es/dict.bin', lambda b, st, n: b.__setitem__(st + 1, b[st + 1] ^ 1), False),
+    'pools in which a theme has no word': ('lang/es/pools.bin', lambda b, st, n: b.__setitem__(slice(st + 16, st + 28), bytes(12)), True),
 }
 
 
 def damaged_case(kind, rom, elf, d):
-    """A language file damaged inside the ROM: the load must fail, English must stay and be playable, and the options screen
-    must say so. (The ROM copy is damaged by flipping bytes at the file's place in the card image.)"""
+    """Header damage is hidden at startup; deeper damage is refused on load.
+    Both cases must leave a route to a playable English game."""
     from fatrig import rom_file_range
-    from wp import Emu, ST_OPTIONS, ST_TITLE, ST_PLAY
-    path, hit = DAMAGE[kind]
+    from wp import Emu, ST_OPTIONS, ST_TITLE, ST_PLAY, ST_LANGPICK, symbol
+    path, hit, listed = DAMAGE[kind]
     data = bytearray(open(rom, 'rb').read())
     st, n = rom_file_range(rom, path)
     hit(data, st, n)
     bad = os.path.join(d, 'damaged.nds'); open(bad, 'wb').write(bytes(data))
     e = Emu(bad, elf=elf)
     e.set_tutor(1)
-    assert e.state()['langMask'] & 2, 'Spanish is not even listed'
-    e.tap(86, 170); e.run(30)
-    assert e.state()['state'] == ST_OPTIONS
-    e.tap(130, 32 + 13 * 8 + 6); e.run(20)              # LANGUAGE, right half: the next language, Espanol
-    g = e.state()
-    assert g['language'] == 0, 'the damaged language was accepted (language %d)' % g['language']
-    e.shot(os.path.join(d, 'damaged_options.png'))
-    e.press('B', settle=30)
+    assert bool(e.state()['langMask'] & 2) == listed, 'startup availability did not match the damaged header'
+    if listed:
+        e.tap(86, 170); e.run(30)
+        assert e.state()['state'] == ST_OPTIONS
+        e.tap(130, 32 + 13 * 8 + 6); e.run(20)     # attempt the otherwise-listed Spanish pack
+        g = e.state()
+        assert g['language'] == 0, 'the damaged language was accepted (language %d)' % g['language']
+        assert e.mem.unsigned[symbol(e.rom_elf, 'loadFailed')], 'deep pack damage must report load failure'
+        e.shot(os.path.join(d, 'damaged_pools_refused.png'))
+        e.press('B', settle=30)
+    else:
+        e.tap(40, 15, settle=10)
+        assert e.state()['state'] == ST_LANGPICK
+        e.tap(60, 22 + 13 + 6, settle=10)          # disabled Spanish row
+        assert e.state()['state'] == ST_LANGPICK and e.state()['language'] == 0, 'a damaged-header row must not be selectable'
+        e.shot(os.path.join(d, 'damaged_dictionary_disabled.png'))
+        e.press('DOWN', settle=3); e.press('A', settle=30)
+        assert e.state()['state'] == ST_TITLE and e.state()['language'] == 2, 'picker navigation must skip the damaged pack'
+        e.set_language(0)
     e.start_classic(); e.run(20)
     g = e.state()
     assert g['state'] == ST_PLAY and g['passLen'] >= 4, 'English is not playable after the failed load'
@@ -139,14 +151,16 @@ def main():
     dl = patch_dldi(rom, os.path.join(d, 'wordPass.nds'))
     fails = 0
     for tag in SITUATIONS:
-        r = subprocess.run([sys.executable, '-I', os.path.abspath(__file__), '--case', tag, dl, elf, d], capture_output=True, text=True,
+        # A fresh process isolates DeSmuME's global state. Python's -I would
+        # also hide user-site wheels installed by CI, including py-desmume.
+        r = subprocess.run([sys.executable, os.path.abspath(__file__), '--case', tag, dl, elf, d], capture_output=True, text=True,
                            env=dict(os.environ, PYTHONPATH=HERE))
-        if 'CASE OK' in r.stdout: print('PASS fat card: save, power off, reboot, load (%s)' % tag)
+        if r.returncode == 0 and 'CASE OK' in r.stdout: print('PASS fat card: save, power off, reboot, load (%s)' % tag)
         else:
             fails += 1; print('FAIL fat card: save, power off, reboot, load (%s) -' % tag, (r.stderr.strip().splitlines() or ['?'])[-1])
     for kind in DAMAGE:
-        r = subprocess.run([sys.executable, '-I', os.path.abspath(__file__), '--damaged', kind, rom, elf, d], capture_output=True, text=True)
-        if 'CASE OK' in r.stdout: print('PASS damaged language file stays English: %s' % kind)
+        r = subprocess.run([sys.executable, os.path.abspath(__file__), '--damaged', kind, rom, elf, d], capture_output=True, text=True)
+        if r.returncode == 0 and 'CASE OK' in r.stdout: print('PASS damaged language file stays English: %s' % kind)
         else:
             fails += 1; print('FAIL damaged language file stays English: %s -' % kind, (r.stderr.strip().splitlines() or ['?'])[-1])
     print('FAT OK' if not fails else 'FAT FAILED: %d failure(s)' % fails)

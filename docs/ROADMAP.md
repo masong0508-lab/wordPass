@@ -13,6 +13,12 @@ There is **no defensible numeric completion percentage**.
 - [x] English plus ten playable Latin-encoded translations (11 total)
 - [x] Native rules/data, ROM build and selected DeSmuME gameplay CI
 - [x] Missing/damaged language pack fallback and language picker recovery
+- [x] Bounded dictionary/hint optimization, single retail chain validation per
+      frame, linked-ROM memory budgets and mutually exclusive retail/preview packs
+- [x] Backup-preserving saves with failed-write/rename recovery regressions,
+      plus default CI FAT-card save/reboot and damaged-language scenarios
+- [x] Formatter-accurate localization checks and deterministic standard music
+      previews across scalar/NumPy hosts
 
 The core game is playable; remaining work is predominantly editorial,
 platform compatibility, balancing, broader tests and script expansion.
@@ -26,8 +32,10 @@ platform compatibility, balancing, broader tests and script expansion.
       review queue, not a replacement for proofreading.
 - [ ] Native DS/DS Lite/DSi and flashcart playthroughs; measure 60-FPS,
       loading latency, memory headroom and FAT-card save roundtrips.
-- [ ] Release CI: include the existing FAT-card emulator rig and the full
-      rules/layout/guide scenario suite, not only the shorter default smoke.
+- [ ] Release CI: run the full rules/layout/guide scenario suite for each
+      release candidate. Default CI now includes FAT-card scenarios, all-language
+      gameplay/layout smoke and selected input/music/frame-cadence regressions;
+      the complete long suite remains available on tags and manual runs.
 - [ ] Investigate and retest the Lockdown difficulty spike at shelves 14–15
       with before/after balance bots; preserve intended challenge.
 - [ ] Continue dictionary and theme-content editorial fixes, especially
@@ -100,7 +108,8 @@ as available in the in-game language picker.
       passwords. Includes fail-atomic and real emulator input tests.
 - [ ] Expand every draft theme beyond four starter passwords, edit native
       vocabulary and balance word lengths/weighted tiles. The seeded helper
-      and limited rescue guarantee a way back, not an abundant dictionary.
+      and limited rescue offer bounded help when a safe path exists; they do
+      not replace an abundant dictionary.
 - [ ] Bring Cyrillic modes to full retail Classic/Daily parity: lockdown,
       twists, complete hints economy, scored Daily/streaks, full statistics,
       saves, remaining fail conditions and measured difficulty balance.

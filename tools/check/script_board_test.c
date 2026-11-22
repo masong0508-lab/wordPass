@@ -20,6 +20,50 @@ static uint8_t *readFile(const char *name, size_t *size)
     if (fread(p, 1, (size_t)n, f) != (size_t)n) { free(p); fclose(f); return NULL; }
     fclose(f); *size = (size_t)n; return p;
 }
+static void hintTargetRegression(void)
+{
+    // Valid two-symbol dictionary: BBBBBB is playable, while AAAAAAAAAA...
+    // exists only at length 20. A dense A board must not spend the six-letter
+    // search budget on paths that can only complete as a twenty-letter word.
+    uint8_t image[104] = {0};
+    memcpy(image, "WPD4", 4);
+    image[4] = 1; image[6] = 2; image[7] = 1;
+    image[8] = WPD4_MIN_WORD; image[9] = WPD4_MAX_WORD;
+    image[12] = sizeof image;
+    image[20] = 'A'; image[24] = 'B';
+    image[28 + 4 * (6 - WPD4_MIN_WORD)] = 1;
+    image[28 + 4 * (20 - WPD4_MIN_WORD)] = 1;
+    image[100] = 0xfc; // six one-bit B IDs, zero padding/tier
+    uint32_t checksum = 2166136261u;
+    for (size_t i = 20; i < sizeof image; i++) checksum = (checksum ^ image[i]) * 16777619u;
+    for (int i = 0; i < 4; i++) image[16 + i] = (uint8_t)(checksum >> (8 * i));
+    V4Dict d;
+    CHECK(v4DictOpen(&d, image, sizeof image), "hint decoy dictionary validates");
+    V4Tiles t = {0};
+    t.valid = true; t.symbols = 2;
+    t.alphabet[0] = 'A'; t.alphabet[1] = 'B';
+    t.weight[0] = t.weight[1] = 50;
+    t.value[0] = t.value[1] = 1;
+    ScriptBoard b = {0};
+    for (int c = 0; c < SCRIPT_COLS; c++)
+        for (int r = 0; r < SCRIPT_ROWS; r++) b.state[c][r] = SCRIPT_TILE;
+    for (int r = 0; r < 6; r++) b.tile[SCRIPT_COLS - 1][r] = 1;
+    ScriptBoard before = b;
+    uint8_t cols[SCRIPT_HINT_MAX], rows[SCRIPT_HINT_MAX];
+    int length = scriptBoardHint(&b, &d, &t, cols, rows);
+    CHECK(length == 6, "hint reaches final-column word despite long-word decoys");
+    CHECK(!memcmp(&b, &before, sizeof b), "hint search never mutates the board");
+    if (length == 6) {
+        for (int i = 0; i < length; i++)
+            CHECK(scriptBoardAdd(&b, cols[i], rows[i]), "hint path is adjacent and nonrepeating");
+        CHECK(scriptBoardPreview(&b, &d, &t, NULL) > 0, "targeted hint scores a real word");
+    }
+    b = before;
+    b.state[SCRIPT_COLS - 1][2] = SCRIPT_HOLE;
+    before = b;
+    CHECK(!scriptBoardHint(&b, &d, &t, cols, rows) && !memcmp(&b, &before, sizeof b),
+          "no hint for a broken target path despite many irrelevant prefixes");
+}
 static void test(const char *dictFile, const char *tileFile, bool uk)
 {
     size_t nd=0, nt=0;
@@ -96,6 +140,7 @@ static void test(const char *dictFile, const char *tileFile, bool uk)
 int main(int argc,char **argv)
 {
     if(argc!=5) { fprintf(stderr,"usage: %s ru.wpd4 uk.wpd4 ru.wpl2 uk.wpl2\n",argv[0]);return 2; }
+    hintTargetRegression();
     test(argv[1],argv[3],false);
     test(argv[2],argv[4],true);
     printf(failures?"SCRIPT BOARD FAILED: %d failures\n":"SCRIPT BOARD OK: 33-letter hex chains, preview, submit, deterministic refill\n",failures);

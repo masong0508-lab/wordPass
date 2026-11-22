@@ -33,6 +33,81 @@ static void fixChecksum(uint8_t *p, size_t n)
     for (size_t i = 20; i < n; i++) h = (h ^ p[i]) * 16777619u;
     for (int i = 0; i < 4; i++) p[16 + i] = (uint8_t)(h >> (i * 8));
 }
+static void writeLE32(uint8_t *p, uint32_t value)
+{
+    for (int i = 0; i < 4; i++) p[i] = (uint8_t)(value >> (i * 8));
+}
+// An independent bit-at-a-time encoder checks every supported bit width and
+// word length, including byte crossings and the last 20-symbol key window.
+static void referencePack(uint8_t *out, const uint8_t *ids, int length,
+                          unsigned bits, int tier)
+{
+    unsigned stride = ((unsigned)length * bits + 8u) / 8u;
+    memset(out, 0, stride);
+    for (unsigned at = 0; at < (unsigned)length * bits; at++) {
+        unsigned bit = (ids[at / bits] >> (bits - 1u - at % bits)) & 1u;
+        out[at / 8u] |= (uint8_t)(bit << (7u - at % 8u));
+    }
+    out[stride - 1u] |= (uint8_t)tier;
+}
+static void testPackedWidths(void)
+{
+    for (unsigned bits = 1; bits <= 6; bits++) {
+        unsigned symbols = 1u << bits;
+        for (int length = WPD4_MIN_WORD; length <= WPD4_MAX_WORD; length++) {
+            uint8_t image[512] = {0}, ids[4][WPD4_MAX_WORD] = {{0}};
+            unsigned counts = 20u + 4u * symbols, start = counts + 18u * 4u;
+            unsigned stride = ((unsigned)length * bits + 8u) / 8u;
+            size_t bytes = start + 4u * stride;
+            memcpy(image, "WPD4", 4);
+            image[4] = 1; image[6] = (uint8_t)symbols; image[7] = (uint8_t)bits;
+            image[8] = WPD4_MIN_WORD; image[9] = WPD4_MAX_WORD;
+            writeLE32(image + 12, (uint32_t)bytes);
+            for (unsigned i = 0; i < symbols; i++) writeLE32(image + 20 + i * 4u, 0x21u + i);
+            writeLE32(image + counts + (unsigned)(length - WPD4_MIN_WORD) * 4u, 4);
+            ids[1][length - 1] = (uint8_t)(symbols - 1u);
+            ids[2][0] = (uint8_t)(symbols - 1u);
+            memset(ids[3], (int)symbols - 1, (size_t)length);
+            for (int word = 0; word < 4; word++)
+                referencePack(image + start + (unsigned)word * stride,
+                              ids[word], length, bits, word & 1);
+            fixChecksum(image, bytes);
+            V4Dict d;
+            bool opened = v4DictOpen(&d, image, bytes);
+            CHECK(opened, "reference dictionary bits=%u length=%d", bits, length);
+            if (!opened) continue;
+            for (int word = 0; word < 4; word++) {
+                CHECK(v4DictLookupIds(&d, ids[word], length) == 1 + (word & 1),
+                      "packed lookup bits=%u length=%d word=%d", bits, length, word);
+                for (int prefix = 1; prefix <= length; prefix++) {
+                    CHECK(v4DictHasPrefixIds(&d, ids[word], prefix) &&
+                          v4DictHasPrefixLengthIds(&d, ids[word], prefix, length),
+                          "prefix bits=%u length=%d word=%d prefix=%d", bits, length, word, prefix);
+                }
+            }
+            uint8_t missing[WPD4_MAX_WORD] = {0};
+            missing[1] = (uint8_t)(symbols - 1u);
+            CHECK(!v4DictLookupIds(&d, missing, length) &&
+                  !v4DictHasPrefixIds(&d, missing, 2) &&
+                  !v4DictHasPrefixLengthIds(&d, missing, 2, length),
+                  "absent prefix bits=%u length=%d", bits, length);
+            int otherLength = length == WPD4_MAX_WORD ? length - 1 : length + 1;
+            CHECK(!v4DictHasPrefixLengthIds(&d, ids[0], 1, otherLength),
+                  "prefix excludes other length table bits=%u length=%d", bits, length);
+            CHECK(!v4DictHasPrefixLengthIds(&d, ids[0], length + 1, length) &&
+                  !v4DictHasPrefixLengthIds(&d, ids[0], 0, length) &&
+                  !v4DictHasPrefixLengthIds(&d, ids[0], 1, 2) &&
+                  !v4DictHasPrefixLengthIds(&d, ids[0], 1, WPD4_MAX_WORD + 1) &&
+                  !v4DictHasPrefixLengthIds(&d, NULL, 1, length) &&
+                  !v4DictHasPrefixLengthIds(NULL, ids[0], 1, length),
+                  "bounded prefix rejects invalid lengths/pointers");
+            missing[0] = (uint8_t)symbols;
+            CHECK(!v4DictLookupIds(&d, missing, length) &&
+                  !v4DictHasPrefixLengthIds(&d, missing, 1, length),
+                  "bounded packing rejects ID past alphabet");
+        }
+    }
+}
 static void testRechecks(const uint8_t *p, size_t n, const V4Dict *dict)
 {
     uint8_t *badData = malloc(n);
@@ -170,8 +245,9 @@ static void exercise(const char *file, bool uk)
 int main(int argc, char **argv)
 {
     if (argc != 3) { fprintf(stderr, "usage: %s build/wpd4_ru.bin build/wpd4_uk.bin\n", argv[0]); return 2; }
+    testPackedWidths();
     exercise(argv[1], false);
     exercise(argv[2], true);
-    printf(fails ? "WPD4 NATIVE FAILED: %d failures\n" : "WPD4 NATIVE OK: Cyrillic words, strict records, checksum, corruption and truncation\n", fails);
+    printf(fails ? "WPD4 NATIVE FAILED: %d failures\n" : "WPD4 NATIVE OK: 1..6-bit packing, bounded prefixes, Cyrillic words and strict records\n", fails);
     return fails ? 1 : 0;
 }

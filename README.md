@@ -177,10 +177,14 @@ stylus.
 
 Settings, records, the Daily state and the ledger are saved to `wordPass.cfg`
 on the card when a FAT filesystem is available (flashcarts with DLDI, DSi SD).
-The file is written to a temporary name and renamed over the old one, carries a
-checksum (a damaged file falls back to the defaults) and still reads the older
-28-byte format. Without a card they last for the session and the options screen
-says so; if a write fails it says SAVE FAILED.
+The file carries a checksum and still reads the older 28-byte format. A new
+image is completed in `wordPass.cfg.tmp` before replacing the primary; on
+cards that refuse replacing a name directly, the previous primary is kept in
+`wordPass.cfg.bak` until promotion succeeds. Startup tries the primary, then
+a valid temporary image, then the backup, falling back to defaults only when
+none is usable. A recovered temporary image is protected before another save
+can overwrite it. Without a card settings last for the session and the options
+screen says so; if a write fails it says SAVE FAILED.
 
 ### Languages
 

@@ -60,7 +60,7 @@ def slot_errors(s):
     return problems
 
 
-def sample_errors(sample, known_ids):
+def sample_errors(sample, known_ids, fmt=None):
     """Samples must match the eight-slot native test and resolve their references."""
     if sample == "-":
         return []
@@ -75,6 +75,18 @@ def sample_errors(sample, known_ids):
             problems.append(f"sample {token!r} exceeds the native test's 15-character slot")
         if token.startswith("@") and token[1:] not in known_ids:
             problems.append(f"unknown referenced UI text {token!r}")
+    if fmt is not None:
+        kinds = slots(fmt)
+        if len(tokens) > len(kinds):
+            problems.append(f"{len(tokens)} samples for {len(kinds)} format arguments")
+        for pos, kind in kinds.items():
+            if kind != "d" or pos > len(tokens):
+                continue
+            token = tokens[pos - 1]
+            if not re.fullmatch(r"[+-]?[0-9]+", token):
+                problems.append(f"argument {pos} needs an integer sample, got {token!r}")
+            elif not -(1 << 31) <= int(token) < (1 << 31):
+                problems.append(f"argument {pos} sample {token!r} exceeds signed 32-bit range")
     return problems
 
 
@@ -103,12 +115,16 @@ def expand(s, samp, lang=0, rows=None):
                 t = CODE.sub('', rows[t[1:]][lang])
         else:
             t = "99" if m.group(3) == "d" else "WWWW"
-        # Match the runtime formatter's integer field width. Without this,
-        # a future %08d might fit its sample yet overflow the rendered slot.
-        count = int(m.group(2)) if m.group(2) else 0
-        if count > len(t):
-            pad = "0" if m.group(2).startswith("0") and m.group(3) == "d" else " "
-            t = pad * (count - len(t)) + t
+        # Match uiFmtV: only integers honor field width; sign precedes zero
+        # padding. Normalize the sample as an int so +01 is drawn as 1.
+        if m.group(3) == "d":
+            t = str(int(t))
+            count = int(m.group(2)) if m.group(2) else 0
+            if count > len(t):
+                if m.group(2).startswith("0"):
+                    t = t.zfill(count)
+                else:
+                    t = t.rjust(count)
         return t
     return SLOT.sub(rep, s)
 
@@ -172,7 +188,8 @@ def validate(rows):
     bad, seen = example_words(rows), set()
     byid = {r[1]: r[5] for r in rows}
     for ln, id_, scale, budget, samp, txt in rows:
-        for problem in sample_errors(samp, byid):
+        sample_bad = sample_errors(samp, byid, txt[0])
+        for problem in sample_bad:
             bad.append(f"{id_} sample: {problem}")
         # Unsupported printf-like syntax may otherwise be mistaken for text.
         # Literal percentages (100%, % PER) stay allowed.
@@ -196,6 +213,11 @@ def validate(rows):
                     break
             if slots(s) != base:
                 bad.append(f"{id_} {lang}: slots differ from English in {s!r}")
+                continue
+            # Bad or unresolved samples are already reported; do not crash
+            # with ValueError/KeyError while trying to measure them.
+            if sample_bad:
+                continue
             w = width(expand(s, samp, LANGS.index(lang), byid), scale)
             if w > budget:
                 bad.append(f"{id_} {lang}: {w}px > {budget}px: {s!r}")

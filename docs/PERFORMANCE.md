@@ -1,7 +1,78 @@
 # Performance and responsiveness
 
-wordPass runs at 60 fps in every state (`Emu.fps()` reads 120 in 120 emulated frames). This page records how long the
-game takes to answer an input, in frames, measured by `tools/emu/latency.py`, and what was done about it.
+Earlier DeSmuME measurements below recorded 120 game frames in 120 emulated frames during steady gameplay
+(the intended 60 Hz cadence). Language loading blocks separately. These are emulator observations, not a
+current blanket hardware guarantee. This page records input latency and the changes that reduce work or
+protect the DS memory budget.
+
+## November 21, 2026 performance and reliability pass
+
+### Less work during play
+
+The retail renderer now obtains a chain's validity and score from one `boardChainScore` call. The former
+`boardWordOk` call validated the same word a second time on every rendered frame with a valid chain.
+Tier, dialect, repeat and overtime rules still run inside the scoring path. This adds no cache, heap
+allocation or invalidation state.
+
+The experimental WPD4 dictionary packs each 1..6-bit symbol into a bounded two-byte window rather than
+looping over each bit. Its hint DFS now checks prefixes only in the exact word length it is seeking,
+skipping empty length tables. This also fixes a real missed hint: a dense board with prefixes that
+only reach a 20-letter dictionary word could exhaust the six-letter search budget before finding a
+valid six-letter chain in the final column. The regression verifies that the returned path scores
+and that searching leaves the board unchanged. Independent packing tests cover all six bit widths
+and all 18 supported word lengths, including byte boundaries and prefix masks.
+
+A host-only microbenchmark alternated four million present/absent six-symbol Russian lookups. Five
+alternating baseline/current runs with GCC `-O2` returned the same checksum in every run:
+
+| Lookup implementation | Median host time |
+| --- | ---: |
+| Baseline `a888b449` | 155.534 ms |
+| Bounded symbol packing | 104.570 ms |
+
+This isolated test used about 32.8% less elapsed time. It is not a DS FPS or end-to-end hint timing claim.
+Reproduce with `make check` to create `build/wpd4_ru.bin`, then:
+
+```sh
+gcc -std=gnu11 -O2 -I source tools/check/dict_v4_bench.c source/dict_v4.c -o build/lookup-new
+git show a888b449:source/dict_v4.c > build/dict-v4-before.c
+gcc -std=gnu11 -O2 -I source tools/check/dict_v4_bench.c build/dict-v4-before.c -o build/lookup-before
+build/lookup-before build/wpd4_ru.bin
+build/lookup-new build/wpd4_ru.bin
+```
+
+### Linked memory and active packs
+
+The baseline retail ELF left 1,831,700 bytes between `__end__` and `__eheap_end`. The largest shipped
+pack is Dutch: 1,749,435 payload bytes, leaving only 82,265 bytes before loader padding, allocator,
+filesystem and other runtime costs. This is a static upper bound, not measured free RAM.
+
+The pass removes the general `snprintf` dependency from save-path assembly and uses newlib's bounded
+integer formatter in the Cyrillic HUD. The build reports check that full floating printf helpers
+are absent. When entering the experimental board, the runtime releases the previous retail pack;
+it closes all preview images before restoring that pack on exit. The saved language preference is
+unchanged. Emulator pointer checks exercise the largest retail pack, both entry routes, title/options
+returns, language switches and failed loads.
+
+`tools/check/rom_budget.py` writes a separate JSON report for each linked ROM. CI requires at least
+64 KiB of linker heap span after the largest active pack and loader padding, checks ITCM/DTCM bounds,
+caps ROM size at 18 MiB, and rejects preview symbols in the retail build. The reserve still has to
+cover filesystem buffers and all other dynamic allocations; it does not certify runtime memory or
+hardware speed. The reports are retained with the build artifacts so future changes have an explicit
+budget. Measurements on physical DS/DS Lite/DSi hardware remain a release gate.
+
+### Faster, reproducible verification
+
+Emulator symbol lookup reads and caches the matching ELF's data/BSS symbols with local `nm`. It used
+to launch a toolchain container for each lookup. Replacement, modification or deletion of the ELF
+invalidates the cache; a pinned container remains a fallback when local binutils cannot read it.
+This speeds host test execution without changing the ROM.
+
+Standard soundtrack previews now use one canonical oscillator phase recurrence whether NumPy is
+installed or not. NumPy's former vectorized phase arithmetic could flip samples at square-wave duty
+boundaries and incorrectly report changes to all ten committed WAV files. Backend parity and all
+20 existing WAV/MIDI comparisons cover this; the game sequencer and tracked recordings are unchanged.
+The optional untracked HQ renderer retains its explicitly separate accelerated path.
 
 ## How it is measured
 

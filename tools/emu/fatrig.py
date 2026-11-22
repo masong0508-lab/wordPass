@@ -16,12 +16,14 @@ just dropping the object and booting a new FatEmu on the same image. The three w
 through FAT), 'norom' (argv, but the card does not hold the .nds: libfilesystem falls back to card reads and chdir()s
 to nitro:/), 'noargv' (the loader gave no argv at all; same fallback). tools/emu/test_fat.py is the suite on top.
 
-Needs py-desmume, the ELF of the ROM (for the static flags) and docker (arm-none-eabi-nm) like wp.py.
+Needs py-desmume and the ELF of the ROM (for the static flags). Symbol lookup
+uses cached local nm when available, with the same container fallback as wp.py.
 """
-import ctypes, os, struct, subprocess, sys
+import ctypes, os, struct, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import wp
 from wp import Emu, IMAGE
+from elf_symbols import symbols
 from desmume.emulator import DeSmuME
 import fatimg
 from fatimg import Fat16
@@ -96,26 +98,11 @@ def cfg_fields(b):
     return d
 
 
-def symbols(elf, names):
-    """Addresses of static variables, one docker call for all of them."""
-    elf = os.path.abspath(elf)
-    cmd = f'export PATH=$PATH:/opt/devkitpro/devkitARM/bin; arm-none-eabi-nm /work/{os.path.basename(elf)}'
-    out = subprocess.run(['docker', 'run', '--rm', '-v', f'{os.path.dirname(elf)}:/work', IMAGE, 'bash', '-c', cmd],
-                         capture_output=True, text=True).stdout.splitlines()
-    found = {}
-    for line in out:
-        p = line.split()
-        if len(p) == 3 and p[2] in names and p[1] in 'bBdD':
-            found[p[2]] = int(p[0], 16)
-    missing = [n for n in names if n not in found]
-    if missing: raise RuntimeError(f'symbols not found in {elf}: {missing}')
-    return found
-
-
 class FatEmu(Emu):
     def __init__(self, rom, elf, image, argv=True, dismiss=True, boot_limit=3000, left_hand=False):
         """argv=False clears the loader's argv before the first instruction runs (a loader that passes none)."""
         rom = os.path.abspath(rom)
+        self.rom_elf = os.path.abspath(elf)
         self.emu = DeSmuME()
         lib = self.lib = self.emu.lib
         ctypes.c_int.in_dll(lib, 'CFlash_Mode').value = 1            # File: a raw disk image, opened rb+

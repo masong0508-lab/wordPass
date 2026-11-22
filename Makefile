@@ -129,7 +129,7 @@ LANG_SRC  := tools/check/lang_test.c tools/check/stubs.c source/dict.c source/po
 check:
 	@mkdir -p $(BUILD)
 	gcc -std=gnu11 -Wall -Wextra -Wshadow -I tools/check/stub -I source -DCFG_PATH='"$(BUILD)/settings_test.cfg"' \
-	    tools/check/settings_test.c source/settings.c -Wl,--wrap=rename -o $(BUILD)/settings_check
+	    tools/check/settings_test.c source/settings.c -Wl,--wrap=rename,--wrap=fwrite,--wrap=remove -o $(BUILD)/settings_check
 	$(BUILD)/settings_check
 	gcc -std=gnu11 -Wall -Wextra -Wshadow -I tools/check/stub -I source $(LANG_SRC) -o $(BUILD)/lang_check
 	$(BUILD)/lang_check
@@ -156,6 +156,8 @@ check:
 	$(BUILD)/script_pass_check $(BUILD)/wpd4_ru.bin $(BUILD)/wpd4_uk.bin $(BUILD)/wpl2_ru.bin $(BUILD)/wpl2_uk.bin $(BUILD)/wpp2_ru.bin $(BUILD)/wpp2_uk.bin
 	gcc -std=gnu11 -O2 -Wall -Wextra -Wshadow -I source tools/check/script_fire_test.c source/script_rules.c source/script_board.c source/pools_v2.c source/tiles_v2.c source/dict_v4.c -o $(BUILD)/script_fire_check
 	$(BUILD)/script_fire_check $(BUILD)/wpd4_ru.bin $(BUILD)/wpd4_uk.bin $(BUILD)/wpl2_ru.bin $(BUILD)/wpl2_uk.bin $(BUILD)/wpp2_ru.bin $(BUILD)/wpp2_uk.bin
+	gcc -std=gnu11 -O2 -Wall -Wextra -Wshadow -DWP_CYR_PREVIEW -I source tools/check/script_preview_test.c source/script_preview.c source/script_rules.c source/script_board.c source/script_ledger.c source/script_daily.c source/pools_v2.c source/tiles_v2.c source/dict_v4.c -o $(BUILD)/script_preview_check
+	$(BUILD)/script_preview_check $(BUILD)/cyrpreview/ru/dict.bin $(BUILD)/cyrpreview/uk/dict.bin $(BUILD)/cyrpreview/ru/tiles.bin $(BUILD)/cyrpreview/uk/tiles.bin $(BUILD)/cyrpreview/ru/pools.bin $(BUILD)/cyrpreview/uk/pools.bin
 	gcc -std=gnu11 -O2 -Wall -Wextra -Wshadow -I source tools/check/script_ledger_test.c source/script_ledger.c -o $(BUILD)/script_ledger_check
 	$(BUILD)/script_ledger_check
 	gcc -std=gnu11 -O2 -Wall -Wextra -Wshadow -I source tools/check/script_daily_test.c source/script_daily.c -o $(BUILD)/script_daily_check
@@ -167,6 +169,9 @@ check:
 	python3 tools/music/build_songs.py --check || (echo 'source/songs.c is not what tools/music/songs_src.py generates: run make songs'; exit 1)
 	python3 tools/music/render.py --stats > /dev/null
 	python3 tools/check/save_sites.py
+	python3 tools/check/elf_symbols_test.py
+	python3 tools/check/rom_budget_test.py
+	python3 tools/check/music_render_test.py
 	python3 tools/lang/gen_ui.py --check || (echo 'source/ui_strings.[ch] are not what tools/lang/gen_ui.py generates from ui_strings.tsv: run python3 tools/lang/gen_ui.py'; exit 1)
 	python3 tools/check/ui_slot_sanity.py
 	python3 tools/lang/check_translation_quality.py

@@ -479,7 +479,7 @@ static bool hintWalk(HintSearch *h, int col, int row, int depth)
     int n = depth + 1;
     if (n == h->target) {
         if (v4DictLookupIds(h->dict, h->ids, n) != 0) return true;
-    } else if (n < 2 || v4DictHasPrefixIds(h->dict, h->ids, n)) {
+    } else if (v4DictHasPrefixLengthIds(h->dict, h->ids, n, h->target)) {
         int nc[6] = {col, col, col - 1, col - 1, col + 1, col + 1};
         int nr[6] = {row + 1, row - 1, row, row + ((col & 1) ? 1 : -1),
                      row, row + ((col & 1) ? 1 : -1)};
@@ -496,6 +496,7 @@ int scriptBoardHint(const ScriptBoard *b, const V4Dict *dict,
 {
     if (!b || !sameAlphabet(dict, tiles) || !outC || !outR) return 0;
     for (int length = SCRIPT_HINT_MAX; length >= WPD4_MIN_WORD; length--) {
+        if (!dict->count[length]) continue;
         HintSearch search;
         memset(&search, 0, sizeof search);
         search.b = b; search.dict = dict; search.tiles = tiles;

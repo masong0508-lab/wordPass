@@ -4,6 +4,7 @@
 // stands in for the active language.
 #include "game.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
 
@@ -72,8 +73,8 @@ static void expand(const char *f, const char *samp, char *out, int lang)
         const char *p = f + 1;
         int pos = 0;
         if (p[0] >= '1' && p[0] <= '9' && p[1] == '$') { pos = p[0] - '0'; p += 2; }
-        if (*p == '0') p++;
-        while (*p >= '0' && *p <= '9') p++;
+        int zero = *p == '0', width = 0;
+        while (*p >= '0' && *p <= '9') width = width * 10 + (*p++ - '0');
         if (*p != 'd' && *p != 's') { out[len++] = *f; continue; }
         if (!pos) pos = ++seq;
         const char *t = pos - 1 < nt ? toks[pos - 1] : (*p == 'd' ? "99" : "WWWW");
@@ -82,6 +83,11 @@ static void expand(const char *f, const char *samp, char *out, int lang)
             ref[0] = 0;
             for (int k = 0; k < UI_COUNT; k++) if (!strcmp(UI_IDNAME[k], toks[pos - 1] + 1)) { strcpy(ref, uiIn(k, lang)); break; }
             t = ref;
+        }
+        char number[16];
+        if (*p == 'd') {
+            snprintf(number, sizeof number, zero ? "%0*d" : "%*d", width, atoi(t));
+            t = number;
         }
         while (*t) out[len++] = *t++;
         f = p;
@@ -120,6 +126,27 @@ int main(void)
 
     // the formatter
     char o[64];
+    // Measure the same padded integers the game draws. The old test's
+    // sample expansion omitted padding, hiding narrow-slot overflows.
+    static const struct { const char *f, *sample, *expected; int value; } numeric[] = {
+        { "%03d", "-5", "-05", -5 },
+        { "%3d", "-5", " -5", -5 },
+        { "%08d", "7", "00000007", 7 },
+        { "%d", "+0005", "5", 5 },
+        { "%d", "-2147483648", "-2147483648", (-2147483647 - 1) },
+    };
+    for (unsigned i = 0; i < sizeof numeric / sizeof numeric[0]; i++) {
+        expand(numeric[i].f, numeric[i].sample, buf, 0);
+        fmt(o, sizeof o, numeric[i].f, numeric[i].value);
+        CHECK(!strcmp(buf, numeric[i].expected) && !strcmp(o, buf),
+              "sample/runtime integer formatting differs: %s -> %s / %s", numeric[i].f, buf, o);
+    }
+    expand("%5s", "A", buf, 0);
+    fmt(o, sizeof o, "%5s", "A");
+    CHECK(!strcmp(buf, "A") && !strcmp(o, buf), "string widths stay unpadded: %s / %s", buf, o);
+    expand("%2$03d/%1$s", "A|-5", buf, 0);
+    fmt(o, sizeof o, "%2$03d/%1$s", "A", -5);
+    CHECK(!strcmp(buf, "-05/A") && !strcmp(o, buf), "positional sample padding: %s / %s", buf, o);
     curLang = 0;
     uiFmt(o, sizeof o, UI_T_DAILYDATE, 11, 3);
     CHECK(!strcmp(o, "DAILY 1103"), "zero padded slots: %s", o);

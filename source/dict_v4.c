@@ -130,19 +130,30 @@ int v4DictSymbol(const V4Dict *view, uint32_t cp)
     }
     return -1;
 }
+// Each 1..6-bit symbol fits in a 16-bit window, even when it crosses a byte
+// boundary. Pack once per symbol instead of once per bit. With at most
+// 20 symbols the final window starts at byte 14, inside this 16-byte key.
+static bool packIds(const V4Dict *view, const uint8_t *ids, int count,
+                    uint8_t key[16])
+{
+    memset(key, 0, 16);
+    unsigned bit = 0;
+    for (int i = 0; i < count; i++, bit += view->bits) {
+        if (ids[i] >= view->symbols) return false;
+        unsigned at = bit >> 3;
+        unsigned pair = (unsigned)ids[i] << (16u - view->bits - (bit & 7u));
+        key[at] |= (uint8_t)(pair >> 8);
+        key[at + 1u] |= (uint8_t)pair;
+    }
+    return true;
+}
 int v4DictLookupIds(const V4Dict *view, const uint8_t *ids, int symbols)
 {
     if (!view || !view->image || !ids || symbols < WPD4_MIN_WORD ||
         symbols > WPD4_MAX_WORD || !view->count[symbols]) return 0;
     unsigned rec = width(symbols, view->bits);
-    uint8_t key[16] = {0};  // maximum ceil((20*6+1)/8) = 16 bytes
-    for (int i = 0; i < symbols; i++) {
-        if (ids[i] >= view->symbols) return 0;
-        for (int b = view->bits - 1; b >= 0; b--) {
-            unsigned at = (unsigned)i * view->bits + (unsigned)(view->bits - 1 - b);
-            key[at >> 3] |= (uint8_t)(((ids[i] >> b) & 1u) << (7u - (at & 7u)));
-        }
-    }
+    uint8_t key[16];  // maximum ceil((20*6+1)/8) = 16 bytes
+    if (!packIds(view, ids, symbols, key)) return 0;
     int lo = 0, hi = (int)view->count[symbols] - 1;
     while (lo <= hi) {
         int mid = lo + ((hi - lo) >> 1);
@@ -171,34 +182,41 @@ static int prefixCompare(const uint8_t *rec, const uint8_t *key,
     unsigned a = rec[whole] & mask, b = key[whole] & mask;
     return (a > b) - (a < b);
 }
+static bool prefixAtLength(const V4Dict *view, const uint8_t key[16],
+                           unsigned prefixBits, int length)
+{
+    int lo = 0, hi = (int)view->count[length] - 1;
+    unsigned stride = width(length, view->bits);
+    while (lo <= hi) {
+        int mid = lo + ((hi - lo) >> 1);
+        const uint8_t *word = view->base[length] + (size_t)mid * stride;
+        int cmp = prefixCompare(word, key, prefixBits);
+        if (!cmp) return true;
+        if (cmp < 0) lo = mid + 1;
+        else hi = mid - 1;
+    }
+    return false;
+}
+bool v4DictHasPrefixLengthIds(const V4Dict *view, const uint8_t *ids,
+                             int count, int wordLength)
+{
+    if (!view || !view->image || !ids || count <= 0 || count > wordLength ||
+        wordLength < WPD4_MIN_WORD || wordLength > WPD4_MAX_WORD ||
+        !view->count[wordLength]) return false;
+    uint8_t key[16];
+    if (!packIds(view, ids, count, key)) return false;
+    return prefixAtLength(view, key, (unsigned)count * view->bits, wordLength);
+}
 bool v4DictHasPrefixIds(const V4Dict *view, const uint8_t *ids, int count)
 {
     if (!view || !view->image || !ids || count <= 0 ||
         count > WPD4_MAX_WORD) return false;
-    uint8_t key[16] = {0};
-    for (int i = 0; i < count; i++) {
-        if (ids[i] >= view->symbols) return false;
-        for (int bit = view->bits - 1; bit >= 0; bit--) {
-            unsigned at = (unsigned)i * view->bits +
-                          (unsigned)(view->bits - 1 - bit);
-            key[at >> 3] |= (uint8_t)(((ids[i] >> bit) & 1u) <<
-                                     (7u - (at & 7u)));
-        }
-    }
+    uint8_t key[16];
+    if (!packIds(view, ids, count, key)) return false;
     unsigned prefixBits = (unsigned)count * view->bits;
     int firstLength = count > WPD4_MIN_WORD ? count : WPD4_MIN_WORD;
-    for (int length = firstLength; length <= WPD4_MAX_WORD; length++) {
-        int lo = 0, hi = (int)view->count[length] - 1;
-        unsigned stride = width(length, view->bits);
-        while (lo <= hi) {
-            int mid = lo + ((hi - lo) >> 1);
-            const uint8_t *word = view->base[length] + (size_t)mid * stride;
-            int cmp = prefixCompare(word, key, prefixBits);
-            if (!cmp) return true;
-            if (cmp < 0) lo = mid + 1;
-            else hi = mid - 1;
-        }
-    }
+    for (int length = firstLength; length <= WPD4_MAX_WORD; length++)
+        if (prefixAtLength(view, key, prefixBits, length)) return true;
     return false;
 }
 

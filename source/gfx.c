@@ -2235,7 +2235,7 @@ static void drawScriptPreviewBoard(void)
     drawText(px0 + 6, 10, "RU/UK DEMO", GOLD_LT, 1);
     char label[20];
     if (scriptPreviewDaily) strcpy(label, "ДЕНЬ");
-    else snprintf(label, sizeof label, scriptPreviewLanguage ? "ПОЛИЦЯ %d" : "ПОЛКА %d", scriptPreviewShelf);
+    else sniprintf(label, sizeof label, scriptPreviewLanguage ? "ПОЛИЦЯ %d" : "ПОЛКА %d", scriptPreviewShelf);
     drawText(px0 + 6, 20, label, ACCENT, 1);
     hline(px0 + 2, 33, 70, GOLD_DK);
     drawText(px0 + 7, 40, scriptPreviewLanguage ? "УКРАЇНСЬКА" : "РУССКИЙ", WHITE, 1);
@@ -2243,12 +2243,12 @@ static void drawScriptPreviewBoard(void)
     drawText(px0 + 4, 57, scriptPreviewLanguage ? "БАЛИ" : "СЧЁТ", DIM_TEXT, 1);
     fmtInt(n, scriptPreviewScore);
     drawText(px0 + 4, 67, n, GOLD_LT, 1);
-    snprintf(n, sizeof n, scriptPreviewLanguage ? "СПЕКА %d/%d" : "ЖАР %d/%d",
+    sniprintf(n, sizeof n, scriptPreviewLanguage ? "СПЕКА %d/%d" : "ЖАР %d/%d",
              scriptPreviewRules.heat, scriptPreviewRules.heatThreshold);
     drawText(px0 + 4, 81, n,
              scriptPreviewRules.heat >= scriptPreviewRules.heatThreshold - 2 ?
              FIRE2 : DIM_TEXT, 1);
-    snprintf(n, sizeof n, scriptPreviewLanguage ? "ХІД %u" : "ХОД %u", scriptPreviewRules.turns);
+    sniprintf(n, sizeof n, scriptPreviewLanguage ? "ХІД %u" : "ХОД %u", scriptPreviewRules.turns);
     drawText(px0 + 4, 94, n, WHITE, 1);
     hline(px0 + 2, 107, 70, GOLD_DK);
     // Give each action its own readable row instead of an English
@@ -2311,7 +2311,7 @@ static void drawScriptPreviewTop(void)
     if (scriptPreviewDaily) {
         char dateLabel[48];
         int ymd = scriptPreviewDailyDate;
-        snprintf(dateLabel, sizeof dateLabel, scriptPreviewLanguage ?
+        sniprintf(dateLabel, sizeof dateLabel, scriptPreviewLanguage ?
                  "УКРАЇНСЬКА %04d-%02d-%02d" : "РУССКИЙ %04d-%02d-%02d",
                  ymd / 10000, ymd / 100 % 100, ymd % 100);
         drawTextCenter(128, 31, dateLabel, DIM_TEXT, 1);
@@ -2348,7 +2348,7 @@ static void drawScriptPreviewTop(void)
         int points = scriptPreviewQuote(); // exactly what submit awards, including repeats and combo
         char pts[52]; // UTF-8 Cyrillic labels can use two bytes per glyph
         if (points) {
-            snprintf(pts, sizeof pts, "+%d %s", points,
+            sniprintf(pts, sizeof pts, "+%d %s", points,
                      scriptPreviewLanguage ? (tier == 1 ? "ЗВИЧАЙНЕ" : "РІДКІСНЕ")
                                            : (tier == 1 ? "ЧАСТОЕ" : "РЕДКОЕ"));
             drawTextCenter(128, 147, pts, GOLD_LT, 1);
@@ -2360,7 +2360,7 @@ static void drawScriptPreviewTop(void)
     // All character IDs and combo state remain fixed-size, not heap strings.
     if (scriptPreviewLedger.combo > 0) {
         char combo[48];
-        snprintf(combo, sizeof combo, scriptPreviewLedger.lastRepeat ?
+        sniprintf(combo, sizeof combo, scriptPreviewLedger.lastRepeat ?
                  (scriptPreviewLanguage ? "СЕРІЯ %u / ПОВТОР" : "СЕРИЯ %u / ПОВТОР") :
                  (scriptPreviewLanguage ? "СЕРІЯ %u" : "СЕРИЯ %u"),
                  (unsigned)scriptPreviewLedger.combo);
@@ -2369,9 +2369,9 @@ static void drawScriptPreviewTop(void)
     if (scriptPreviewRules.status == SCRIPT_PASSED) {
         char msg[96];
         if (scriptPreviewDaily)
-            snprintf(msg, sizeof msg, scriptPreviewLanguage ?
+            sniprintf(msg, sizeof msg, scriptPreviewLanguage ?
                      "ДЕНЬ ЗАВЕРШЕНО +%d" : "ДЕНЬ ЗАВЕРШЁН +%d", scriptPreviewRules.lastBonus);
-        else snprintf(msg, sizeof msg, scriptPreviewLanguage ?
+        else sniprintf(msg, sizeof msg, scriptPreviewLanguage ?
                       "ПОЛИЦЮ ВРЯТОВАНО +%d - A: ДАЛІ" :
                       "ПОЛКА СПАСЕНА +%d - A: ДАЛЬШЕ", scriptPreviewRules.lastBonus);
         drawTextCenter(128, 169, msg, GOLD_LT, 1);
@@ -3333,8 +3333,11 @@ void gfxFrame(const Game *g)
     dangerSetup(g);
     chainMask = 0;
     for (int i = 0; i < g->chainLen; i++) chainMask |= (u64)1 << (g->chainC[i] * ROWS + g->chainR[i]);
-    chainValidNow = g->chainLen >= 3 && boardWordOk(chainWordNow, strlen(chainWordNow));
-    chainScoreNow = chainValidNow ? boardChainScore(g) : 0;
+    // Scoring already validates the dictionary, tier and spelling. A valid
+    // chain has positive tile values (and a minimum of one point in overtime),
+    // so the HUD needs one validation, not a second lookup before scoring.
+    chainScoreNow = g->chainLen >= 3 ? boardChainScore(g) : 0;
+    chainValidNow = chainScoreNow > 0;
     // per-letter pop timers for the pass plaque
     for (int i = 0; i < g->passLen; i++) {
         if (g->found[i] && !prevFound[i]) letterPop[i] = 24;
