@@ -32,7 +32,9 @@ def main(rom, output):
     e.shot(str(out / "russian-ukrainian-chooser.png"))
     # Preview-only rows 11 and 12: y=23+11*12+6 and 23+12*12+6.
     e.tap(80, 161, settle=24)
-    check(e.state()["state"] == 9, "Русский DEMO option failed to enter DS preview")
+    check(e.state()["state"] == 9,
+          f"Русский DEMO launch failed: state={e.state()['state']}, "
+          f"resource-stage={get_int(e, 'scriptPreviewOpenError')}")
     check(get_int(e, "scriptPreviewLanguage") == 0, "Russian menu entry selected wrong board")
     check(get_int(e, "scriptPreviewThemeCount") == 40, "Russian preview should contain 40 seeded themes")
     check(get_int(e, "scriptPreviewShelf") == 1, "Cyrillic first shelf should start at 1")
