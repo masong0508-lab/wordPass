@@ -81,6 +81,58 @@ Real source-derived imports do not alter the current playable 11-language
 ROM, do not automatically enter the Cyrillic engineering preview build and
 do not replace native-speaker approval, 60 FPS profiling or DS RAM tests.
 
+## Expand Russian or Ukrainian themed password pools safely
+
+The normal demo still has **four original passwords per theme**. An optional
+licensed-source import can now accept extra **unreviewed** candidate passwords
+for specific themes rather than remaining capped at four forever. This is
+thematic editorial input, not automatic synonym generation or language
+certification. Create a **separate JSON file per language**, identifying
+categories by the original English theme key (never by translating the key):
+
+```json
+{
+  "language": "uk",
+  "review_status": "unreviewed-candidates",
+  "themes": {
+    "BINDERY": ["REPLACE_WITH_REAL_REVIEWED_UKRAINIAN_WORD"],
+    "MUSIC": ["REPLACE_WITH_ANOTHER_REVIEWED_UKRAINIAN_WORD"]
+  }
+}
+```
+
+The uppercase English placeholders are illustrative, **not playable words**.
+Replace them with actual NFC-uppercase Russian or Ukrainian spelling (4–9
+alphabet letters) that is **already present in your licensed Hunspell
+dictionary**, and choose the appropriate target language explicitly. An
+apostrophe-dependent Ukrainian spelling is still not supported by the
+33-tile game, and is **not** silently stripped or substituted.
+
+Supply `--extra-themes /path/to/ru-extras.json` or
+`--extra-themes /path/to/uk-extras.json` to the corresponding importer.
+Only categories from the canonical 40-theme index are accepted; an expansion
+may cover just one category at a time. The parser rejects unknown categories,
+duplicate/reused starter passwords, wrong alphabets, mixed languages, words
+missing from the sourced dictionary, malformed case/Unicode, and more than
+64 extras in one theme. Every original starter remains mandatory even when
+`--max-words` is used; a dictionary budget below the count of required
+passwords is rejected rather than deleting themed content.
+
+The output still has the regular `dict.bin`, `tiles.bin`, `pools.bin`,
+`LICENSE-SOURCE.txt` and `SOURCE-MANIFEST.json`. For an expanded pack, it
+also contains `THEME-EXTRAS.json` with the exact supplied bytes.
+`SOURCE-MANIFEST.json` separately records the original 160 starters, the
+additional count, the total candidate count, the expansion file SHA-256 and
+its **unreviewed** status. The opt-in installer verifies that the counts
+match the WPP2 binary, the thematic source file hash is unchanged, and
+**both** language packs pass validation before publishing either. Older
+160-word imports without an expansion remain supported.
+
+This feature provides the **content pipeline**, not approved new vocabulary.
+It ships **no newly invented candidate words** in the standard preview.
+Native-speaker editing, word frequency, licensing and hardware testing are
+still required before any promoted full Russian/Ukrainian release.
+
 ## Using attributable source packs in a DS preview
 
 The installer `tools/lang/install_cyr_preview.py` provides an explicit
