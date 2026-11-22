@@ -301,9 +301,9 @@ is **Lockdown**: a heat pulse every six turns, a peel adds 2 heat (it eases in:
 shelf 6 holds one meter step more, 8, and overtime starts later on shelves 6 to 9), the pass
 buried low, and the music turns to one of the dark songs. Lockdown climbs in tiers
 every three shelves (the panel reads LOCKDOWN, LOCKDOWN II, III, IV): the
-pulse comes faster. From shelf 11 **twin ignitions** begin: one ignition in
-eight lights two columns at once, one more in eight every two shelves, every
-ignition from shelf 25. New flames go to a column that has no flame, so flames
+pulse comes faster (the tier-IV jump is deliberately staggered: shelf 15 holds steady, 16 raises twin-fire, 17 tightens the pulse, and 18 raises twin-fire again). From shelf 11 **twin ignitions** begin: one ignition in
+eight lights two columns at once, normally one more in eight every two shelves; the tier-IV entrance holds twins at 2/8 on shelf 15 and 3/8 on 17 so it never tightens pulse and twins together. Every
+ignition is twin from shelf 25. New flames go to a column that has no flame, so flames
 do not stack up on a diamond. The ladder was tuned with the balance bot (see
 `docs/BALANCE.md`) so a competent player's clear rate falls steadily with the
 shelf instead of in cliffs.
