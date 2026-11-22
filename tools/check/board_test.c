@@ -1944,7 +1944,7 @@ int main(int argc, char **argv)
               strstr(all[3], "PASSWORD IS HIDDEN UNDER THE GEMS") && strstr(all[3], "GEM LETTERS DO NOT TELL WHAT IS BELOW") &&
               strstr(all[3], "FIND ITS LETTERS IN ANY ORDER") && strstr(all[3], "TOP SLOTS FILL UP AUTOMATICALLY") && strstr(all[3], "NO TYPING NEEDED"));
         CHECK("guide connects words to fixed neighbor clues and safe inspection", strstr(all[3], "THE WORD'S LAST GEM LEAVES A CLUE") &&
-              strstr(all[3], "HOLD L OR R TO READ THE CLUES") && strstr(all[3], "PASS LETTERS IN 6 NEIGHBOURS") &&
+              strstr(all[3], "HOLD L/R + SELECT: FIND A CLUE.") && strstr(all[3], "PASS LETTERS IN 6 NEIGHBOURS") &&
               strstr(all[3], "COUNT FOUND DIAMONDS TOO") && strstr(all[3], "A CLUED GEM CAN STILL HIDE A LETTER"));
         CHECK("password letters and shelf completion retain their rewards",
               boardPassLetterReward(3) == 300 && boardShelfBonus(3) == 3000 && boardSpeedBonus(2, 30) == 500 && boardSpeedBonus(2, 50) == 0);
