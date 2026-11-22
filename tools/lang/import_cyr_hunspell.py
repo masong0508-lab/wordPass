@@ -201,7 +201,15 @@ def build(code, dic, aff, notice, origin, out,
     if sample_words:
         if rank or max_words:
             raise ValueError("--sample-words is separate from frequency ranking or --max-words")
-        words = sample_sourced_forms(code, words, required, sample_words)
+        # Native board/score regressions exercise a genuine short word in
+        # EACH language outside the themed-password subset. Preserve these
+        # only when the pinned *actual* Hunspell source contains the spelling.
+        # Never inject invented or unsupported vocabulary into a source pack.
+        smoke_words = {"ru": {"ЁЖИК"}, "uk": {"ЇЖАК"}}[code]
+        if not smoke_words <= words:
+            raise ValueError(f"{code}: source does not attest required board "
+                             f"playthrough words {sorted(smoke_words - words)}")
+        words = sample_sourced_forms(code, words, required | smoke_words, sample_words)
     ranked = rank_words(rank, index)
     if max_words and len(words) > max_words:
         if not ranked:
