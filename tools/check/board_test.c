@@ -164,6 +164,40 @@ static void cohesionSearchTests(void)
     dictInit();
 }
 
+static void clueInferenceTests(void)
+{
+    boardOf('x'); plantWord();
+    int nc[6], nr[6], n = boardNeighbors(2, 3, nc, nr);
+    for (int i = 0; i < n; i++) set(nc[i], nr[i], CELL_HOLE, 0);
+    set(1, 2, CELL_SECRET, 'b'); g.found[0] = 1;
+    set(2, 2, CELL_TILE, 'a'); set(2, 4, CELL_TILE, 't');
+    int remaining = -1, covered = -1;
+    CHECK("an unsurveyed gem has no deduction", boardClueInference(&g, 2, 3, &remaining, &covered) == CLUE_NO_DATA);
+    CHECK("invalid clue coordinates are rejected safely", boardClueInference(&g, -1, 3, &remaining, &covered) == CLUE_NO_DATA && remaining == 0 && covered == 0);
+
+    g.wordClue[2][3] = 2; // visible one; the neighboring revealed diamond already satisfies it
+    Game before = g;
+    CHECK("satisfied clue marks two remaining neighbors safe", boardClueInference(&g, 2, 3, &remaining, &covered) == CLUE_SAFE && remaining == 0 && covered == 2);
+    CHECK("deduction does not mutate the board", !memcmp(&g, &before, sizeof g));
+    g.wordClue[2][3] = 3; // two nearby, one found; one of two covered remains
+    CHECK("partly resolved clue makes no unsupported promise", boardClueInference(&g, 2, 3, &remaining, &covered) == CLUE_UNDECIDED && remaining == 1 && covered == 2);
+    g.wordClue[2][3] = 4; // three nearby, one found; both covered must be letters
+    CHECK("fully forced clue marks both covered neighbors as password letters", boardClueInference(&g, 2, 3, &remaining, &covered) == CLUE_PASS && remaining == 2 && covered == 2);
+    g.back[2][2] = 6; g.back[2][4] = 5; // deliberately contradict the visible clue
+    CHECK("covered back-layer secrets never influence word-clue deductions", boardClueInference(&g, 2, 3, &remaining, &covered) == CLUE_PASS && remaining == 2 && covered == 2);
+    set(2, 2, CELL_BURN, 'a');
+    CHECK("a burning covered neighbor still counts as unknown, not as a found letter", boardClueInference(&g, 2, 3, &remaining, &covered) == CLUE_PASS && remaining == 2 && covered == 2);
+    g.wordClue[2][3] = 8;
+    CHECK("a corrupt or impossible clue cannot create false certainty", boardClueInference(&g, 2, 3, &remaining, &covered) == CLUE_NO_DATA);
+
+    // An exposed hole publishes its own number; it must work without a word clue.
+    set(2, 3, CELL_HOLE, 0); g.wordClue[2][3] = 0;
+    g.back[1][2] = 1; g.back[2][2] = 0; g.back[2][4] = 2;
+    CHECK("an opened hole offers the same visible deduction rule", boardClueInference(&g, 2, 3, &remaining, &covered) == CLUE_UNDECIDED && remaining == 1 && covered == 2);
+    set(2, 2, CELL_HOLE, 0); set(2, 4, CELL_HOLE, 0); g.back[2][4] = 0;
+    CHECK("an already explored ring has no action to mark", boardClueInference(&g, 2, 3, &remaining, &covered) == CLUE_UNDECIDED && remaining == 0 && covered == 0);
+}
+
 static void wordClueTests(void)
 {
     boardOf('x'); plantWord();
@@ -845,6 +879,7 @@ int main(int argc, char **argv)
     S.library = LIB_FULL;
     prefixTests();
     cohesionSearchTests();
+    clueInferenceTests();
     wordClueTests();
 
     // ---- long words: the dictionary holds words up to 20 letters

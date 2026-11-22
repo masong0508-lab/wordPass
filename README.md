@@ -56,7 +56,15 @@ against the source and the data files by `tools/check_guide.py`, and every pictu
   a numbered badge beside the front letter, and the latest clue's neighbours
   are outlined automatically. The number counts adjacent password locations,
   including found diamonds, and never counts the centre itself. The clue stays
-  fixed when gems fall or refill. A covered clue can still hide a password
+  fixed when gems fall or refill. In PEEK, a small blue **-** on a covered
+  neighbor means the displayed clue is already satisfied, so that neighbor
+  does not hide a password letter; a gold **+** means all remaining covered
+  neighbors must hide password letters. These are logical deductions from
+  visible numbers, holes and found diamonds only, not automatic reveals.
+  The **NEARBY** display also shows *hidden candidates / covered neighbors*
+  when space allows (for example, **1/2** means one of two covered locations
+  still hides a password letter). Fire warnings stay red: a safe deduction can still be dangerous to peel.
+  A covered clue can still hide a password
   letter, even when its number is zero. Reusing an endpoint repeats its clue;
   ending a word elsewhere can add information.
 - **Peek.** Hold **L** or **R** (or press **X**, or tap the **PEEK** button, to

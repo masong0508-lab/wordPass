@@ -353,6 +353,10 @@ def main():
         empty = sum(visible[c][r][1] == HOLE for c, r in neighbors)
         assert empty == 5 and shown_count - known == len(covered) == 1, 'visible clue does not force exactly one covered neighbor'
         inferred = covered[0]
+        # A visibly forced password neighbor gets the gold '+' badge.
+        ix, iy, _, _ = e.cell_rect(*inferred)
+        marker = [pixels[ix + dx, iy + dy] for dx in range(3, 8) for dy in range(2, 9)]
+        assert any(r >= 215 and g >= 155 and 65 <= b <= 220 for r, g, b in marker), f'forced password neighbor lacks gold + badge: {marker}'
         assert resources() == before, 'inspecting the clue spent a resource'
         e.shot(str(args.output / f'clue_deduction_before_{e.bx}.png'))
         e.hold('L', False)
@@ -362,6 +366,28 @@ def main():
         assert sum(after['found']) == sum(before['found']) + 1, 'deduced reveal did not advance FOUND by exactly one'
         assert after['cell'][tail[0]][tail[1]][1] == TILE and not after['found'][3], 'neighbor deduction incorrectly uncovered the clue center'
         e.shot(str(args.output / f'clue_deduction_after_{e.bx}.png'))
+
+    def safe_clue():
+        # One displayed password neighbor is already a diamond, so a one
+        # clue makes every other covered neighbor safe from the password.
+        path = fixture(column=2, background=HOLE, keep_word=True)
+        e.set_back(1, 1, 1)          # cell 1,1 borders the word's tail (2,2)
+        e.set_cell(1, 1, SECRET, 'a')
+        e.set_pass(4, 1 << 0)
+        e.set_cell(2, 3, TILE, 'x')
+        after = submit(path)
+        tail = path[-1]
+        assert clues()[tail[0] * ROWS + tail[1]] == 2 and after['found'][0], 'safe-clue setup lacks the visible one and diamond'
+        stable = resources()
+        e.hold('L')
+        e.run(12)
+        pixels = e.pixels()
+        x, y, _, _ = e.cell_rect(2, 3)
+        marker = [pixels[x + dx, y + dy] for dx in range(3, 8) for dy in range(2, 9)]
+        assert any(b >= 165 and g >= 165 and b > r + 45 for r, g, b in marker), f'satisfied clue lacks blue - badge: {marker}'
+        assert resources() == stable and e.state()['cell'][2][3][1] == TILE, 'safe deduction spent a turn or auto-peeled a gem'
+        e.shot(str(args.output / f'clue_safe_{e.bx}.png'))
+        e.hold('L', False)
 
     def tutorial_retry():
         path = fixture(column=2, background=TILE, keep_word=True)
@@ -450,6 +476,7 @@ def main():
                  ('six-gem-only shelf survives and offers a hint', longer_word),
                  ('word earns a visible fixed clue and goal help is free', word_clue),
                  ('earned clue yields a reveal using only visible information', clue_deduction),
+                 ('satisfied clue visibly marks safe neighbors without peeling', safe_clue),
                  ('unfinished tutorial retry clears clues and teaches words again', tutorial_retry),
                  ('EEE refill rescues the board promptly after a tail tap', lambda: repetitive_refill('eee')),
                  ('OAE refill rescues the board promptly after a tail tap', lambda: repetitive_refill('oae')))

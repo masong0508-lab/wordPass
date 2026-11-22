@@ -1147,15 +1147,26 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
         }
         clipY0 = outerClip;
     }
-    // Outline exactly the six counted neighbors, never the clue's own square.
+    // Outline the inspected clue's six neighbors (not its center). Simple
+    // forced deductions get a tiny +/- badge on still-covered gems: blue '-'
+    // means the visible count is satisfied; gold '+' means every remaining
+    // neighbor must hide a password letter. Fire danger stays red and wins.
     int clueC, clueR;
     if (inspectedClue(g, &clueC, &clueR) >= 0) {
+        int remaining, covered;
+        int inference = boardClueInference(g, clueC, clueR, &remaining, &covered);
         int nc[6], nr[6], n = boardNeighbors(clueC, clueR, nc, nr);
         for (int i = 0; i < n; i++) {
             int x, y; cellOrigin(nc[i], nr[i], &x, &y);
-            bool risk = g->cell[nc[i]][nr[i]].state == CELL_BURN ||
+            int state = g->cell[nc[i]][nr[i]].state;
+            bool risk = state == CELL_BURN ||
                         (nr[i] > 0 && g->cell[nc[i]][nr[i] - 1].state == CELL_BURN);
-            rectOutline(x, y, TILE_W, TILE_H, risk ? FIRE1 : GOLD_LT);
+            u16 col = risk ? FIRE1 : state == CELL_TILE && inference == CLUE_SAFE ? C(9,28,30) : GOLD_LT;
+            rectOutline(x, y, TILE_W, TILE_H, col);
+            if (state == CELL_TILE && !risk && (inference == CLUE_SAFE || inference == CLUE_PASS)) {
+                fillRect(x + 2, y + 2, 7, 8, BLACK);
+                drawChar(x + 3, y + 2, inference == CLUE_SAFE ? '-' : '+', col, 1);
+            }
         }
     }
     // the d-pad cursor: a 2 px rim alternating white and accent, with a notch above it
@@ -1329,7 +1340,21 @@ static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
     if (peek && clue >= 0) { fmtInt(s, clue); panelRow(74, ui(UI_P_CLUE), s, ACCENT); }
     else if (w[0]) drawText(PANEL_X, 74, w, valid ? GOLD_LT : WHITE, 1);
     else if (!peek) { char hp[24]; uiFmt(hp, sizeof hp, UI_P_HOLDPEEK, S.hand == HAND_LEFT ? "R" : "L"); drawText(PANEL_X, 74, hp, DIM_TEXT, 1); }   // the shoulder under the idle hand
-    if (peek && clue >= 0) drawText(PANEL_X, 84, ui(UI_P_NEARBY), DIM_TEXT, 1);
+    if (peek && clue >= 0) {
+        // Show hidden-pass candidates / covered neighbors alongside the
+        // localized NEARBY label when they fit. This is derived from visible
+        // clues only, and is omitted for inconsistent/debug-poked clues.
+        const char *label = ui(UI_P_NEARBY);
+        drawText(PANEL_X, 84, label, DIM_TEXT, 1);
+        int left, covered;
+        boardClueInference(g, clueC, clueR, &left, &covered);
+        if (covered > 0 && left >= 0 && left <= covered) {
+            char frac[8]; siprintf(frac, "%d/%d", left, covered);
+            int px = PANEL_X + 76 - textWidth(frac, 1);
+            if (px >= PANEL_X + textWidth(label, 1) + 3)
+                drawText(px, 84, frac, left == 0 ? C(9,28,30) : left == covered ? GOLD_LT : WHITE, 1);
+        }
+    }
     else if (g->chainLen >= 3 && !peek) {
         if (valid) {   // what the word is worth, and its length multiplier
             s[0] = '+'; fmtInt(s + 1, chainScoreNow);
