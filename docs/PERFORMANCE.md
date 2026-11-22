@@ -373,3 +373,43 @@ cache while maintaining a full 120/120 emulated frame cadence.
 These are deterministic cache/cadence checks, not a real-hardware cycle or FPS
 benchmark. DS/DS Lite/DSi performance still needs physical measurements and
 comparison against a matching earlier ROM.
+
+
+## Cyrillic WPD4 hint search: narrowing per-prefix record spans
+
+Russian/Ukrainian word hints use a bounded 7x8 hex DFS (only on an explicit
+R hint request). The old algorithm repacked the entire current prefix and
+binary-searched the full WPD4 word-length group each time another possible
+letter was followed, even after a previous prefix narrowed the candidates.
+
+The interval API v4DictNarrowPrefixLengthId() now uses validated WPD4
+lexicographic record ordering to narrow a [first, past) record span by the
+NEXT symbol position, reading only that symbol's already-packed bits. The
+recursive search passes this interval to children, so deeper branches search
+their matching parent range and reject impossible paths immediately. A
+full-length nonempty interval itself proves an accepted dictionary word.
+It preserves the existing six-symbol hint maximum, 12,000-node cap, search
+ordering, chosen word/coordinates, score rules and complete game state.
+
+No heap allocations, new images, per-frame renderer work, dictionary format
+changes, additional board arrays, save migration or new language columns are
+introduced. Parent intervals and path state occupy only existing bounded
+recursion stack; the new API is pure and checks input bounds before reads.
+
+Validation includes native differential checks over 1..6-bit WPD4 records,
+all supported length groups (3..20), every stored test word's full path,
+and missing one/two-symbol prefixes. The legacy prefix check is retained.
+The existing Cyrillic gameplay tests require hints to be legal words, never
+mutate the board or leak hidden pass cells, and keep the 11-language retail
+code unchanged. Both the retail and Cyrillic ROM builds plus complete
+emulator suites remain release gates.
+
+The separate GitHub Actions workflow WordPass Cyrillic hint search performance
+also runs a deterministic host benchmark. It builds two distinct **synthetic**
+60,000-word six-symbol corpora for Russian/Ukrainian alphabets; these are
+not licensed or meaningful actual-language dictionaries and are never bundled
+into the ROM. It compiles the exact baseline source commit
+18d5ab0fea67079475e02c9c9a1ddf75b2f6ec0e and the new engine with
+matching host compiler settings and board seeds, asserts identical found
+counts and path fingerprints, and retains Markdown/JSON timings. Host timing
+ratios are observational only and are NOT physical DS FPS/cycle measurements.
