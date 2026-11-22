@@ -129,6 +129,37 @@ def main():
             e.hold(shoulder, False)
         e.shot(str(args.output / f'hint_peek_{e.bx}.png'))
 
+    def focus_visible_clue_with_select():
+        # A word discovers a visible number; a nearby cell has a password
+        # location. Existing exposed holes can be selected too: neither
+        # counts as secret information or a free peel.
+        path = fixture(column=2, background=HOLE, keep_word=True)
+        e.set_cell(2, 3, TILE, 'x')
+        e.set_back(2, 3, 1)
+        after = submit(path)
+        assert after['state'] == ST_PLAY and clues()[2 * ROWS + 2] > 0, 'word did not earn a real clue'
+        before = resources()
+        e.hold('L')
+        e.press('SELECT', settle=4)
+        g = e.state()
+        c, r = g['curC'], g['curR']
+        visible_number = clues()[c * ROWS + r] or g['cell'][c][r][1] == HOLE
+        assert g['state'] == ST_PLAY and g['peek'] and g['curOn'] and visible_number, \
+            f'shoulder+SELECT did not focus a numbered cell: {(c, r, g["peek"], g["curOn"])}'
+        assert resources() == before and not g['hintReq'] and g['chainLen'] == 0, \
+            'clue scan spent a hint/turn, peeled, or started a chain'
+        assert 'CLUE' in g['msg'], f'clue scan did not explain the focused evidence: {g["msg"]!r}'
+        neighbors = list(e.neighbors(c, r))
+        assert any(g['cell'][nc][nr][1] == TILE and
+                   (nr == 0 or g['cell'][nc][nr-1][1] != BURN)
+                   for nc, nr in neighbors), 'clue scan focused only unsafe/used neighbors'
+        e.shot(str(args.output / f'clue_scan_{e.bx}.png'))
+        e.press('SELECT', settle=4)
+        g = e.state()
+        assert g['curOn'] and resources() == before and g['peek'], \
+            'cycling clues altered game state or unexpectedly left PEEK'
+        e.hold('L', False)
+
     def diamond_hint():
         path = fixture(keep_word=True)
         e.set_pass(4, 1 << 2)          # C is the third letter in the debug password ABCD
@@ -470,6 +501,7 @@ def main():
         assert bool(e.state()['settings']['hand']) == left
 
     scenarios = (('SELECT leaves PEEK safely', select_from_peek),
+                 ('held-shoulder SELECT cycles useful visible clues freely', focus_visible_clue_with_select),
                  ('submit ring and button match chaining or PEEK mode', submit_affordances_respect_peek),
                  ('word cues stay coherent when entering and leaving PEEK', word_cues_respect_peek),
                  ('diamond starts a usable word hint', diamond_hint),
