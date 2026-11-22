@@ -341,3 +341,35 @@ Before > after, frames (`-` is no change in the 45-frame window; `done` includes
 - Menu taps: 2 for keys, 3 for the stylus (the options value row reads 4 because it rebuilds the gem cache).
 - The profile build (`-DWP_PROFILE`, see TESTING.md) shows the touch screen at about 175k to 230k ticks of a 558k frame and
   one top slice at 26k to 41k; two slices in a vblank fit.
+
+## Russian/Ukrainian bitmap glyph cache (experimental ROM only)
+
+The separate Russian and Ukrainian DS preview renders **56 Cyrillic board
+cells** per game frame. Previously each covered cell ran
+`fontGlyphCodepoint(dictionary->alphabet[id])`, a Unicode case/switch mapping
+on every redraw even though its 33-character alphabet is fixed for the
+duration of the language pack.
+
+The preview now resolves the up-to-64 glyph pointers only when
+`scriptPreviewOpen` successfully loads a dictionary. The loader increments a
+monotonic `scriptPreviewGlyphEpoch`; the renderer rebuilds its
+`scriptGlyphById` table only when that epoch changes. This is robust when
+the allocator reuses a previous dictionary address on a later language load.
+All 56 cells thereafter use one symbol-indexed pointer read instead of
+repeating Unicode glyph mapping. This changes no glyph pixels, no game logic,
+no per-tile storage, no VRAM bank, and no heap allocation.
+
+The maximum static cache is 64 pointers (256 B on the 32-bit ARM9), plus
+two 32-bit epoch/counter words. Both languages currently use 33 of the slots.
+The renderer still draws glyph pixels once per ordinary frame; the cache
+reduces **lookup CPU overhead**, not all drawing cost.
+
+**Emulator regression:** `tools/emu/test_cyr_preview.py` checks that a
+Russian session populates the cache exactly once, 120 consecutive frames
+do not rebuild it, switching to the independently loaded Ukrainian language
+triggers exactly one rebuild, and its next 120 frames likewise reuse the
+cache while maintaining a full 120/120 emulated frame cadence.
+
+These are deterministic cache/cadence checks, not a real-hardware cycle or FPS
+benchmark. DS/DS Lite/DSi performance still needs physical measurements and
+comparison against a matching earlier ROM.
