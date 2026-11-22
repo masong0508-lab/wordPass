@@ -9,6 +9,7 @@ from PIL import Image, ImageChops
 import struct
 import sys
 from wp import Emu, symbol
+from elf_abi import member_offsets
 
 def get_int(e, name):
     address = symbol(e.rom_elf, name)
@@ -37,6 +38,32 @@ def main(rom, output):
     check(get_int(e, "scriptPreviewShelf") == 1, "Cyrillic first shelf should start at 1")
     e.shot(str(out / "ru-board.png"))
     check(get_int(e, "scriptPreviewScore") == 0, "initial score is zero")
+    board_ptr = symbol(e.rom_elf, "scriptPreviewBoard")
+    clues_offset = member_offsets(e.rom_elf, "scriptPreviewBoard",
+                                   ("surveyed", "clueC", "clueR"))
+    check(not any(bytes(e.mem.unsigned[
+          board_ptr + clues_offset["surveyed"]:
+          board_ptr + clues_offset["surveyed"] + 7])),
+          "fresh Russian shelf starts without any word-earned clues")
+    # The old preview painted a gold pixel under EVERY hidden pass cell,
+    # leaking the entire secret. Changing one still-covered back value
+    # must not change any pixel on the touch-screen board without a peel.
+    # A top-row cell can never be an actual seeded pass location.
+    x, y, _, _ = e.cell_rect(0, 0)
+    crop = (x, y + 192, x + 24, y + 192 + 22)
+    before_pixels = e.emu.screenshot().convert("RGB").crop(crop)
+    back_addr = board_ptr + 153      # back[0][0] (legacy debug offsets)
+    original_back = int(e.mem.unsigned[back_addr])
+    check(original_back == 0, "top row unexpectedly hides a pass letter")
+    e.mem.write_byte(back_addr, 1)
+    try:
+        e.run(6)
+        after_pixels = e.emu.screenshot().convert("RGB").crop(crop)
+        check(ImageChops.difference(before_pixels, after_pixels).getbbox() is None,
+              "Cyrillic preview rendered an unopened secret location (spoiler)")
+    finally:
+        e.mem.write_byte(back_addr, original_back)
+        e.run(6)
     # Localized manual uses only the normal top LCD and pauses gameplay while
     # visible. B dismisses it without exiting or consuming a shelf turn.
     e.hold("L")
@@ -52,7 +79,6 @@ def main(rom, output):
     check(e.state()["state"] == 9 and get_int(e, "scriptPreviewHelp") == 0
           and get_int(e, "scriptPreviewTurns") == 0,
           "dismissing Russian manual must resume the untouched board")
-    board_ptr = symbol(e.rom_elf, "scriptPreviewBoard")
     initial_board = bytes(e.mem.unsigned[board_ptr:board_ptr + 336])
     e.hold("L")
     e.press("R", settle=12)
@@ -89,6 +115,29 @@ def main(rom, output):
     e.shot(str(out / "ru-selected-word.png"))
     check(e.fps() == 120, "selected Cyrillic word must retain 120/120 emulator frame cadence")
     e.press("A", settle=24)
+    # A submitted word publishes a genuine fixed-position clue at its tail.
+    # Temporarily remove only that public-bit marker: the numbered badge
+    # should vanish, while scores and secret data remain unchanged.
+    tail_c, tail_r = russian_path[-1]
+    surveyed_at = board_ptr + clues_offset["surveyed"] + tail_c
+    survey_bits = int(e.mem.unsigned[surveyed_at])
+    check(survey_bits & (1 << tail_r),
+          "scored Russian word did not publish a location-anchored clue")
+    check(int(e.mem.unsigned[board_ptr + clues_offset["clueC"]]) == tail_c and
+          int(e.mem.unsigned[board_ptr + clues_offset["clueR"]]) == tail_r,
+          "last word-clue focus is not its true tail")
+    x, y, _, _ = e.cell_rect(tail_c, tail_r)
+    crop = (x + 15, y + 192 + 12, x + 24, y + 192 + 22)
+    with_clue = e.emu.screenshot().convert("RGB").crop(crop)
+    e.mem.write_byte(surveyed_at, survey_bits & ~(1 << tail_r))
+    try:
+        e.run(6)
+        without_clue = e.emu.screenshot().convert("RGB").crop(crop)
+        check(ImageChops.difference(with_clue, without_clue).getbbox() is not None,
+              "scored Russian clue numeral is not visible on the DS screen")
+    finally:
+        e.mem.write_byte(surveyed_at, survey_bits)
+        e.run(6)
     check(get_int(e, "scriptPreviewScore") > 0, "real themed Russian word did not score")
     check(get_int(e, "scriptPreviewTurns") == 1,
           "a valid Russian themed word must consume exactly one shelf turn")
@@ -148,6 +197,10 @@ def main(rom, output):
     check(bytes(e.mem.unsigned[ledger:ledger + 194])[184] == 0,
           "switching languages must not leak Russian word history into Ukrainian")
     e.shot(str(out / "uk-board.png"))
+    check(not any(bytes(e.mem.unsigned[
+          board_ptr + clues_offset["surveyed"]:
+          board_ptr + clues_offset["surveyed"] + 7])),
+          "switching Russian to Ukrainian leaked earned word clues")
     e.hold("L")
     e.press("Y", settle=18)
     e.hold("L", False)
@@ -184,6 +237,10 @@ def main(rom, output):
     e.press("Y", settle=6)
     e.chain(ukrainian_path)
     e.press("A", settle=20)
+    uk_tail_c, uk_tail_r = ukrainian_path[-1]
+    check(int(e.mem.unsigned[board_ptr + clues_offset["surveyed"] + uk_tail_c]) &
+          (1 << uk_tail_r),
+          "Ukrainian word must earn its own clue independently of Russian")
     check(get_int(e, "scriptPreviewScore") > 0, "real themed Ukrainian word should score")
     check(get_int(e, "scriptPreviewTurns") == 1,
           "Ukrainian scripted board should share shelf-turn semantics")
