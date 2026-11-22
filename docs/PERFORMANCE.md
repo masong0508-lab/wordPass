@@ -5,6 +5,60 @@ Earlier DeSmuME measurements below recorded 120 game frames in 120 emulated fram
 current blanket hardware guarantee. This page records input latency and the changes that reduce work or
 protect the DS memory budget.
 
+## Continued search and regression pass
+
+Retail dead-board detection and word hints now stop following impossible
+dictionary prefixes. The WPD3 lookup compares only the prefix's letter bits
+in the existing sorted records; it needs no trie, extra index or heap
+allocation. The search bounds include Qu's two-letter expansion and
+plain-Q diamonds, and the final word still passes the normal common/rare,
+library and spelling checks. Traversal order and first eligible hint are
+preserved.
+
+`tools/check/benchmark_search.py` compares the old and new implementations
+against the same language data and support code. At 100 samples per setting,
+2,422 exact result/path cases matched across all 11 locales, library and
+English spelling settings, fire/hole/diamond layouts, recent-word history
+and all-X/all-Q stress boards. Each search also verifies unchanged board
+bytes and RNG state. Across the 2,400 seeded cases, full dictionary lookups
+fell from 2,713,366 to 176,651, with 683,214 bounded prefix queries replacing
+the discarded branches. Prefix queries also do work; these counts are not
+a frame-rate measurement. The separate 7,200-attempt balance sweep produced
+identical gameplay reports before and after; see `docs/BALANCE.md`.
+
+Five paired host runs gave these median totals (GCC `-O2`, the same 100
+samples per setting):
+
+| Workload | Before | After |
+| --- | ---: | ---: |
+| 2,400 seeded search/hint cases | 141.988 ms | 113.912 ms |
+| All-X boards across 11 locales | 20.830 ms | 3.575 ms |
+| All-Q boards across 11 locales | 26.589 ms | 2.449 ms |
+
+The seeded total was about 20% lower, with substantial host scheduling
+scatter across the five runs. These timings help assess CPU work; they do
+not establish a physical DS frame-rate improvement. Exact search results
+and deterministic operation counts are the stronger regression evidence.
+
+Reproduce the isolated search comparison against the prior merged build:
+
+```sh
+python3 tools/check/benchmark_search.py --baseline fd4ccd3b092f44c662513cd56059ec65a77e9a75 --samples 100 --output build/search-comparison.json
+```
+
+The Cyrillic preview now computes a selected word's score and tier once
+before vblank, sharing the pair across top-screen slices. Previously each
+clipped slice repeated both dictionary validations during the short LCD
+refresh interval. Score, tier and invalid-word visibility participate in
+the dirty-slice signatures so the displayed quote updates promptly.
+
+The complete emulator rules/layout/guide suite now runs on every PR, main
+build, tag and manual run, replacing its two separately filtered subsets.
+Structure offsets are read from the matching built ELF's DWARF with
+`pyelftools` or GNU `readelf`, rather than compiling the current checkout
+to infer a potentially different build's layout. CI no longer pulls a
+toolchain container solely to inspect symbols and member offsets.
+
 ## November 21, 2026 performance and reliability pass
 
 ### Less work during play

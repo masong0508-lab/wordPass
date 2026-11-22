@@ -2409,7 +2409,8 @@ def _():
             bad = lit_outside_panel(px); assert not bad, f'{LANG_CODES[i]} {tag}: panel text reaches the margin: {bad[:3]}'
             top = [(x, y) for y in range(0, 192) for x in list(range(0, 8)) + list(range(249, 256)) if sum(px[x, y]) > 250]
             assert not top, f'{LANG_CODES[i]} {tag}: top screen text reaches the border: {top[:3]}'
-            assert e.fps() == 120, f'{LANG_CODES[i]} {tag}: fps'
+            cadence = e.fps()
+            assert cadence == 120, f'{LANG_CODES[i]} {tag}: {cadence}/120 game frames'
     set_hand(False); lang_title(0)
 
 @scenario('languages: the results card in every language (a perfect pass), screenshots, fps, then English again')
@@ -2989,27 +2990,17 @@ def lit_extent(px, x0, y0, x1, y1, thr=250):
 # ---- text that must stay whole: popups and the PEEL tag in the edge columns, the results WORDS row, the Dutch calendar tile, the options date -----
 _ABI = {}
 def abi_offsets():
-    """offsetof(Game, wordsThisShelf / uniqueWords) and offsetof(Settings, bestDaily / bestDailyDate) of the ARM build, read from a
-    throw-away object compiled in the pinned toolchain image (so the test follows the struct instead of pinning byte offsets)."""
+    """Read the actual tested ROM's structure layout from its matching ELF."""
     if _ABI: return _ABI
-    import subprocess, tempfile
-    src = ('#include <nds.h>\n#include <stddef.h>\n#include "game.h"\n'
-           'char o1[offsetof(Game, wordsThisShelf) + 1000];\nchar o2[offsetof(Game, uniqueWords) + 1000];\n'
-           'char o3[offsetof(Settings, bestDaily) + 1000];\nchar o4[offsetof(Settings, bestDailyDate) + 1000];\n')
-    with tempfile.TemporaryDirectory() as d:
-        open(os.path.join(d, 'o.c'), 'w').write(src)
-        cmd = ('export PATH=$PATH:/opt/devkitpro/devkitARM/bin; arm-none-eabi-gcc -march=armv5te -mtune=arm946e-s -DARM9 -std=gnu11 '
-               '-I/opt/devkitpro/libnds/include -I/w/source -c /f/o.c -o /f/o.o && arm-none-eabi-nm -S /f/o.o')
-        r = subprocess.run(['docker', 'run', '--rm', '-v', f'{REPO}:/w', '-v', f'{d}:/f', 'devkitpro/devkitarm:20240511', 'bash', '-c', cmd],
-                           capture_output=True, text=True)
-        for ln in r.stdout.splitlines():
-            p = ln.split()
-            if len(p) == 4 and p[3] in ('o1', 'o2', 'o3', 'o4'): _ABI[p[3]] = int(p[1], 16) - 1000
-    assert len(_ABI) == 4, f'could not read the struct offsets: {r.stdout[-300:]} {r.stderr[-300:]}'
+    from elf_abi import member_offsets
+    game = member_offsets(e.rom_elf, 'G', ('wordsThisShelf', 'uniqueWords'))
+    settings = member_offsets(e.rom_elf, 'S', ('bestDaily', 'bestDailyDate'))
+    _ABI.update(o1=game['wordsThisShelf'], o2=game['uniqueWords'],
+                o3=settings['bestDaily'], o4=settings['bestDailyDate'])
     return _ABI
 def sym(name):
     from wp import symbol
-    return symbol(os.path.join(REPO, 'wordPass.elf'), name)
+    return symbol(e.rom_elf, name)
 
 def new_lit(px, base, xs, ys, thr=200):
     return [(x, y) for y in ys for x in xs if sum(px[x, y]) > thr and sum(base[x, y]) <= thr]

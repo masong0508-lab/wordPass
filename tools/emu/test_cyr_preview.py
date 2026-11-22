@@ -82,6 +82,12 @@ def main(rom, output):
     check(get_int(e, "scriptPreviewHints") == 1,
           "a single preview shelf cannot silently grant endless free hints")
     e.chain(russian_path)
+    quoted = get_int(e, "chainScoreNow")
+    quoted_tier = get_int(e, "scriptQuoteTierNow")
+    check(quoted > 0 and quoted_tier in (1, 2),
+          "Russian renderer must cache a real score and tier for the selected word")
+    e.shot(str(out / "ru-selected-word.png"))
+    check(e.fps() == 120, "selected Cyrillic word must retain 120/120 emulator frame cadence")
     e.press("A", settle=24)
     check(get_int(e, "scriptPreviewScore") > 0, "real themed Russian word did not score")
     check(get_int(e, "scriptPreviewTurns") == 1,
@@ -89,6 +95,9 @@ def main(rom, output):
     e.shot(str(out / "ru-scored.png"))
     check(get_int(e, "scriptPreviewLastScore") > 0,
           "awarded Russian score must record a real submitted word")
+    check(get_int(e, "scriptPreviewLastScore") == quoted and
+          get_int(e, "scriptPreviewLastTier") == quoted_tier,
+          "Russian submitted points and tier must match the displayed quote")
     # L+R repairs a thin draft vocabulary board once after the first turn.
     # It must spend a real turn, avoid granting points, and reset combo.
     scored = get_int(e, "scriptPreviewScore")
@@ -127,6 +136,11 @@ def main(rom, output):
     ledger_bytes = bytes(e.mem.unsigned[ledger:ledger + 194])
     check(ledger_bytes[184] == 1 and struct.unpack_from("<H", ledger_bytes, 186)[0] == 0,
           "peeling must break combo but keep Russian word history")
+    e.press("SELECT", settle=9)
+    check(get_int(e, "scriptPreviewScore") == 0 and
+          get_int(e, "scriptPreviewTurns") == 0 and
+          get_int(e, "scriptPreviewShelf") == 1,
+          "Russian first-shelf replay must discard its attempt score")
     e.press("X", settle=20)
     check(e.state()["state"] == 9 and get_int(e, "scriptPreviewLanguage") == 1,
           "X should switch to Ukrainian without changing the release locale")
@@ -176,7 +190,9 @@ def main(rom, output):
     check(bytes(e.mem.unsigned[ledger:ledger + 194])[184] == 1,
           "Ukrainian scored word must have its own fresh ledger")
     e.press("SELECT", settle=8)
-    check(get_int(e, "scriptPreviewTurns") == 0, "new pass did not reset turn counter")
+    check(get_int(e, "scriptPreviewTurns") == 0 and
+          get_int(e, "scriptPreviewScore") == 0,
+          "Ukrainian re-deal must reset both the attempt clock and its points")
     # Exercise a complete secret-finding shelf through REAL stylus taps,
     # reading hidden pass coordinates from the ARM9 game's independent
     # ScriptBoard memory. This is an emulator-only diagnostic: it does not
@@ -201,11 +217,24 @@ def main(rom, output):
     check(get_int(e, "scriptPreviewTurns") == pass_len,
           "every revealed secret must consume a single shelf turn")
     e.shot(str(out / "uk-shelf-won.png"))
+    banked = get_int(e, "scriptPreviewScore")
+    check(banked > 0, "completed Ukrainian shelf should award its real bonus")
     e.press("A", settle=18)
     check(get_int(e, "scriptPreviewShelf") == 2,
           "a completed Cyrillic password must advance to the next shelf")
     check(get_int(e, "scriptPreviewTurns") == 0,
           "new Cyrillic shelf must reset heat/turn pacing")
+    check(get_int(e, "scriptPreviewScore") == banked,
+          "advancing must retain the completed shelf score")
+    e.press("R", settle=9)
+    e.press("A", settle=14)
+    check(get_int(e, "scriptPreviewScore") > banked,
+          "next shelf should add real word points before a retry")
+    e.press("SELECT", settle=9)
+    check(get_int(e, "scriptPreviewScore") == banked and
+          get_int(e, "scriptPreviewShelf") == 2 and
+          get_int(e, "scriptPreviewTurns") == 0,
+          "retrying shelf two must retain only the already completed shelf")
     e.press("START", settle=20)
     check(e.state()["state"] == 0, "START should return to the untouched 11-language title")
     # The second choice must work independently from the same visible menu,
@@ -268,7 +297,7 @@ def main(rom, output):
               "invalid RTC must prevent Daily practice and show clock feedback")
     e.press("START", settle=18)
     check(e.state()["state"] == 0, "Daily demo exits safely without changing retail Daily")
-    print("RUSSIAN/UKRAINIAN DS OK: menu, hints, scores, combo, Daily practice seed and safe exit")
+    print("RUSSIAN/UKRAINIAN DS OK: menu, hints, score/retry banking, combo, Daily practice seed and safe exit")
     from cyr_lifecycle import exercise
     exercise(e, rom, out)
 

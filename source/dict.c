@@ -105,5 +105,42 @@ static int tableLookup(const Table *t, const char *word, int len)
 // 0 = not a word, 1 = common, 2 = rare
 int dictLookup(const char *word, int len) { return tableLookup(&dict, word, len); }
 
+// Does a dictionary word in this inclusive length range begin with prefix?
+// The packed records are lexicographically ordered, so a masked binary search
+// can prune impossible board paths without a trie, heap allocation or index.
+// Both tiers count here; the caller still applies library/spelling rules to a
+// completed word. A rare-only prefix can cause extra work, never a false hint.
+bool dictHasPrefix(const char *prefix, int len, int minLen, int maxLen)
+{
+    if (!prefix || len < 1 || len > MAX_LEN) return false;
+    if (minLen < MIN_LEN) minLen = MIN_LEN;
+    if (minLen < len) minLen = len;
+    if (maxLen > MAX_LEN) maxLen = MAX_LEN;
+    if (minLen > maxLen) return false;
+    for (int i = 0; i < len; i++) {
+        unsigned ch = (unsigned char)prefix[i] | 0x20u;
+        if (ch < 'a' || ch > 'z') return false;
+    }
+    u8 key[REC_MAX];
+    packWord(prefix, len, key, REC_MAX);
+    int whole = (len * 5) >> 3, partial = (len * 5) & 7;
+    unsigned mask = partial ? 0xffu << (8 - partial) : 0;
+    for (int length = minLen; length <= maxLen; length++) {
+        int lo = 0, hi = (int)dict.count[length] - 1;
+        const int stride = recLen[length];
+        while (lo <= hi) {
+            int mid = lo + ((hi - lo) >> 1);
+            const u8 *record = dict.base[length] + (size_t)mid * stride;
+            int cmp = memcmp(record, key, (size_t)whole);
+            if (!cmp && partial)
+                cmp = (int)(record[whole] & mask) - (int)(key[whole] & mask);
+            if (!cmp) return true;
+            if (cmp < 0) lo = mid + 1;
+            else hi = mid - 1;
+        }
+    }
+    return false;
+}
+
 // 0 = spelled the same everywhere (or unknown), 1 = American spelling only, 2 = British only
 int dictSpelling(const char *word, int len) { return tableLookup(&variants, word, len); }

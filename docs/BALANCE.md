@@ -715,3 +715,50 @@ Highest shelf cleared, competent: 11:3 13:1 14:7 15:2 16:7 17:2 18:2 19:3 20:5 2
 **Diagnostics (competent, all shelves)**: FIRE fails 1240, of which 371 had no word through any flame near the floor on the last look; OUT OF WORDS fails 5 (average 41.0 chainable gems and 15.0 holes on the board at the end); guess peels (chance under 20%) 13.3% of all peels.
 
 
+## Continued verification — 2026-11-21
+
+The retail prefix-pruning pass was checked against `fd4ccd3` with a focused
+sweep of shelves 12–17 in English, German and Finnish. Each language/shelf
+received 200 attempts from each existing bot policy (competent and weak):
+**7,200 attempts per implementation**. Both builds used the same current bot,
+language data and support code; only `source/board.c` and `source/dict.c` came
+from the baseline revision. Settings were normal fire, the full library and
+both spelling variants.
+
+Both player policies received the same initial boards. For zero-based attempt
+`i`, the unsigned 32-bit board seed was `1000 + shelf*100003 + i*7919`; the bot's
+separate RNG seed was `board_seed ^ 0xABCDEF`. All paired per-shelf CSV reports
+were byte-identical, including clears, failure categories, average turns,
+words played, ignitions and unreachable-fire failures. This confirms unchanged
+reported outcomes for this sweep; no difficulty rules were retuned.
+
+The shelf 14–15 transition remains a useful investigation target. Clear rates
+below apply to these fixed bot policies and seeds, not a human-player sample.
+
+| Language | Competent, shelf 14 | Competent, shelf 15 | Weak, shelf 14 | Weak, shelf 15 |
+| --- | ---: | ---: | ---: | ---: |
+| English | 68.0% (136/200) | 63.0% (126/200) | 3.0% (6/200) | 0.0% (0/200) |
+| German | 74.0% (148/200) | 60.5% (121/200) | 3.0% (6/200) | 2.5% (5/200) |
+| Finnish | 79.0% (158/200) | 67.5% (135/200) | 3.0% (6/200) | 3.5% (7/200) |
+
+At shelf 15 the fire pulse changes from every four turns to every three, while
+the chance of twin ignitions rises from 2/8 to 3/8. The competent-policy drop
+varies from 5.0 to 13.5 percentage points here, and the weak policy is already
+near its floor at shelf 14. This bounded sample does **not justify a specific
+retuning**. Further work should vary those two pressure changes separately,
+use more seeds and languages, and check human play before choosing a change.
+
+Reproduce the bounded comparison from the repository root with a host C
+compiler and Python 3:
+
+```sh
+python3 tools/check/balance_sweep.py --baseline fd4ccd3 \
+  --languages en de fi --first 12 --last 17 --attempts 200 \
+  --seed-base 1000 --require-identical --output build/balance-continuation
+```
+
+The runner reuses the existing bot policies without changing them, writes the
+paired CSV files and a JSON summary, and exits with failure if the reports
+differ. `--first`, `--last`, `--attempts` and `--seed-base` keep follow-up sweeps
+bounded and reproducible. Search-result parity and operation-count evidence
+for the CPU improvement are documented separately in [PERFORMANCE.md](PERFORMANCE.md).

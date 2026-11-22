@@ -35,6 +35,8 @@ extern uint32_t scriptPreviewSeed;
 
 bool scriptPreviewOpen(int language, uint32_t seed);
 void scriptPreviewClose(void);
+// Replay/re-deal the current shelf, discarding this attempt's points while
+// retaining completed earlier shelves. Failed generation leaves it intact.
 bool scriptPreviewNewPass(uint32_t seed);
 // L+SELECT switches between free shelves and reproducible single-shelf
 // Daily practice; never touches the production score and save format.
@@ -49,7 +51,8 @@ bool scriptPreviewHint(void);
 // charges heat/time and breaks the combo. Never affects retail saves.
 bool scriptPreviewRescue(void);
 // Score the current valid word with repeat penalty and combo before submit.
-int scriptPreviewQuote(void);
+// Optionally return its dictionary tier from the same single lookup.
+int scriptPreviewQuote(int *tier);
 int scriptPreviewSubmit(void);
 #endif
 #endif

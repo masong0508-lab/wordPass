@@ -93,7 +93,7 @@ jobs:
 
   emulator:
     # Boots the built ROM headless in DeSmuME (py-desmume is a binary wheel with its own SDL2, so pip alone is enough;
-    # the DBG symbol lookup of tools/emu/wp.py runs arm-none-eabi-nm in the toolchain image through the runner's docker).
+    # local GNU binutils read symbols and DWARF member offsets from the matching built ELF).
     needs: nds
     runs-on: ubuntu-latest
     env:
@@ -106,8 +106,6 @@ jobs:
           name: wordPass
       - name: Install py-desmume, Pillow and numpy
         run: python3 -m pip install py-desmume pillow numpy
-      - name: Pull the toolchain image (symbol lookup)
-        run: docker pull devkitpro/devkitarm:20240511
       - uses: actions/download-artifact@v7
         with:
           name: wordPass-cyr-preview
@@ -118,19 +116,9 @@ jobs:
         run: python3 tools/emu/test_fat.py wordPass.nds wordPass.elf fat-out
       - name: Real DS Cyrillic preview touch, chain, peel, switch and exit
         run: python3 tools/emu/test_cyr_preview.py wordPass-cyr-preview.nds cyr-preview-out
-      - name: All-language ROM gameplay and layout smoke
-        # The full rule-scenario suite remains opt-in below. These two existing
-        # scenarios load all ten translated languages in DeSmuME, spell valid and
-        # invalid words with real stylus input, and inspect both-hand UI bounds.
-        env:
-          WP_ONLY: "languages: selecting the active language keeps the title board stable|languages: the NitroFS filesystem holds all ten|languages: the options row cycles through every language|languages: the title tag cycles the language|languages: a known word spelled through the real touch path|languages: a shelf of each language|options: best Daily uses the localized date order"
-        run: python3 tools/emu/test_rules.py wordPass.nds languages-out
-      - name: Input, results, music and frame cadence regressions
-        env:
-          WP_ONLY: "languages: the results card|input state:|shelf-start iris:|responsiveness:|music: the MUSIC option|music effects from play:|music mixes: pause|music songs: title"
-        run: python3 tools/emu/test_rules.py wordPass.nds regression-out
-      - name: Rule scenarios (tags and manual runs only, 15 to 25 minutes)
-        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+      - name: Complete rules, all-language layouts, guide, input and music scenarios
+        # Every PR/release candidate now passes the entire suite. This includes
+        # the former language/input subsets, so do not run those a second time.
         timeout-minutes: 90
         run: python3 tools/emu/test_rules.py wordPass.nds rules-out
       # Always retain evidence from the emulator, including partially written
@@ -144,9 +132,7 @@ jobs:
           path: |
             smoke-out/**/*.png
             cyr-preview-out/**/*.png
-            languages-out/**/*.png
             fat-out/**/*.png
-            regression-out/**/*.png
             rules-out/**/*.png
           if-no-files-found: ignore
           retention-days: 7
