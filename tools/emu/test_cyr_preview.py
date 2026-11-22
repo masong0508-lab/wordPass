@@ -50,7 +50,7 @@ def main(rom, output):
     # must not change any pixel on the touch-screen board without a peel.
     # A top-row cell can never be an actual seeded pass location.
     x, y, _, _ = e.cell_rect(0, 0)
-    crop = (x, y + 192, x + 24, y + 192 + 22)
+    crop = (x, y, x + 24, y + 22)
     before_pixels = e.emu.screenshot().convert("RGB").crop(crop)
     back_addr = board_ptr + 153      # back[0][0] (legacy debug offsets)
     original_back = int(e.mem.unsigned[back_addr])
@@ -127,7 +127,7 @@ def main(rom, output):
           int(e.mem.unsigned[board_ptr + clues_offset["clueR"]]) == tail_r,
           "last word-clue focus is not its true tail")
     x, y, _, _ = e.cell_rect(tail_c, tail_r)
-    crop = (x + 15, y + 192 + 12, x + 24, y + 192 + 22)
+    crop = (x + 15, y + 12, x + 24, y + 22)
     with_clue = e.emu.screenshot().convert("RGB").crop(crop)
     e.mem.write_byte(surveyed_at, survey_bits & ~(1 << tail_r))
     try:
