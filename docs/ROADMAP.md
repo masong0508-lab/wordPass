@@ -136,6 +136,11 @@ and test unranked Daily Practice.
 
 ### Milestone 3 — Ukrainian
 
+- [x] Audit source-only Ukrainian spellings with U+0027, U+2019 and U+02BC
+      apostrophes; count excluded forms in the licensed source manifest rather
+      than silently converting them to incorrect Cyrillic-only words.
+- [ ] Implement a true non-tile Ukrainian apostrophe separator throughout
+      dictionary indexing, on-screen words, theme pools and hint scoring.
 - [ ] Native Ukrainian dictionary and distinct frequency/balance model.
 - [ ] Explicit Ґ, Є, І, Ї, Й and apostrophe handling, not Russian reuse.
 - [ ] Complete translated UI, themes and guide with full parity tests.
