@@ -128,6 +128,14 @@ match the WPP2 binary, the thematic source file hash is unchanged, and
 **both** language packs pass validation before publishing either. Older
 160-word imports without an expansion remain supported.
 
+The installer also preserves the previously installed source-backed preview
+when a new publication fails: it writes complete RU/UK data to a sibling
+staging directory, renames the old directory to a backup, and promotes
+the new one in a second rename. A failed promotion rolls back to the
+backup. A later run can restore an interrupted backup before continuing,
+and rejects incomplete language/attribution data. The native selftest
+injects a promotion failure and checks that both original packs survive.
+
 This feature provides the **content pipeline**, not approved new vocabulary.
 It ships **no newly invented candidate words** in the standard preview.
 Native-speaker editing, word frequency, licensing and hardware testing are
