@@ -1483,8 +1483,8 @@ int main(int argc, char **argv)
     g.shelf = 12; boardNewShelf(&g);
     bool s12 = g.heatThreshold == 4 && g.lockTier == 2 && g.pulseEvery == 4 && g.twinEighths == 1;
     g.shelf = 20; boardNewShelf(&g);
-    bool s20 = g.heatThreshold == 4 && g.lockTier == 3 && g.pulseEvery == 3 && g.twinEighths == 5;
-    CHECK("shelf thresholds 1/4/6/12/20", s1 && s4 && s6 && s12 && s20);
+    bool s20 = g.heatThreshold == 4 && g.lockTier == 3 && g.pulseEvery == 3 && g.twinEighths == 4;
+    CHECK("shelf thresholds 1/4/6/12/20 match staged tier IV", s1 && s4 && s6 && s12 && s20);
     {
         ShelfRules r14, r15, r16, r17, r18, r19, r20, r21, r22, r23;
         boardShelfRules(14, &r14); boardShelfRules(15, &r15);
