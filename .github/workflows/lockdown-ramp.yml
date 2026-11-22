@@ -1,0 +1,57 @@
+name: WordPass staged Lockdown progression
+
+on:
+  pull_request:
+    paths:
+      - 'source/board.c'
+      - 'source/game.h'
+      - 'tools/check/bot.c'
+      - 'tools/check/balance_sweep.py'
+      - 'tools/check/balance_ramp_report.py'
+      - '.github/workflows/lockdown-ramp.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'source/board.c'
+      - 'source/game.h'
+      - 'tools/check/bot.c'
+      - 'tools/check/balance_sweep.py'
+      - 'tools/check/balance_ramp_report.py'
+      - '.github/workflows/lockdown-ramp.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  progression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Check benchmark report tool syntax
+        run: python3 -m py_compile tools/check/balance_ramp_report.py
+      - name: Compare shelves 14-19 across 11 languages with unchanged bot policies
+        run: >
+          python3 tools/check/balance_sweep.py
+          --baseline b02d7268ea9ff5ad5e053dd8914cb95992a924d6
+          --languages en es fr de it pt nl sv pl da fi
+          --first 14 --last 19 --attempts 60
+          --seed-base 1000
+          --output build/staged-ramp
+      - name: Assert unchanged shelves match and report progression steepness
+        run: >
+          python3 tools/check/balance_ramp_report.py
+          --input build/staged-ramp
+          --languages en es fr de it pt nl sv pl da fi
+          --first 14 --last 19
+      - name: Upload paired outcomes and report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: wordPass-staged-ramp-balance
+          path: build/staged-ramp/
+          if-no-files-found: warn
+          retention-days: 14
