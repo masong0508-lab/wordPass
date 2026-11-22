@@ -399,6 +399,7 @@ def main(rom, output):
               get_int(e, "scriptPreviewScore") == 0,
               "Daily practice retry must preserve seed and clear score")
         e.press("X", settle=18)
+        await_preview(1)
         check(get_int(e, "scriptPreviewDaily") == 1 and
               get_int(e, "scriptPreviewDailyDate") == first_date and
               get_int(e, "scriptPreviewSeed") != first_seed,
