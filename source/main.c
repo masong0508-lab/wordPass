@@ -828,7 +828,10 @@ int main(void)
                     break;
                 }
                 if (down & KEY_Y) scriptBoardClearChain(&scriptPreviewBoard);
-                if (down & KEY_R) (void)scriptPreviewHint();
+                if (down & KEY_R) {
+                    if (held & KEY_L) (void)scriptPreviewRescue();
+                    else (void)scriptPreviewHint();
+                }
                 if (down & KEY_A) {
                     if (scriptPreviewRules.status == SCRIPT_PASSED)
                         (void)scriptPreviewAdvance(seedCounter);

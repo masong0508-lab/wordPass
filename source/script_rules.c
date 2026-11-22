@@ -29,14 +29,15 @@ int scriptRulesWordHeat(int letters)
     if (letters <= 0) return 0;
     return letters <= 3 ? 3 : letters == 4 ? 2 : letters <= 6 ? 1 : 0;
 }
-int scriptRulesTurn(ScriptRules *rules, ScriptBoard *board,
-                    const V4Tiles *tiles, int heatBase, bool peel, bool fatal)
+static int rulesTurnCore(ScriptRules *rules, ScriptBoard *board,
+                         const V4Tiles *tiles, int heatBase, bool peel,
+                         bool rescue, bool fatal)
 {
     if (!rules || !board || !tiles || !tiles->valid ||
         rules->status != SCRIPT_RUNNING) return 0;
     rules->turns++;
     rules->peels += peel ? 1u : 0u;
-    rules->words += peel ? 0u : 1u;
+    rules->words += (peel || rescue) ? 0u : 1u;
     rules->lastBonus = 0;
     if (fatal) { rules->status = SCRIPT_FAILED; return 0; }
     // The final password letter completes the shelf before another fire
@@ -80,4 +81,22 @@ int scriptRulesTurn(ScriptRules *rules, ScriptBoard *board,
         }
     }
     return 0;
+}
+
+int scriptRulesTurn(ScriptRules *rules, ScriptBoard *board,
+                    const V4Tiles *tiles, int heatBase, bool peel, bool fatal)
+{
+    return rulesTurnCore(rules, board, tiles, heatBase, peel, false, fatal);
+}
+int scriptRulesRescueTurn(ScriptRules *rules, ScriptBoard *board,
+                          const V4Tiles *tiles)
+{
+    // Reject an already recovered password even if a caller has not yet
+    // advanced the status flag. A rescue must never award a pass bonus.
+    if (!rules || !board || !tiles || !tiles->valid ||
+        rules->status != SCRIPT_RUNNING || scriptBoardPassComplete(board))
+        return 0;
+    // Recovering a legal move is not a word or a peel and never awards
+    // points; it still advances flame, heat and overtime once.
+    return rulesTurnCore(rules, board, tiles, 2, false, true, false);
 }

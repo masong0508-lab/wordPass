@@ -21,6 +21,10 @@ void scriptRulesStart(ScriptRules *rules, unsigned shelf, uint32_t seed);
 // failure and completion in one place, allowing deterministic replays.
 int scriptRulesTurn(ScriptRules *rules, ScriptBoard *board,
                     const V4Tiles *tiles, int heatBase, bool peel, bool fatal);
+// A one-time rescue costs a real heat/fire turn but is neither a word nor
+// a peel, so it cannot inflate scoring stats or distort pass efficiency.
+int scriptRulesRescueTurn(ScriptRules *rules, ScriptBoard *board,
+                          const V4Tiles *tiles);
 // Derive heat for a valid word; longer words feed the fire less.
 int scriptRulesWordHeat(int letters);
 #endif

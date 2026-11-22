@@ -99,6 +99,28 @@ uses the actual on-board hint path rather than assuming a six-tile word in
 column zero. The limited dictionaries and professional translation gates
 still apply.
 
+## Recovery when a small draft dictionary leaves no useful chain
+
+After making at least one turn in the Russian or Ukrainian engineering ROM,
+**hold L and press R** to place another real, dictionary-validated word
+along a legal 7×8 hex chain. This uses the current shelf's theme when
+possible. It can be used **once per shelf** and costs one additional
+turn and two heat, allowing normal flames and overtime to advance.
+It never awards word points, and it breaks any active word combo.
+It is a gameplay recovery option, not a free unlimited reshuffle.
+
+Recovery searches other eligible columns and both chain directions if
+peels, burns or diamonds obstruct the preferred path. It cannot overwrite
+a hidden password tile or an existing fire/hole/diamond. If every path
+is blocked, the action fails without modifying the board or spending
+a turn. Attempting recovery too early or a second time gives an explicit
+Russian/Ukrainian message on the top LCD. A new shelf or replay resets
+its one-use allowance; the regular 11-language ROM has no such feature.
+
+Native regression tests validate turn/heat accounting, safety around
+obstacles and atomic failure. The DS emulator tests the actual L+R
+input, score and combo safety, and rejects repeated rescue attempts.
+
 ## On-device language-specific controls help
 
 While playing either demo, **hold L and press Y** to open a readable

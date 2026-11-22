@@ -76,21 +76,40 @@ def main(rom, output):
     check(get_int(e, "scriptPreviewTurns") == 1,
           "a valid Russian themed word must consume exactly one shelf turn")
     e.shot(str(out / "ru-scored.png"))
+    check(get_int(e, "scriptPreviewLastScore") > 0,
+          "awarded Russian score must record a real submitted word")
+    # L+R repairs a thin draft vocabulary board once after the first turn.
+    # It must spend a real turn, avoid granting points, and reset combo.
+    scored = get_int(e, "scriptPreviewScore")
+    e.hold("L")
+    e.press("R", settle=14)
+    e.hold("L", False)
+    check(get_int(e, "scriptPreviewRescues") == 1 and
+          get_int(e, "scriptPreviewTurns") == 2 and
+          get_int(e, "scriptPreviewScore") == scored,
+          "one L+R rescue must cost one turn without awarding score")
+    e.shot(str(out / "ru-rescued-board.png"))
+    e.hold("L")
+    e.press("R", settle=9)
+    e.hold("L", False)
+    check(get_int(e, "scriptPreviewRescueError") == 2 and
+          get_int(e, "scriptPreviewTurns") == 2,
+          "repeated L+R must not bypass the one-use rescue limit")
     # Preview stores an independent, fixed-size eight-word score ledger.
     # Byte offsets: 8*20 word IDs, 8 lengths, 8 uint16 scores, count, head,
     # then aligned uint16 combo. These are diagnostics, not game save fields.
     ledger = symbol(e.rom_elf, "scriptPreviewLedger")
     ledger_bytes = bytes(e.mem.unsigned[ledger:ledger + 194])
-    check(ledger_bytes[184] == 1 and struct.unpack_from("<H", ledger_bytes, 186)[0] == 1,
-          "first scored Russian word should enter ledger and start combo")
-    check(get_int(e, "scriptPreviewLastScore") > 0,
-          "awarded Russian score must record a real submitted word")
+    check(ledger_bytes[184] == 1 and struct.unpack_from("<H", ledger_bytes, 186)[0] == 0,
+          "rescue must keep Russian word history and break the earned combo")
+    check(get_int(e, "scriptPreviewLastScore") == 0,
+          "rescue should clear the stale last-word score display")
     e.hold("L")
     e.tap(*e.center(1, 6), settle=8)
     e.hold("L", False)
     check(get_int(e, "scriptPreviewPeels") == 1, "touch-screen peel did not register")
-    check(get_int(e, "scriptPreviewTurns") == 2,
-          "a successful peel must cost another turn and trigger fire rules")
+    check(get_int(e, "scriptPreviewTurns") == 3,
+          "a successful peel after word+rescue must cost a third fire turn")
     ledger_bytes = bytes(e.mem.unsigned[ledger:ledger + 194])
     check(ledger_bytes[184] == 1 and struct.unpack_from("<H", ledger_bytes, 186)[0] == 0,
           "peeling must break combo but keep Russian word history")

@@ -349,11 +349,8 @@ bool scriptBoardPlantThemeWord(ScriptBoard *b, const V4Dict *dict,
 
     uint32_t choice = nextSeed(seed ^ 0x7f4a7c15u ^
                                ((uint32_t)b->passTheme * 0x9e3779b9u));
-    const int col = (int)((choice >> 5) % SCRIPT_COLS);
-    const int beside = col == 0 ? 1 :
-                       col == SCRIPT_COLS - 1 ? col - 1 :
-                       ((choice >> 13) & 1u) ? col - 1 : col + 1;
-    const int reverse = (int)((choice >> 10) & 1u);
+    const int preferredCol = (int)((choice >> 5) % SCRIPT_COLS);
+    const int preferredReverse = (int)((choice >> 10) & 1u);
 
     // Theme-first, with fallback only when a tiny draft pool lacks any
     // four-to-six-letter entry. Source packs may have fewer than 40 themes.
@@ -373,27 +370,42 @@ bool scriptBoardPlantThemeWord(ScriptBoard *b, const V4Dict *dict,
                 // exact secret in an immediately playable tile chain.
                 if (count > 1 && length == b->passLen &&
                     memcmp(ids, b->pass, (size_t)length) == 0) continue;
-                bool eligible = true;
-                for (int i = 0; i < length; i++) {
-                    int order = reverse ? length - 1 - i : i;
-                    int c = order == 5 ? beside : col;
-                    int r = order == 5 ? 4 : order;
-                    if (ids[i] >= tiles->symbols || !tiles->weight[ids[i]] ||
-                        b->state[c][r] != SCRIPT_TILE || b->back[c][r]) {
-                        eligible = false;
-                        break;
+                // New shelves prefer one seeded column. On an already
+                // played board a peel-hole or moving flame might block it;
+                // try the remaining columns and both directions instead of
+                // overwriting a hazard, diamond or password location.
+                // This is only called on new shelf or explicit L+R rescue.
+                for (int columnTry = 0; columnTry < SCRIPT_COLS; columnTry++) {
+                    int col = (preferredCol + columnTry) % SCRIPT_COLS;
+                    int beside = col == 0 ? 1 :
+                                 col == SCRIPT_COLS-1 ? col-1 :
+                                 ((choice >> 13) & 1u) ? col-1 : col+1;
+                    for (int dirTry = 0; dirTry < 2; dirTry++) {
+                        int reverse = preferredReverse ^ dirTry;
+                        bool eligible = true;
+                        for (int i = 0; i < length; i++) {
+                            int order = reverse ? length - 1 - i : i;
+                            int c = order == 5 ? beside : col;
+                            int r = order == 5 ? 4 : order;
+                            if (ids[i] >= tiles->symbols ||
+                                !tiles->weight[ids[i]] ||
+                                b->state[c][r] != SCRIPT_TILE || b->back[c][r]) {
+                                eligible = false;
+                                break;
+                            }
+                        }
+                        if (!eligible) continue;
+                        // Confirm every tile before writing: a failed rescue
+                        // leaves the board, hidden symbols and RNG unchanged.
+                        for (int i = 0; i < length; i++) {
+                            int order = reverse ? length - 1 - i : i;
+                            int c = order == 5 ? beside : col;
+                            int r = order == 5 ? 4 : order;
+                            b->tile[c][r] = ids[i];
+                        }
+                        return true;
                     }
                 }
-                if (!eligible) continue;
-                // Write the selected word in reading order along a simple
-                // vertical/hex turn path. No per-frame search or malloc.
-                for (int i = 0; i < length; i++) {
-                    int order = reverse ? length - 1 - i : i;
-                    int c = order == 5 ? beside : col;
-                    int r = order == 5 ? 4 : order;
-                    b->tile[c][r] = ids[i];
-                }
-                return true;
             }
         }
     }
