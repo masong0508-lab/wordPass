@@ -39,7 +39,12 @@ platform compatibility, balancing, broader tests and script expansion.
       with before/after balance bots; preserve intended challenge.
 - [ ] Continue dictionary and theme-content editorial fixes, especially
       Finnish inflections and false-positive/false-negative word acceptance.
-- [ ] Consider a user-facing build/version marker and release packaging.
+- [x] CI creates a deterministic, SHA-256-verified ZIP containing the retail
+      and separate experimental Cyrillic ROMs, a source-commit manifest,
+      usage instructions and license notices. Both stand-alone ROM artifacts
+      remain available. Verify the complete bundle on real hardware.
+- [ ] Add a user-facing build/version marker without spending meaningful DS
+      RAM, rendering time or localization space.
 
 ## Multiscript expansion, with honest feature gates
 
