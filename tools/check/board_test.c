@@ -217,6 +217,16 @@ static void clueNavigationTests(void)
     CHECK("invalid prior coordinate starts a deterministic board scan",
           boardNextUsefulClue(&g, -3, ROWS + 2, &c, &r) == CLUE_PASS && c == 2 && r == 2);
     CHECK("clue navigation makes no mutation or resource charge", !memcmp(&g, &before, sizeof g));
+    g.wordClue[5][4] = 0;
+    g.wordClue[4][4] = 4; // one uncertain clue after the single forced one
+    CHECK("one decisive clue cannot trap repeated SELECT away from other evidence",
+          boardNextUsefulClue(&g, 2, 2, &c, &r) == CLUE_UNDECIDED && c == 4 && r == 4);
+    CHECK("after an unresolved clue, navigation cycles back to the forced clue",
+          boardNextUsefulClue(&g, 4, 4, &c, &r) == CLUE_PASS && c == 2 && r == 2);
+    g.wordClue[4][4] = 0;
+    CHECK("a single actionable clue can still be reselected",
+          boardNextUsefulClue(&g, 2, 2, &c, &r) == CLUE_PASS && c == 2 && r == 2);
+    g.wordClue[5][4] = 1;
 
     // An unopened back cell cannot influence a published word clue.
     g.back[2][3] = 4;
