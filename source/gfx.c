@@ -2311,8 +2311,11 @@ static void drawScriptPreviewBoard(void)
             int y = GRID_Y + r * TILE_H + ((c & 1) ? ODD_SHIFT : 0);
             int state = b->state[c][r], id = b->tile[c][r];
             if (state == SCRIPT_HOLE) {
+                // A peeled hole publishes its neighboring pass count just
+                // as in the retail game; it is not a meaningless dot.
+                int clue = scriptBoardVisibleClue(b, c, r);
                 rectOutline(x + 1, y + 1, TILE_W - 2, TILE_H - 2, ACCENT);
-                drawChar(x + 9, y + 8, '.', DIM_TEXT, 1);
+                if (clue >= 0) drawChar(x + 9, y + 8, '0' + clue, GOLD_LT, 1);
                 continue;
             }
             if (id < 0 || id >= dict->symbols) continue;
@@ -2325,8 +2328,16 @@ static void drawScriptPreviewBoard(void)
             u16 fg = state == SCRIPT_DIAMOND ? C(4,6,10) : WHITE;
             drawGlyph(x + 8, y + 5, glyph, pal->dark, 2);
             drawGlyph(x + 7, y + 4, glyph, fg, 2);
-            if (b->back[c][r] && state != SCRIPT_DIAMOND)
-                fillRect(x + 10, y + 20, 4, 1, GOLD);
+            // Never mark an unopened password location. The old gold bar
+            // explicitly exposed b->back[c][r] and spoiled the puzzle.
+            // Only an earned word endpoint may show a numbered badge.
+            if (b->surveyed[c] & (1u << r)) {
+                int clue = scriptBoardVisibleClue(b, c, r);
+                if (clue >= 0) {
+                    fillRect(x + 15, y + 12, 8, 9, BLACK);
+                    drawChar(x + 16, y + 13, '0' + clue, GOLD_LT, 1);
+                }
+            }
             for (int k = 0; k < b->chainLen; k++)
                 if (b->chainC[k] == c && b->chainR[k] == r) {
                     rectOutline(x, y, TILE_W, TILE_H, GOLD_LT);
@@ -2335,9 +2346,38 @@ static void drawScriptPreviewBoard(void)
                 }
         }
     }
+    // The latest word's surveyed *location* is fixed when front gems fall.
+    // Show which six neighbors its numeral describes, using only that
+    // already-public evidence. Never advertise a burning tile as safe.
+    if (b->clueC < SCRIPT_COLS && b->clueR < SCRIPT_ROWS &&
+        (b->surveyed[b->clueC] & (1u << b->clueR))) {
+        int left, covered;
+        int certainty = scriptBoardClueInference(b, b->clueC, b->clueR,
+                                                 &left, &covered);
+        int nc[6], nr[6], n = boardNeighbors(b->clueC, b->clueR, nc, nr);
+        for (int i = 0; i < n; i++) {
+            int c = nc[i], r = nr[i];
+            int x = gridX + c * TILE_W;
+            int y = GRID_Y + r * TILE_H + ((c & 1) ? ODD_SHIFT : 0);
+            int state = b->state[c][r];
+            bool risk = state == SCRIPT_BURN ||
+                        (r > 0 && b->state[c][r - 1] == SCRIPT_BURN);
+            u16 color = risk ? FIRE1 :
+                        (certainty == SCRIPT_CLUE_SAFE ? C(9,28,30) : GOLD_LT);
+            rectOutline(x, y, TILE_W, TILE_H, color);
+            if (!risk && state == SCRIPT_TILE &&
+                (certainty == SCRIPT_CLUE_PASS || certainty == SCRIPT_CLUE_SAFE)) {
+                fillRect(x + 2, y + 2, 7, 8, BLACK);
+                drawChar(x + 3, y + 2,
+                         certainty == SCRIPT_CLUE_PASS ? '+' : '-', color, 1);
+            }
+        }
+    }
     const int px0 = panelX + 2;
     rectOutline(panelX, 2, 78, 188, GOLD_DK);
-    drawText(px0 + 6, 10, "RU/UK DEMO", GOLD_LT, 1);
+    // Show the active LANGUAGE, never an invented "Cyrillic" locale.
+    drawText(px0 + 6, 10, scriptPreviewLanguage ? "УКР ДЕМО" : "РУС ДЕМО",
+             GOLD_LT, 1);
     char label[20];
     if (scriptPreviewDaily) strcpy(label, "ДЕНЬ");
     else sniprintf(label, sizeof label, scriptPreviewLanguage ? "ПОЛИЦЯ %d" : "ПОЛКА %d", scriptPreviewShelf);
@@ -2388,8 +2428,10 @@ static void drawScriptPreviewHelp(void)
                               "L+КАСАНИЕ: ОТКРЫТЬ БУКВУ", INK, 1);
     drawTextCenter(128, 74, uk ? "R: ОДНА ПІДКАЗКА НА ПОЛИЦЮ" :
                               "R: ОДНА ПОДСКАЗКА НА ПОЛКУ", INK, 1);
-    drawTextCenter(128, 87, uk ? "X: ІНША МОВА" :
-                               "X: СМЕНИТЬ ЯЗЫК", WHITE, 1);
+    // Numbered clues: safe and certain neighboring tiles are marked with
+    // '-' and '+'; they are logic hints, never automatic reveals.
+    drawTextCenter(128, 87, uk ? "ЧИСЛО: ЛІТЕРИ НАВКОЛО" :
+                               "ЧИСЛО: БУКВЫ РЯДОМ", WHITE, 1);
     drawTextCenter(128, 100, scriptPreviewDaily ? "SELECT: ПОВТОР ДНЯ" :
                    (uk ? "SELECT: НОВА СПРОБА" : "SELECT: НОВАЯ ПОПЫТКА"), INK, 1);
     drawTextCenter(128, 113, uk ? "L+SELECT: ДЕНЬ БЕЗ РЕКОРДУ" :
@@ -2410,7 +2452,9 @@ static void drawScriptPreviewTop(void)
     fillRect(0, 0, SCREEN_W, SCREEN_H, BLACK);
     rectOutline(7, 7, 242, 178, GOLD_DK);
     rectOutline(8, 8, 240, 176, GOLD);
-    drawTextCenter(128, 18, "RUSSIAN / UKRAINIAN PREVIEW", GOLD_LT, 1);
+    drawTextCenter(128, 18, scriptPreviewLanguage ?
+                   "WORDPASS / УКРАЇНСЬКА" : "WORDPASS / РУССКИЙ",
+                   GOLD_LT, 1);
     // The first Russian/Ukrainian shelves both say "КНИГИ". Show the
     // active language explicitly so switching remains unambiguous and testable.
     if (scriptPreviewDaily) {

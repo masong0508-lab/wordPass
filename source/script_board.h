@@ -25,6 +25,12 @@ typedef struct {
     uint8_t bag[WPL2_BAG_SIZE];
     uint8_t bagPos;
     uint32_t seed;
+    // Fixed back-layer surveys: each bit records a coordinate whose nearby
+    // password count has been earned by submitting a valid word. Seven bytes,
+    // no heap; the published number itself is derived from back + diamonds.
+    // Added at the end to preserve the debug mirror's legacy field offsets.
+    uint8_t surveyed[SCRIPT_COLS];  // one bit per row; reset each shelf
+    uint8_t clueC, clueR;          // last earned clue for a compact HUD focus
 } ScriptBoard;
 bool scriptBoardStart(ScriptBoard *board, const V4Tiles *tiles, uint32_t seed);
 // Build a deterministic test-only password shelf from validated WPP2 pools.
@@ -43,6 +49,18 @@ bool scriptBoardPlantThemeWord(ScriptBoard *board, const V4Dict *dictionary,
 // A peel returns -1 for invalid action, 0 for empty hole, or 1..passLen for
 // the hidden symbol it revealed. Revealed diamonds are permanent firebreaks.
 int scriptBoardPeel(ScriptBoard *board, int col, int row);
+// Exactly the same shifted-hex neighbor rule as the retail board. Only a
+// previously opened HOLE or surveyed word endpoint publishes a number.
+// -1 means no visible clue, 0..6 is the number of adjacent pass letters,
+// including already revealed diamonds; the center is NEVER counted.
+int scriptBoardVisibleClue(const ScriptBoard *board, int col, int row);
+// Logical deductions from a *visible* clue; counts only revealed diamonds
+// and still-covered cells. No clue, contradictory data, and zero unknowns
+// must never advertise a forced peel or expose unopened back locations.
+enum { SCRIPT_CLUE_UNSEEN = -1, SCRIPT_CLUE_UNKNOWN = 0,
+       SCRIPT_CLUE_SAFE = 1, SCRIPT_CLUE_PASS = 2 };
+int scriptBoardClueInference(const ScriptBoard *board, int col, int row,
+                             int *remaining, int *covered);
 bool scriptBoardPassComplete(const ScriptBoard *board);
 bool scriptBoardPassUtf8(const ScriptBoard *board, const V4Dict *dictionary,
                          char *out, size_t capacity);

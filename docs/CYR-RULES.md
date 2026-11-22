@@ -23,6 +23,26 @@ Unicode-script prototype without changing the released 11-language engine.
   modifiers are **not** implemented by this preliminary rules module.
   Enabling these languages in Classic/Daily remains blocked on full parity.
 
+## Word-earned and peel-earned numbered clues (RU/UK demo)
+
+Both experimental language engines now use the genuine shifted-hex
+Minesweeper clue rule: peeling a blank tile exposes a permanent number 0–6,
+while successfully submitting any dictionary-accepted word surveys the fixed
+board location where its chain ended. A published count includes adjacent
+hidden password positions **and** diamonds that were already revealed; it
+never includes the center tile. Refills, flames and front-letter movement do
+not relocate the back-layer count.
+
+Previously, the demo drew gold markers directly on secret positions, spoiling
+the password. Those marks are removed. A code-level visibility gate ensures
+unsurveyed covered cells return **no clue**; a deterministic native test checks
+the gate independently of screen rendering, and a real-ROM screenshot test
+changes a hidden back value without permitting the on-screen tile to change.
+Where a published clue logically forces all/none of the remaining covered
+neighbors, the DS marks them with +/- cues while retaining red fire danger.
+This adds no automatic reveal, hint resource, turn, heap allocation or texture
+asset. It does **not** make Ukrainian/Russian complete retail languages.
+
 ## Memory and rendering
 
 The rules state is a few dozen bytes, uses stack-bounded searches and has

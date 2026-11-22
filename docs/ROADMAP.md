@@ -108,6 +108,11 @@ as available in the in-game language picker.
       theme-aware 4–6-symbol chain. The seed varies word/column, protects
       hidden password tiles, and supports the existing bounded hint solver;
       native checks cover all 40 themes in both languages.
+- [x] Replace hidden-password cheat marks in the Cyrillic renderer with
+      legitimate numbered peels and accepted-word endpoint clues. The seven
+      survey row masks preserve fixed back-layer clues through gravity;
+      safe/forced-neighbor deduction uses only earned evidence, native rules
+      tests, and an actual DS anti-spoiler screenshot comparison.
 - [x] Add a bounded one-use recovery move for sparse Cyrillic shelves:
       L+R after a turn can plant one valid word around burns/holes, costs
       heat and time, breaks combos, never awards points, and avoids hidden
