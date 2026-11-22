@@ -61,7 +61,9 @@ against the source and the data files by `tools/check_guide.py`, and every pictu
   does not hide a password letter; a gold **+** means all remaining covered
   neighbors must hide password letters. These are logical deductions from
   visible numbers, holes and found diamonds only, not automatic reveals.
-  Fire warnings stay red: a safe deduction can still be dangerous to peel.
+  The **NEARBY** display also shows *hidden candidates / covered neighbors*
+  when space allows (for example, **1/2** means one of two covered locations
+  still hides a password letter). Fire warnings stay red: a safe deduction can still be dangerous to peel.
   A covered clue can still hide a password
   letter, even when its number is zero. Reusing an endpoint repeats its clue;
   ending a word elsewhere can add information.
