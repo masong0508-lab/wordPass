@@ -216,6 +216,10 @@ int boardTwinEighths(int shelf)
 {
     if (shelf < TWIN_FIRE_FROM_SHELF) return 0;
     int k = (shelf - (TWIN_FIRE_FROM_SHELF - TWIN_FIRE_STEP)) / TWIN_FIRE_STEP;
+    // Stage tier IV's new dangers rather than raising both at once on shelf 15.
+    // 14: 2/8, 15: 2/8, 16: 3/8, 17: 3/8, 18: 4/8.
+    // By shelf 19 the ordinary every-two-shelves ladder resumes unchanged.
+    if (shelf == 15 || shelf == 17) k--;
     return k > 8 ? 8 : k;
 }
 
@@ -235,6 +239,10 @@ void boardShelfRules(int shelf, ShelfRules *out)
     out->burnEvery = (shelf <= 3) ? 2 : 1;
     out->pulseEvery = 6 - out->tier;
     if (out->pulseEvery < 3) out->pulseEvery = 3;
+    // Entering LOCKDOWN IV no longer tightens the pulse and twin ignitions
+    // on the same shelf. The stronger three-turn pulse arrives at shelf 17;
+    // shelf 16 first raises the twin share, shelf 18 raises it again.
+    if (shelf == 15 || shelf == 16) out->pulseEvery = 4;
     // deeper shelves bury the pass lower in the board
     out->minRow = (shelf <= 2) ? 1 : (shelf <= 5) ? 3 : (shelf <= 11) ? 4 : 5;
     out->twinEighths = boardTwinEighths(shelf);
