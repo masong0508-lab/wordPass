@@ -24,6 +24,7 @@ import dict_v4 as d4
 import tiles_v2 as t2
 import pools_v2 as p2
 from check_cyr_seeds import check_language
+from themes import ORDER
 from hunspell import expand
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -58,6 +59,47 @@ def read_catalog(code):
     return themes, {word for row in rows for word in row["words"]}
 
 
+def expand_themes_from_source(code, path, themes, starters, source_words):
+    """Accept explicit language-specific, unreviewed, source-backed additions.
+
+    English theme keys are identifiers, NEVER English/Russian/Ukrainian words
+    to put into the playable pack. The original 40 translated titles remain
+    fixed. No semantic matching or automatic theming is invented by software.
+    """
+    if path is None:
+        return set()
+    raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    if (not isinstance(raw, dict) or set(raw) !=
+            {"language", "review_status", "themes"} or
+            raw["language"] != code or
+            raw["review_status"] != "unreviewed-candidates" or
+            not isinstance(raw["themes"], dict) or not raw["themes"]):
+        raise ValueError(f"{code}: expansion must specify its language, "
+                         "unreviewed status and nonempty theme mapping")
+    titles = dict(zip(ORDER, themes))
+    if len(titles) != 40 or any(key not in titles for key in raw["themes"]):
+        raise ValueError(f"{code}: unknown or missing canonical theme identity")
+    index = {cp: i for i, cp in enumerate(d4.alphabet(code))}
+    added = set()
+    for english, entries in raw["themes"].items():
+        if not isinstance(entries, list) or not 1 <= len(entries) <= 64:
+            raise ValueError(f"{code}/{english}: provide 1..64 editorial candidates")
+        for word in entries:
+            if (not isinstance(word, str) or
+                not 4 <= len(word) <= 9 or
+                word != unicodedata.normalize("NFC", word) or
+                not word.isupper() or
+                any(ord(ch) not in index for ch in word)):
+                raise ValueError(f"{code}/{english}: invalid spelling or alphabet: {word!r}")
+            if word in starters or word in added:
+                raise ValueError(f"{code}/{english}: duplicate password {word}")
+            if word not in source_words:
+                raise ValueError(f"{code}/{english}: {word} absent from licensed source dictionary")
+            added.add(word)
+            themes[titles[english]].append(word)
+    return added
+
+
 def rank_words(path, index):
     if path is None:
         return []
@@ -74,7 +116,8 @@ def rank_words(path, index):
 
 
 def build(code, dic, aff, notice, origin, out,
-          rank=None, max_words=0, max_dict_bytes=DEFAULT_BUDGET):
+          rank=None, max_words=0, max_dict_bytes=DEFAULT_BUDGET,
+          extra_themes=None):
     if code not in ("ru", "uk"):
         raise ValueError("supported Cyrillic source codes: ru, uk")
     if not origin or not origin.startswith(("https://", "http://")):
@@ -112,13 +155,18 @@ def build(code, dic, aff, notice, origin, out,
         raise ValueError(f"{len(missing)} candidate passwords absent from source dictionary: "
                          + ", ".join(sorted(missing)[:18])
                          + " (edit/review catalog, do not inject unsupported words)")
+    extras = expand_themes_from_source(code, extra_themes, themes, seeds, words)
+    required = seeds | extras
+    if max_words and max_words < len(required):
+        raise ValueError(f"--max-words={max_words} would discard mandatory "
+                         f"themed passwords ({len(required)})")
 
     ranked = rank_words(rank, index)
     if max_words and len(words) > max_words:
         if not ranked:
             raise ValueError("word budget requires an independently sourced frequency ranking; "
                              "lexicographic cutoff would bias the dictionary")
-        selected = set(seeds)
+        selected = set(required)
         for word in ranked:
             if len(selected) >= max_words:
                 break
@@ -144,8 +192,10 @@ def build(code, dic, aff, notice, origin, out,
     d4.verify(dictionary)
     t2.verify(tiles, dictionary)
     report = p2.verify(dictionary, pools)
-    if report["themes"] != 40 or report["words"] != 160:
-        raise ValueError("40-theme seed library incomplete")
+    if report["themes"] != 40 or report["words"] != 160 + len(extras):
+        raise ValueError("40-theme source-backed candidate library incomplete")
+    if len(pools) > 256 * 1024:
+        raise ValueError("expanded 40-theme pool exceeds Nintendo DS preview budget")
 
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -153,6 +203,11 @@ def build(code, dic, aff, notice, origin, out,
                               ("pools.bin", pools)):
         (out / filename).write_bytes(payload)
     (out / "LICENSE-SOURCE.txt").write_bytes(notice_bytes)
+    extras_copy = out / "THEME-EXTRAS.json"
+    if extra_themes is not None:
+        extras_copy.write_bytes(Path(extra_themes).read_bytes())
+    elif extras_copy.exists():
+        extras_copy.unlink()
     sha = lambda path: hashlib.sha256(Path(path).read_bytes()).hexdigest()
     manifest = {
         "status": "EXPERIMENTAL: not certified for release",
@@ -168,12 +223,18 @@ def build(code, dic, aff, notice, origin, out,
         "retained_word_count": len(words),
         "common_tier_count": len(common),
         "starter_theme_count": 40, "starter_password_count": 160,
+        "extra_password_count": len(extras),
+        "total_password_count": report["words"],
+        "theme_expansion_status": ("unreviewed-candidates" if extra_themes
+                                   else "none"),
+        "theme_expansion_sha256": (sha(extra_themes) if extra_themes else None),
         "dictionary_bytes": len(dictionary),
         "tile_bytes": len(tiles), "pool_bytes": len(pools),
         "frequency_source": str(rank) if rank else "NONE: candidate seeds marked common for engineering only",
         "warnings": [
             "Native-speaker review, mature frequency tiers and content filtering still required",
-            "The bundled 160 candidate passwords are not enough for full Classic/Daily play",
+            "The starter 160 passwords and any unreviewed expansions are not release-ready",
+            "Theme assignments and extra vocabulary require independent native-speaker review",
             "Verify source and derivative redistribution obligations for all components",
             "Ukrainian apostrophe spellings are excluded, never silently stripped; add a true non-tile separator before locale release",
         ],
@@ -181,7 +242,8 @@ def build(code, dic, aff, notice, origin, out,
     (out / "SOURCE-MANIFEST.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"CYR INTAKE {code}: {len(words)} source words, {len(dictionary)} dictionary bytes, "
-          f"40 starter themes, {len(pools)} pool bytes; "
+          f"40 themes, {report['words']} passwords ({len(extras)} additional), "
+          f"{len(pools)} pool bytes; "
           f"Ukrainian apostrophe forms excluded={len(apostrophized)}; status EXPERIMENTAL")
     return manifest
 
@@ -236,6 +298,7 @@ def main():
     p.add_argument("--origin")
     p.add_argument("--out")
     p.add_argument("--rank")
+    p.add_argument("--extra-themes", help="JSON: unreviewed, source-backed themed candidates")
     p.add_argument("--max-words", type=int, default=0)
     p.add_argument("--max-dict-bytes", type=int, default=DEFAULT_BUDGET)
     args = p.parse_args()
@@ -246,7 +309,8 @@ def main():
             p.error("word and byte budgets must be positive")
         build(args.code, args.dic, args.aff, args.notice, args.origin, args.out,
               rank=args.rank, max_words=args.max_words,
-              max_dict_bytes=args.max_dict_bytes)
+              max_dict_bytes=args.max_dict_bytes,
+              extra_themes=args.extra_themes)
     else:
         p.error("provide --selftest or --code, --dic, --aff, --notice, --origin and --out")
 
