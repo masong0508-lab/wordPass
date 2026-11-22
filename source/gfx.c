@@ -1340,7 +1340,21 @@ static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
     if (peek && clue >= 0) { fmtInt(s, clue); panelRow(74, ui(UI_P_CLUE), s, ACCENT); }
     else if (w[0]) drawText(PANEL_X, 74, w, valid ? GOLD_LT : WHITE, 1);
     else if (!peek) { char hp[24]; uiFmt(hp, sizeof hp, UI_P_HOLDPEEK, S.hand == HAND_LEFT ? "R" : "L"); drawText(PANEL_X, 74, hp, DIM_TEXT, 1); }   // the shoulder under the idle hand
-    if (peek && clue >= 0) drawText(PANEL_X, 84, ui(UI_P_NEARBY), DIM_TEXT, 1);
+    if (peek && clue >= 0) {
+        // Show hidden-pass candidates / covered neighbors alongside the
+        // localized NEARBY label when they fit. This is derived from visible
+        // clues only, and is omitted for inconsistent/debug-poked clues.
+        const char *label = ui(UI_P_NEARBY);
+        drawText(PANEL_X, 84, label, DIM_TEXT, 1);
+        int left, covered;
+        boardClueInference(g, clueC, clueR, &left, &covered);
+        if (covered > 0 && left >= 0 && left <= covered) {
+            char frac[8]; siprintf(frac, "%d/%d", left, covered);
+            int px = PANEL_X + 76 - textWidth(frac, 1);
+            if (px >= PANEL_X + textWidth(label, 1) + 3)
+                drawText(px, 84, frac, left == 0 ? C(9,28,30) : left == covered ? GOLD_LT : WHITE, 1);
+        }
+    }
     else if (g->chainLen >= 3 && !peek) {
         if (valid) {   // what the word is worth, and its length multiplier
             s[0] = '+'; fmtInt(s + 1, chainScoreNow);
