@@ -33,6 +33,8 @@ jobs:
         run: make music-check
       - name: Python tools compile
         run: python3 -m py_compile tools/*.py tools/emu/*.py tools/lang/*.py tools/music/*.py tools/check/*.py
+      - name: Verify deterministic ROM-set packaging (no DS toolchain)
+        run: python3 tools/check/package_roms.py --selftest
       - name: Generate actionable 11-language audit report
         run: python3 tools/lang/quality_report.py build/language-quality.md
       - name: Upload localization QA report
@@ -74,6 +76,7 @@ jobs:
           files: wordPass.nds
       - name: Build separate Cyrillic engineering preview ROM
         run: |
+          cp wordPass.nds wordPass-retail.nds
           make clean
           make WP_CYR_PREVIEW=1
           test -f nitrofiles/cyrpreview/ru/dict.bin
@@ -90,6 +93,22 @@ jobs:
             wordPass-cyr-preview.nds
             wordPass-cyr-preview.elf
             build/rom-budget-preview.json
+      - name: Create verified, labeled retail and preview ROM ZIP
+        run: |
+          python3 tools/check/package_roms.py \
+            --retail wordPass-retail.nds \
+            --preview wordPass-cyr-preview.nds \
+            --output wordPass-ROM-set.zip \
+            --commit "$GITHUB_SHA"
+          python3 tools/check/package_roms.py --verify wordPass-ROM-set.zip
+          sha256sum --check wordPass-ROM-set.sha256
+      - name: Upload full ROM-set ZIP and checksum
+        uses: actions/upload-artifact@v7
+        with:
+          name: wordPass-complete-ROM-set
+          path: |
+            wordPass-ROM-set.zip
+            wordPass-ROM-set.sha256
 
   emulator:
     # Boots the built ROM headless in DeSmuME (py-desmume is a binary wheel with its own SDL2, so pip alone is enough;
