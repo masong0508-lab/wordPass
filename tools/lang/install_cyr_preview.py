@@ -26,6 +26,7 @@ import pools_v2 as pools
 
 RESOURCE_MAX = {"dict.bin": 1536 * 1024, "tiles.bin": 512, "pools.bin": 256 * 1024}
 META_FILES = ("SOURCE-MANIFEST.json", "LICENSE-SOURCE.txt")
+EXTRA_FILE = "THEME-EXTRAS.json"
 
 
 def _sha(data):
@@ -74,6 +75,30 @@ def _inspect(source, code, synthetic=False):
             manifest.get("starter_password_count") != 160 or
             manifest.get("retained_word_count") != d["words"]):
         raise ValueError(f"{code}: source counts contradict binary packs")
+    extra_count = manifest.get("extra_password_count", 0)
+    total = manifest.get("total_password_count", 160)
+    if (type(extra_count) is not int or extra_count < 0 or
+            type(total) is not int or total != 160 + extra_count or
+            total != p["words"]):
+        raise ValueError(f"{code}: theme expansion counts do not match WPP2")
+    expansion_file = folder / EXTRA_FILE
+    if extra_count:
+        extras = expansion_file.read_bytes()
+        if (manifest.get("theme_expansion_status") != "unreviewed-candidates" or
+                not extras or manifest.get("theme_expansion_sha256") != _sha(extras)):
+            raise ValueError(f"{code}: theme expansion source has changed")
+        info = json.loads(extras.decode("utf-8"))
+        if (not isinstance(info, dict) or info.get("language") != code or
+                info.get("review_status") != "unreviewed-candidates" or
+                not isinstance(info.get("themes"), dict) or
+                sum(len(words) for words in info["themes"].values()
+                    if isinstance(words, list)) != extra_count):
+            raise ValueError(f"{code}: malformed theme expansion provenance")
+        assets[EXTRA_FILE] = extras
+    elif (expansion_file.exists() or
+          manifest.get("theme_expansion_sha256") not in (None, "") or
+          manifest.get("theme_expansion_status", "none") != "none"):
+        raise ValueError(f"{code}: unexpected theme expansion file/manifest")
     assets["LICENSE-SOURCE.txt"] = notice
     assets["SOURCE-MANIFEST.json"] = manifest_bytes
     return assets, d, p
@@ -107,7 +132,7 @@ def install(source, dest, synthetic=False):
             shutil.rmtree(stage)
     for code, (_, d, p) in validated.items():
         print(f"CYR IMPORTED PREVIEW {code}: {d['words']} sourced words, "
-              f"{p['themes']} starter themes, {p['words']} draft passes "
+              f"{p['themes']} themes, {p['words']} unreviewed candidate passwords "
               "(NOT a certified playable locale)")
 
 
@@ -119,7 +144,7 @@ def selftest(folder):
     dest = root / "installed"
     install(source, dest, synthetic=True)
     for code in ("ru", "uk"):
-        for file in (*RESOURCE_MAX, *META_FILES):
+        for file in (*RESOURCE_MAX, *META_FILES, EXTRA_FILE):
             assert (dest / code / file).read_bytes() == (source / code / file).read_bytes()
     before = (dest / "ru" / "dict.bin").read_bytes()
     license_path = source / "uk" / "LICENSE-SOURCE.txt"
@@ -135,6 +160,21 @@ def selftest(folder):
         assert (dest / "ru" / "dict.bin").read_bytes() == before
     finally:
         license_path.write_bytes(original)
+    # A changed editorial-candidate file must not install even if its
+    # dictionary and pool binaries remain otherwise valid.
+    extra_path = source / "uk" / EXTRA_FILE
+    original_extra = extra_path.read_bytes()
+    extra_path.write_bytes(original_extra + b" ")
+    try:
+        try:
+            install(source, dest, synthetic=True)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("tampered thematic candidate attribution accepted")
+        assert (dest / "ru" / "dict.bin").read_bytes() == before
+    finally:
+        extra_path.write_bytes(original_extra)
     # A checksum-free identity attack is also rejected: IDs for Ukrainian
     # and Russian cannot be interchanged even with 33-symbol headers.
     bad_dict = source / "ru" / "dict.bin"
