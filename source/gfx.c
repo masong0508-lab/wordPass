@@ -1127,6 +1127,10 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
                     else drawChar(x + 3, y + 4, 'A' + cl->letter, BLACK, 1);
                     fillRect(x + 14, y + 11, 8, 9, BLACK);
                     drawChar(x + 16, y + 12, '0' + g->wordClue[c][r] - 1, ACCENT, 1);
+                    if (cl->state == CELL_BURN) {
+                        rectOutline(x + 1, y + 1, TILE_W - 2, TILE_H - 2, FIRE1);
+                        if (frame & 16) drawChar(x + 17, y + 3, '!', FIRE2, 1);
+                    }
                 }
             }
             if (cl->flash) {

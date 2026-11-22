@@ -7,13 +7,19 @@ protect the DS memory budget.
 
 ## Continued search and regression pass
 
-Retail dead-board detection and word hints now stop following impossible
+### PR25 prefix-only comparison
+
+The result and timing figures in this subsection describe the prefix-only
+search milestone at `27ff7db` (PR25), before cohesion's intentional changes
+to diamond routes and long-word hints.
+
+Retail dead-board detection and word hints started stopping at impossible
 dictionary prefixes. The WPD3 lookup compares only the prefix's letter bits
 in the existing sorted records; it needs no trie, extra index or heap
 allocation. The search bounds include Qu's two-letter expansion and
 plain-Q diamonds, and the final word still passes the normal common/rare,
-library and spelling checks. Traversal order and first eligible hint are
-preserved.
+library and spelling checks. Traversal order and first eligible hint were
+preserved in this comparison.
 
 `tools/check/benchmark_search.py` compares the old and new implementations
 against the same language data and support code. At 100 samples per setting,
@@ -40,17 +46,43 @@ scatter across the five runs. These timings help assess CPU work; they do
 not establish a physical DS frame-rate improvement. Exact search results
 and deterministic operation counts are the stronger regression evidence.
 
-Reproduce the isolated search comparison against the prior merged build:
+Reproduce that historical comparison against the prior merged build:
 
 ```sh
-python3 tools/check/benchmark_search.py --baseline fd4ccd3b092f44c662513cd56059ec65a77e9a75 --samples 100 --output build/search-comparison.json
+python3 tools/check/benchmark_search.py --baseline fd4ccd3b092f44c662513cd56059ec65a77e9a75 --candidate 27ff7db6f51e368b5c93949d182ecb44bd31a687 --samples 100 --output build/search-comparison.json
 ```
+
+Both revisions supply `board.c` and `dict.c`; the comparison uses the same
+current headers, language data and support modules. Omitting `--candidate`
+compares against the working tree. The JSON report identifies the resolved
+candidate commit or `working-tree`. Exact result/path parity remains a
+requirement; the current cohesion search intentionally differs from this
+historical baseline and is not a valid parity comparison against it.
 
 The Cyrillic preview now computes a selected word's score and tier once
 before vblank, sharing the pair across top-screen slices. Previously each
 clipped slice repeated both dictionary validations during the short LCD
 refresh interval. Score, tier and invalid-word visibility participate in
 the dirty-slice signatures so the displayed quote updates promptly.
+
+### Cohesion: bounded longer-word search and clue state
+
+The current retail search retains the short common-word hint preferences,
+then searches longer dictionary prefixes and allowed rare words as a
+fallback. Revealed diamonds can participate in routes. One shared budget
+limits the whole extended fallback to 4,096 visited nodes, with at most
+20 gems and 20 spelled letters per path; Qu consumes two of those letters.
+Search state stays on the stack. If dead-board detection exhausts the
+budget without finding a word, it conservatively keeps the shelf playable
+instead of declaring it dead. A hint can still be unavailable when that
+bounded search finds no route. These are work bounds and correctness
+choices, not measured DS performance improvements.
+
+Word clues use 56 one-byte board entries and two one-byte endpoint
+coordinates: 58 bytes of state before any structure padding. They live in
+`Game` and require no heap allocation. An accepted word updates its final
+location with the adjacent password-letter count; the fixed clue survives
+front-gem refills and resets with the shelf.
 
 ### Real presentation cadence, not only loop counts
 

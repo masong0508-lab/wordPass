@@ -182,6 +182,29 @@ def main():
         rims = [px[e.cell_rect(c, r)[0], e.cell_rect(c, r)[1]] for c, r in neighbors]
         assert len(neighbors) == 6 and len(set(rims)) == 1 and sum(rims[0]) > 300, f'neighbor explanation missing: {rims}'
         e.shot(str(args.output / f'word_clue_{e.bx}.png'))
+        # A surveyed gem that catches fire must retain its warning after the
+        # compact clue plate is painted. The always-red inner rim is distinct
+        # from the animated outer flame; the exclamation flashes inside it.
+        letter = e.state()['cell'][tail[0]][tail[1]][0]
+        e.set_cell(*tail, BURN, letter)
+        try:
+            e.run(6)
+            x, y, _, _ = e.cell_rect(*tail)
+            px = e.pixels()
+            warning_rim = [px[x + dx, y + dy] for dx, dy in ((1, 1), (22, 1), (1, 20), (22, 20))]
+            e.shot(str(args.output / f'burning_word_clue_{e.bx}.png'))
+            assert all(r >= 230 and 80 <= g <= 120 and b <= 30 for r, g, b in warning_rim), f'burning clue lost its red warning rim: {warning_rim}'
+            blink = set()
+            for _ in range(32):
+                e.run(1)
+                px = e.pixels()
+                warning = any(r >= 230 and 180 <= g <= 210 and 20 <= b <= 45
+                              for r, g, b in (px[x + dx, y + dy] for dx in range(17, 22) for dy in range(3, 10)))
+                blink.add(warning)
+            assert blink == {False, True}, 'compact clue plate erased the blinking scorch warning'
+        finally:
+            e.set_cell(*tail, TILE, letter)
+        assert resources() == stable and clues() == learned, 'warning display changed the shelf'
         e.hold('L', False)
         # The goal tracker opens the password explanation without a turn.
         e.tap((4 if e.bx else 176) + 24, 55, settle=8)
@@ -193,6 +216,44 @@ def main():
         e.peel(*tail)
         after = e.state()
         assert after['cell'][tail[0]][tail[1]][1] == SECRET and after['found'][3] and clues() == learned, 'covered clue could not reveal its own hidden letter'
+
+    def clue_deduction():
+        fixture(word='', background=HOLE, keep_word=True)
+        path = [(2, 2), (2, 3), (2, 4)]
+        tail = path[-1]
+        for (c, r), letter in zip(path, 'cat'):
+            e.set_cell(c, r, TILE, letter)
+        e.set_back(*tail, 4)
+        e.set_cell(2, 5, TILE, 'x')
+        e.set_back(2, 5, 1)
+        after_word = submit(path)
+        assert clues()[2 * ROWS + 4] == 2 and not any(after_word['found']), 'word did not earn clue 1 without revealing its center'
+        e.peel(2, 3)
+        assert e.state()['cell'][2][3][1] == HOLE, 'preparation peel did not leave an empty neighbor'
+        before = resources()
+        e.hold('L')
+        e.run(25)
+
+        # Only information available to the player enters the decision: the
+        # displayed clue, neighbor geometry, visible holes and known diamonds.
+        # In particular, neither the back map nor a preselected secret is read.
+        shown_count = clues()[tail[0] * ROWS + tail[1]] - 1
+        visible = e.state()['cell']
+        neighbors = e.neighbors(*tail)
+        known = sum(visible[c][r][1] == SECRET for c, r in neighbors)
+        covered = [(c, r) for c, r in neighbors if visible[c][r][1] in (TILE, BURN)]
+        empty = sum(visible[c][r][1] == HOLE for c, r in neighbors)
+        assert empty == 5 and shown_count - known == len(covered) == 1, 'visible clue does not force exactly one covered neighbor'
+        inferred = covered[0]
+        assert resources() == before, 'inspecting the clue spent a resource'
+        e.shot(str(args.output / f'clue_deduction_before_{e.bx}.png'))
+        e.hold('L', False)
+        e.peel(*inferred)
+        after = e.state()
+        assert after['cell'][inferred[0]][inferred[1]][1] == SECRET and after['found'][0], 'the visibly deduced peel did not reveal a password letter'
+        assert sum(after['found']) == sum(before['found']) + 1, 'deduced reveal did not advance FOUND by exactly one'
+        assert after['cell'][tail[0]][tail[1]][1] == TILE and not after['found'][3], 'neighbor deduction incorrectly uncovered the clue center'
+        e.shot(str(args.output / f'clue_deduction_after_{e.bx}.png'))
 
     def tutorial_retry():
         path = fixture(column=2, background=TILE, keep_word=True)
@@ -230,6 +291,7 @@ def main():
                  ('diamond starts a usable word hint', diamond_hint),
                  ('six-gem-only shelf survives and offers a hint', longer_word),
                  ('word earns a visible fixed clue and goal help is free', word_clue),
+                 ('earned clue yields a reveal using only visible information', clue_deduction),
                  ('unfinished tutorial retry clears clues and teaches words again', tutorial_retry))
     for left in (False, True):
         choose_hand(left)
