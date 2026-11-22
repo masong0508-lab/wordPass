@@ -380,6 +380,11 @@ void boardAnimate(Game *g);
 bool boardIsChainable(const Game *g, int c, int r);
 int  boardNeighbors(int c, int r, int outC[6], int outR[6]);
 int  boardBackNumber(const Game *g, int c, int r);
+// An inspected clue only constrains its *covered* neighboring cells. These
+// deductions use the visible clue and revealed diamonds/holes, never the
+// secret back layer (except the number already displayed on an opened hole).
+enum { CLUE_NO_DATA = -1, CLUE_UNDECIDED, CLUE_SAFE, CLUE_PASS };
+int  boardClueInference(const Game *g, int c, int r, int *remaining, int *covered);
 bool boardHasWords(const Game *g);
 int  boardHintChain(const Game *g, u8 *outC, u8 *outR, int max);   // a path spelling a common word of 3 to 5 letters on this board: its length, 0 if none
 bool boardWordOk(const char *w, int len);     // accepted under the current LIBRARY setting
