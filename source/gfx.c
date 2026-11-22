@@ -1147,15 +1147,26 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
         }
         clipY0 = outerClip;
     }
-    // Outline exactly the six counted neighbors, never the clue's own square.
+    // Outline the inspected clue's six neighbors (not its center). Simple
+    // forced deductions get a tiny +/- badge on still-covered gems: blue '-'
+    // means the visible count is satisfied; gold '+' means every remaining
+    // neighbor must hide a password letter. Fire danger stays red and wins.
     int clueC, clueR;
     if (inspectedClue(g, &clueC, &clueR) >= 0) {
+        int remaining, covered;
+        int inference = boardClueInference(g, clueC, clueR, &remaining, &covered);
         int nc[6], nr[6], n = boardNeighbors(clueC, clueR, nc, nr);
         for (int i = 0; i < n; i++) {
             int x, y; cellOrigin(nc[i], nr[i], &x, &y);
-            bool risk = g->cell[nc[i]][nr[i]].state == CELL_BURN ||
+            int state = g->cell[nc[i]][nr[i]].state;
+            bool risk = state == CELL_BURN ||
                         (nr[i] > 0 && g->cell[nc[i]][nr[i] - 1].state == CELL_BURN);
-            rectOutline(x, y, TILE_W, TILE_H, risk ? FIRE1 : GOLD_LT);
+            u16 col = risk ? FIRE1 : state == CELL_TILE && inference == CLUE_SAFE ? C(9,28,30) : GOLD_LT;
+            rectOutline(x, y, TILE_W, TILE_H, col);
+            if (state == CELL_TILE && !risk && (inference == CLUE_SAFE || inference == CLUE_PASS)) {
+                fillRect(x + 2, y + 2, 7, 8, BLACK);
+                drawChar(x + 3, y + 2, inference == CLUE_SAFE ? '-' : '+', col, 1);
+            }
         }
     }
     // the d-pad cursor: a 2 px rim alternating white and accent, with a notch above it
