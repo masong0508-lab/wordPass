@@ -64,6 +64,16 @@ jobs:
               assert m["dictionary_bytes"] <= 1536*1024, m
           print("SOURCED RU/UK OK: 100k words each, 347/333 attested password candidates")
           PY
+      - name: Validate real 100k-word files in the actual native C password engine
+        run: |
+          gcc -std=gnu11 -O2 -Wall -Wextra -Wshadow -I source \
+            tools/check/script_pass_test.c \
+            source/script_board.c source/pools_v2.c source/tiles_v2.c source/dict_v4.c \
+            -o sourced-script-pass-check
+          ./sourced-script-pass-check \
+            sourced-preview/ru/dict.bin sourced-preview/uk/dict.bin \
+            sourced-preview/ru/tiles.bin sourced-preview/uk/tiles.bin \
+            sourced-preview/ru/pools.bin sourced-preview/uk/pools.bin
       - name: Upload source dictionaries, original notices and tested packs
         uses: actions/upload-artifact@v7
         with:
