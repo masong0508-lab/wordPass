@@ -312,3 +312,29 @@ complete retail Classic/Daily rules (which include lockdown, twists,
 saved progress, a word ledger, hint fairness, full difficulty and balancing).
 The separate preview is still an engineering build with starter theme
 content and should not be presented as a full translated release.
+
+## Optional larger Russian/Ukrainian source-backed build
+
+A dedicated `sourced-cyr-preview.yml` GitHub Actions job now assembles an
+**additional** opt-in Nintendo DS ROM with 100,000 licensed-source-derived
+candidate words in **each** language, plus 347/333 source-headword-verified,
+unreviewed thematic password candidates across all 40 themes. This is not
+the ordinary mini demonstration ROM and is not enabled in the retail
+11-language game.
+
+Choose the Actions artifact `wordPass-real-RU-UK-experimental-ROM`
+(`wordPass-ru-uk-sourced-preview.nds`). The separate
+`wordPass-ru-uk-sourced-lexicons` artifact retains original LibreOffice
+Russian/Ukrainian dictionary and affix source files, original rights notices,
+the exact source commit, generated WPD4/WPL2/WPP2 data, attribution manifests
+and the source candidate files. The ROM itself still labels the modes
+`РУССКИЙ — DEMO` and `УКРАЇНСЬКА — DEMO`.
+
+The builder validates source integrity and keeps the DS dictionary under
+the 1.5 MiB/language cap, rather than making unavailable or inaccurate words
+appear. Larger dictionaries are sampled by word length without a genuine
+frequency ranking; the supplied themed words have not received professional
+semantic review. Hardware save compatibility, physical DS FPS, Ukrainian
+apostrophe gameplay, complete Classic/Daily modes and the full UI translation
+remain unfinished. Do not present this build as a certified Russian/Ukrainian
+release.
