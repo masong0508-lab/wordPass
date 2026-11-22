@@ -20,6 +20,78 @@ static uint8_t *readFile(const char *path, size_t *length)
     *length = (size_t)n;
     return p;
 }
+// Evidence on a Cyrillic shelf must behave like the real Minesweeper back
+// layer: no spoiler on an unopened cell, a fixed clue from a scored word,
+// opened holes with numbers, and already-found diamonds still counted.
+static void clueTests(void)
+{
+    ScriptBoard b;
+    memset(&b, 0, sizeof b);
+    for (int c = 0; c < SCRIPT_COLS; c++)
+        for (int r = 0; r < SCRIPT_ROWS; r++)
+            b.state[c][r] = SCRIPT_TILE;
+    b.passLen = 4;
+    b.back[2][4] = 1; // neighbor below (2,3)
+    b.back[3][3] = 2; // diagonal neighbor of the even column
+    b.back[2][3] = 3; // the center is explicitly NOT a neighbor
+    int remaining = 99, covered = 99;
+    CHECK(scriptBoardVisibleClue(&b, 2, 3) == -1 &&
+          scriptBoardClueInference(&b, 2, 3, &remaining, &covered) == SCRIPT_CLUE_UNSEEN &&
+          remaining == 0 && covered == 0,
+          "an unopened Cyrillic password cell has no visible clue or inference");
+    CHECK(scriptBoardVisibleClue(&b, -1, 3) == -1 &&
+          scriptBoardVisibleClue(&b, 2, SCRIPT_ROWS) == -1,
+          "invalid coordinates cannot expose password information");
+    b.surveyed[2] |= 1u << 3;
+    ScriptBoard before = b;
+    CHECK(scriptBoardVisibleClue(&b, 2, 3) == 2,
+          "survey counts two hex neighbors but excludes its own hidden password");
+    CHECK(scriptBoardClueInference(&b, 2, 3, &remaining, &covered) == SCRIPT_CLUE_UNKNOWN &&
+          remaining == 2 && covered == 6,
+          "uncertain clue reports remaining password neighbors without guessing");
+    CHECK(!memcmp(&b, &before, sizeof b),
+          "inspecting Cyrillic clue does not alter board, RNG, or hidden password");
+    b.state[2][4] = SCRIPT_DIAMOND;
+    b.back[2][4] = 0;
+    CHECK(scriptBoardVisibleClue(&b, 2, 3) == 2 &&
+          scriptBoardClueInference(&b, 2, 3, &remaining, &covered) == SCRIPT_CLUE_UNKNOWN &&
+          remaining == 1 && covered == 5,
+          "revealed diamond still contributes to the fixed clue after its back index clears");
+    b.back[3][3] = 0;
+    CHECK(scriptBoardVisibleClue(&b, 2, 3) == 1 &&
+          scriptBoardClueInference(&b, 2, 3, &remaining, &covered) == SCRIPT_CLUE_SAFE &&
+          remaining == 0 && covered == 5,
+          "satisfied word clue proves other covered neighbors lack password letters");
+    b.surveyed[2] = 0;
+    CHECK(scriptBoardVisibleClue(&b, 2, 3) == -1,
+          "removing a survey never leaves hidden pass counts visible");
+    b.state[2][3] = SCRIPT_HOLE;
+    CHECK(scriptBoardVisibleClue(&b, 2, 3) == 1,
+          "opened hole publishes its same nearby password count");
+
+    memset(&b, 0, sizeof b);
+    for (int c = 0; c < SCRIPT_COLS; c++)
+        for (int r = 0; r < SCRIPT_ROWS; r++) b.state[c][r] = SCRIPT_HOLE;
+    b.state[2][3] = SCRIPT_TILE;
+    b.state[2][4] = SCRIPT_TILE;
+    b.back[2][4] = 1;
+    b.surveyed[2] = 1u << 3;
+    CHECK(scriptBoardVisibleClue(&b, 2, 3) == 1 &&
+          scriptBoardClueInference(&b, 2, 3, &remaining, &covered) == SCRIPT_CLUE_PASS &&
+          remaining == 1 && covered == 1,
+          "one covered neighbor and one remaining letter forces the pass location");
+    b.state[2][4] = SCRIPT_BURN;
+    CHECK(scriptBoardClueInference(&b, 2, 3, &remaining, &covered) == SCRIPT_CLUE_PASS &&
+          covered == 1,
+          "a burning tile is still an unknown cover; the renderer must warn of fire");
+    b.state[2][4] = SCRIPT_HOLE;
+    b.back[2][4] = 0;
+    CHECK(scriptBoardClueInference(&b, 2, 3, &remaining, &covered) == SCRIPT_CLUE_UNKNOWN &&
+          remaining == 0 && covered == 0,
+          "already explored ring never offers a phantom free peel");
+    printf("SCRIPT CLUES OK: visible-only evidence, diamonds, holes and forced deduction\\n");
+}
+
 static void suite(const char *dictPath, const char *tilePath, const char *poolPath, bool uk)
 {
     size_t dl=0, tl=0, pl=0;
@@ -183,6 +255,9 @@ static void suite(const char *dictPath, const char *tilePath, const char *poolPa
     CHECK(k==b.passLen,"all secrets become visible diamonds");
     CHECK(scriptBoardSubmit(&b,&d,&t,&tier)==points && b.chainLen==0,
           "accepted word clears tiles and refills within segments");
+    CHECK((b.surveyed[1] & (1u << 3)) && b.clueC==1 && b.clueR==3 &&
+          scriptBoardVisibleClue(&b,1,3)==0,
+          "accepted Cyrillic word surveys its final fixed coordinate after gravity");
     CHECK(b.state[0][0]==SCRIPT_HOLE, "submitted word cannot fill past a hole");
     for (int i=0;i<k;i++)
         CHECK(b.state[secretC[i]][secretR[i]]==SCRIPT_DIAMOND,
@@ -196,6 +271,7 @@ int main(int argc,char **argv)
         fprintf(stderr,"usage: %s ru.dict uk.dict ru.tiles uk.tiles ru.pools uk.pools\n",argv[0]);
         return 2;
     }
+    clueTests();
     suite(argv[1],argv[3],argv[5],false);
     suite(argv[2],argv[4],argv[6],true);
     printf(failures?"SCRIPT PASS FAILED: %d failure(s)\n":
