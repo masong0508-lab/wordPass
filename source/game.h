@@ -206,7 +206,7 @@ int  pauseRows(const Game *g, int ids[PAUSE_ROWS_MAX]);   // main.c: the visible
 #define LOCKDOWN_FIRST_METER       1    // the first Lockdown shelf holds this much more meter than its place on the ladder (it eases Lockdown in) ...
 #define OVERTIME_EASE_STEP         2    // ... and Lockdown overtime starts 24 turns in on that shelf, this many turns earlier each shelf, until 16 on shelf 10
 #define TWIN_FIRE_FROM_SHELF      11    // from this shelf some ignitions light two columns at once ...
-#define TWIN_FIRE_STEP             2    // ... baseline share rises every two shelves; tier IV stages at shelves 15/17; full from 25
+#define TWIN_FIRE_STEP             2    // ... base share every two shelves; tier IV staged 15-21; all eight from 25
 #define OVERTIME_SCORE_DIV        10    // a word spelled past the turn limit scores this many times less (no farming a burning shelf)
 #define OVERTIME_HEAT_STEP        12    // overtime heat is 1, plus 1 more every this many turns past the limit
 #define SHUFFLES_PER_SHELF         1    // a board with no word left is re-dealt this many times a shelf before the shelf is lost
@@ -231,7 +231,7 @@ void boardShelfRules(int shelf, ShelfRules *out);   // a Classic shelf on FIRE N
 void boardDailyRules(int mod, ShelfRules *out);     // the same for a Daily with modifier DAILYMOD_*
 int  boardComboPct(int combo);                       // the bonus percent the next word scores after `combo` words in a row without a peel
 int  boardStreakBonus(int shelf, int streak);        // the bonus the streak-th pass letter in a row pays (0 for the first)
-int  boardTwinEighths(int shelf);                   // Classic twin-fire share: zero before 11, tier-IV entry staged at 15/17
+int  boardTwinEighths(int shelf);                   // Classic twin-fire share: zero before 11, staged through tier-IV shelf 21
 int  boardPassLenFor(int shelf);                    // the pass length a Classic shelf asks for (4, 5, 6, 7, 8)
 bool boardTwistShelf(int shelf);                    // does a Classic shelf carry a twist (4, 7, 10 ...)
 int  boardPeelHeat(bool lockdown);                  // heat a peel adds: 1, or 2 in Lockdown
