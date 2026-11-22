@@ -15,6 +15,11 @@ dictionaries and is kept unchanged so the English data stays byte-identical).  H
   * COMPOUNDRULE / COMPOUNDFLAG, REP, ICONV, OCONV, KEEPCASE are read but not expanded:
     compounds are handled by tools/lang/build_lang.py from word-frequency evidence instead
 
+The optional allow_internal_apostrophes=True accepts straight and typographic
+Ukrainian word-internal apostrophes in source stems for a lossless coverage
+audit; it does not turn them into playable symbol IDs. The default remains
+strictly alphabetic for all other importers.
+
 Output is the raw form, case preserved; the caller normalises.  Stems that start with a
 capital letter are proper nouns in every language here except German, where all nouns do;
 expand() takes a predicate keep_capitalised(stem, forms) for that case: it sees the stem and
