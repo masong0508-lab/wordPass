@@ -2435,6 +2435,43 @@ def _():
         assert not top, f'{code}: the results card reaches the screen edge: {top[:3]}'
     to_title(); lang_title(0)
 
+@scenario('guided ghost cadence: every translated first shelf presents one frame per scan, both hands, with a nine-letter pass and six-digit score')
+def _():
+    from wp import symbol
+    front_address = symbol(e.rom_elf, 'vramFront')
+    def front():
+        return int.from_bytes(bytes(e.mem.unsigned[front_address:front_address + 4]), 'little')
+
+    tutor_done = e.state()['tutorDone']
+    e.set_tutor(0)                         # exercise the first-shelf ghost even when this scenario runs alone
+    try:
+        for left in (False, True):
+            set_hand(left)
+            for i in range(1, 11):
+                lang_shelf(i); e.set_heat(0); e.set_burn(0, 99)
+                e.set_pass(9, 0b101010101); e.set_score(999999); e.set_turn(150); e.run(20)
+                before = e.state(); tag = f'{LANG_CODES[i]} {"left" if left else "right"}'
+                assert before['tutorStep'] == 0 and before['msgTimer'] == -1, f'{tag}: the guided prompt must be active'
+                assert before['cue'] == 1 and before['hintLen'] >= 3, f'{tag}: the automatic ghost did not start'
+
+                # DBG.frame is updated before drawing: a lost VBlank can be
+                # followed by two flips inside one scan, hiding the stall in
+                # a 120-update total. Also require a new front bank on every
+                # scan, through the ghost's moving pointer and expanding rings.
+                previous = front(); missed = []
+                for frame in range(1, 121):
+                    e.run(1); current = front()
+                    if current == previous:
+                        missed.append((frame, e.mem.register_arm9.pc & 0xFFFFFFFF))
+                    previous = current
+                updates = e.state()['frame'] - before['frame']
+                if missed or updates != 120:
+                    e.shot(f'{out}/rules_ghost_cadence_{LANG_CODES[i]}_{"left" if left else "right"}.png')
+                assert updates == 120, f'{tag}: {updates}/120 game frames during the guided ghost'
+                assert not missed, f'{tag}: no front-buffer swap on scan(s) {[(n, hex(pc)) for n, pc in missed]}'
+    finally:
+        set_hand(False); lang_title(0); e.set_tutor(tutor_done)
+
 # ---- music: the sequencer through the debug mirror (nothing here is judged by ear) -------------
 SFX_TAP, SFX_UNTAP, SFX_INVALID, SFX_PEEL, SFX_SCORCH, SFX_IGNITE, SFX_FIRESTEP, SFX_MENU = range(8)
 

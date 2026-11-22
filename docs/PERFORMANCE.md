@@ -52,6 +52,27 @@ clipped slice repeated both dictionary validations during the short LCD
 refresh interval. Score, tier and invalid-word visibility participate in
 the dirty-slice signatures so the displayed quote updates promptly.
 
+### Real presentation cadence, not only loop counts
+
+The expanded full-suite baseline exposed a real missed framebuffer swap
+during the localized first-shelf tutorial's animated word hint. Rendering
+finished just before scanline 192 and entered the linked libnds interrupt
+wait. Its flag/IRQ-enable/halt sequence can lose that boundary wake and
+resume only on a later interrupt. The trace caught the ARM9 in that wait
+with work starting at line 94 and taking 97 scanlines; a detailed replay
+then observed a flip at visible line 83 of the following scan and another
+at line 203. A focused follow-up detected missing bank changes even when
+the early game-loop counter reported 120 updates, so that counter alone
+is insufficient evidence of smooth presentation.
+
+The steady frame flip now polls a single VCOUNT sample until it reaches the
+existing permitted window, lines 192–256. It does not clear interrupt flags
+or depend on the helper's interrupt-wait sequence. This is a short spin
+wait in the already late-sampled loop; its battery/power impact has not
+been measured on hardware. Top-screen drawing also rechecks each slice's
+beam margin immediately before drawing it, accounting for time spent on
+the preceding slice and keeping any skipped dirty slice pending.
+
 The complete emulator rules/layout/guide suite now runs on every PR, main
 build, tag and manual run, replacing its two separately filtered subsets.
 Structure offsets are read from the matching built ELF's DWARF with

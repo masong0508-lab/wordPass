@@ -3318,12 +3318,15 @@ static void lateNoteCost(void)
     workCost[workIdx++ & 7] = c;
     lateLines = c;
 }
-// wait for vblank, unless the draw already finished inside it (lines 192..235)
+// Wait for the same early/late vblank window using one beam sample per test.
+// A check just before line 192 followed by swiWaitForVBlank can lose a wake
+// around the helper's flag/IRQ-enable/halt sequence and return on a later IRQ,
+// outside vblank. Polling this interval avoids it without changing IRQ flags.
 static void waitFlipPoint(void)
 {
-    int v = REG_VCOUNT;
-    if (v >= VBLANK_LINE && v <= LATE_FLIP_MAX) return;
-    swiWaitForVBlank();
+    int v;
+    do { v = REG_VCOUNT; }
+    while (v < VBLANK_LINE || v > LATE_FLIP_MAX);
 }
 
 void gfxFrame(const Game *g)
@@ -3508,6 +3511,10 @@ void gfxFrame(const Game *g)
     for (int sl = 0; sl < 4 && n < 2; sl++) if ((topNeed & (1 << sl)) && sliceFits(sl)) list[n++] = sl;
     if (n < 2 && (n || topNeed == 0) && sliceFits(frame & 3) && !(n && list[0] == (frame & 3))) list[n++] = frame & 3;
     for (int i = 0; i < n; i++) {
+        // A preceding slice has spent some of the remaining beam margin.
+        // Recheck immediately before drawing, especially when a dirty high
+        // slice was followed by rotating slice 0. Keep skipped dirt pending.
+        if (!sliceFits(list[i])) continue;
         clipY0 = list[i] * 48; clipY1 = clipY0 + 48;
         drawTop(g);
         topDrawn[list[i]] = topSigNow[list[i]];

@@ -39,6 +39,15 @@ CI: see `.github/workflows/build.yml`: native/data/localization checks, guide an
 
 Emulator symbol lookup uses a cached local `arm-none-eabi-nm` or GNU `nm` table, with the pinned Docker image as fallback. The ELF must match the ROM; rebuilds and deleted files invalidate the cache. Structure-member offsets come from that **same built ELF's DWARF**, using optional `pyelftools` or GNU `readelf`; they no longer compile the current checkout to guess an older ROM's layout. Keep the matching, unstripped `.elf` next to the `.nds`. A normal Ubuntu host with GNU binutils can run all emulator scenarios without pulling the toolchain image. Native fixture tests verify both DWARF backends, compiler-derived offsets, rejected unsupported layouts and cache invalidation.
 
+The `guided ghost cadence` scenario explicitly enables the first-shelf tutorial
+and checks every translated locale in both hands with a nine-letter password
+and six-digit score. It requires both 120 game-loop updates and a different
+front framebuffer on **every** one of 120 emulator scans. A loop-count total
+alone can hide a missed presentation followed by a catch-up update. On failure,
+the scenario records a screenshot and the ARM9 PCs of missed swaps. Run it in
+isolation with `WP_ONLY="guided ghost cadence" python3 tools/emu/test_rules.py
+wordPass.nds ghost-out`; the full CI suite also runs it automatically.
+
 ## Emulator harness
 `tools/emu/wp.py` wraps a headless DeSmuME (py-desmume, already installed) and reads a
 fixed-layout `DBG` mirror of game state from the ROM, so it keeps working when `Game` changes.
