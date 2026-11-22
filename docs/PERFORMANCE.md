@@ -84,6 +84,39 @@ coordinates: 58 bytes of state before any structure padding. They live in
 location with the adjacent password-letter count; the fixed clue survives
 front-gem refills and resets with the shelf.
 
+### Repeated-prefix latency repair
+
+The full cohesion gate exposed a synchronous search stall after a valid
+tail tap. The word was accepted at emulated scan 2, but an almost-all-E
+board after an OAE refill kept the display/debug snapshot unchanged until
+scan 27. A separate EEE refill reproduced it. That EEE trace performed
+2,756 dictionary-prefix queries with only 19 distinct argument tuples;
+the same `eee` prefix alone was queried 1,190 times at each of two length
+ranges. The input sample had valid coordinates and was accepted normally.
+
+Each `boardHasWords` or `boardHintChain` call now owns a 460-byte stack
+cache: one exact prefix per spelled length, its normalized minimum and
+maximum dictionary lengths, and an empty/false/true state. The short and
+extended stages share it. It has no heap allocation or cross-call lifetime,
+so changing dictionaries, languages or filters cannot leave stale entries.
+Hits skip only the dictionary query; path order, full-word validation,
+the 4,096-node fallback budget and conservative exhaustion behavior stay
+the same.
+
+Against the pre-cache cohesion revision, all 2,422 exact search/result
+cases across 11 locales match, including returned paths for hints capped
+at five gems. Board bytes and the host `rand()` stream remain unchanged;
+separate native fixtures cover 20-gem/Qu limits, exhausted budgets and the
+private board RNG stream. Full-word lookup counts are unchanged. The actual-ROM
+cohesion suite separately pins EEE and OAE refills in both hands and
+requires submission, rescue and a subsequent presented frame within
+12 scans. The old ROM fails all four cases. The chain-input grammar test
+retains a spare CAT to avoid coupling gesture checks to random refills.
+
+```sh
+python3 tools/check/benchmark_search.py --baseline f2b473eb383a4bc3bc8a956a83a4669abd80a24a --samples 100 --output build/search-cache-comparison.json
+```
+
 ### Real presentation cadence, not only loop counts
 
 The expanded full-suite baseline exposed a real missed framebuffer swap

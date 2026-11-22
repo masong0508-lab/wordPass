@@ -528,9 +528,12 @@ static void updateCue(u32 held)
     int want = CUE_NONE;
     bool touching = (held & KEY_TOUCH) != 0;
     if (G.state == ST_PLAY && tutorOn() && !G.fail) {
-        if (held & (KEY_TOUCH | KEY_A | KEY_B | KEY_X | KEY_Y | KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT | KEY_L | KEY_R)) G.idleFrames = 0;
+        // A word gesture is only safe in chaining mode. Inspecting clues must
+        // not leave a ghost or submit ring that would instead peel on touch.
+        if (G.peekHeld && G.cue == CUE_GHOST && !G.hintReq && G.tutorStep == TUTOR_DRAG) G.ghostDone = 0;
+        if (G.peekHeld || (held & (KEY_TOUCH | KEY_A | KEY_B | KEY_X | KEY_Y | KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT | KEY_L | KEY_R))) G.idleFrames = 0;
         else G.idleFrames++;
-        if (G.tutorStep == TUTOR_DRAG && !touching) {
+        if (G.tutorStep == TUTOR_DRAG && !touching && !G.peekHeld) {
             char w[WORD_BUF];
             if (G.chainLen >= 3) { boardChainWord(&G, w); if (boardWordOk(w, (int)strlen(w))) want = CUE_TAIL; }
             else if (G.chainLen == 0 && (!G.ghostDone || G.cue == CUE_GHOST) && G.idleFrames >= GHOST_IDLE_FRAMES) want = CUE_GHOST;   // once: it keeps going until its own end
@@ -540,7 +543,7 @@ static void updateCue(u32 held)
         } else if (G.tutorStep >= TUTOR_PEEK && G.armed) want = CUE_ARMED;
     } else G.idleFrames = 0;
     if (G.hintReq) {             // a hint: the same ghost drag, on request, until the player touches the board
-        if (G.state != ST_PLAY || touching || G.chainLen > 0 || G.fail) G.hintReq = 0;
+        if (G.state != ST_PLAY || G.peekHeld || touching || G.chainLen > 0 || G.fail) G.hintReq = 0;
         else want = CUE_GHOST;
     }
     if (want == CUE_GHOST && G.cue != CUE_GHOST && !G.hintReq) {

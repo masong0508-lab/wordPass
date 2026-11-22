@@ -78,12 +78,12 @@ def main():
         e.set_turn(0)
         e.set_features(shuffles=1, hints=2)
 
-    def fixture(word='cat', column=0, background=HOLE, keep_word=False):
+    def fixture(word='cat', column=0, background=HOLE, keep_word=False, background_letter='x'):
         restart()
         e.set_pass(4)
         for c in range(COLS):
             for r in range(ROWS):
-                e.set_cell(c, r, background, 'x')
+                e.set_cell(c, r, background, background_letter)
                 e.set_back(c, r, 0)
         for r, letter in enumerate(word):
             e.set_cell(column, r, TILE, letter)
@@ -140,6 +140,55 @@ def main():
         after = submit(path)
         assert after['lastWord'] == 'cat' and after['cell'][0][0] == (2, SECRET), 'diamond hint did not preserve its letter anchor'
         assert after['found'] == before['found'] and after['peels'] == before['peels'], 'word play altered password discovery'
+
+    def word_cues_respect_peek():
+        path = fixture(keep_word=True)
+        e.set_tutor(0)
+        before = resources()
+        e.press('X', settle=4)
+        assert e.state()['peek'], 'X did not enter PEEK'
+        for _ in range(200):
+            e.run(1)
+            assert e.state()['cue'] not in (1, 2), 'tutorial offered a word gesture while PEEK would peel it'
+        assert resources() == before, 'reading PEEK spent a tutorial resource'
+        e.press('X', settle=4)
+        e.run(180)
+        assert e.state()['cue'] == 1 and hint() == path, 'word tutorial did not resume after leaving PEEK'
+        # Interrupting the automatic word demonstration must stop it safely,
+        # then allow it to return after the player finishes inspecting clues.
+        e.hold('R')
+        assert e.state()['peek'] and e.state()['cue'] not in (1, 2), 'held R kept the automatic word cue visible'
+        e.run(200)
+        e.hold('R', False)
+        e.run(180)
+        assert e.state()['cue'] == 1 and resources() == before, 'interrupted word tutorial did not return for free'
+        e.chain(path)
+        assert e.state()['cue'] == 2 and e.state()['chain'] == path, 'tutorial did not point to the selected word tail'
+        e.press('X', settle=4)
+        assert e.state()['peek'] and e.state()['cue'] not in (1, 2), 'tail-submit cue remained visible in peeling mode'
+        e.press('X', settle=4)
+        after = submit(path)
+        assert after['lastWord'] == 'cat' and after['peels'] == before['peels'], 'following the resumed tutorial peeled a gem'
+        e.set_tutor(1)
+        # A requested hint also stops if the player deliberately switches
+        # back to peeling; entering PEEK never spends another hint.
+        for shoulder in ('X', 'L', 'R'):
+            e.set_features(hints=2)
+            e.press('SELECT', settle=4)
+            assert e.state()['hintReq'] and e.state()['cue'] == 1, 'requested hint did not start'
+            charged = resources()
+            if shoulder == 'X':
+                e.press('X', settle=4)
+            else:
+                e.hold(shoulder)
+            g = e.state()
+            assert g['peek'] and not g['hintReq'] and g['cue'] not in (1, 2), f'{shoulder} left a word hint visible in PEEK'
+            assert resources() == charged, f'{shoulder} spent a resource while stopping a hint'
+            if shoulder == 'X':
+                e.press('X', settle=4)
+            else:
+                e.hold(shoulder, False)
+        e.shot(str(args.output / f'word_cue_modes_{e.bx}.png'))
 
     def longer_word():
         path = fixture('rhythm')
@@ -238,6 +287,14 @@ def main():
         # displayed clue, neighbor geometry, visible holes and known diamonds.
         # In particular, neither the back map nor a preselected secret is read.
         shown_count = clues()[tail[0] * ROWS + tail[1]] - 1
+        # Check the player's numeral too: a correct stored count is not enough
+        # if its badge is blank or draws the encoded count instead of 1.
+        x, y, _, _ = e.cell_rect(*tail)
+        pixels = e.pixels()
+        badge = [sum((1 << (4 - dx)) for dx in range(5)
+                     if max(pixels[x + 16 + dx, y + 12 + dy]) < 32)
+                 for dy in range(7)]
+        assert badge == [4, 12, 4, 4, 4, 4, 14], f'clue badge does not visibly read 1: {badge}'
         visible = e.state()['cell']
         neighbors = e.neighbors(*tail)
         known = sum(visible[c][r][1] == SECRET for c, r in neighbors)
@@ -270,6 +327,54 @@ def main():
         assert g['tutorStep'] == 0 and not g['tutorDone'] and not any(clues()) and focus() == (0, 0), 'retry kept stale clues or skipped word instruction'
         e.set_tutor(1)
 
+    def repetitive_refill(refill):
+        # A valid tail tap must finish its dead-board rescue promptly, even
+        # when many geometric routes repeat the same impossible prefixes.
+        path = fixture('bed', column=3, background=TILE, background_letter='e')
+        bag_address = symbol(e.rom_elf, 'bag')
+        position_address = symbol(e.rom_elf, 'bagPos')
+        size_address = symbol(e.rom_elf, 'bagN')
+        size = int.from_bytes(bytes(e.mem.unsigned[size_address:size_address + 4]), 'little')
+        assert 3 <= size <= 100, f'invalid letter bag size {size}'
+        bag = list(e.mem.unsigned[bag_address:bag_address + size])
+        # Reorder real bag entries rather than inventing a different letter
+        # distribution. The remaining bag also supplies the rescue re-deal.
+        for i, letter in enumerate(refill):
+            index = bag.index(ord(letter) - ord('a'), i)
+            bag[i], bag[index] = bag[index], bag[i]
+        for i, letter in enumerate(bag):
+            e.mem.write_byte(bag_address + i, letter)
+        e.mem.write_long(position_address, 0)
+        e.chain(path)
+        before = e.state()
+        assert before['chain'] == path and before['chainScore'] == 60, 'BED fixture is not a valid selected word'
+        front_address = symbol(e.rom_elf, 'vramFront')
+
+        def front():
+            return bytes(e.mem.unsigned[front_address:front_address + 4])
+
+        completed = presented = None
+        completed_front = None
+        e.emu.input.touch_set_pos(*e.center(*path[-1]))
+        try:
+            for scan in range(1, 13):
+                e.run(1)
+                g = e.state()
+                if completed is None and g['lastWord'] == 'bed' and g['score'] == before['score'] + 60:
+                    completed, completed_front = scan, front()
+                elif completed is not None and presented is None and front() != completed_front:
+                    presented = scan
+            e.shot(str(args.output / f'repetitive_refill_{refill}_{e.bx}.png'))
+        finally:
+            e.emu.input.touch_release()
+            # Restore normal input even when the old ROM is still blocked.
+            # All latency assertions use the state captured at scan 12.
+            e.run(45)
+        assert completed is not None and presented is not None, f'{refill.upper()} refill stalled: completion={completed}, presentation={presented} within 12 scans'
+        assert g['state'] == ST_PLAY and not g['chainLen'] and g['turn'] == before['turn'] + 1, 'rescue altered the word turn or restarted its held stroke'
+        assert before['shuffles'] == 1 and g['shuffles'] == 0 and g['peels'] == before['peels'], 'fixture did not exercise the normal dead-board rescue'
+        print(f'LATENCY {refill.upper()} hand={e.bx}: submit {completed}, next presentation {presented} scans', flush=True)
+
     def choose_hand(left):
         if e.state()['state'] != ST_TITLE:
             restart()
@@ -288,11 +393,14 @@ def main():
         assert bool(e.state()['settings']['hand']) == left
 
     scenarios = (('SELECT leaves PEEK safely', select_from_peek),
+                 ('word cues stay coherent when entering and leaving PEEK', word_cues_respect_peek),
                  ('diamond starts a usable word hint', diamond_hint),
                  ('six-gem-only shelf survives and offers a hint', longer_word),
                  ('word earns a visible fixed clue and goal help is free', word_clue),
                  ('earned clue yields a reveal using only visible information', clue_deduction),
-                 ('unfinished tutorial retry clears clues and teaches words again', tutorial_retry))
+                 ('unfinished tutorial retry clears clues and teaches words again', tutorial_retry),
+                 ('EEE refill rescues the board promptly after a tail tap', lambda: repetitive_refill('eee')),
+                 ('OAE refill rescues the board promptly after a tail tap', lambda: repetitive_refill('oae')))
     for left in (False, True):
         choose_hand(left)
         for name, scenario in scenarios:

@@ -1001,9 +1001,37 @@ int boardLowestFireRow(const Game *g)
     return low;
 }
 
+// Repetitive boards revisit the same prefix through many geometric paths.
+// Keep one exact answer per prefix length for this public search call only:
+// no heap, cross-language lifetime, or change to traversal/node accounting.
+typedef struct {
+    char word[MAX_WORD][MAX_WORD];
+    u8 min[MAX_WORD], max[MAX_WORD], state[MAX_WORD]; // 0 empty, 1 false, 2 true
+} PrefixCache;
+
+static bool searchHasPrefix(PrefixCache *cache, const char *word, int length,
+                            int minLength, int maxLength)
+{
+    if (length < 1 || length > MAX_WORD) return false;
+    if (minLength < 3) minLength = 3;
+    if (minLength < length) minLength = length;
+    if (maxLength > MAX_WORD) maxLength = MAX_WORD;
+    if (minLength > maxLength) return false;
+    int slot = length - 1;
+    if (cache->state[slot] && cache->min[slot] == minLength && cache->max[slot] == maxLength &&
+        !memcmp(cache->word[slot], word, (size_t)length)) return cache->state[slot] == 2;
+    bool found = dictHasPrefix(word, length, minLength, maxLength);
+    memcpy(cache->word[slot], word, (size_t)length);
+    cache->min[slot] = (u8)minLength;
+    cache->max[slot] = (u8)maxLength;
+    cache->state[slot] = found ? 2 : 1;
+    return found;
+}
+
 // Fast path for the usual 3- to 5-letter word.
 // (a chain needs three GEMS: a Qu gem is two letters, so QUE alone is not spellable)
-static bool dfsWords(const Game *g, int c, int r, char *w, int n, int gems, bool used[COLS][ROWS])
+static bool dfsWords(const Game *g, int c, int r, char *w, int n, int gems,
+                     bool used[COLS][ROWS], PrefixCache *cache)
 {
     w[n++] = 'a' + g->cell[c][r].letter;
     if (quGem(&g->cell[c][r])) w[n++] = 'u';
@@ -1012,12 +1040,12 @@ static bool dfsWords(const Game *g, int c, int r, char *w, int n, int gems, bool
     if (n >= 5) return false;
     // A final Qu tile can take a four-letter prefix to six letters. Include
     // that existing edge case while pruning only impossible continuations.
-    if (n >= 3 && !dictHasPrefix(w, n, n + 1, 6)) return false;
+    if (n >= 3 && !searchHasPrefix(cache, w, n, n + 1, 6)) return false;
     used[c][r] = true;
     int nc[6], nr[6], k = boardNeighbors(c, r, nc, nr);
     for (int i = 0; i < k; i++) {
         if (used[nc[i]][nr[i]] || !boardIsChainable(g, nc[i], nr[i])) continue;
-        if (dfsWords(g, nc[i], nr[i], w, n, gems, used)) { used[c][r] = false; return true; }
+        if (dfsWords(g, nc[i], nr[i], w, n, gems, used, cache)) { used[c][r] = false; return true; }
     }
     used[c][r] = false;
     return false;
@@ -1032,6 +1060,7 @@ static bool dfsWords(const Game *g, int c, int r, char *w, int n, int gems, bool
 typedef struct {
     int left, max, length;
     bool preferCommon;
+    PrefixCache *cache;
     u8 pathC[MAX_CHAIN], pathR[MAX_CHAIN];
     u8 resultC[MAX_CHAIN], resultR[MAX_CHAIN];
 } WordSearch;
@@ -1057,7 +1086,7 @@ static bool extendedDfs(const Game *g, int c, int r, char *w, int n, int depth,
     if (depth >= search->max || n >= MAX_WORD) return false;
     int remaining = search->max - depth;
     int longest = n + remaining * (langQuTile() ? 2 : 1);
-    if (!dictHasPrefix(w, n, n + 1, longest)) return false;
+    if (!searchHasPrefix(search->cache, w, n, n + 1, longest)) return false;
     used[c][r] = true;
     int nc[6], nr[6], k = boardNeighbors(c, r, nc, nr);
     for (int i = 0; i < k && search->left; i++) {
@@ -1084,7 +1113,7 @@ static void extendedWords(const Game *g, WordSearch *search)
 // ledger word still works when there is no alternative. The preferred short path uses at most five gems.
 // needBurn requests a route that actually extinguishes a flame.
 static bool hintDfs(const Game *g, int c, int r, char *w, int n, int maxLen, int depth, u8 *pc, u8 *pr,
-                    bool used[COLS][ROWS], bool needBurn, bool burnSeen, bool freshOnly)
+                    bool used[COLS][ROWS], bool needBurn, bool burnSeen, bool freshOnly, PrefixCache *cache)
 {
     w[n++] = 'a' + g->cell[c][r].letter;
     if (quGem(&g->cell[c][r])) w[n++] = 'u';
@@ -1100,13 +1129,13 @@ static bool hintDfs(const Game *g, int c, int r, char *w, int n, int maxLen, int
     // the prefix search to every letter length still reachable by this path,
     // preserving the old traversal and first eligible hint exactly.
     int remaining = maxLen - depth;
-    if (n >= 2 && !dictHasPrefix(w, n, n + remaining,
+    if (n >= 2 && !searchHasPrefix(cache, w, n, n + remaining,
                                 n + remaining * (langQuTile() ? 2 : 1))) return false;
     used[c][r] = true;
     int nc[6], nr[6], k = boardNeighbors(c, r, nc, nr);
     for (int i = 0; i < k; i++) {
         if (used[nc[i]][nr[i]] || !boardIsChainable(g, nc[i], nr[i])) continue;
-        if (hintDfs(g, nc[i], nr[i], w, n, maxLen, depth, pc, pr, used, needBurn, burnSeen, freshOnly)) { used[c][r] = false; return true; }
+        if (hintDfs(g, nc[i], nr[i], w, n, maxLen, depth, pc, pr, used, needBurn, burnSeen, freshOnly, cache)) { used[c][r] = false; return true; }
     }
     used[c][r] = false;
     return false;
@@ -1120,6 +1149,7 @@ int boardHintChain(const Game *g, u8 *outC, u8 *outR, int max)
 {
     if (max < 3) return 0;
     if (max > MAX_CHAIN) max = MAX_CHAIN;
+    PrefixCache cache = {0};
     char w[WORD_BUF];
     u8 pc[MAX_CHAIN], pr[MAX_CHAIN];
     bool anyFlame = false;
@@ -1131,14 +1161,14 @@ int boardHintChain(const Game *g, u8 *outC, u8 *outR, int max)
                 for (int c = 0; c < COLS; c++)
                     for (int r = 0; r < ROWS; r++)
                         if (boardIsChainable(g, c, r) &&
-                            hintDfs(g, c, r, w, 0, len, 0, pc, pr, used, pass == 0, false, fresh != 0)) {
+                            hintDfs(g, c, r, w, 0, len, 0, pc, pr, used, pass == 0, false, fresh != 0, &cache)) {
                             for (int i = 0; i < len; i++) { outC[i] = pc[i]; outR[i] = pr[i]; }
                             return len;
                         }
             }
     // Preserve every existing short common-word preference before considering
     // longer paths or an allowed rare word. One budget covers the whole fallback.
-    WordSearch search = { .left = WORD_SEARCH_NODES, .max = max, .preferCommon = true };
+    WordSearch search = { .left = WORD_SEARCH_NODES, .max = max, .preferCommon = true, .cache = &cache };
     extendedWords(g, &search);
     if (search.length) {
         memcpy(outC, search.resultC, (size_t)search.length);
@@ -1149,12 +1179,13 @@ int boardHintChain(const Game *g, u8 *outC, u8 *outR, int max)
 
 bool boardHasWords(const Game *g)
 {
+    PrefixCache cache = {0};
     char w[12];
     bool used[COLS][ROWS] = {{false}};
     for (int c = 0; c < COLS; c++)
         for (int r = 0; r < ROWS; r++)
-            if (boardIsChainable(g, c, r) && dfsWords(g, c, r, w, 0, 0, used)) return true;
-    WordSearch search = { .left = WORD_SEARCH_NODES, .max = MAX_CHAIN };
+            if (boardIsChainable(g, c, r) && dfsWords(g, c, r, w, 0, 0, used, &cache)) return true;
+    WordSearch search = { .left = WORD_SEARCH_NODES, .max = MAX_CHAIN, .cache = &cache };
     extendedWords(g, &search);
     return search.length != 0 || search.left == 0;
 }

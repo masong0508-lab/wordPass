@@ -1096,6 +1096,9 @@ def check_chain_input(tag):
     for c in range(COLS):
         for r in range(ROWS): e.set_cell(c, r, TILE, 'e')
     for r, l in enumerate('bed'): e.set_cell(C, r, TILE, l)
+    # Keep input grammar independent of a random refill's dead-board rescue.
+    # Repetitive-refill search latency has its own real-ROM cohesion cases.
+    for r, letter in enumerate('cat', start=4): e.set_cell(0, r, TILE, letter)
     e.run(3)
     # a wider hit area: the old rectangle dead-zoned x 22..24 of a cell; the 12 px circle takes it
     ox, oy = e.center(0, 0)

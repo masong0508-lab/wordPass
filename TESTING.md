@@ -205,9 +205,14 @@ title card. `make check` covers the CLEAR theme in the settings file.
 
     python3 tools/emu/test_cohesion.py wordPass.nds cohesion-out
 
-This focused real-ROM suite runs six scenarios in both hands, twelve cases total. It reads `Game.wordClue`, its latest endpoint and the hint paths
+This focused real-ROM suite runs nine scenarios in both hands, eighteen cases total. It reads `Game.wordClue`, its latest endpoint and the hint paths
 using offsets from the matching ELF's DWARF; it does not extend the pinned debug mirror or assume the current source layout.
 Fixtures use the existing poke channel, but submit, PEEK, hint, help, retry and discovery actions use real controls.
+
+The cue-mode scenario keeps latched PEEK on past the automatic tutorial's idle delay and requires no word gesture to appear.
+After leaving PEEK, the free ghost must start and remain usable. Interrupting it with a shoulder hides it and allows it to
+return after inspection. The selected word's tail cue also hides during PEEK. X/L/R each cancel an active paid hint without
+another charge. The pre-fix ROM offers a word gesture while PEEK would peel, failing this case in both hands.
 
 The scenarios check SELECT from latched PEEK followed by actually spelling the hint, physical L/R refusal without a hint charge,
 a diamond-start CAT path, and a RHYTHM-only board surviving a turn and offering a usable six-gem hint. The clue scenario submits
@@ -218,10 +223,18 @@ rim and blinking exclamation above the compact clue plate; the pixel regression 
 Another scenario fails the unfinished tutorial,
 retries and requires empty clues plus a fresh word prompt. Screenshots are retained in the output directory, including failures.
 
-The deduction scenario earns a clue of 1 beside five visible empty holes and one covered neighbour. Its choice of where to peel
-uses only that clue, board geometry, visible cell states and known diamonds, with no hidden-map lookup or preselected target.
+The deduction scenario earns a clue of 1 beside five visible empty holes and one covered neighbour. It checks the rendered
+badge against the seven pixel rows of the numeral 1 as well as its stored count. Its choice of where to peel uses only that
+clue, board geometry, visible cell states and known diamonds, with no hidden-map lookup or preselected target.
 The real peel must reveal the inferred letter, advance FOUND by exactly one and leave the clue's own covered centre intact.
 `clue_deduction_before_*.png` and `clue_deduction_after_*.png` show that information-to-discovery step in both hands.
+
+Two latency scenarios submit BED by tapping its tail on a near-all-E board, with real bag entries reordered to force EEE or
+OAE refills while preserving the bag's letter distribution. Each requires the normal scored word turn, an empty chain, the
+dead-board rescue and a subsequent front-buffer swap within 12 emulated scans of pen-down. The previous ROM (`f2b473e`) fails
+all four latency cases while passing the original twelve. The separate `chain input` scenarios keep an untouched CAT so
+their gesture assertions do not depend on whether a random refill creates a dead board; their existing waits and assertions
+remain unchanged. `repetitive_refill_*.png` captures each latency deadline, including failures.
 
 The native bounded search deliberately treats its work limit as uncertainty: board-existence checks keep the shelf alive,
 while a hint is returned only for a proven accepted path. These tests do not equate "no hint found" with a dead board.
