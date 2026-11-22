@@ -238,6 +238,13 @@ checks that the mode is safely refused.
 
 This milestone is real DS technical integration, not linguistic completion.
 
+Ukrainian dictionary imports now report apostrophe-containing words separately
+rather than silently changing their spelling. Those forms are **not playable
+in the 33-letter demo yet**: the engine still needs a proper word-internal
+apostrophe separator instead of a bogus tile. Russian and Ukrainian remain
+independent language modes. See [CYR-SOURCES.md](CYR-SOURCES.md) for the
+exact manifest fields and source-review limitations.
+
 ## Bring your own licensed Cyrillic dictionary packs
 
 The built-in preview remains tiny and deterministic for emulator regression.

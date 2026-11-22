@@ -15,6 +15,11 @@ dictionaries and is kept unchanged so the English data stays byte-identical).  H
   * COMPOUNDRULE / COMPOUNDFLAG, REP, ICONV, OCONV, KEEPCASE are read but not expanded:
     compounds are handled by tools/lang/build_lang.py from word-frequency evidence instead
 
+The optional allow_internal_apostrophes=True accepts straight and typographic
+Ukrainian word-internal apostrophes in source stems for a lossless coverage
+audit; it does not turn them into playable symbol IDs. The default remains
+strictly alphabetic for all other importers.
+
 Output is the raw form, case preserved; the caller normalises.  Stems that start with a
 capital letter are proper nouns in every language here except German, where all nouns do;
 expand() takes a predicate keep_capitalised(stem, forms) for that case: it sees the stem and
@@ -68,11 +73,27 @@ def parse_aff(path):
         table.setdefault(flag, (True, []))[1].append((strip, add, flags_of(cont), rx))
     return flagtype, special, pfx, sfx, flags_of
 
-def expand(dic, aff, keep_capitalised=None, verbose=False):
+def expand(dic, aff, keep_capitalised=None, verbose=False,
+           allow_internal_apostrophes=False):
     flagtype, special, pfx, sfx, flags_of = parse_aff(aff)
     need, onlyc, forbid = special.get("NEEDAFFIX") or special.get("PSEUDOROOT"), special.get("ONLYINCOMPOUND"), special.get("FORBIDDENWORD")
     circ = special.get("CIRCUMFIX")
     out, banned = set(), set()
+
+    def stem_allowed(stem):
+        if stem.isalpha():
+            return True
+        if not allow_internal_apostrophes:
+            return False
+        # Ukrainian spelling dictionaries use straight and typographic
+        # apostrophes as well as U+02BC. Accept only an internal separator
+        # between letters; reject hyphens, digits, stray quotes and doubled
+        # marks. This permits an honest orthography audit, NOT a stripped
+        # or misspelled substitute word in the current 33-tile DS model.
+        normalized = stem.replace("’", "ʼ").replace("'", "ʼ")
+        parts = normalized.split("ʼ")
+        return (len(parts) > 1 and all(p and p.isalpha() for p in parts)
+                and not any("ʼ" in p for p in parts))
 
     def apply_sfx(word, flags, depth):
         res = []
@@ -120,7 +141,7 @@ def expand(dic, aff, keep_capitalised=None, verbose=False):
         caps = stem[:1].isupper()
         if caps and keep_capitalised is None:
             continue
-        if not stem.isalpha():
+        if not stem_allowed(stem):
             continue
         loc = set()
         is_only = bool(onlyc and onlyc in flags)

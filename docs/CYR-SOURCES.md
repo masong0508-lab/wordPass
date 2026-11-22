@@ -21,6 +21,30 @@ lexicographic cutoff. Full lexical filtering, human translation review,
 offensive-word screening and accurate common/rare frequency tiers remain
 an editorial responsibility; the output is marked EXPERIMENTAL.
 
+## Ukrainian apostrophe coverage — do not corrupt spelling
+
+Ukrainian orthography requires an apostrophe in ordinary words, such as
+`п’ять`, `м’ясо`, and `зв’язок` (official orthography, §7:
+https://mon.gov.ua/static-objects/mon/sites/1/zagalna%20serednya/Pravopys.2019/ukrayinskii-pravopis-oficiine-vidannia-2026.pdf).
+The source spell-checking data can use U+0027 (`'`), U+2019 (`’`),
+or U+02BC (`ʼ`) for this internal separator.
+
+The Ukrainian-only Hunspell intake now **recognizes and audits** these source
+spellings. The `SOURCE-MANIFEST.json` reports
+`ukrainian_apostrophe_forms_unrepresented`, gives up to twelve canonical
+U+02BC examples, and records the exclusion policy. This is a deliberately
+truthful count of the forms missing from the experimental 33-tile WPD4 game:
+it does **not** delete apostrophes to make fake playable words, substitute
+Russian hard signs, or pretend a 34th independent apostrophe letter/tile
+already works. A future proper Ukrainian word engine must support the
+separator without making the apostrophe a meaningless standalone gem.
+
+The source audit runs only offline, never during play. It leaves the retail
+11-language ROM and even the current miniature Ukrainian preview unchanged.
+Its synthetic fixture checks straight, typographic and modifier-letter
+apostrophe variants and confirms they are excluded from playable data but
+visible in the attribution manifest.
+
 ## Candidate upstream sources
 
 **Russian:** LibreOffice Russian spelling dictionary, upstream file paths
