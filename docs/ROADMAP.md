@@ -11,7 +11,7 @@ There is **no defensible numeric completion percentage**.
 - [x] 40 themed password pools, score bonuses, library challenges and twists
 - [x] Saving and load recovery, tutorial and eight-page guide, music and ledger
 - [x] English plus ten playable Latin-encoded translations (11 total)
-- [x] Native rules/data, ROM build and selected DeSmuME gameplay CI
+- [x] Native rules/data, ROM build and complete DeSmuME rules/layout/guide CI
 - [x] Missing/damaged language pack fallback and language picker recovery
 - [x] Bounded dictionary/hint optimization, single retail chain validation per
       frame, linked-ROM memory budgets and mutually exclusive retail/preview packs
@@ -32,10 +32,9 @@ platform compatibility, balancing, broader tests and script expansion.
       review queue, not a replacement for proofreading.
 - [ ] Native DS/DS Lite/DSi and flashcart playthroughs; measure 60-FPS,
       loading latency, memory headroom and FAT-card save roundtrips.
-- [ ] Release CI: run the full rules/layout/guide scenario suite for each
-      release candidate. Default CI now includes FAT-card scenarios, all-language
-      gameplay/layout smoke and selected input/music/frame-cadence regressions;
-      the complete long suite remains available on tags and manual runs.
+- [x] Release CI: run the full rules/layout/guide scenario suite for every
+      PR, main build, tag and manual run, alongside FAT-card scenarios and
+      the separate Cyrillic preview. ABI checks use the actual built ELF.
 - [ ] Investigate and retest the Lockdown difficulty spike at shelves 14–15
       with before/after balance bots; preserve intended challenge.
 - [ ] Continue dictionary and theme-content editorial fixes, especially

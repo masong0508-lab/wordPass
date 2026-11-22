@@ -170,6 +170,7 @@ check:
 	python3 tools/music/render.py --stats > /dev/null
 	python3 tools/check/save_sites.py
 	python3 tools/check/elf_symbols_test.py
+	python3 tools/check/elf_abi_test.py
 	python3 tools/check/rom_budget_test.py
 	python3 tools/check/music_render_test.py
 	python3 tools/lang/gen_ui.py --check || (echo 'source/ui_strings.[ch] are not what tools/lang/gen_ui.py generates from ui_strings.tsv: run python3 tools/lang/gen_ui.py'; exit 1)

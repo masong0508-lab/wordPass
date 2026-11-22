@@ -24,6 +24,9 @@ int scriptPreviewLastTier, scriptPreviewLastScore;
 uint32_t scriptPreviewSeed;
 
 static unsigned char *images[3];
+// Only an advance banks a completed shelf. Retrying/re-dealing rolls this
+// shelf back without losing points earned on earlier completed shelves.
+static int shelfStartScore;
 
 static unsigned char *readPreview(const char *code, const char *file,
                                   size_t maximum, size_t *size)
@@ -63,6 +66,7 @@ void scriptPreviewClose(void)
     memset(&scriptPreviewPools, 0, sizeof scriptPreviewPools);
     memset(&scriptPreviewBoard, 0, sizeof scriptPreviewBoard);
     scriptPreviewScore = scriptPreviewTurns = scriptPreviewPeels = scriptPreviewHints = 0;
+    shelfStartScore = 0;
     scriptPreviewRescues = scriptPreviewRescueError = 0;
     scriptPreviewThemeCount = 0;
     scriptPreviewShelf = 0;
@@ -72,24 +76,34 @@ void scriptPreviewClose(void)
     scriptPreviewHelp = 0;
     scriptPreviewLastTier = scriptPreviewLastScore = 0;
 }
-bool scriptPreviewNewPass(uint32_t seed)
+static bool startPass(unsigned shelf, uint32_t seed, int bankedScore)
 {
     if (!scriptPreviewPools.image || !scriptPreviewDict.image ||
         !scriptPreviewTiles.valid) return false;
     if (scriptPreviewDaily) {
         seed = scriptDailySeed(scriptPreviewDailyDate, scriptPreviewLanguage);
         if (!seed) return false;
-        scriptPreviewScore = 0; // retries must not farm score
+        bankedScore = 0;
     }
-    scriptPreviewSeed = seed ? seed : 0x87654321u;
-    scriptRulesStart(&scriptPreviewRules,
-                     scriptPreviewShelf ? (unsigned)scriptPreviewShelf : 1u,
-                     scriptPreviewSeed);
+    seed = seed ? seed : 0x87654321u;
+    ScriptBoard nextBoard;
+    ScriptRules nextRules;
+    scriptRulesStart(&nextRules, shelf, seed);
     // 5 and 6 are both represented in the tiny fixtures; if a sampled theme
     // lacks that length, the prototype picks its nearest valid word length.
-    if (!scriptBoardStartPass(&scriptPreviewBoard, &scriptPreviewDict,
+    if (!scriptBoardStartPass(&nextBoard, &scriptPreviewDict,
                               &scriptPreviewTiles, &scriptPreviewPools,
-                              scriptPreviewSeed, 5)) return false;
+                              seed, 5) ||
+        !scriptBoardPlantThemeWord(&nextBoard, &scriptPreviewDict,
+                                   &scriptPreviewTiles, &scriptPreviewPools,
+                                   seed)) return false;
+    // Generate both the hidden password and a playable word before replacing
+    // a live shelf. A refused generation must not erase its score or state.
+    scriptPreviewBoard = nextBoard;
+    scriptPreviewRules = nextRules;
+    scriptPreviewShelf = nextRules.shelf;
+    scriptPreviewSeed = seed;
+    shelfStartScore = scriptPreviewScore = bankedScore;
     scriptPreviewTurns = scriptPreviewPeels = scriptPreviewHints = 0;
     scriptPreviewRescues = scriptPreviewRescueError = 0;
     scriptPreviewLastTier = scriptPreviewLastScore = 0;
@@ -97,9 +111,11 @@ bool scriptPreviewNewPass(uint32_t seed)
     // Each generated shelf now guarantees a valid dictionary word from its
     // own theme when possible, instead of always spelling ПРИВЕТ/ПРИВІТ.
     // This includes Daily Practice: identical date + language => same word.
-    return scriptBoardPlantThemeWord(&scriptPreviewBoard, &scriptPreviewDict,
-                                    &scriptPreviewTiles, &scriptPreviewPools,
-                                    scriptPreviewSeed);
+    return true;
+}
+bool scriptPreviewNewPass(uint32_t seed)
+{
+    return startPass((unsigned)scriptPreviewShelf, seed, shelfStartScore);
 }
 bool scriptPreviewOpen(int language, uint32_t seed)
 {
@@ -135,12 +151,16 @@ bool scriptPreviewToggleDaily(int date, uint32_t freeSeed)
         scriptPreviewDailyClockError = 1;
         return false;
     }
-    scriptPreviewDailyClockError = 0;
+    int previousDate = scriptPreviewDailyDate;
     scriptPreviewDaily = next;
     scriptPreviewDailyDate = next ? date : 0;
-    scriptPreviewShelf = 1;
-    scriptPreviewScore = 0;
-    return scriptPreviewNewPass(freeSeed);
+    if (!startPass(1, freeSeed, 0)) {
+        scriptPreviewDaily = !next;
+        scriptPreviewDailyDate = previousDate;
+        return false;
+    }
+    scriptPreviewDailyClockError = 0;
+    return true;
 }
 bool scriptPreviewAdvance(uint32_t seed)
 {
@@ -148,14 +168,11 @@ bool scriptPreviewAdvance(uint32_t seed)
     if (!scriptPreviewDict.image || scriptPreviewRules.status != SCRIPT_PASSED)
         return false;
     if (scriptPreviewShelf >= 999) return false;
-    // Keep the cumulative score across shelves; each new pass resets
-    // only heat, fire, peels and turn counters, never the release save.
-    scriptPreviewShelf++;
-    if (!scriptPreviewNewPass(seed ^ ((uint32_t)scriptPreviewShelf * 0x9e3779b9u))) {
-        scriptPreviewShelf--;
-        return false;
-    }
-    return true;
+    // Bank this completed shelf only when its successor is ready. Replays
+    // discard the current attempt's words/bonus, keeping earlier shelves.
+    unsigned nextShelf = (unsigned)scriptPreviewShelf + 1;
+    return startPass(nextShelf, seed ^ (nextShelf * 0x9e3779b9u),
+                     scriptPreviewScore);
 }
 int scriptPreviewPeel(int c, int r)
 {
@@ -247,10 +264,12 @@ bool scriptPreviewRescue(void)
 }
 // Words live as compact alphabet IDs, never as variable-length UTF-8 bytes.
 // This read-only quote is used only to show the score of a selected chain.
-int scriptPreviewQuote(void)
+int scriptPreviewQuote(int *tier)
 {
+    if (tier) *tier = 0;
+    int wordTier = 0;
     int raw = scriptBoardPreview(&scriptPreviewBoard, &scriptPreviewDict,
-                                 &scriptPreviewTiles, NULL);
+                                 &scriptPreviewTiles, &wordTier);
     int length = scriptPreviewBoard.chainLen;
     if (raw <= 0 || length < WPD4_MIN_WORD || length > SCRIPT_MAX_CHAIN)
         return 0;
@@ -260,7 +279,9 @@ int scriptPreviewQuote(void)
         if (col >= SCRIPT_COLS || row >= SCRIPT_ROWS) return 0;
         ids[i] = scriptPreviewBoard.tile[col][row];
     }
-    return scriptLedgerQuote(&scriptPreviewLedger, ids, length, raw);
+    int points = scriptLedgerQuote(&scriptPreviewLedger, ids, length, raw);
+    if (points > 0 && tier) *tier = wordTier;
+    return points;
 }
 
 int scriptPreviewSubmit(void)

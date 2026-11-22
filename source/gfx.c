@@ -2190,6 +2190,7 @@ static void drawCues(const Game *g)
 
 
 #ifdef WP_CYR_PREVIEW
+static int scriptQuoteTierNow;
 // Developer-only Cyrillic board uses the ACTUAL two-screen VRAM renderer and
 // stylus coordinate geometry, not a mock picture or a separate framebuffer.
 // Each tile draws a gem plus an on-demand Unicode glyph. No 64-gem atlas.
@@ -2277,24 +2278,24 @@ static void drawScriptPreviewHelp(void)
     hline(25, 28, 206, GOLD_DK);
     drawTextCenter(128, 34, uk ? "З'ЄДНУЙТЕ СУСІДНІ ЛІТЕРИ" :
                               "СОЕДИНЯЙТЕ СОСЕДНИЕ БУКВЫ", ACCENT, 1);
-    drawTextCenter(128, 48, uk ? "A: ПРИЙНЯТИ СЛОВО" :
-                              "A: ПРИНЯТЬ СЛОВО", WHITE, 1);
-    drawTextCenter(128, 61, uk ? "Y: ОЧИСТИТИ ЛАНЦЮЖОК" :
-                              "Y: ОЧИСТИТЬ ЦЕПОЧКУ", INK, 1);
-    drawTextCenter(128, 74, uk ? "L+ДОТИК: ВІДКРИТИ ЛІТЕРУ" :
+    drawTextCenter(128, 48, uk ? "A: ПРИЙНЯТИ / Y: ОЧИСТИТИ" :
+                              "A: ПРИНЯТЬ / Y: СБРОС", WHITE, 1);
+    drawTextCenter(128, 61, uk ? "L+ДОТИК: ВІДКРИТИ ЛІТЕРУ" :
                               "L+КАСАНИЕ: ОТКРЫТЬ БУКВУ", INK, 1);
-    drawTextCenter(128, 87, uk ? "R: ОДНА ПІДКАЗКА НА ПОЛИЦЮ" :
+    drawTextCenter(128, 74, uk ? "R: ОДНА ПІДКАЗКА НА ПОЛИЦЮ" :
                               "R: ОДНА ПОДСКАЗКА НА ПОЛКУ", INK, 1);
-    drawTextCenter(128, 100, uk ? "X: ІНША МОВА" :
+    drawTextCenter(128, 87, uk ? "X: ІНША МОВА" :
                                "X: СМЕНИТЬ ЯЗЫК", WHITE, 1);
-    drawTextCenter(128, 113, uk ? "SELECT: НОВИЙ ПАРОЛЬ" :
-                               "SELECT: НОВЫЙ ПАРОЛЬ", INK, 1);
-    drawTextCenter(128, 126, uk ? "L+SELECT: ДЕНЬ БЕЗ РЕКОРДУ" :
+    drawTextCenter(128, 100, scriptPreviewDaily ? "SELECT: ПОВТОР ДНЯ" :
+                   (uk ? "SELECT: НОВА СПРОБА" : "SELECT: НОВАЯ ПОПЫТКА"), INK, 1);
+    drawTextCenter(128, 113, uk ? "L+SELECT: ДЕНЬ БЕЗ РЕКОРДУ" :
                                "L+SELECT: ДЕНЬ БЕЗ РЕКОРДА", INK, 1);
-    drawTextCenter(128, 139, uk ? "ПОВТОР -50% / СЕРІЯ: БОНУС" :
+    drawTextCenter(128, 126, uk ? "ПОВТОР -50% / СЕРІЯ: БОНУС" :
                                "ПОВТОР -50% / СЕРИЯ: БОНУС", DIM_TEXT, 1);
-    drawTextCenter(128, 152, uk ? "L+R: НОВЕ СЛОВО (1 РАЗ)" :
+    drawTextCenter(128, 139, uk ? "L+R: НОВЕ СЛОВО (1 РАЗ)" :
                                "L+R: НОВОЕ СЛОВО (1 РАЗ)", ACCENT, 1);
+    drawTextCenter(128, 152, uk ? "1 ХІД / СПЕКА +2 АБО БІЛЬШЕ" :
+                               "1 ХОД / ЖАР +2 ИЛИ БОЛЬШЕ", DIM_TEXT, 1);
     hline(25, 164, 206, GOLD_DK);
     drawTextCenter(128, 170, uk ? "B: НАЗАД / START: ВИХІД" :
                                "B: НАЗАД / START: ВЫХОД", GOLD_LT, 1);
@@ -2343,9 +2344,10 @@ static void drawScriptPreviewTop(void)
     if (scriptBoardChainUtf8(b, &scriptPreviewDict, chain, sizeof chain)) {
         drawTextCenter(128, 106, scriptPreviewLanguage ? "ПОТОЧНЕ СЛОВО" : "ТЕКУЩЕЕ СЛОВО", DIM_TEXT, 1);
         drawTextCenter(128, 122, chain, WHITE, fontTextColumns(chain) > 16 ? 1 : 2);
-        int tier = 0;
-        (void)scriptBoardPreview(b, &scriptPreviewDict, &scriptPreviewTiles, &tier);
-        int points = scriptPreviewQuote(); // exactly what submit awards, including repeats and combo
+        // The single quote was computed before vblank. All top-screen slices
+        // share that exact score/tier, including repeats, diamonds and combo.
+        int tier = scriptQuoteTierNow;
+        int points = chainScoreNow;
         char pts[52]; // UTF-8 Cyrillic labels can use two bytes per glyph
         if (points) {
             sniprintf(pts, sizeof pts, "+%d %s", points,
@@ -3216,6 +3218,7 @@ static void topSigs(const Game *g, u32 sig[4])
         h0 = hmix(h0, scriptPreviewDaily);
         h0 = hmix(h0, scriptPreviewDailyDate);
         h0 = hmix(h0, scriptPreviewHelp);
+        h0 = hmix(h0, b->passTheme); // theme starts at row 47, crossing slices
         // Switching the manual on/off invalidates every 48-row top LCD slice.
         h1 = hmix(h1, scriptPreviewHelp);
         h2 = hmix(h2, scriptPreviewHelp);
@@ -3225,6 +3228,7 @@ static void topSigs(const Game *g, u32 sig[4])
         h1 = hmix(h1, scriptPreviewLanguage);
         h2 = hmix(h2, scriptPreviewLanguage);
         h3 = hmix(h3, scriptPreviewLanguage);
+        h2 = hmix(h2, scriptPreviewDaily); // the manual's SELECT description
         h1 = hmix(h1, b->passLen);
         h1 = hmix(h1, b->passTheme);
         for (int i = 0; i < b->passLen; i++) {
@@ -3237,7 +3241,9 @@ static void topSigs(const Game *g, u32 sig[4])
             if (c < SCRIPT_COLS && r < SCRIPT_ROWS)
                 h2 = hmix(h2, b->tile[c][r]);
         }
-        h2 = hmix(h2, scriptPreviewLastTier);
+        h3 = hmix(h3, chainScoreNow); // quote occupies rows 147..153
+        h3 = hmix(h3, scriptQuoteTierNow);
+        h3 = hmix(h3, b->chainLen >= WPD4_MIN_WORD); // invalid-word message visibility
         h3 = hmix(h3, scriptPreviewRules.status);
         h3 = hmix(h3, scriptPreviewRules.lastBonus);
         h3 = hmix(h3, scriptPreviewDaily);
@@ -3312,12 +3318,15 @@ static void lateNoteCost(void)
     workCost[workIdx++ & 7] = c;
     lateLines = c;
 }
-// wait for vblank, unless the draw already finished inside it (lines 192..235)
+// Wait for the same early/late vblank window using one beam sample per test.
+// A check just before line 192 followed by swiWaitForVBlank can lose a wake
+// around the helper's flag/IRQ-enable/halt sequence and return on a later IRQ,
+// outside vblank. Polling this interval avoids it without changing IRQ flags.
 static void waitFlipPoint(void)
 {
-    int v = REG_VCOUNT;
-    if (v >= VBLANK_LINE && v <= LATE_FLIP_MAX) return;
-    swiWaitForVBlank();
+    int v;
+    do { v = REG_VCOUNT; }
+    while (v < VBLANK_LINE || v > LATE_FLIP_MAX);
 }
 
 void gfxFrame(const Game *g)
@@ -3336,7 +3345,15 @@ void gfxFrame(const Game *g)
     // Scoring already validates the dictionary, tier and spelling. A valid
     // chain has positive tile values (and a minimum of one point in overtime),
     // so the HUD needs one validation, not a second lookup before scoring.
-    chainScoreNow = g->chainLen >= 3 ? boardChainScore(g) : 0;
+#ifdef WP_CYR_PREVIEW
+    if (g->state == ST_SCRIPT_PREVIEW) {
+        // Dictionary work belongs to the visible-frame budget, never once
+        // per clipped top-screen redraw during the short vblank interval.
+        scriptQuoteTierNow = 0;
+        chainScoreNow = scriptPreviewHelp ? 0 : scriptPreviewQuote(&scriptQuoteTierNow);
+    } else
+#endif
+        chainScoreNow = g->chainLen >= 3 ? boardChainScore(g) : 0;
     chainValidNow = chainScoreNow > 0;
     // per-letter pop timers for the pass plaque
     for (int i = 0; i < g->passLen; i++) {
@@ -3494,6 +3511,10 @@ void gfxFrame(const Game *g)
     for (int sl = 0; sl < 4 && n < 2; sl++) if ((topNeed & (1 << sl)) && sliceFits(sl)) list[n++] = sl;
     if (n < 2 && (n || topNeed == 0) && sliceFits(frame & 3) && !(n && list[0] == (frame & 3))) list[n++] = frame & 3;
     for (int i = 0; i < n; i++) {
+        // A preceding slice has spent some of the remaining beam margin.
+        // Recheck immediately before drawing, especially when a dirty high
+        // slice was followed by rotating slice 0. Keep skipped dirt pending.
+        if (!sliceFits(list[i])) continue;
         clipY0 = list[i] * 48; clipY1 = clipY0 + 48;
         drawTop(g);
         topDrawn[list[i]] = topSigNow[list[i]];

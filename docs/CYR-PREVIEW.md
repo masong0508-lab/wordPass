@@ -35,7 +35,15 @@ opens Russian for debugging, but is no longer needed to find these modes.
   X to switch the language
 - Hold L and tap a letter to peel it: hidden pass letters become permanent
   diamonds; a miss leaves a permanent hole
-- Press Select for another password, Start or B to leave the preview
+- Press Select for a fresh attempt on the current shelf, Start or B to leave the preview
+
+Replaying a free-play shelf discards the **current attempt's** word points
+and completion bonus. Points from previously completed shelves stay banked.
+Press **A after completing the password** to bank that shelf and advance;
+pressing Select on the completed shelf instead replays it without banking
+the same bonus repeatedly. Retrying after fire follows the same rule.
+Daily Practice always retries from zero. If a replacement board cannot be
+generated, the current board, selection, score and mode remain intact.
 
 The touch screen uses real 7×8 hex-grid coordinates and the same bitmap VRAM
 banks as the production game. Cyrillic glyphs render directly on gems without
@@ -68,7 +76,9 @@ remains in the last eight scored words halves its base score. A streak of
 successful words adds 10% per preceding word, capped at +50%. An accepted peel
 breaks the streak but does not erase the recent-word history. The current
 word's HUD preview includes both modifiers so the score shown is the score
-awarded. The preview's tiny WPD4 symbol IDs are stored in a fixed 8×20 buffer
+awarded. Its score and dictionary tier are computed once before vblank and
+shared by the top-screen slices, avoiding repeated dictionary searches
+during the LCD's refresh interval. The preview's tiny WPD4 symbol IDs are stored in a fixed 8×20 buffer
 (under 256 bytes total); there are no new images, heap allocations, runtime
 dictionary conversions or save-card writes.
 
@@ -137,7 +147,8 @@ Native regression tests validate turn/heat accounting, safety around
 obstacles and atomic failure. A separate native test calls the actual
 preview action with both complete 40-theme draft packs, checking recovery
 after fire/gravity, blocked-new-flame refusal, fatal fire, finished shelves,
-and preservation of score, word history and hint allowance.
+preservation of score, word history and hint allowance, exact read-only
+score/tier quotes, replay score banking and failed board generation.
 The DS emulator tests the actual L+R
 input, score and combo safety, and rejects repeated rescue attempts.
 It also checks allocator pointers around Dutch (the largest retail pack),
@@ -151,6 +162,9 @@ Russian or Ukrainian control guide on the existing top LCD. It explains
 how to chain neighboring tiles, submit, clear a chain, peel/reveal a
 password letter, use the once-per-shelf hint, switch languages, start
 unranked Daily Practice and understand repeated-word/combination scoring.
+The recovery entry explicitly shows that it spends a turn and heat;
+overtime can add to its normal two-heat cost. The Select description also
+distinguishes a new free-play attempt from replaying the same Daily puzzle.
 
 Press **B** or **A** to close the guide without exiting the demo or
 accidentally submitting the current chain. Press **START** to leave the

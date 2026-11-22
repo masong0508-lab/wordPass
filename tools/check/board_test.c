@@ -76,6 +76,85 @@ static bool loadDict(const char *path, const char *poolPath, const char *variant
     return true;
 }
 
+// Independent bit-at-a-time WPD3 fixtures exercise the prefix masks across
+// every record width. Each total length has its own first letter, so a prefix
+// in one group must not accidentally match a different length's table.
+static void prefixTests(void)
+{
+    static const int widths[21] = {0,0,0,4,4,4,4,5,6,7,7,8,8,9,9,10,11,11,12,13,13};
+    u8 image[1024] = {0};
+    char words[21][4][WORD_BUF];
+    memcpy(image, "WPD3", 4);
+    size_t offset = 76;
+    for (int length = 3; length <= MAX_WORD; length++) {
+        image[4 + (length - 3) * 4] = 4;
+        for (int w = 0; w < 4; w++) {
+            char *word = words[length][w];
+            memset(word, 'a', (size_t)length); word[length] = 0;
+            word[0] = (char)('a' + length - 3);
+            if (w == 1) word[length - 1] = 'z';
+            if (w == 2) word[1] = 'z';
+            if (w == 3) memset(word + 1, 'z', (size_t)length - 1);
+            for (int bit = 0; bit < length * 5; bit++) {
+                unsigned one = ((unsigned)(word[bit / 5] - 'a') >> (4 - bit % 5)) & 1u;
+                image[offset + (size_t)bit / 8] |= (u8)(one << (7 - bit % 8));
+            }
+            image[offset + widths[length] - 1] |= (u8)(w & 1);
+            offset += widths[length];
+        }
+    }
+    CHECK("prefix fixture loads all 18 WPD3 record lengths", dictSet(image, offset));
+    bool all = true, bounds = true, tiers = true;
+    for (int length = 3; length <= MAX_WORD; length++) {
+        for (int w = 0; w < 4; w++) {
+            const char *word = words[length][w];
+            tiers = tiers && dictLookup(word, length) == 1 + (w & 1);
+            for (int prefix = 1; prefix <= length; prefix++) {
+                all = all && dictHasPrefix(word, prefix, length, length) &&
+                      dictHasPrefix(word, prefix, 3, MAX_WORD);
+            }
+            char upper[WORD_BUF];
+            for (int i = 0; i <= length; i++) upper[i] = word[i] ? (char)(word[i] - 'a' + 'A') : 0;
+            all = all && dictHasPrefix(upper, length, length, length);
+        }
+        int other = length == MAX_WORD ? length - 1 : length + 1;
+        char absent[3] = {words[length][0][0], 'b', 0};
+        bounds = bounds && !dictHasPrefix(words[length][0], 1, other, other) &&
+                 !dictHasPrefix(absent, 2, 3, MAX_WORD) &&
+                 !dictHasPrefix(words[length][0], length, 3, length - 1);
+    }
+    CHECK("WPD3 prefixes preserve every bit boundary, full word, case and tier", all && tiers);
+    CHECK("WPD3 prefix search excludes absent prefixes and unreachable lengths", bounds);
+    CHECK("prefix arguments clamp valid ranges and reject invalid inputs",
+          dictHasPrefix(words[3][0], 1, -10, 99) &&
+          !dictHasPrefix(NULL, 1, 3, 5) && !dictHasPrefix("a", 0, 3, 5) &&
+          !dictHasPrefix("a", -1, 3, 5) && !dictHasPrefix("a", MAX_WORD + 1, 3, MAX_WORD) &&
+          !dictHasPrefix("?", 1, 3, 5) && !dictHasPrefix("a", 1, 9, 5));
+    // The historical dead-board search may reach six letters when its last
+    // tile is Qu. A dictionary containing only this synthetic word isolates
+    // that edge from unrelated short words on a normal English board.
+    memset(image, 0, sizeof image); memcpy(image, "WPD3", 4);
+    image[4 + (6 - 3) * 4] = 1;
+    const char *quWord = "abbbqu";
+    for (int bit = 0; bit < 30; bit++) {
+        unsigned one = ((unsigned)(quWord[bit / 5] - 'a') >> (4 - bit % 5)) & 1u;
+        image[76 + bit / 8] |= (u8)(one << (7 - bit % 8));
+    }
+    CHECK("isolated six-letter Qu fixture loads", dictSet(image, 80));
+    boardOf('x');
+    for (int r = 0; r < 5; r++) set(3, r, CELL_TILE, "abbbq"[r]);
+    u8 cols[5], rows[5];
+    Game before = g;
+    int found = boardHintChain(&g, cols, rows, 5);
+    CHECK("prefix pruning retains the final-Qu six-letter path in five gems",
+          boardHasWords(&g) && found == 5 && cols[0] == 3 && rows[0] == 0 && rows[4] == 4);
+    CHECK("word and hint searches leave the board unchanged", !memcmp(&g, &before, sizeof g));
+    CHECK("a closed dictionary has no prefixes", !dictSet(NULL, 0) && !dictHasPrefix("a", 1, 3, 20));
+    dictInit();
+    CHECK("restoring the built-in dictionary restores prefixes and tiers",
+          dictHasPrefix("book", 4, 4, 4) && dictLookup("zax", 3) == 2);
+}
+
 // ---- music: the sequencer is compiled in and the stubs keep what it sent to each channel
 extern int stubHz[32], stubVol[32], stubDuty[32], stubPan[32], stubWrites, stubRedundant;
 static MusicDbg mdbg(void) { MusicDbg d; musicDebug(&d); return d; }
@@ -641,6 +720,7 @@ int main(int argc, char **argv)
     S.library = LIB_COMMON;
     CHECK("LIBRARY COMMON rejects a rare word", !boardWordOk("zax", 3) && boardWordOk("book", 4));
     S.library = LIB_FULL;
+    prefixTests();
 
     // ---- long words: the dictionary holds words up to 20 letters
     {
@@ -1904,6 +1984,12 @@ int main(int argc, char **argv)
             strcpy(list, UNKNOWN[li]);
             for (char *tk = strtok(list, " "); tk; tk = strtok(NULL, " ")) if (boardWordOk(tk, (int)strlen(tk))) { junk = false; printf("   %s: %s accepted\n", langCode(li), tk); }
             CHECK(strcat(strcpy(list, nm), " accepts known words and rejects non-words"), known && junk);
+            bool prefixes = true;
+            strcpy(list, KNOWN[li]);
+            for (char *tk = strtok(list, " "); tk; tk = strtok(NULL, " "))
+                for (int prefix = 1, length = (int)strlen(tk); prefix <= length; prefix++)
+                    prefixes = prefixes && dictHasPrefix(tk, prefix, length, length);
+            CHECK(strcat(strcpy(list, nm), " active dictionary keeps every known-word prefix after language switch"), prefixes);
             S.library = LIB_COMMON;
             int commonSeen = 0, rareSeen = 0, rareRejected = 0;
             for (int len = POOL_MIN_LEN; len <= POOL_MAX_LEN; len++)

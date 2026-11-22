@@ -999,6 +999,9 @@ static bool dfsWords(const Game *g, int c, int r, char *w, int n, int gems, bool
     gems++;
     if (gems >= 3 && wordAccepted(w, n)) return true;
     if (n >= 5) return false;
+    // A final Qu tile can take a four-letter prefix to six letters. Include
+    // that existing edge case while pruning only impossible continuations.
+    if (n >= 3 && !dictHasPrefix(w, n, n + 1, 6)) return false;
     used[c][r] = true;
     int nc[6], nr[6], k = boardNeighbors(c, r, nc, nr);
     for (int i = 0; i < k; i++) {
@@ -1020,11 +1023,17 @@ static bool hintDfs(const Game *g, int c, int r, char *w, int n, int maxLen, int
     pc[depth] = (u8)c; pr[depth] = (u8)r;
     depth++;
     if (g->cell[c][r].state == CELL_BURN) burnSeen = true;
-    if (depth >= 3 && depth == maxLen && (!needBurn || burnSeen) && dictLookup(w, n) == 1 && wordAccepted(w, n)) {
+    if (depth >= 3 && depth == maxLen && (!needBurn || burnSeen) && wordAccepted(w, n) == 1) {
         w[n] = 0;             // ledgerHas compares NUL-terminated words; max five Qu gems fit w[16]
         if (!freshOnly || !ledgerHas(g, w)) return true;
     }
     if (depth >= maxLen) return false;
+    // The target is measured in gems; Qu contributes two letters. Restrict
+    // the prefix search to every letter length still reachable by this path,
+    // preserving the old traversal and first eligible hint exactly.
+    int remaining = maxLen - depth;
+    if (n >= 2 && !dictHasPrefix(w, n, n + remaining,
+                                n + remaining * (langQuTile() ? 2 : 1))) return false;
     used[c][r] = true;
     int nc[6], nr[6], k = boardNeighbors(c, r, nc, nr);
     for (int i = 0; i < k; i++) {

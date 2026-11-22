@@ -76,6 +76,110 @@ static void refused(int error, const char *why)
     CHECK(scriptPreviewRescueError == error, "%s reports expected error", why);
 }
 
+static void retryScores(void)
+{
+    CHECK(scriptPreviewNewPass(314), "start a fresh score/retry scenario");
+    CHECK(scriptPreviewHint(), "score/retry scenario has a real hinted word");
+    ScriptBoard beforeQuote = scriptPreviewBoard;
+    ScriptRules rulesBeforeQuote = scriptPreviewRules;
+    ScriptLedger ledgerBeforeQuote = scriptPreviewLedger;
+    int tier = -1;
+    int quoted = scriptPreviewQuote(&tier);
+    CHECK(quoted > 0 && (tier == 1 || tier == 2) &&
+          !memcmp(&beforeQuote, &scriptPreviewBoard, sizeof beforeQuote) &&
+          !memcmp(&rulesBeforeQuote, &scriptPreviewRules, sizeof rulesBeforeQuote) &&
+          !memcmp(&ledgerBeforeQuote, &scriptPreviewLedger, sizeof ledgerBeforeQuote),
+          "score and tier quote is read-only for a real hinted word");
+    int points = scriptPreviewSubmit();
+    CHECK(points == quoted && scriptPreviewScore == points &&
+          scriptPreviewLastTier == tier,
+          "a first-shelf word awards the exact quoted points and tier");
+    tier = -1;
+    CHECK(scriptPreviewQuote(&tier) == 0 && tier == 0,
+          "an empty chain clears its score and tier quote");
+    CHECK(scriptPreviewNewPass(315) && scriptPreviewScore == 0 &&
+          scriptPreviewLedger.count == 0 && scriptPreviewHints == 0,
+          "re-dealing shelf one discards its attempt score and history");
+
+    // Complete an actual password, preserving earned points only when A
+    // advances to the next shelf. Replay must not bank the same pass bonus.
+    for (int c = 0; c < SCRIPT_COLS; c++)
+        for (int r = 0; r < SCRIPT_ROWS; r++)
+            if (scriptPreviewBoard.back[c][r])
+                CHECK(scriptPreviewPeel(c, r) > 0, "reveal an actual password tile");
+    int banked = scriptPreviewScore;
+    CHECK(scriptPreviewRules.status == SCRIPT_PASSED && banked > 0,
+          "finishing a password earns a real shelf bonus");
+    CHECK(scriptPreviewAdvance(316) && scriptPreviewShelf == 2 &&
+          scriptPreviewScore == banked, "advancing banks the completed shelf score");
+    CHECK(scriptPreviewHint() && scriptPreviewSubmit() > 0 &&
+          scriptPreviewScore > banked, "next-shelf word adds temporary attempt points");
+    CHECK(scriptPreviewNewPass(317) && scriptPreviewScore == banked,
+          "re-dealing keeps completed shelves but discards this attempt's points");
+    CHECK(scriptPreviewHint() && scriptPreviewSubmit() > 0,
+          "failed retry scenario starts with actual word points");
+    scriptPreviewRules.status = SCRIPT_FAILED;
+    CHECK(scriptPreviewNewPass(318) && scriptPreviewScore == banked &&
+          scriptPreviewRules.status == SCRIPT_RUNNING,
+          "retrying a failed shelf cannot farm its word points");
+
+    for (int c = 0; c < SCRIPT_COLS; c++)
+        for (int r = 0; r < SCRIPT_ROWS; r++)
+            if (scriptPreviewBoard.back[c][r])
+                CHECK(scriptPreviewPeel(c, r) > 0, "finish second real password");
+    CHECK(scriptPreviewRules.status == SCRIPT_PASSED && scriptPreviewScore > banked,
+          "completed second shelf displays its new bonus");
+    CHECK(scriptPreviewNewPass(319) && scriptPreviewScore == banked,
+          "replaying a completed shelf discards its unbanked bonus");
+
+    CHECK(scriptPreviewToggleDaily(20261121, 320) && scriptPreviewScore == 0 &&
+          scriptPreviewShelf == 1 && scriptPreviewDaily,
+          "Daily practice starts independent of banked free-play score");
+    ScriptBoard daily = scriptPreviewBoard;
+    CHECK(scriptPreviewHint() && scriptPreviewSubmit() > 0,
+          "Daily practice has a scoreable real word");
+    CHECK(scriptPreviewNewPass(321) && scriptPreviewScore == 0 &&
+          !memcmp(&daily, &scriptPreviewBoard, sizeof daily),
+          "Daily retry restores exactly the same board and zero score");
+    CHECK(scriptPreviewToggleDaily(20261121, 322) && !scriptPreviewDaily &&
+          scriptPreviewShelf == 1 && scriptPreviewScore == 0,
+          "leaving Daily starts a fresh free-play score bank");
+}
+
+static void failedGeneration(void)
+{
+    CHECK(scriptPreviewNewPass(420) && scriptPreviewHint(),
+          "generation failure starts on a live selected word");
+    ScriptBoard board = scriptPreviewBoard;
+    ScriptRules rules = scriptPreviewRules;
+    ScriptLedger ledger = scriptPreviewLedger;
+    int score = scriptPreviewScore, shelf = scriptPreviewShelf;
+    uint32_t seed = scriptPreviewSeed;
+    // Simulate an unavailable pool after play began. Starting a replacement
+    // must fail without resetting the old clock/board/selection or score.
+    unsigned themes = scriptPreviewPools.themes;
+    scriptPreviewPools.themes = 0;
+    CHECK(!scriptPreviewNewPass(421) && scriptPreviewSeed == seed &&
+          scriptPreviewScore == score && scriptPreviewShelf == shelf &&
+          !memcmp(&board, &scriptPreviewBoard, sizeof board) &&
+          !memcmp(&rules, &scriptPreviewRules, sizeof rules) &&
+          !memcmp(&ledger, &scriptPreviewLedger, sizeof ledger),
+          "failed re-deal preserves the previous complete attempt");
+    CHECK(!scriptPreviewToggleDaily(20261121, 422) && !scriptPreviewDaily &&
+          scriptPreviewDailyDate == 0 && scriptPreviewScore == score &&
+          scriptPreviewSeed == seed && scriptPreviewShelf == shelf &&
+          !memcmp(&board, &scriptPreviewBoard, sizeof board),
+          "failed Daily switch restores the previous mode and attempt");
+    scriptPreviewRules.status = SCRIPT_PASSED;
+    rules = scriptPreviewRules;
+    CHECK(!scriptPreviewAdvance(423) && scriptPreviewSeed == seed &&
+          scriptPreviewScore == score && scriptPreviewShelf == shelf &&
+          !memcmp(&board, &scriptPreviewBoard, sizeof board) &&
+          !memcmp(&rules, &scriptPreviewRules, sizeof rules),
+          "failed advance leaves the completed shelf ready to retry");
+    scriptPreviewPools.themes = (uint16_t)themes;
+}
+
 static void exercise(const char *dictPath, const char *tilesPath,
                      const char *poolsPath, int language)
 {
@@ -91,6 +195,9 @@ static void exercise(const char *dictPath, const char *tilesPath,
     if (!valid) { free(dict); free(tiles); free(pools); return; }
     scriptPreviewLanguage = language;
     scriptPreviewShelf = 1;
+
+    retryScores();
+    failedGeneration();
 
     start(66, 0, 0);
     refused(1, "first-turn guard");
@@ -173,7 +280,7 @@ int main(int argc, char **argv)
     exercise(argv[1], argv[3], argv[5], 0);
     exercise(argv[2], argv[4], argv[6], 1);
     printf(failures ? "SCRIPT PREVIEW FAILED: %d failure(s)\n" :
-                     "SCRIPT PREVIEW OK: recovery transaction, fire, score and refusal guards\n",
+                     "SCRIPT PREVIEW OK: retries, score quote, generation, rescue and fire\n",
            failures);
     return failures ? 1 : 0;
 }

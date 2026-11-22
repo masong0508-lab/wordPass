@@ -400,6 +400,9 @@ bool poolsSet(const u8 *p, size_t bytes);                         // activate a 
 int  poolCount(int theme, int len);                           // words of that length in the theme
 void poolWord(int theme, int len, int idx, char *out);        // out holds len + 1 bytes
 int  dictLookup(const char *word, int len);   // 0 none, 1 common, 2 rare
+// Any tier, inclusive total-letter bounds; no extra index or heap allocation.
+// Completed words still need the game's library and spelling acceptance check.
+bool dictHasPrefix(const char *prefix, int len, int minLen, int maxLen);
 int  dictSpelling(const char *word, int len); // 0 same everywhere, 1 American only, 2 British only
 
 // gfx.c
