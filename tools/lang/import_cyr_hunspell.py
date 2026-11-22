@@ -259,7 +259,11 @@ def selftest(folder):
     for code in ("ru", "uk"):
         themes, seeds = read_catalog(code)
         fixtures, _ = d4.FIXTURES[code]
-        words = sorted(set(fixtures) | seeds)
+        # The extra entry is SYNTHETIC (not a real lexical candidate) and
+        # appears only in this temporary source-coverage test.
+        synthetic = "".join(chr(cp) for cp in d4.alphabet(code)[:4])
+        assert synthetic not in seeds
+        words = sorted(set(fixtures) | seeds | {synthetic})
         dic = root / (code + ".dic")
         # Exercise all three real Ukrainian apostrophe encodings, which
         # must be accounted for but NEVER turned into misspelled DS words.
@@ -268,11 +272,60 @@ def selftest(folder):
         dic.write_text(str(len(words)) + "\n" +
                        "\n".join(word.lower() for word in words) + "\n",
                        encoding="utf-8")
+        extras = root / (code + ".extra-themes.json")
+        extras.write_text(json.dumps({
+            "language": code, "review_status": "unreviewed-candidates",
+            "themes": {"BINDERY": [synthetic]},
+        }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        # Default builds remain unchanged even if a larger source has words
+        # not explicitly assigned to the 40 original themes.
+        baseline = root / (code + "-starter-only")
+        base_result = build(code, dic, aff, notice,
+                            "https://example.invalid/synthetic",
+                            baseline, max_dict_bytes=DEFAULT_BUDGET)
+        assert base_result["total_password_count"] == 160
+        assert not (baseline / "THEME-EXTRAS.json").exists()
         dest = root / code
         result = build(code, dic, aff, notice, "https://example.invalid/synthetic",
-                       dest, max_dict_bytes=DEFAULT_BUDGET)
+                       dest, max_dict_bytes=DEFAULT_BUDGET,
+                       extra_themes=extras)
         assert result["starter_theme_count"] == 40
         assert result["starter_password_count"] == 160
+        assert result["extra_password_count"] == 1
+        assert result["total_password_count"] == 161
+        assert result["theme_expansion_status"] == "unreviewed-candidates"
+        assert result["theme_expansion_sha256"] == hashlib.sha256(
+            extras.read_bytes()).hexdigest()
+        assert (dest / "THEME-EXTRAS.json").read_bytes() == extras.read_bytes()
+        try:
+            build(code, dic, aff, notice, "https://example.invalid/synthetic",
+                  root / "unsafe-budget", max_words=160, rank=extras,
+                  extra_themes=extras)
+        except ValueError as err:
+            assert "mandatory" in str(err)
+        else:
+            raise AssertionError("truncated source word budget dropped themed passwords")
+        # An extra password absent from the licensed dictionary, a repeated
+        # original seed, and cross-locale JSON must all be rejected.
+        for candidate in (
+            {"language": code, "review_status": "unreviewed-candidates",
+             "themes": {"BINDERY": ["ЖЖЖЖ"] if code == "ru" else ["ЇЇЇЇ"]}},
+            {"language": code, "review_status": "unreviewed-candidates",
+             "themes": {"BINDERY": [next(iter(seeds))]}},
+            {"language": "uk" if code == "ru" else "ru",
+             "review_status": "unreviewed-candidates",
+             "themes": {"BINDERY": [synthetic]}},
+        ):
+            invalid = root / (code + ".invalid-extra.json")
+            invalid.write_text(json.dumps(candidate, ensure_ascii=False),
+                               encoding="utf-8")
+            try:
+                expand_themes_from_source(code, invalid, dict(themes), seeds,
+                                          set(words))
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("invalid source/theme mapping was accepted")
         if code == "uk":
             assert result["ukrainian_apostrophe_forms_unrepresented"] == 3
             assert set(result["ukrainian_apostrophe_example_forms"]) == {
@@ -282,10 +335,13 @@ def selftest(folder):
             assert result["ukrainian_apostrophe_forms_unrepresented"] == 0
         dictionary = (dest / "dict.bin").read_bytes()
         pools = (dest / "pools.bin").read_bytes()
-        assert p2.verify(dictionary, pools)["words"] == 160
+        assert p2.verify(dictionary, pools)["words"] == 161
+        assert p2.verify((baseline / "dict.bin").read_bytes(),
+                         (baseline / "pools.bin").read_bytes())["words"] == 160
         assert (dest / "LICENSE-SOURCE.txt").read_bytes() == notice.read_bytes()
-    print("CYR INTAKE OK: 40 themes, source words, verified binary + attribution; "
-          "Ukrainian apostrophes preserved in audit, not corrupted into tiles")
+    print("CYR INTAKE OK: 40 themes, 160 starter vs 161 source-backed "
+          "test passwords, attribution and invalid-expansion rejection; "
+          "Ukrainian apostrophes preserved in audit")
 
 
 def main():
