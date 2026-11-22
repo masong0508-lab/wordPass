@@ -33,12 +33,12 @@ jobs:
           fetch-depth: 0
       - name: Check benchmark report tool syntax
         run: python3 -m py_compile tools/check/balance_ramp_report.py
-      - name: Compare shelves 14-19 across 11 languages with unchanged bot policies
+      - name: Compare shelves 14-23 across 11 languages with unchanged bot policies
         run: >
           python3 tools/check/balance_sweep.py
           --baseline b02d7268ea9ff5ad5e053dd8914cb95992a924d6
           --languages en es fr de it pt nl sv pl da fi
-          --first 14 --last 19 --attempts 60
+          --first 14 --last 23 --attempts 50
           --seed-base 1000
           --output build/staged-ramp
       - name: Assert unchanged shelves match and report progression steepness
@@ -46,13 +46,13 @@ jobs:
           python3 tools/check/balance_ramp_report.py
           --input build/staged-ramp
           --languages en es fr de it pt nl sv pl da fi
-          --first 14 --last 19
+          --first 14 --last 23
       - name: Replicate across all 11 languages with independent seeds
         run: >
           python3 tools/check/balance_sweep.py
           --baseline b02d7268ea9ff5ad5e053dd8914cb95992a924d6
           --languages en es fr de it pt nl sv pl da fi
-          --first 14 --last 19 --attempts 60
+          --first 14 --last 23 --attempts 50
           --seed-base 750001
           --output build/staged-ramp-replication
       - name: Verify replication controls and report progression
@@ -60,7 +60,7 @@ jobs:
           python3 tools/check/balance_ramp_report.py
           --input build/staged-ramp-replication
           --languages en es fr de it pt nl sv pl da fi
-          --first 14 --last 19
+          --first 14 --last 23
       - name: Upload paired outcomes and report
         if: always()
         uses: actions/upload-artifact@v7
