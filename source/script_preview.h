@@ -35,6 +35,9 @@ extern uint32_t scriptPreviewSeed;
 // Incremented ONLY when a full Russian/Ukrainian dictionary image is loaded.
 // Forces font-cache renewal even when malloc reuses the previous file address.
 extern uint32_t scriptPreviewGlyphEpoch;
+// Diagnostic stage for a failed source-backed preview launch (0 = success).
+// Exposed to the test ELF; never persisted in normal saves.
+extern int scriptPreviewOpenError;
 
 bool scriptPreviewOpen(int language, uint32_t seed);
 void scriptPreviewClose(void);
