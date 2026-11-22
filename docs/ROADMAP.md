@@ -19,6 +19,8 @@ There is **no defensible numeric completion percentage**.
       plus default CI FAT-card save/reboot and damaged-language scenarios
 - [x] Formatter-accurate localization checks and deterministic standard music
       previews across scalar/NumPy hosts
+- [x] Free, bounded PEEK clue navigation using visible numbered evidence only,
+      with no game-state mutation, new allocations or per-frame search work
 
 The core game is playable; remaining work is predominantly editorial,
 platform compatibility, balancing, broader tests and script expansion.
