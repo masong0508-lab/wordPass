@@ -9,7 +9,13 @@ Example:
   python3 tools/lang/import_cyr_hunspell.py --code ru \
     --dic path/to/ru_RU.dic --aff path/to/ru_RU.aff \
     --notice path/to/README_ru_RU.txt --origin https://... \
-    --out build/ru-experiment
+    --out build/ru-experiment \
+    --extra-themes path/to/ru-extra-themes.json
+
+  Optional theme expansions are editorial candidates only, never auto-added.
+  They must occur in the legally sourced spelling dictionary and retain their
+  original Ukrainian/Russian orthography. Default imports still use 160
+  starter passwords (four per theme).
 
   python3 tools/lang/import_cyr_hunspell.py --selftest build/cyr-intake
 """
