@@ -129,7 +129,7 @@ LANG_SRC  := tools/check/lang_test.c tools/check/stubs.c source/dict.c source/po
 check:
 	@mkdir -p $(BUILD)
 	gcc -std=gnu11 -Wall -Wextra -Wshadow -I tools/check/stub -I source -DCFG_PATH='"$(BUILD)/settings_test.cfg"' \
-	    tools/check/settings_test.c source/settings.c -Wl,--wrap=rename,--wrap=fwrite -o $(BUILD)/settings_check
+	    tools/check/settings_test.c source/settings.c -Wl,--wrap=rename,--wrap=fwrite,--wrap=remove -o $(BUILD)/settings_check
 	$(BUILD)/settings_check
 	gcc -std=gnu11 -Wall -Wextra -Wshadow -I tools/check/stub -I source $(LANG_SRC) -o $(BUILD)/lang_check
 	$(BUILD)/lang_check

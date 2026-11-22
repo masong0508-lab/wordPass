@@ -228,7 +228,9 @@ bool settingsSave(void)
     // A recovered or unsuccessfully promoted .tmp may be the only good image.
     // Move it out of the way before opening that path with truncation.
     if (pendingTemp) {
-        if ((remove(cfgBak) != 0 && errno != ENOENT) || rename(cfgTmp, cfgBak) != 0) {
+        // This is a regular file: newlib remove() retries a missing file as
+        // rmdir(), whose unsupported libfat hook hides ENOENT with ENOSYS.
+        if ((unlink(cfgBak) != 0 && errno != ENOENT) || rename(cfgTmp, cfgBak) != 0) {
             lastSaveFailed = true;
             return false;
         }
@@ -246,13 +248,13 @@ bool settingsSave(void)
         pendingTemp = true;
         ok = rename(cfgTmp, cfgPath) == 0;
         if (!ok && access(cfgPath, F_OK) == 0 &&
-            (remove(cfgBak) == 0 || errno == ENOENT) && rename(cfgPath, cfgBak) == 0) {
+            (unlink(cfgBak) == 0 || errno == ENOENT) && rename(cfgPath, cfgBak) == 0) {
             ok = rename(cfgTmp, cfgPath) == 0;
             if (!ok) (void)rename(cfgBak, cfgPath);
         }
         if (ok) {
             pendingTemp = false;
-            (void)remove(cfgBak);    // an old backup is harmless if cleanup fails
+            (void)unlink(cfgBak);    // an old backup is harmless if cleanup fails
         }
     }
     lastSaveFailed = !ok;

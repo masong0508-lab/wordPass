@@ -14,6 +14,7 @@ bool stubFatOk = true;
 // backup-then-rename branch of settingsSave. Failures below simulate interrupted
 // promotion, rollback and partial writes without needing a physical card.
 int __real_rename(const char *from, const char *to);
+int __real_remove(const char *path);
 size_t __real_fwrite(const void *ptr, size_t size, size_t count, FILE *stream);
 static int renameRefused, failPromotions, failRestores, failBackups, failPreserves, shortNextWrite;
 int __wrap_rename(const char *from, const char *to)
@@ -31,6 +32,15 @@ size_t __wrap_fwrite(const void *ptr, size_t size, size_t count, FILE *stream)
 {
     if (shortNextWrite) { shortNextWrite = 0; count /= 2; }
     return __real_fwrite(ptr, size, count, stream);
+}
+int __wrap_remove(const char *path)
+{
+    // Observed on the real ARM9/libfat path: newlib remove retries a missing
+    // file with rmdir, whose missing devoptab hook replaces ENOENT by ENOSYS.
+    // File-only cleanup must use unlink so this cannot block later saves.
+    int result = __real_remove(path);
+    if (result != 0 && errno == ENOENT) errno = ENOSYS;
+    return result;
 }
 
 // Inspect a persisted image without changing the in-memory settings being saved.
