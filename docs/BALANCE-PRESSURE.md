@@ -33,7 +33,10 @@ From the repository root with Python 3 and a host GCC compiler:
 The GitHub Actions workflow named **WordPass fire-pressure study** runs on
 relevant rule / bot / study pull requests and main changes, as well as on
 manual dispatch. It uploads a Markdown report and the source CSV and JSON
-summaries. The same command can be run locally with more attempts or languages.
+summaries. The workflow also runs an independent 80-attempt-per-case seed batch
+across all eleven retail languages, to check whether a first batch's results
+hold across other vocabulary and board distributions. The same command can be
+run locally with more attempts or languages.
 
 ## How to use the evidence
 
@@ -49,3 +52,31 @@ Once a change is supported, check it against all currently playable languages,
 Daily rules, memory/ROM budgets, save compatibility, the full DeSmuME scenarios
 and native-hardware observations. This experiment is intentionally separate
 from the release rules and cannot change the ROM by itself.
+
+## Initial results (November 22, 2026; first seed batch)
+
+[Successful CI run #45055393299](https://github.com/masong0508-lab/wordPass/actions/runs/45055393299):
+**7,680 completed simulated shelves**, 160 attempts per player/shelf/language/
+scenario in English, German and Finnish. All shelf-14 control CSV rows matched
+exactly. The following are *competent bot* shelf-15 clear percentages, not
+human win rates:
+
+| Locale | Current | Pulse-only relief | Twin-only relief | Both changes |
+| --- | ---: | ---: | ---: | ---: |
+| English | 61.2% | 72.5% | 65.6% | 75.0% |
+| German | 70.0% | 70.0% | 65.6% | 75.6% |
+| Finnish | 73.8% | 75.0% | 75.6% | 81.9% |
+
+Shelf-14 competent bot clear percentages were 75.0% English, 76.2% German and
+79.4% Finnish. The weak bot's shelf-15 clear percentage remained very low
+(1.2–6.2% across the 12 scenario/locale combinations), indicating that a
+single rule adjustment is unlikely to make later Lockdown accessible to the
+current weak simulated player.
+
+The counterintuitive German twin-only result and other non-monotonic cases
+are plausible in a stochastic game: changing when fire appears can change
+subsequent board and player decisions, even under matched initial seeds. A
+160-attempt comparison is too small and too model-dependent to choose a rule.
+The independent all-language replication, additional seeds, and actual player
+testing are needed before any gameplay retune. No shipping rules are changed
+by this work.
