@@ -2295,6 +2295,29 @@ static void drawCues(const Game *g)
 
 #ifdef WP_CYR_PREVIEW
 static int scriptQuoteTierNow;
+// The Russian and Ukrainian board uses a fixed 33-symbol alphabet loaded
+// from a validated WPD4 dictionary. Resolving all 56 tile glyphs through
+// fontGlyphCodepoint() on EVERY rendered frame wastes CPU on repeated
+// Unicode case/switch handling. Resolve the at-most-64 alphabet members
+// once on a language/image change, and draw each tile by its symbol ID.
+// ROM glyph pointers are stable even when the dictionary is unloaded.
+static const u8 *scriptGlyphById[WPD4_MAX_SYMBOLS];
+static const u8 *scriptGlyphImage;
+static int scriptGlyphLanguage = -1;
+// Observable in the test ELF, so the emulator can prove that 120 consecutive
+// frames never rebuild the cache; incremented only on alphabet changes.
+unsigned scriptGlyphCacheBuilds;
+static void scriptRefreshGlyphs(void)
+{
+    const V4Dict *dict = &scriptPreviewDict;
+    if (dict->image == scriptGlyphImage &&
+        scriptGlyphLanguage == scriptPreviewLanguage) return;
+    for (unsigned id = 0; id < dict->symbols; id++)
+        scriptGlyphById[id] = fontGlyphCodepoint(dict->alphabet[id]);
+    scriptGlyphImage = dict->image;
+    scriptGlyphLanguage = scriptPreviewLanguage;
+    scriptGlyphCacheBuilds++;
+}
 // Developer-only Cyrillic board uses the ACTUAL two-screen VRAM renderer and
 // stylus coordinate geometry, not a mock picture or a separate framebuffer.
 // Each tile draws a gem plus an on-demand Unicode glyph. No 64-gem atlas.
@@ -2303,6 +2326,8 @@ static void drawScriptPreviewBoard(void)
     const ScriptBoard *b = &scriptPreviewBoard;
     const V4Dict *dict = &scriptPreviewDict;
     const V4Tiles *tiles = &scriptPreviewTiles;
+    // One epoch check per render, rather than 56 glyph-codepoint switches.
+    scriptRefreshGlyphs();
     fillRect(0, 0, SCREEN_W, SCREEN_H, BLACK);
     drawBoardFrame();
     for (int c = 0; c < SCRIPT_COLS; c++) {
@@ -2324,7 +2349,7 @@ static void drawScriptPreviewBoard(void)
                                 GEM_PALS[v4TilesVowel(tiles, id) ? 0 :
                                          (int)(id % 4) + 1];
             drawGemSized(x, y, TILE_W, TILE_H, pal, false);
-            const u8 *glyph = fontGlyphCodepoint(dict->alphabet[id]);
+            const u8 *glyph = scriptGlyphById[id];
             u16 fg = state == SCRIPT_DIAMOND ? C(4,6,10) : WHITE;
             drawGlyph(x + 8, y + 5, glyph, pal->dark, 2);
             drawGlyph(x + 7, y + 4, glyph, fg, 2);
