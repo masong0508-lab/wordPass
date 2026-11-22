@@ -249,6 +249,15 @@ apostrophe separator instead of a bogus tile. Russian and Ukrainian remain
 independent language modes. See [CYR-SOURCES.md](CYR-SOURCES.md) for the
 exact manifest fields and source-review limitations.
 
+An optional source-verified thematic expansion pipeline now allows
+independent, editorially selected Russian and Ukrainian candidates beyond
+the built-in four passwords per theme. Each addition must be present in its
+licensed source dictionary, explicitly mapped to a canonical theme, and
+included in the external manifest for verification. The two existing demo
+ROMs remain limited to the original starter catalogs unless you opt into
+external packs and select extra candidates yourself. This is **not** a
+substitute for translation review or complete retail gameplay parity.
+
 ## Bring your own licensed Cyrillic dictionary packs
 
 The built-in preview remains tiny and deterministic for emulator regression.
