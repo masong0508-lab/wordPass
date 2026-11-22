@@ -29,6 +29,18 @@ from hunspell import expand
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_BUDGET = 1536 * 1024  # practical per-language dictionary RAM budget
 
+# Both ordinary keyboard and typographic Ukrainian apostrophes are the same
+# orthographic separator for auditing. Do not simply discard them or silently
+# strip them out of passwords: WPD4's current DS tile alphabet lacks a
+# non-tile apostrophe representation, so these forms remain unsupported.
+UK_APOSTROPHES = "'’ʼ"
+
+
+def canonical_uk_apostrophe(form):
+    word = unicodedata.normalize("NFC", form.strip()).upper()
+    return word.replace("'", "ʼ").replace("’", "ʼ")
+
+
 
 def normalize(token, index):
     word = unicodedata.normalize("NFC", token.strip()).upper()
@@ -80,9 +92,16 @@ def build(code, dic, aff, notice, origin, out,
     # Expand Hunspell affix flags rather than pretending the root .dic entries
     # are all playable inflections. Default Hunspell expander drops capitalized
     # proper names and forbids marked ONLYINCOMPOUND / FORBIDDENWORD roots.
-    forms = expand(str(dic), str(aff))
+    forms = expand(str(dic), str(aff),
+                   allow_internal_apostrophes=(code == "uk"))
+    apostrophized = set()
     words = set()
     for form in forms:
+        if code == "uk" and any(ch in form for ch in UK_APOSTROPHES):
+            canonical = canonical_uk_apostrophe(form)
+            parts = canonical.split("ʼ")
+            if len(parts) > 1 and all(part and part.isalpha() for part in parts):
+                apostrophized.add(canonical)
         word = normalize(form, index)
         if word is not None:
             words.add(word)
@@ -142,6 +161,10 @@ def build(code, dic, aff, notice, origin, out,
         "affix_source_sha256": sha(aff),
         "license_notice_sha256": hashlib.sha256(notice_bytes).hexdigest(),
         "source_valid_word_count": len(forms),
+        "source_tile_eligible_word_count": len({normalize(w, index) for w in forms} - {None}),
+        "ukrainian_apostrophe_forms_unrepresented": len(apostrophized),
+        "ukrainian_apostrophe_example_forms": sorted(apostrophized)[:12],
+        "apostrophe_policy": "Preserve source spelling; reject apostrophe forms until a non-tile separator is implemented",
         "retained_word_count": len(words),
         "common_tier_count": len(common),
         "starter_theme_count": 40, "starter_password_count": 160,
@@ -152,12 +175,14 @@ def build(code, dic, aff, notice, origin, out,
             "Native-speaker review, mature frequency tiers and content filtering still required",
             "The bundled 160 candidate passwords are not enough for full Classic/Daily play",
             "Verify source and derivative redistribution obligations for all components",
+            "Ukrainian apostrophe spellings are excluded, never silently stripped; add a true non-tile separator before locale release",
         ],
     }
     (out / "SOURCE-MANIFEST.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"CYR INTAKE {code}: {len(words)} source words, {len(dictionary)} dictionary bytes, "
-          f"40 starter themes, {len(pools)} pool bytes; status EXPERIMENTAL")
+          f"40 starter themes, {len(pools)} pool bytes; "
+          f"Ukrainian apostrophe forms excluded={len(apostrophized)}; status EXPERIMENTAL")
     return manifest
 
 
@@ -174,6 +199,10 @@ def selftest(folder):
         fixtures, _ = d4.FIXTURES[code]
         words = sorted(set(fixtures) | seeds)
         dic = root / (code + ".dic")
+        # Exercise all three real Ukrainian apostrophe encodings, which
+        # must be accounted for but NEVER turned into misspelled DS words.
+        if code == "uk":
+            words += ["п'ять", "м’ясо", "звʼязок"]
         dic.write_text(str(len(words)) + "\n" +
                        "\n".join(word.lower() for word in words) + "\n",
                        encoding="utf-8")
@@ -182,11 +211,19 @@ def selftest(folder):
                        dest, max_dict_bytes=DEFAULT_BUDGET)
         assert result["starter_theme_count"] == 40
         assert result["starter_password_count"] == 160
+        if code == "uk":
+            assert result["ukrainian_apostrophe_forms_unrepresented"] == 3
+            assert set(result["ukrainian_apostrophe_example_forms"]) == {
+                "ПʼЯТЬ", "МʼЯСО", "ЗВʼЯЗОК"
+            }, "all Ukrainian apostrophe variants should normalize identically"
+        else:
+            assert result["ukrainian_apostrophe_forms_unrepresented"] == 0
         dictionary = (dest / "dict.bin").read_bytes()
         pools = (dest / "pools.bin").read_bytes()
         assert p2.verify(dictionary, pools)["words"] == 160
         assert (dest / "LICENSE-SOURCE.txt").read_bytes() == notice.read_bytes()
-    print("CYR INTAKE OK: 40 themes, trusted source words, verified binary + attribution")
+    print("CYR INTAKE OK: 40 themes, source words, verified binary + attribution; "
+          "Ukrainian apostrophes preserved in audit, not corrupted into tiles")
 
 
 def main():
