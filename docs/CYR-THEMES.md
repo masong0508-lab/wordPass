@@ -23,3 +23,16 @@ Before release: expand theme pools, build complete licensed WPD4 dictionaries,
 validate WPL2 tile frequencies, translate 385 UI messages and the in-game
 guide, then test the full DS gameplay and review with native speakers.
 These JSON catalogs are not compiled into the normal 11-language ROM.
+
+## Targeted source corrections
+
+The following two starter entries were corrected against dictionary entries:
+
+| Locale / theme | Previous entry | Corrected entry | Evidence and reason |
+| --- | --- | --- | --- |
+| Russian / SMITHY | МЕЧЬ | ГОРН | [Gramota's dictionary entry](https://gramota.ru/meta/gorn) lists the forge/furnace sense. This supplies a valid four-letter smithy term without retaining the misspelled sword entry. |
+| Ukrainian / MOODS | СУМОК | СМУТОК | [СУМ-11 dictionary entry](https://sum11.com.ua/smutok/) defines the intended sad mood. The corrected spelling fits the existing 4..9-symbol password limit. |
+
+Both retain four distinct candidates per theme and are included in the
+generated preview dictionary and pools. These corrections do not constitute
+native-speaker approval of the remaining draft catalog.

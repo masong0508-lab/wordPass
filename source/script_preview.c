@@ -29,7 +29,14 @@ static unsigned char *readPreview(const char *code, const char *file,
                                   size_t maximum, size_t *size)
 {
     char path[70];
-    snprintf(path, sizeof path, "nitro:/cyrpreview/%s/%s", code, file);
+    static const char prefix[] = "nitro:/cyrpreview/";
+    size_t prefixLen = sizeof prefix - 1;
+    size_t codeLen = strlen(code), fileLen = strlen(file);
+    if (prefixLen + codeLen + 1 + fileLen + 1 > sizeof path) return NULL;
+    memcpy(path, prefix, prefixLen);
+    memcpy(path + prefixLen, code, codeLen);
+    path[prefixLen + codeLen] = '/';
+    memcpy(path + prefixLen + codeLen + 1, file, fileLen + 1);
     FILE *fp = fopen(path, "rb");
     if (!fp) return NULL;
     if (fseek(fp, 0, SEEK_END) != 0) { fclose(fp); return NULL; }
@@ -192,7 +199,8 @@ bool scriptPreviewHint(void)
 }
 bool scriptPreviewRescue(void)
 {
-    if (!scriptPreviewDict.image || scriptPreviewRules.status != SCRIPT_RUNNING)
+    if (!scriptPreviewDict.image || scriptPreviewRules.status != SCRIPT_RUNNING ||
+        scriptBoardPassComplete(&scriptPreviewBoard))
         return false;
     if (!scriptPreviewRules.turns) {
         scriptPreviewRescueError = 1; // use a normal word/peel first
@@ -204,19 +212,36 @@ bool scriptPreviewRescue(void)
     }
     uint32_t seed = scriptPreviewSeed ^
                     ((uint32_t)(scriptPreviewRules.turns + 1u) * 0x9e3779b9u);
-    if (!scriptBoardPlantThemeWord(&scriptPreviewBoard, &scriptPreviewDict,
+    // Preflight the current board so an already blocked rescue never spends
+    // time, even on a fatal fire tick. Both copies are small fixed-size structs.
+    ScriptBoard nextBoard = scriptPreviewBoard;
+    if (!scriptBoardPlantThemeWord(&nextBoard, &scriptPreviewDict,
                                    &scriptPreviewTiles, &scriptPreviewPools, seed)) {
         scriptPreviewRescueError = 3; // board too obstructed, spend no turn
         return false;
     }
+    // Let this action's normal fire/gravity settle BEFORE planting. Otherwise
+    // gravity can split the bend of a six-symbol word in the very same action
+    // that promises to recover a playable chain. Stage the turn as well: if a
+    // new ignition blocks the final route, refuse without charging anything.
+    nextBoard = scriptPreviewBoard;
+    ScriptRules nextRules = scriptPreviewRules;
+    (void)scriptRulesRescueTurn(&nextRules, &nextBoard, &scriptPreviewTiles);
+    if (nextRules.status == SCRIPT_RUNNING &&
+        !scriptBoardPlantThemeWord(&nextBoard, &scriptPreviewDict,
+                                   &scriptPreviewTiles, &scriptPreviewPools, seed)) {
+        scriptPreviewRescueError = 3;
+        return false;
+    }
+    // A permitted recovery is still a real turn. Commit fatal fire as failed;
+    // it must not become an escape from the shelf's normal loss condition.
+    scriptPreviewBoard = nextBoard;
+    scriptPreviewRules = nextRules;
     scriptBoardClearChain(&scriptPreviewBoard);
     scriptPreviewRescues = 1;
     scriptPreviewRescueError = 0;
     scriptLedgerPeel(&scriptPreviewLedger); // any recovery breaks the combo
     scriptPreviewLastTier = scriptPreviewLastScore = 0;
-    scriptPreviewScore += scriptRulesRescueTurn(&scriptPreviewRules,
-                                               &scriptPreviewBoard,
-                                               &scriptPreviewTiles);
     scriptPreviewTurns = scriptPreviewRules.turns;
     return true;
 }

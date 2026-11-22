@@ -14,8 +14,9 @@ PSG's 12.5 / 25 / 37.5 / 50 percent duties and a 15-bit noise register, 60 frame
 the tune, A A B A (four passes through the 64 steps), mono, 16-bit, 22050 Hz. The game songs play the way a shelf does
 when the player keeps spelling words: one bar of bass and pulse, then the hook, with the drums climbing a level each pass
 (1, 2, 3, 3). The menu song plays the title's mix (its bass, quiet pad and very soft hat are always in, one level).
-Sound effects, chimes, the alarm and the pass and fail stingers are not rendered. numpy is used when installed (about
-ten times faster); without it the same code runs on plain lists.
+Sound effects, chimes, the alarm and the pass and fail stingers are not rendered. numpy accelerates buffers and mixing
+when installed; the standard oscillator follows the same phase recurrence with or without it so tracked WAVs are
+byte-identical. The untracked HQ mode uses a vectorized oscillator before filtering.
 
 Not a recording of the console: the real PSG's analogue filtering and the speakers' response are not modelled, and the
 mix level is one fixed gain, so loudness here is only a comparison between songs.
@@ -257,8 +258,9 @@ def render_frames(song_def, built, passes=4, menu=False):
 class Synth:
     """The six voices as square (duty) and noise (15-bit LFSR) generators, summed to mono (or, with pans, to stereo)."""
 
-    def __init__(self, rate=None):
+    def __init__(self, rate=None, *, vectorized=False):
         self.rate = rate or RATE
+        self.vectorized = vectorized
         self.phase = [0.0] * 6
         self.lfsr = [0x7FFF] * 6
         self.nacc = [0.0] * 6
@@ -276,17 +278,20 @@ class Synth:
         if kind == "s":
             ph = self.phase[i]
             step = freq / rate
-            if np is not None:
+            if np is not None and self.vectorized:
                 p = (ph + step * np.arange(n)) % 1.0
                 sig = np.where(p < duty / 100.0, amp, -amp)
             else:
+                # Canonical phase recurrence for the committed mono previews.
+                # (ph + step*k) % 1 differs at floating-point wrap/duty
+                # boundaries and used to change the WAV when numpy was present.
                 dd = duty / 100.0
                 for k in range(n):
                     sig[k] = amp if ph < dd else -amp
                     ph += step
                     if ph >= 1.0:
                         ph -= 1.0
-            self.phase[i] = (ph + step * n) % 1.0 if np is not None else ph
+            self.phase[i] = (ph + step * n) % 1.0 if np is not None and self.vectorized else ph
         else:
             clock = min(freq, rate * 1.0) / rate * 2.0          # LFSR clocks per output sample
             acc, val, lf = self.nacc[i], self.nval[i], self.lfsr[i]
@@ -343,7 +348,7 @@ def write_wav_hq(path, built, song_def, menu, target_peak=0.89):
     therefore NOT comparable here: --stats and the standard render keep the fixed gain)."""
     if np is None:
         raise SystemExit("the HQ render needs numpy")
-    syn = Synth(HQ_RATE * HQ_OVER)
+    syn = Synth(HQ_RATE * HQ_OVER, vectorized=True)
     L, R = [], []
     last_hz, side = 0, 0
     for voices, _V in render_frames(song_def, built, 8, menu):       # two full A A B A cycles

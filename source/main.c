@@ -234,6 +234,43 @@ void gameSetLanguage(int idx)
     boardNewShelf(&G);
 }
 
+#ifdef WP_CYR_PREVIEW
+// Retail packs can occupy most of the DS heap. The preview owns separate
+// dictionaries, so release the active retail buffers before opening it and
+// reload them only after every preview image is closed. S.language remains
+// the player's saved preference throughout this temporary runtime switch.
+static int scriptReturnLanguage = -1;
+
+static void leaveScriptPreview(void)
+{
+    scriptPreviewClose();
+    int language = scriptReturnLanguage;
+    scriptReturnLanguage = -1;
+    G.state = G.langFrom == ST_OPTIONS ? ST_OPTIONS : ST_TITLE;
+    if (language >= 0 && !langLoad(language)) {
+        // A removed/damaged pack safely leaves English active. Keep the
+        // existing load-failure banner and saved choice, but rebuild the
+        // waiting board so it cannot contain a different language's pass.
+        boardNewShelf(&G);
+        setMsg(ui(UI_OP_LANGFAIL), 180);
+    }
+    musicMenu();
+}
+
+static bool enterScriptPreview(int language, u32 seed, int from)
+{
+    G.langFrom = from == ST_OPTIONS ? ST_OPTIONS : ST_TITLE;
+    scriptReturnLanguage = langCur();
+    (void)langLoad(LANG_EN); // built-in data; frees all three retail buffers
+    if (scriptPreviewOpen(language, seed)) {
+        G.state = ST_SCRIPT_PREVIEW;
+        return true;
+    }
+    leaveScriptPreview(); // also restores the retail pack after a load failure
+    return false;
+}
+#endif
+
 // the next available language in a direction, wrapping (English is always there)
 static void cycleLanguage(int dir)
 {
@@ -700,8 +737,8 @@ int main(void)
                 // preview. Never enters the production language selector or
                 // writes a partially translated locale into the save card.
                 if ((down & KEY_Y) && (held & (KEY_L | KEY_R)) == (KEY_L | KEY_R)) {
-                    if (scriptPreviewOpen(0, seedCounter)) G.state = ST_SCRIPT_PREVIEW;
-                    else setMsg("CYRILLIC DEMO FILES MISSING", 110);
+                    if (!enterScriptPreview(0, seedCounter, ST_TITLE))
+                        setMsg("CYRILLIC DEMO FILES MISSING", 110);
                     break;
                 }
 #endif
@@ -749,11 +786,9 @@ int main(void)
                         // A named beta board, not a release locale. Leave
                         // S.language and the save format completely untouched.
                         int which = G.langPick - LANG_COUNT;
-                        if (scriptPreviewOpen(which, seedCounter)) {
-                            G.state = ST_SCRIPT_PREVIEW;
+                        if (enterScriptPreview(which, seedCounter, G.langFrom)) {
                             musicSfx(SFX_MENU, 0);
                         } else {
-                            G.state = G.langFrom;
                             setMsg("RU/UK PREVIEW FILES MISSING", 110);
                         }
                         break;
@@ -800,9 +835,7 @@ int main(void)
                     if (!(down & KEY_START)) break;
                 }
                 if (down & (KEY_B | KEY_START)) {
-                    scriptPreviewClose();
-                    G.state = G.langFrom == ST_OPTIONS ? ST_OPTIONS : ST_TITLE;
-                    musicMenu();
+                    leaveScriptPreview();
                     break;
                 }
                 if (down & KEY_X) {
@@ -810,8 +843,8 @@ int main(void)
                     bool wasDaily = scriptPreviewDaily != 0;
                     int date = scriptPreviewDailyDate;
                     if (!scriptPreviewOpen(next, seedCounter)) {
-                        scriptPreviewClose();
-                        G.state = ST_TITLE;
+                        leaveScriptPreview();
+                        setMsg("RU/UK PREVIEW FILES MISSING", 110);
                     } else if (wasDaily) {
                         // Keep deterministic practice in the newly selected
                         // language, but never carry score/ledger across it.

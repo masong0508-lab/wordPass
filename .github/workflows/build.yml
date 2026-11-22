@@ -57,6 +57,8 @@ jobs:
           test "$(find nitrofiles/lang -name '*.bin' | wc -l)" -eq 30
           test "$(ls nitrofiles/lang | wc -l)" -eq 10
           grep -aq 'letters.bin' wordPass.nds
+      - name: Retail linked-memory and ROM budget
+        run: python3 tools/check/rom_budget.py --rom wordPass.nds --elf wordPass.elf --mode retail --nm "$DEVKITARM/bin/arm-none-eabi-nm" --forbid-float-printf --output build/rom-budget-retail.json
       - name: Upload ROM
         uses: actions/upload-artifact@v7
         with:
@@ -64,6 +66,7 @@ jobs:
           path: |
             wordPass.nds
             wordPass.elf
+            build/rom-budget-retail.json
       - name: Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v3
@@ -77,6 +80,8 @@ jobs:
           test -f nitrofiles/cyrpreview/uk/pools.bin
           mv wordPass.nds wordPass-cyr-preview.nds
           mv wordPass.elf wordPass-cyr-preview.elf
+      - name: Preview linked-memory and ROM budget
+        run: python3 tools/check/rom_budget.py --rom wordPass-cyr-preview.nds --elf wordPass-cyr-preview.elf --mode preview --preview-root nitrofiles/cyrpreview --nm "$DEVKITARM/bin/arm-none-eabi-nm" --forbid-float-printf --output build/rom-budget-preview.json
       - name: Upload Cyrillic engineering preview ROM (NOT a release)
         uses: actions/upload-artifact@v7
         with:
@@ -84,6 +89,7 @@ jobs:
           path: |
             wordPass-cyr-preview.nds
             wordPass-cyr-preview.elf
+            build/rom-budget-preview.json
 
   emulator:
     # Boots the built ROM headless in DeSmuME (py-desmume is a binary wheel with its own SDL2, so pip alone is enough;
@@ -107,6 +113,9 @@ jobs:
           name: wordPass-cyr-preview
       - name: Smoke test
         run: python3 tools/emu/smoke.py wordPass.nds smoke-out
+      - name: FAT card saves, reboots and damaged language fallback
+        timeout-minutes: 12
+        run: python3 tools/emu/test_fat.py wordPass.nds wordPass.elf fat-out
       - name: Real DS Cyrillic preview touch, chain, peel, switch and exit
         run: python3 tools/emu/test_cyr_preview.py wordPass-cyr-preview.nds cyr-preview-out
       - name: All-language ROM gameplay and layout smoke
@@ -116,6 +125,10 @@ jobs:
         env:
           WP_ONLY: "languages: selecting the active language keeps the title board stable|languages: the NitroFS filesystem holds all ten|languages: the options row cycles through every language|languages: the title tag cycles the language|languages: a known word spelled through the real touch path|languages: a shelf of each language|options: best Daily uses the localized date order"
         run: python3 tools/emu/test_rules.py wordPass.nds languages-out
+      - name: Input, results, music and frame cadence regressions
+        env:
+          WP_ONLY: "languages: the results card|input state:|shelf-start iris:|responsiveness:|music: the MUSIC option|music effects from play:|music mixes: pause|music songs: title"
+        run: python3 tools/emu/test_rules.py wordPass.nds regression-out
       - name: Rule scenarios (tags and manual runs only, 15 to 25 minutes)
         if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         timeout-minutes: 90
@@ -132,6 +145,8 @@ jobs:
             smoke-out/**/*.png
             cyr-preview-out/**/*.png
             languages-out/**/*.png
+            fat-out/**/*.png
+            regression-out/**/*.png
             rules-out/**/*.png
           if-no-files-found: ignore
           retention-days: 7

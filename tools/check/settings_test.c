@@ -2,6 +2,7 @@
 // migration, clamping), the streak arithmetic, and the save path against a scratch file.
 // Built by `make check` with a stub <fat.h>; CFG_PATH points at build/settings_test.cfg.
 #include "game.h"
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,13 +11,40 @@
 bool stubFatOk = true;
 
 // libfat's rename refuses an existing target (POSIX replaces it), so on the DS every save after the first takes the
-// remove-then-rename branch of settingsSave. The check binary is linked with --wrap=rename to behave like libfat.
+// backup-then-rename branch of settingsSave. Failures below simulate interrupted
+// promotion, rollback and partial writes without needing a physical card.
 int __real_rename(const char *from, const char *to);
-static int renameRefused;
+size_t __real_fwrite(const void *ptr, size_t size, size_t count, FILE *stream);
+static int renameRefused, failPromotions, failRestores, failBackups, failPreserves, shortNextWrite;
 int __wrap_rename(const char *from, const char *to)
 {
-    if (access(to, F_OK) == 0) { renameRefused++; return -1; }
+    if (access(to, F_OK) == 0) { renameRefused++; errno = EEXIST; return -1; }
+    int *failure = NULL;
+    if (!strcmp(from, CFG_PATH ".tmp") && !strcmp(to, CFG_PATH)) failure = &failPromotions;
+    if (!strcmp(from, CFG_PATH ".bak") && !strcmp(to, CFG_PATH)) failure = &failRestores;
+    if (!strcmp(from, CFG_PATH) && !strcmp(to, CFG_PATH ".bak")) failure = &failBackups;
+    if (!strcmp(from, CFG_PATH ".tmp") && !strcmp(to, CFG_PATH ".bak")) failure = &failPreserves;
+    if (failure && *failure) { --*failure; errno = EIO; return -1; }
     return __real_rename(from, to);
+}
+size_t __wrap_fwrite(const void *ptr, size_t size, size_t count, FILE *stream)
+{
+    if (shortNextWrite) { shortNextWrite = 0; count /= 2; }
+    return __real_fwrite(ptr, size, count, stream);
+}
+
+// Inspect a persisted image without changing the in-memory settings being saved.
+static int storedScore(const char *path)
+{
+    FILE *f = fopen(path, "rb");
+    if (!f) return -1;
+    unsigned char image[256];
+    size_t n = fread(image, 1, sizeof image, f);
+    fclose(f);
+    Settings before = S;
+    int score = settingsDecode(image, n) ? S.bestClassic : -1;
+    S = before;
+    return score;
 }
 
 static int fails;
@@ -200,12 +228,22 @@ int main(void)
         CHECK("... a working directory with no device, an empty one or a path that does not fit gives no path",
               !settingsCardPath("/home/user", "wordPass.cfg", p, sizeof p) && !settingsCardPath("", "x", p, sizeof p) &&
               !settingsCardPath(":/", "x", p, sizeof p) && !settingsCardPath("fat:/", "wordPass.cfg", p, 8));
+        CHECK("the card path accepts an exact fit including its terminator",
+              settingsCardPath("sd:/", "x", p, 6) && !strcmp(p, "sd:/x"));
+        strcpy(p, "untouched");
+        CHECK("an undersized card path leaves the destination untouched",
+              !settingsCardPath("sd:/", "x", p, 5) && !strcmp(p, "untouched"));
+        CHECK("device prefixes are bounded and null arguments are refused",
+              settingsCardPath("12345678:/", "x", p, sizeof p) && !strcmp(p, "12345678:/x") &&
+              !settingsCardPath("123456789:/", "x", p, sizeof p) &&
+              !settingsCardPath(NULL, "x", p, sizeof p) && !settingsCardPath("sd:/", NULL, p, sizeof p) &&
+              !settingsCardPath("sd:/", "x", NULL, 10) && !settingsCardPath("sd:/", "x", p, 0));
         stubFatOk = true; settingsInit();
         CHECK("without a device in the working directory (the host) the configured path is used", !strcmp(settingsCfgPath(), CFG_PATH));
     }
 
     // ---- the card: save, reload, no leftover temp file, fallbacks
-    remove(CFG_PATH); remove(CFG_PATH ".tmp");
+    remove(CFG_PATH); remove(CFG_PATH ".tmp"); remove(CFG_PATH ".bak");
     stubFatOk = true;
     settingsInit();
     CHECK("no file: defaults, and the card counts as present", settingsPersistent() && S.music == 1 && S.bestClassic == 0 && !settingsSaveFailed());
@@ -222,12 +260,67 @@ int main(void)
     CHECK("settingsInit reads the saved file back", S.bestClassic == 4242 && S.theme == THEME_EMBER && S.wordsSpelled == 12 && !strcmp(S.longestWord, "wordpass"));
     S.bestClassic = 5000;
     int refusedBefore = renameRefused;
-    CHECK("a second save replaces the first (rename onto the existing file is refused, as libfat does: remove, then rename)", settingsSave() && renameRefused == refusedBefore + 1);
+    CHECK("a second save replaces the first through backup rotation when libfat refuses an existing target", settingsSave() && renameRefused == refusedBefore + 1);
     settingsInit();
     CHECK("... and reads back the newer one", S.bestClassic == 5000);
     f = fopen(CFG_PATH ".tmp", "rb");
     CHECK("... with no temp file left", f == NULL);
     if (f) fclose(f);
+    CHECK("... and no stale backup after success", access(CFG_PATH ".bak", F_OK) != 0);
+
+    // A final rename can fail even after the old primary has been moved aside.
+    S.bestClassic = 6000;
+    failPromotions = 1;
+    CHECK("failed promotion reports failure and restores the previous primary",
+          !settingsSave() && settingsSaveFailed() && storedScore(CFG_PATH) == 5000 && storedScore(CFG_PATH ".tmp") == 6000);
+    failPreserves = 1;
+    CHECK("refused pending-temp protection returns before truncating any complete image",
+          !settingsSave() && storedScore(CFG_PATH) == 5000 && storedScore(CFG_PATH ".tmp") == 6000);
+    S.bestClassic = 6100;
+    shortNextWrite = 1;
+    CHECK("retry protects a complete pending temp before a new partial write",
+          !settingsSave() && storedScore(CFG_PATH) == 5000 && storedScore(CFG_PATH ".bak") == 6000 && storedScore(CFG_PATH ".tmp") == -1);
+    settingsInit();
+    CHECK("a valid primary has priority over recovery files and clears stale failure state", S.bestClassic == 5000 && !settingsSaveFailed());
+    remove(CFG_PATH ".tmp"); remove(CFG_PATH ".bak");
+
+    S.bestClassic = 7000;
+    failPromotions = failRestores = 1;
+    CHECK("failed promotion and rollback leave both old and new complete recovery images",
+          !settingsSave() && settingsSaveFailed() && storedScore(CFG_PATH) == -1 &&
+          storedScore(CFG_PATH ".bak") == 5000 && storedScore(CFG_PATH ".tmp") == 7000);
+    settingsInit();
+    CHECK("the complete temp is preferred when promotion and rollback were interrupted", S.bestClassic == 7000);
+    S.bestClassic = 7100;
+    shortNextWrite = 1;
+    CHECK("a recovered sole temp survives an interrupted next save in the backup",
+          !settingsSave() && storedScore(CFG_PATH ".bak") == 7000 && storedScore(CFG_PATH ".tmp") == -1);
+    settingsInit();
+    CHECK("missing primary and truncated temp recover the good backup", S.bestClassic == 7000);
+    S.bestClassic = 7200;
+    CHECK("saving after backup recovery succeeds and removes both recovery files",
+          settingsSave() && storedScore(CFG_PATH) == 7200 && access(CFG_PATH ".tmp", F_OK) != 0 && access(CFG_PATH ".bak", F_OK) != 0);
+    S.bestClassic = 7300;
+    failBackups = 1;
+    CHECK("failed backup rename never deletes the existing primary",
+          !settingsSave() && storedScore(CFG_PATH) == 7200 && storedScore(CFG_PATH ".tmp") == 7300);
+    settingsInit();
+    CHECK("backup refusal still loads the previous primary", S.bestClassic == 7200);
+    remove(CFG_PATH ".tmp");
+    CHECK("scratch backup collision setup", system("mkdir -p " CFG_PATH ".bak") == 0);
+    f = fopen(CFG_PATH ".bak/keep", "wb");
+    CHECK("scratch backup collision marker", f != NULL);
+    if (f) { fputc('x', f); fclose(f); }
+    S.bestClassic = 7400;
+    CHECK("a nonempty backup directory refuses rotation without deleting either image",
+          !settingsSave() && storedScore(CFG_PATH) == 7200 && storedScore(CFG_PATH ".tmp") == 7400 &&
+          access(CFG_PATH ".bak/keep", F_OK) == 0);
+    remove(CFG_PATH ".bak/keep");
+    CHECK("scratch backup collision teardown", rmdir(CFG_PATH ".bak") == 0);
+    settingsInit();
+    remove(CFG_PATH ".tmp");
+    S.bestClassic = 5000;
+    CHECK("restore the fixture after fault injection", settingsSave());
 
     // a card pulled mid-save: the old file is gone but the finished temp image is there
     n = settingsEncode(buf);
@@ -260,10 +353,12 @@ int main(void)
     CHECK("the next good save clears SAVE FAILED", settingsSave() && !settingsSaveFailed());
 
     // no card at all
+    failPromotions = 1;
+    CHECK("prepare a save failure before removing the card", !settingsSave() && settingsSaveFailed());
     stubFatOk = false;
     settingsInit();
     CHECK("no card: defaults, not persistent, a save is false and is not a failure", !settingsPersistent() && S.bestClassic == 0 && !settingsSave() && !settingsSaveFailed());
-    remove(CFG_PATH);
+    remove(CFG_PATH); remove(CFG_PATH ".tmp"); remove(CFG_PATH ".bak");
 
     printf("%s: %d failure(s)\n", fails ? "SETTINGS FAILED" : "SETTINGS OK", fails);
     return fails;

@@ -8,6 +8,7 @@
 // settingsSave are the thin FAT wrappers around them.
 #include "game.h"
 #include <fat.h>
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -16,6 +17,7 @@
 Settings S;
 static bool fatReady;
 static bool lastSaveFailed;
+static bool pendingTemp;            // a complete .tmp image must survive the next attempted save
 static unsigned saveCount;          // settingsSave calls that reached the card code (tests and the run-end save read it)
 static int clockOverride;           // settingsDebugClock: 0 = the real clock
 #ifndef CFG_PATH
@@ -25,7 +27,7 @@ static int clockOverride;           // settingsDebugClock: 0 = the real clock
 // The save's paths. settingsInit points them at the card's own device ("fat:/wordPass.cfg", "sd:/..."): a path with no
 // device name goes to the C library's default device, and libfilesystem's nitroFSInit (langInit, after settingsInit)
 // moves that to nitro:/, the read-only ROM, whenever it reads the card itself instead of through FAT.
-static char cfgPath[96] = CFG_PATH, cfgTmp[104] = CFG_PATH ".tmp";
+static char cfgPath[96] = CFG_PATH, cfgTmp[104] = CFG_PATH ".tmp", cfgBak[104] = CFG_PATH ".bak";
 #define V1_BYTES_A 28               // every WPS1 file ever written: magic, up to eight option bytes, four records
 #define V1_BYTES_B 32               // the same layout with a trailing word of padding
 #define DATE_MIN 20250101
@@ -164,7 +166,8 @@ static size_t readFile(const char *path, void *buf, size_t cap)
     FILE *f = fopen(path, "rb");
     if (!f) return 0;
     size_t n = fread(buf, 1, cap, f);
-    fclose(f);
+    if (ferror(f)) n = 0;
+    if (fclose(f) != 0) n = 0;
     return n;
 }
 
@@ -172,10 +175,17 @@ static size_t readFile(const char *path, void *buf, size_t cap)
 // false when the directory names no device. Pure, so tools/check can test it.
 bool settingsCardPath(const char *cwd, const char *file, char *out, size_t cap)
 {
+    if (!cwd || !file || !out || !cap) return false;
     const char *colon = strchr(cwd, ':');
     if (!colon || colon == cwd || colon - cwd > 8) return false;
-    int n = snprintf(out, cap, "%.*s:/%s", (int)(colon - cwd), cwd, file);
-    return n > 0 && (size_t)n < cap;
+    size_t device = (size_t)(colon - cwd), length = strlen(file);
+    if (cap <= device + 2 || length >= cap - device - 2) return false;
+    // A path needs no printf engine. Keeping this as bounded byte copies also
+    // avoids linking newlib's floating-point formatter into the retail ROM.
+    memcpy(out, cwd, device);
+    out[device] = ':'; out[device + 1] = '/';
+    memcpy(out + device + 2, file, length + 1);
+    return true;
 }
 
 const char *settingsCfgPath(void) { return cfgPath; }
@@ -183,29 +193,47 @@ const char *settingsCfgPath(void) { return cfgPath; }
 void settingsInit(void)
 {
     settingsDefaults();
-    strcpy(cfgPath, CFG_PATH); strcpy(cfgTmp, CFG_PATH ".tmp");
+    lastSaveFailed = false;
+    pendingTemp = false;
+    strcpy(cfgPath, CFG_PATH); strcpy(cfgTmp, CFG_PATH ".tmp"); strcpy(cfgBak, CFG_PATH ".bak");
     fatReady = fatInitDefault();
     if (!fatReady) return;
-    char cwd[64], p[sizeof cfgPath], t[sizeof cfgTmp];      // fatInitDefault made the card the default device: name it
-    if (getcwd(cwd, sizeof cwd) && settingsCardPath(cwd, CFG_FILE, p, sizeof p) && settingsCardPath(cwd, CFG_FILE ".tmp", t, sizeof t)) {
-        strcpy(cfgPath, p); strcpy(cfgTmp, t);
+    char cwd[64], p[sizeof cfgPath], t[sizeof cfgTmp], b[sizeof cfgBak];
+    // fatInitDefault made the card the default device: name every save path.
+    if (getcwd(cwd, sizeof cwd) && settingsCardPath(cwd, CFG_FILE, p, sizeof p) &&
+        settingsCardPath(cwd, CFG_FILE ".tmp", t, sizeof t) && settingsCardPath(cwd, CFG_FILE ".bak", b, sizeof b)) {
+        strcpy(cfgPath, p); strcpy(cfgTmp, t); strcpy(cfgBak, b);
     }
     u8 buf[256];                        // room to see a file that is too long, which is rejected
     size_t n = readFile(cfgPath, buf, sizeof(buf));
     if (n && settingsDecode(buf, n)) return;
-    // an interrupted save may have left the finished image next to the (missing) old file
+    // An interrupted promotion can leave the complete new image in .tmp.
+    // Keep it protected if the very next save is interrupted during its write.
     n = readFile(cfgTmp, buf, sizeof(buf));
+    if (n && settingsDecode(buf, n)) { pendingTemp = true; return; }
+    n = readFile(cfgBak, buf, sizeof(buf));
     if (n) settingsDecode(buf, n);
     else settingsDefaults();
 }
 
-// Write the image to a temporary file and rename it over the real one, so a card pulled
-// mid-write leaves the previous file intact. libfat's rename may refuse an existing target,
-// in which case the old file is removed first (the temp file still holds the new image).
+// Write a complete image before changing the primary. On libfat, rename refuses
+// an existing target: move the old primary to .bak instead of deleting it, then
+// promote .tmp. A failed promotion restores the old primary when possible and
+// otherwise leaves both recovery files. These are file-level recovery guarantees;
+// a card/controller can still lose buffered writes when power is removed.
 bool settingsSave(void)
 {
     saveCount++;
     if (!fatReady) return false;
+    // A recovered or unsuccessfully promoted .tmp may be the only good image.
+    // Move it out of the way before opening that path with truncation.
+    if (pendingTemp) {
+        if ((remove(cfgBak) != 0 && errno != ENOENT) || rename(cfgTmp, cfgBak) != 0) {
+            lastSaveFailed = true;
+            return false;
+        }
+        pendingTemp = false;
+    }
     u8 buf[sizeof(Settings)];
     size_t n = settingsEncode(buf);
     bool ok = false;
@@ -214,9 +242,18 @@ bool settingsSave(void)
         ok = fwrite(buf, 1, n, f) == n;
         if (fclose(f) != 0) ok = false;
     }
-    if (ok && rename(cfgTmp, cfgPath) != 0) {
-        remove(cfgPath);
+    if (ok) {
+        pendingTemp = true;
         ok = rename(cfgTmp, cfgPath) == 0;
+        if (!ok && access(cfgPath, F_OK) == 0 &&
+            (remove(cfgBak) == 0 || errno == ENOENT) && rename(cfgPath, cfgBak) == 0) {
+            ok = rename(cfgTmp, cfgPath) == 0;
+            if (!ok) (void)rename(cfgBak, cfgPath);
+        }
+        if (ok) {
+            pendingTemp = false;
+            (void)remove(cfgBak);    // an old backup is harmless if cleanup fails
+        }
     }
     lastSaveFailed = !ok;
     return ok;

@@ -18,16 +18,16 @@ libnds 2 (calico) ROMs do not boot in DeSmuME.
 The DBG layout (source/debug.c) is pinned with _Static_asserts; OFF below is the same
 table. Change both together.
 """
-import os, struct, subprocess, sys
+import os, struct, sys
 os.environ.setdefault('SDL_VIDEODRIVER', 'dummy'); os.environ.setdefault('SDL_AUDIODRIVER', 'dummy')
 from desmume.emulator import DeSmuME
 from desmume.controls import Keys, keymask
+from elf_symbols import IMAGE, symbol
 
 COLS, ROWS, TW, TH, GX, GY, ODD = 7, 8, 24, 22, 4, 2, 11
 MAX_CHAIN = 10          # the mirror shows the first ten gems of a chain
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..', '..'))
-IMAGE = 'devkitpro/devkitarm:20240511'
 
 # cell states and fail codes as the ROM numbers them
 EMPTY, TILE, BURN, HOLE, SECRET = 0, 1, 2, 3, 4
@@ -83,16 +83,6 @@ POKE_CELL, POKE_BACK, POKE_HEAT, POKE_BURN, POKE_FIRESTEP, POKE_TURN, POKE_LIVES
 # the ten languages (source/game.h LANG_*; index 0 is English) and the label of each on the options row and the title tag
 LANG_CODES = ['en', 'es', 'fr', 'de', 'it', 'pt', 'nl', 'sv', 'pl', 'da', 'fi']
 LANG_NAMES = ['ENGLISH', 'ESPANOL', 'FRANCAIS', 'DEUTSCH', 'ITALIANO', 'PORTUGUES', 'NEDERLANDS', 'SVENSKA', 'POLSKI', 'DANSK', 'SUOMI']
-
-def symbol(elf, name):
-    """Address of a symbol via arm-none-eabi-nm inside the toolchain container."""
-    elf = os.path.abspath(elf)
-    out = subprocess.run(['docker', 'run', '--rm', '-v', f'{os.path.dirname(elf)}:/work', IMAGE, 'bash', '-c',
-                          f'export PATH=$PATH:/opt/devkitpro/devkitARM/bin; arm-none-eabi-nm /work/{os.path.basename(elf)} | grep " [bBdD] {name}$" | cut -d" " -f1'],
-                         capture_output=True, text=True).stdout.strip().splitlines()
-    out = [l for l in out if l and 'IPv4' not in l]
-    if not out: raise RuntimeError(f'symbol {name} not found in {elf}')
-    return int(out[-1], 16)
 
 def load_words(path=None):
     path = path or os.path.join(REPO, 'tools', 'enable1.txt')

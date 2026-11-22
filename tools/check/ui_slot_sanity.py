@@ -34,7 +34,29 @@ def main():
     for sample, reference in (("@MISSING", {"EXISTS"}), ("ABCDEFGHIJKLMNOP", set()), ("X||Y", set())):
         assert gen_ui.sample_errors(sample, reference), sample
     assert gen_ui.width(gen_ui.expand("%1$02d-%2$02d", "1|3"), 1) == 29
-    print(f"UI SLOT TEST OK: {len(accepted)} valid, {len(rejected)} rejected, 6 sample cases, padding regression")
+    formatting = (
+        ("%03d", "-5", "-05"),
+        ("%3d", "-5", " -5"),
+        ("%08d", "7", "00000007"),
+        ("%d", "+0005", "5"),
+        ("%5s", "A", "A"),  # the game's formatter ignores string widths
+        ("%2$03d/%1$s", "A|-5", "-05/A"),
+        ("%d", "-2147483648", "-2147483648"),
+    )
+    for fmt, sample, expected in formatting:
+        assert not gen_ui.sample_errors(sample, set(), fmt)
+        assert gen_ui.expand(fmt, sample) == expected, (fmt, sample)
+    for sample, fmt in (("text", "%d"), ("2147483648", "%d"),
+                        ("-2147483649", "%d"), ("1|2", "%d")):
+        assert gen_ui.sample_errors(sample, set(), fmt), (sample, fmt)
+    invalid = [(1, "QA_NUM", 1, 60, "text", ["%d"] * len(gen_ui.LANGS))]
+    assert any("integer sample" in e for e in gen_ui.validate(invalid))
+    mismatched = ["%s"] * len(gen_ui.LANGS)
+    mismatched[1] = "%d"
+    invalid = [(1, "QA_KIND", 1, 60, "text", mismatched)]
+    assert any("slots differ" in e for e in gen_ui.validate(invalid))
+    print(f"UI SLOT TEST OK: {len(accepted)} valid, {len(rejected)} rejected, "
+          f"sample type/range checks and {len(formatting)} runtime-format cases")
 
 
 if __name__ == "__main__":

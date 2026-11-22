@@ -52,13 +52,24 @@ def main(rom, output):
     check(e.state()["state"] == 9 and get_int(e, "scriptPreviewHelp") == 0
           and get_int(e, "scriptPreviewTurns") == 0,
           "dismissing Russian manual must resume the untouched board")
+    board_ptr = symbol(e.rom_elf, "scriptPreviewBoard")
+    initial_board = bytes(e.mem.unsigned[board_ptr:board_ptr + 336])
+    e.hold("L")
     e.press("R", settle=12)
-    check(get_int(e, "scriptPreviewHints") == 1,
+    e.hold("L", False)
+    check(get_int(e, "scriptPreviewRescueError") == 1 and
+          get_int(e, "scriptPreviewRescues") == 0 and
+          get_int(e, "scriptPreviewTurns") == 0 and
+          bytes(e.mem.unsigned[board_ptr:board_ptr + 336]) == initial_board,
+          "too-early L+R must show feedback without changing the board or spending rescue")
+    e.shot(str(out / "ru-rescue-too-early.png"))
+    e.press("R", settle=12)
+    check(get_int(e, "scriptPreviewHints") == 1 and
+          get_int(e, "scriptPreviewRescueError") == 0,
           "R should find a real seeded Cyrillic word with bounded DFS")
     # Capture the actual bounded-hint path from the ARM9 board memory. Unlike
     # the previous fixed greeting, today's puzzle may plant 4-6 symbols in
     # different columns and one of the 40 actual themed vocabularies.
-    board_ptr = symbol(e.rom_elf, "scriptPreviewBoard")
     ru_len = int(e.mem.unsigned[board_ptr + 152])
     check(3 <= ru_len <= 6, "Russian theme seed should have a playable hint")
     russian_path = [(int(e.mem.unsigned[board_ptr + 112 + i]),
@@ -86,8 +97,9 @@ def main(rom, output):
     e.hold("L", False)
     check(get_int(e, "scriptPreviewRescues") == 1 and
           get_int(e, "scriptPreviewTurns") == 2 and
-          get_int(e, "scriptPreviewScore") == scored,
-          "one L+R rescue must cost one turn without awarding score")
+          get_int(e, "scriptPreviewScore") == scored and
+          get_int(e, "scriptPreviewHints") == 1,
+          "one L+R rescue must cost one turn without awarding score or refilling hints")
     e.shot(str(out / "ru-rescued-board.png"))
     e.hold("L")
     e.press("R", settle=9)
@@ -107,7 +119,9 @@ def main(rom, output):
     e.hold("L")
     e.tap(*e.center(1, 6), settle=8)
     e.hold("L", False)
-    check(get_int(e, "scriptPreviewPeels") == 1, "touch-screen peel did not register")
+    check(get_int(e, "scriptPreviewPeels") == 1 and
+          get_int(e, "scriptPreviewRescueError") == 0,
+          "touch-screen peel must register and dismiss old rescue feedback")
     check(get_int(e, "scriptPreviewTurns") == 3,
           "a successful peel after word+rescue must cost a third fire turn")
     ledger_bytes = bytes(e.mem.unsigned[ledger:ledger + 194])
@@ -255,6 +269,8 @@ def main(rom, output):
     e.press("START", settle=18)
     check(e.state()["state"] == 0, "Daily demo exits safely without changing retail Daily")
     print("RUSSIAN/UKRAINIAN DS OK: menu, hints, scores, combo, Daily practice seed and safe exit")
+    from cyr_lifecycle import exercise
+    exercise(e, rom, out)
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:

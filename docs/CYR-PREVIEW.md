@@ -117,9 +117,32 @@ a turn. Attempting recovery too early or a second time gives an explicit
 Russian/Ukrainian message on the top LCD. A new shelf or replay resets
 its one-use allowance; the regular 11-language ROM has no such feature.
 
+On a moving-fire turn, the game settles fire and gravity before placing the
+new word, so they cannot immediately break the recovered chain. This uses
+a fixed-size board/rules transaction: if this turn's new flame blocks the
+last usable route, recovery leaves the original board, RNG, heat, turn and
+allowance unchanged. An otherwise eligible recovery still loses normally
+if a bottom flame escapes; it cannot undo that loss or revive a finished
+shelf.
+
+The preview and a translated retail pack never occupy the heap together.
+Entering either demo temporarily releases the active retail dictionary,
+pool and tile-table buffers, retaining the saved language choice. Leaving
+or a failed preview load closes all preview images before restoring that
+retail language and its original title/options screen. If the retail pack
+has become unavailable, the game returns to a playable English board with
+the existing load-failure message and preserves the saved preference.
+
 Native regression tests validate turn/heat accounting, safety around
-obstacles and atomic failure. The DS emulator tests the actual L+R
+obstacles and atomic failure. A separate native test calls the actual
+preview action with both complete 40-theme draft packs, checking recovery
+after fire/gravity, blocked-new-flame refusal, fatal fire, finished shelves,
+and preservation of score, word history and hint allowance.
+The DS emulator tests the actual L+R
 input, score and combo safety, and rejects repeated rescue attempts.
+It also checks allocator pointers around Dutch (the largest retail pack),
+both entry controls, title/options returns, RU/UK switching, damaged preview
+files and an unavailable retail pack on return.
 
 ## On-device language-specific controls help
 

@@ -69,11 +69,12 @@ def case(tag, rom, elf, d):
     # power off, boot again: the saved choice loads (no chooser, same theme)
     need(e.state()['state'] == ST_TITLE, 'second boot shows the chooser again: the save did not load (state %d)' % e.state()['state'])
     need(e.S_theme() == t1, 'second boot has theme %d, saved %d' % (e.S_theme(), t1))
-    # a save with a file already there: libfat refuses a rename onto an existing name, so settingsSave removes and renames
+    # libfat refuses an existing destination, so settingsSave rotates through a backup.
     options_theme(e)
     t2 = cfg_fields(read_cfg(img))['theme']
     need(not e.flags()['saveFailed'] and t2 == e.S_theme() and t2 != t1, 'the second save did not reach the card (card %d, game %d)' % (t2, e.S_theme()))
-    need(not any(n.lower() == 'wordpass.cfg.tmp' for n, _ in card_files(img)), 'a temp file was left on the card: %r' % (card_files(img),))
+    need(not any(n.lower() in ('wordpass.cfg.tmp', 'wordpass.cfg.bak') for n, _ in card_files(img)),
+         'a recovery file was left after a successful save: %r' % (card_files(img),))
     e.power_cycle()
     need(e.state()['state'] == ST_TITLE and e.S_theme() == t2, 'third boot did not load the second save')
 
