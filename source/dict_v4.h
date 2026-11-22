@@ -25,6 +25,16 @@ bool v4DictHasPrefixIds(const V4Dict *view, const uint8_t *ids, int symbols);
 // reach. This searches one table rather than all 18 possible word lengths.
 bool v4DictHasPrefixLengthIds(const V4Dict *view, const uint8_t *ids,
                              int symbols, int wordLength);
+// Restrict one validated, sorted WPD4 word-length group to the next symbol.
+// [*first, *past) must already be the exact interval matching all earlier
+// symbols (initially [0, count[wordLength])). On success it becomes the
+// narrower matching interval; on failure it remains unchanged. This lets
+// a hex-board DFS reuse its parent's prefix interval rather than repack and
+// binary-search the entire dictionary for every additional letter.
+// Pure, allocation-free, bounded; safe to use only on explicit hint input.
+bool v4DictNarrowPrefixLengthId(const V4Dict *view, int wordLength,
+                                int position, uint8_t symbol,
+                                uint32_t *first, uint32_t *past);
 int v4DictLookup(const V4Dict *view, const char *utf8); // NFC Cyrillic UTF-8
 int v4DictSymbol(const V4Dict *view, uint32_t codepoint); // index or -1
 #endif

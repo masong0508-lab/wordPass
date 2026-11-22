@@ -1,0 +1,53 @@
+name: WordPass Cyrillic hint search performance
+
+on:
+  pull_request:
+    paths:
+      - 'source/dict_v4.c'
+      - 'source/dict_v4.h'
+      - 'source/script_board.c'
+      - 'tools/check/dict_v4_test.c'
+      - 'tools/check/hint_span_bench.c'
+      - 'tools/check/bench_cyr_hint.py'
+      - '.github/workflows/cyr-hint-performance.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'source/dict_v4.c'
+      - 'source/dict_v4.h'
+      - 'source/script_board.c'
+      - 'tools/check/dict_v4_test.c'
+      - 'tools/check/hint_span_bench.c'
+      - 'tools/check/bench_cyr_hint.py'
+      - '.github/workflows/cyr-hint-performance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare-hints:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Check benchmark harness syntax
+        run: python3 -m py_compile tools/check/bench_cyr_hint.py
+      - name: Compare baseline and optimized Russian/Ukrainian hints
+        run: >
+          python3 tools/check/bench_cyr_hint.py
+          --baseline 18d5ab0fea67079475e02c9c9a1ddf75b2f6ec0e
+          --count 60000
+          --boards 80
+          --repeats 2
+          --out build/cyr-hint-performance
+      - name: Retain reproducible host timing and equivalence report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: wordPass-cyr-hint-compare
+          path: build/cyr-hint-performance/
+          if-no-files-found: warn
+          retention-days: 14

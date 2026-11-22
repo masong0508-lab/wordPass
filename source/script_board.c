@@ -514,11 +514,15 @@ typedef struct {
     const V4Dict *dict;
     const V4Tiles *tiles;
     uint8_t pathC[SCRIPT_HINT_MAX], pathR[SCRIPT_HINT_MAX];
-    uint8_t ids[SCRIPT_HINT_MAX];
     bool used[SCRIPT_COLS][SCRIPT_ROWS];
     int target, nodes;
 } HintSearch;
-static bool hintWalk(HintSearch *h, int col, int row, int depth)
+// The parent call supplies exactly the WPD4 record interval sharing its
+// prefix. Carry it into the recursion so each new letter searches only that
+// narrowed span. The leaf interval itself proves a complete dictionary word.
+// No per-frame work, heap, persistent cache or change to the 12k-node cap.
+static bool hintWalk(HintSearch *h, int col, int row, int depth,
+                     uint32_t lo, uint32_t hi)
 {
     if (h->nodes >= 12000 || !inside(col, row) || h->used[col][row])
         return false;
@@ -529,21 +533,20 @@ static bool hintWalk(HintSearch *h, int col, int row, int depth)
         id >= h->tiles->symbols || !h->tiles->weight[id])
         return false;
     h->nodes++;
+    // A branch that cannot match even one dictionary word stops before
+    // touching the traversal stack. Invalid IDs/ranges fail closed.
+    if (!v4DictNarrowPrefixLengthId(h->dict, h->target, depth,
+                                    (uint8_t)id, &lo, &hi)) return false;
     h->used[col][row] = true;
     h->pathC[depth] = (uint8_t)col;
     h->pathR[depth] = (uint8_t)row;
-    h->ids[depth] = (uint8_t)id;
     int n = depth + 1;
-    if (n == h->target) {
-        if (v4DictLookupIds(h->dict, h->ids, n) != 0) return true;
-    } else if (v4DictHasPrefixLengthIds(h->dict, h->ids, n, h->target)) {
-        int nc[6] = {col, col, col - 1, col - 1, col + 1, col + 1};
-        int nr[6] = {row + 1, row - 1, row, row + ((col & 1) ? 1 : -1),
-                     row, row + ((col & 1) ? 1 : -1)};
-        for (int i = 0; i < 6; i++) {
-            if (hintWalk(h, nc[i], nr[i], n)) return true;
-        }
-    }
+    if (n == h->target) return true;
+    int nc[6] = {col, col, col - 1, col - 1, col + 1, col + 1};
+    int nr[6] = {row + 1, row - 1, row, row + ((col & 1) ? 1 : -1),
+                 row, row + ((col & 1) ? 1 : -1)};
+    for (int i = 0; i < 6; i++)
+        if (hintWalk(h, nc[i], nr[i], n, lo, hi)) return true;
     h->used[col][row] = false;
     return false;
 }
@@ -560,7 +563,7 @@ int scriptBoardHint(const ScriptBoard *b, const V4Dict *dict,
         search.target = length;
         for (int c = 0; c < SCRIPT_COLS; c++)
             for (int r = 0; r < SCRIPT_ROWS; r++)
-                if (hintWalk(&search, c, r, 0)) {
+                if (hintWalk(&search, c, r, 0, 0u, dict->count[length])) {
                     memcpy(outC, search.pathC, (size_t)length);
                     memcpy(outR, search.pathR, (size_t)length);
                     return length;
