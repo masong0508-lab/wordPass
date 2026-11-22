@@ -76,6 +76,129 @@ static bool loadDict(const char *path, const char *poolPath, const char *variant
     return true;
 }
 
+static void holes(void)
+{
+    boardOf('x');
+    for (int c = 0; c < COLS; c++) for (int r = 0; r < ROWS; r++) set(c, r, CELL_HOLE, 0);
+}
+
+// One sorted WPD3 entry isolates search boundaries from incidental fragments
+// in the full dictionary. The caller keeps image alive until dictInit().
+static void oneWordImage(u8 image[96], const char *word, int tier)
+{
+    static const int widths[21] = {0,0,0,4,4,4,4,5,6,7,7,8,8,9,9,10,11,11,12,13,13};
+    int length = (int)strlen(word);
+    memset(image, 0, 96); memcpy(image, "WPD3", 4);
+    image[4 + (length - 3) * 4] = 1;
+    for (int bit = 0; bit < length * 5; bit++) {
+        unsigned one = ((unsigned)(word[bit / 5] - 'a') >> (4 - bit % 5)) & 1u;
+        image[76 + bit / 8] |= (u8)(one << (7 - bit % 8));
+    }
+    image[76 + widths[length] - 1] |= (u8)(tier - 1);
+    CHECK("isolated search dictionary loads", dictSet(image, (size_t)76 + widths[length]));
+}
+
+static void cohesionSearchTests(void)
+{
+    S.library = LIB_FULL; S.spelling = SPELL_BOTH;
+    u8 hc[MAX_CHAIN], hr[MAX_CHAIN];
+    holes();
+    set(0, 0, CELL_SECRET, 'c'); set(0, 1, CELL_TILE, 'a'); set(0, 2, CELL_TILE, 't');
+    Game before = g;
+    int n = boardHintChain(&g, hc, hr, MAX_CHAIN);
+    CHECK("a revealed diamond can begin the CAT hint", n == 3 && hc[0] == 0 && hr[0] == 0 && hr[2] == 2 && boardHasWords(&g));
+    CHECK("diamond hint lookup does not alter the shelf", !memcmp(&g, &before, sizeof g));
+    for (int i = 0; i < n; i++) boardTryAddToChain(&g, hc[i], hr[i]);
+    CHECK("the diamond hint submits for points and keeps its diamond", boardSubmit(&g) > 0 && st(0, 0) == CELL_SECRET);
+
+    holes();
+    for (int r = 0; r < 6; r++) set(0, r, CELL_TILE, "rhythm"[r]);
+    set(6, 7, CELL_TILE, 'x');
+    before = g;
+    n = boardHintChain(&g, hc, hr, MAX_CHAIN);
+    CHECK("RHYTHM-only shelf has a usable six-gem hint", boardHasWords(&g) && n == 6 && hc[0] == 0 && hr[0] == 0 && hr[5] == 5);
+    CHECK("a short hint buffer cannot receive a longer path", boardHintChain(&g, hc, hr, 5) == 0 && !memcmp(&g, &before, sizeof g));
+    g.shuffles = 1;
+    CHECK("an unrelated peel does not lose or reshuffle a RHYTHM-only shelf", boardPeel(&g, 6, 7) == 1 && g.fail == FAIL_NONE && g.shuffles == 1 && !g.shuffled && g.cell[0][0].letter == 'r' - 'a');
+
+    // The fallback must still honor the library setting, even when the only
+    // playable word is rare and too short to exercise a long common path.
+    holes();
+    for (int r = 0; r < 3; r++) set(0, r, CELL_TILE, "zax"[r]);
+    n = boardHintChain(&g, hc, hr, MAX_CHAIN);
+    CHECK("FULL offers the only accepted rare word", dictLookup("zax", 3) == 2 && n == 3 && boardHasWords(&g));
+    for (int r = 0; r < 6; r++) set(6, r, CELL_TILE, "rhythm"[r]);
+    n = boardHintChain(&g, hc, hr, MAX_CHAIN);
+    CHECK("long common hint wins over an earlier rare fallback", n == 6 && hc[0] == 6 && hr[5] == 5);
+    for (int r = 0; r < 6; r++) set(6, r, CELL_HOLE, 0);
+    S.library = LIB_COMMON;
+    CHECK("COMMON neither hints nor keeps a rare-only shelf alive", boardHintChain(&g, hc, hr, MAX_CHAIN) == 0 && !boardHasWords(&g));
+    S.library = LIB_FULL;
+
+    u8 image[96];
+    const char *longWord = "abcdefghijklmnopqrst";
+    oneWordImage(image, longWord, 1);
+    holes();
+    for (int i = 0; i < MAX_CHAIN; i++) {
+        int c = i / ROWS, r = c & 1 ? ROWS - 1 - i % ROWS : i % ROWS;
+        // Q as a revealed pass letter is one letter, unlike an ordinary Qu.
+        set(c, r, longWord[i] == 'q' ? CELL_SECRET : CELL_TILE, longWord[i]);
+    }
+    before = g;
+    n = boardHintChain(&g, hc, hr, MAX_CHAIN + 5);
+    bool valid = n == MAX_CHAIN;
+    for (int i = 0; i < n; i++) valid = valid && g.cell[hc[i]][hr[i]].letter == (u8)(longWord[i] - 'a');
+    CHECK("fallback reaches MAX_CHAIN/MAX_WORD without truncation or mutation", valid && boardHasWords(&g) && !memcmp(&g, &before, sizeof g));
+    set(2, 0, CELL_TILE, 'q');
+    CHECK("ordinary Qu cannot overflow the twenty-letter dictionary bound", !boardHasWords(&g) && boardHintChain(&g, hc, hr, MAX_CHAIN) == 0);
+
+    // Every A prefix is plausible, but no B exists. A complete unbounded DFS
+    // would explode; budget exhaustion must conservatively preserve the shelf
+    // and must never manufacture a hint. Searches also consume no board RNG.
+    oneWordImage(image, "aaaaaaaaaaaaaaaaaaab", 1);
+    boardOf('a'); before = g;
+    boardSeed(123); boardBagReset(); int next = boardRandomLetter();
+    boardSeed(123); boardBagReset();
+    CHECK("adversarial prefix search is bounded without declaring a false loss", boardHasWords(&g) && boardHintChain(&g, hc, hr, MAX_CHAIN) == 0);
+    CHECK("bounded fallback preserves the board and random stream", !memcmp(&g, &before, sizeof g) && boardRandomLetter() == next);
+    dictInit();
+}
+
+static void wordClueTests(void)
+{
+    boardOf('x'); plantWord();
+    strcpy(g.pass, "books"); g.passLen = 5;
+    set(2, 1, CELL_TILE, 'c'); set(2, 2, CELL_TILE, 'a'); set(2, 3, CELL_TILE, 't');
+    g.back[1][2] = 1; set(1, 2, CELL_SECRET, 'b'); g.found[0] = 1;
+    g.back[2][4] = 2; g.back[3][3] = 3;
+    g.back[3][4] = 4;                // not a neighbor in this even column
+    g.back[2][3] = 5;                // the surveyed center is excluded
+    u8 back[COLS][ROWS]; memcpy(back, g.back, sizeof back);
+    for (int r = 1; r <= 3; r++) boardTryAddToChain(&g, 2, r);
+    int points = boardChainScore(&g), gained = boardSubmit(&g), known = 0;
+    for (int c = 0; c < COLS; c++) for (int r = 0; r < ROWS; r++) if (g.wordClue[c][r]) known++;
+    CHECK("accepted word surveys only its tail and counts fixed hex neighbors", gained == points && points > 0 && known == 1 && g.wordClue[2][3] == 4 && g.wordClueC == 2 && g.wordClueR == 3);
+    CHECK("survey includes a found diamond, excludes its center, and does not reveal letters", boardBackNumber(&g, 2, 3) == 3 && !memcmp(back, g.back, sizeof back) && g.found[0] && !g.found[4] && st(2, 3) == CELL_TILE);
+    CHECK("word clue adds no turn, heat, peel, or score charge", g.turn == 1 && g.heat == boardHeatFor(3) && g.peels == 0 && g.score == points && g.fail == FAIL_NONE);
+    CHECK("refill and a later peel keep the clue at its surveyed coordinate", boardPeel(&g, 4, 7) == 1 && g.wordClue[2][3] == 4 && !g.wordClue[2][2] && !g.wordClue[2][4] && !memcmp(back, g.back, sizeof back));
+
+    // Same word, a new endpoint, and a diamond tail. A known zero must be
+    // distinguishable from no survey, and repeating still updates the focus.
+    strcpy(g.pass, "bookst"); g.passLen = 6; g.back[5][2] = 6; g.found[5] = 1;
+    set(5, 0, CELL_TILE, 'c'); set(5, 1, CELL_TILE, 'a'); set(5, 2, CELL_SECRET, 't');
+    for (int r = 0; r < 3; r++) boardTryAddToChain(&g, 5, r);
+    CHECK("repeat word with a diamond tail earns a known-zero clue and new focus", boardSubmit(&g) > 0 && g.lastWordRepeat && g.wordClue[5][2] == 1 && g.wordClueC == 5 && g.wordClueR == 2 && g.wordClue[2][3] == 4 && st(5, 2) == CELL_SECRET);
+    set(4, 0, CELL_TILE, 'x'); set(4, 1, CELL_TILE, 'x'); set(4, 2, CELL_TILE, 'x');
+    for (int r = 0; r < 3; r++) boardTryAddToChain(&g, 4, r);
+    Game before = g;
+    CHECK("rejected word changes neither clues, focus, nor resources", boardSubmit(&g) == 0 && !memcmp(&g, &before, sizeof g));
+    boardClearChain(&g); boardTryAddToChain(&g, 4, 0); boardTryAddToChain(&g, 4, 1); before = g;
+    CHECK("a two-gem rejection cannot earn a clue", boardSubmit(&g) == 0 && !memcmp(&g, &before, sizeof g));
+    boardNewShelf(&g); known = 0;
+    for (int c = 0; c < COLS; c++) for (int r = 0; r < ROWS; r++) known += g.wordClue[c][r];
+    CHECK("new shelf clears surveyed clues and focus", known == 0 && !g.wordClueC && !g.wordClueR);
+}
+
 // Independent bit-at-a-time WPD3 fixtures exercise the prefix masks across
 // every record width. Each total length has its own first letter, so a prefix
 // in one group must not accidentally match a different length's table.
@@ -721,6 +844,8 @@ int main(int argc, char **argv)
     CHECK("LIBRARY COMMON rejects a rare word", !boardWordOk("zax", 3) && boardWordOk("book", 4));
     S.library = LIB_FULL;
     prefixTests();
+    cohesionSearchTests();
+    wordClueTests();
 
     // ---- long words: the dictionary holds words up to 20 letters
     {
@@ -1722,7 +1847,7 @@ int main(int argc, char **argv)
                 for (int p = 0; p < GUIDE_PAGES; p++) {
                     int c = guideLines(p, pl[p]), h = 0;
                     // the letter-value table of SCORING is as long as the language's alphabet needs (one line more or less)
-                    if (c != cnt[p] && !(p == 1 && c >= cnt[p] - 1 && c <= cnt[p] + 1)) { lfits = false; printf("   lang %d page %d has %d lines, English %d\n", lg, p + 1, c, cnt[p]); }
+                    if (c != cnt[p] && !(guideTopic(p) == 1 && c >= cnt[p] - 1 && c <= cnt[p] + 1)) { lfits = false; printf("   lang %d page %d has %d lines, English %d\n", lg, p + 1, c, cnt[p]); }
                     for (int i = 0; i < c; i++) {
                         int v = guideVisibleLen(pl[p][i]);
                         h += v ? GUIDE_LINE_H : GUIDE_GAP_H;
@@ -1734,16 +1859,16 @@ int main(int argc, char **argv)
                         int de = 0, dl = 0;
                         for (const char *ch = pe; *ch; ch++) if (*ch >= '0' && *ch <= '9') de += *ch - '0' + 1;
                         for (const char *ch = plain; *ch; ch++) if (*ch >= '0' && *ch <= '9') dl += *ch - '0' + 1;
-                        if (p == 1) {   // SCORING's alphabet-sized table moves the lines, so the COMBO line is found by its percent signs
+                        if (guideTopic(p) == 1) {   // SCORING's alphabet-sized table moves the lines, so the COMBO line is found by its percent signs
                             char want[16];
                             if (strchr(pe, '%')) {
                                 snprintf(want, sizeof want, "+%d%%", COMBO_PCT_PER_WORD);
-                                if (!strstr(plain, want)) { lnum = false; printf("   lang %d page 2 line %d: COMBO line lacks %s: %s\n", lg, i, want, plain); }
+                                if (!strstr(plain, want)) { lnum = false; printf("   lang %d page %d line %d: COMBO line lacks %s: %s\n", lg, p + 1, i, want, plain); }
                                 snprintf(want, sizeof want, "%d%%", COMBO_CAP_PCT);
-                                if (!strstr(plain, want)) { lnum = false; printf("   lang %d page 2 line %d: COMBO line lacks %s: %s\n", lg, i, want, plain); }
+                                if (!strstr(plain, want)) { lnum = false; printf("   lang %d page %d line %d: COMBO line lacks %s: %s\n", lg, p + 1, i, want, plain); }
                             }
                         }
-                        if (de != dl && i != 1 && !(p == 1) && !(p == 0 && i == 13)) { lnum = false; printf("   lang %d page %d line %d: digits differ from English: %s | %s\n", lg, p + 1, i, pe, plain); }
+                        if (de != dl && i != 1 && guideTopic(p) != 1 && !(guideTopic(p) == 0 && i == 13)) { lnum = false; printf("   lang %d page %d line %d: digits differ from English: %s | %s\n", lg, p + 1, i, pe, plain); }
                     }
                     if (h > GUIDE_MAX_H) { ltall = false; printf("   lang %d page %d is %d px tall\n", lg, p + 1, h); }
                     if (!guideTitle(p)[0] || strlen(guideTitle(p)) * 12 > 150) { ltitle = false; printf("   lang %d title %s too wide\n", lg, guideTitle(p)); }
@@ -1756,11 +1881,13 @@ int main(int argc, char **argv)
             CHECK("guide in ten languages: the numbers are the English numbers (but the examples, which are the language's own)", lnum);
         }
 
-        // the text of a page with the colour codes taken out, lines joined by '|'
+        // Index by canonical topic, so navigation order cannot silently move
+        // a rule assertion to a different subject.
         static char all[GUIDE_PAGES][1600];
         for (int p = 0; p < GUIDE_PAGES; p++) {
-            all[p][0] = 0;
-            for (int i = 0; i < cnt[p]; i++) { char plain[GUIDE_LINE_BUF]; guideStrip(plain, pg[p][i]); strcat(all[p], plain); strcat(all[p], "|"); }
+            int topic = guideTopic(p);
+            all[topic][0] = 0;
+            for (int i = 0; i < cnt[p]; i++) { char plain[GUIDE_LINE_BUF]; guideStrip(plain, pg[p][i]); strcat(all[topic], plain); strcat(all[topic], "|"); }
         }
         // the multiplier ladder, heat table and pass ladder as the tables give them
         char want[160], num[16];
@@ -1778,22 +1905,13 @@ int main(int argc, char **argv)
               strstr(all[1], "7+ LETTERS ADD A FLAT +200") && strstr(all[1], "+30 PER LETTER") && strstr(all[1], "(2 MAX)"));
         CHECK("guide FIRE prints the heat table of boardHeatFor", boardHeatFor(3) == 3 && boardHeatFor(4) == 2 && boardHeatFor(5) == 1 && boardHeatFor(6) == 1 && boardHeatFor(7) == 0 && boardHeatFor(MAX_CHAIN) == 0 &&
               strstr(all[4], "3 LETTERS +3, 4 +2, 5-6 +1, 7+ FREE") != NULL);
-        want[0] = 0;
-        for (int a = 1; a <= 20;) {
-            int b = a; while (b < 20 && boardPassLenFor(b + 1) == boardPassLenFor(a)) b++;
-            if (a > 1) strcat(want, "  ");
-            sprintf(num, "%d", a); strcat(want, num);
-            if (b == 20) strcat(want, "+"); else if (b > a) { sprintf(num, "-%d", b); strcat(want, num); }
-            sprintf(num, ":%d", boardPassLenFor(a)); strcat(want, num);
-            a = b + 1;
-        }
-        CHECK("guide THE PASS prints the pass-length ladder of boardPassLenFor", strstr(all[3], want) != NULL && strstr(want, "1-2:4  3-5:5  6-8:6  9-12:7  13+:8") != NULL);
-        sprintf(want, "%s, %s, %s", poolName(0), poolName(8), poolName(17));
-        sprintf(num, "%d IN ALL", poolThemeCount());
-        CHECK("guide THE PASS names three themes and counts them from the pools", strstr(all[3], "BINDERY, BEASTS, WEATHER") && strstr(all[3], num) && !strcmp(want, "BINDERY, BEASTS, WEATHER"));
-        CHECK("guide THE PASS prints the pass-letter reward and the shelf bonuses",
-              strstr(all[3], "PAYS 100 X SHELF") && strstr(all[3], "+1000 X SHELF") && strstr(all[3], "+25 X SHELF") && strstr(all[3], "UNDER 40") &&
-              strstr(all[3], "PERFECT, NO WASTED PEEL: +400 X SHELF") && strstr(all[3], "CLEAN, 2 SPARE PEELS: +150 X SHELF") &&
+        CHECK("guide starts with the password goal and explains the separate back layer", guideTopic(0) == 3 &&
+              strstr(all[3], "PASSWORD IS HIDDEN UNDER THE GEMS") && strstr(all[3], "GEM LETTERS DO NOT TELL WHAT IS BELOW") &&
+              strstr(all[3], "FIND ITS LETTERS IN ANY ORDER") && strstr(all[3], "TOP SLOTS FILL UP AUTOMATICALLY") && strstr(all[3], "NO TYPING NEEDED"));
+        CHECK("guide connects words to fixed neighbor clues and safe inspection", strstr(all[3], "THE WORD'S LAST GEM LEAVES A CLUE") &&
+              strstr(all[3], "HOLD L OR R TO READ THE CLUES") && strstr(all[3], "PASS LETTERS IN 6 NEIGHBOURS") &&
+              strstr(all[3], "COUNT FOUND DIAMONDS TOO") && strstr(all[3], "A CLUED GEM CAN STILL HIDE A LETTER"));
+        CHECK("password letters and shelf completion retain their rewards",
               boardPassLetterReward(3) == 300 && boardShelfBonus(3) == 3000 && boardSpeedBonus(2, 30) == 500 && boardSpeedBonus(2, 50) == 0);
         int kind;
         CHECK("bonus helpers: perfect, clean and none", boardPeelBonus(2, 5, 5, &kind) == 800 && kind == 2 && boardPeelBonus(2, 7, 5, &kind) == 300 && kind == 1 && boardPeelBonus(2, 8, 5, &kind) == 0 && kind == 0);
@@ -2104,14 +2222,14 @@ int main(int argc, char **argv)
                 }
                 int gcnt[GUIDE_PAGES];
                 for (int p = 0; p < GUIDE_PAGES; p++) {
-                    gcnt[p] = guideLines(p, gpg[p]);
-                    text[p][0] = 0;
-                    for (int i = 0; i < gcnt[p]; i++) { char pl2[GUIDE_LINE_BUF]; guideStrip(pl2, gpg[p][i]); strcat(text[p], pl2); strcat(text[p], "|"); }
+                    int topic = guideTopic(p);
+                    gcnt[topic] = guideLines(p, gpg[topic]);
+                    text[topic][0] = 0;
+                    for (int i = 0; i < gcnt[topic]; i++) { char pl2[GUIDE_LINE_BUF]; guideStrip(pl2, gpg[topic][i]); strcat(text[topic], pl2); strcat(text[topic], "|"); }
                 }
                 u8 gm[4]; int wl2, ng = guideGems(UI_EX_WORD, gm, &wl2), gsum = 0;
                 for (int q = 0; q < ng; q++) gsum += letterValue(gm[q]);
-                char need[48], pts[16];
-                snprintf(need, sizeof need, "SPELL %s", ui(UI_EX_WORD));
+                char pts[16];
                 snprintf(pts, sizeof pts, "+%d", boardWordPoints(gsum, wl2, false, 0, false));
                 if (!strstr(text[0], ui(UI_EX_WORD)) || !strstr(text[0], pts)) { numOk = false; printf("   %s: THE BOARD does not print %s %s\n", langCode(li), ui(UI_EX_WORD), pts); }
                 ng = guideGems(UI_EX_SCORE, gm, &wl2); gsum = 0;
@@ -2120,8 +2238,6 @@ int main(int argc, char **argv)
                 char eq[40]; snprintf(eq, sizeof eq, "%d+%d+%d = %d", vv[0], vv[1], vv[2], gsum);
                 snprintf(pts, sizeof pts, "= +%d", boardWordPoints(gsum, wl2, false, 0, false));
                 if (!strstr(text[1], eq) || !strstr(text[1], pts)) { numOk = false; printf("   %s: SCORING does not print %s ... %s\n", langCode(li), eq, pts); }
-                char names[48]; snprintf(names, sizeof names, "%s, %s, %s", poolName(0), poolName(8), poolName(17));
-                if (!strstr(text[3], names)) { numOk = false; printf("   %s: THE PASS does not name %s\n", langCode(li), names); }
                 // the value table (the lines under the first one, up to the first gap) lists exactly the tile letters, each under its value
                 u32 listed = 0;
                 for (int ln = 1; ln < gcnt[1] && gpg[1][ln][0]; ln++) {
@@ -2138,7 +2254,7 @@ int main(int argc, char **argv)
                 for (int l = 0; l < 26; l++) if (T->weight[l]) tileSet |= 1u << l;
                 if (listed != tileSet) { numOk = false; printf("   %s: the SCORING value table lists %x, the tiles are %x\n", langCode(li), listed, tileSet); }
                 CHECK(strcat(strcpy(list, nm), " guide examples: words of the dictionary, tile letters, the right lengths"), exOk);
-                CHECK(strcat(strcpy(list, nm), " guide pages print the examples' numbers, the value table and the theme names of the language"), numOk);
+                CHECK(strcat(strcpy(list, nm), " guide pages print the examples' numbers and the language's value table"), numOk);
             }
         }
         // back to English: the bag, the boards and the tables are exactly the old ones again; the buffers were freed

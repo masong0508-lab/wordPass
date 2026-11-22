@@ -150,7 +150,7 @@ typedef struct {
     int  ghostDone;           // the idle ghost drag has been shown on this shelf
     int  idleFrames;          // frames without a touch or a key while the guide waits for a word
     int  hintLen;             // gems in hintC/hintR: a real, common word on the real board (0 = none)
-    u8   hintC[8], hintR[8];
+    u8   hintC[MAX_CHAIN], hintR[MAX_CHAIN];
     // ---- fire fairness and the shuffle (balance pass)
     int  ignitions;           // times the meter has lit this shelf (the twin rule counts them)
     int  twinEighths;         // of every eight ignitions this many light two columns (0 on early shelves and in the Daily)
@@ -167,12 +167,17 @@ typedef struct {
     int  hitStreak;           // pass letters found by consecutive peels (a hole or a scorch resets it, words do not)
     int  bestHitStreak;       // the longest such run this shelf
     int  lastStreakBonus;     // what the latest peel's streak paid (0 when it was not a hit or the first of a run); main.c adds it to the score
+    // A submitted word earns a clue at its final board location. 0 is unknown;
+    // 1..7 stores the number of adjacent password cells plus one. The clue
+    // belongs to the fixed back layer, so refilling the front never moves it.
+    u8   wordClue[COLS][ROWS];
+    u8   wordClueC, wordClueR;   // latest word endpoint: PEEK explains its neighbors before any touch
 } Game;
 enum { CUE_NONE = 0, CUE_GHOST, CUE_TAIL, CUE_PEEKBTN, CUE_ARMED };   // ghost drag, tail gem of a valid chain, the PEEK button, the armed cell
 #define GHOST_IDLE_FRAMES 180   // idle this long before the ghost drag traces a word
 #define GHOST_GEM_FRAMES   18   // frames the ghost pointer spends on each gem (and 30 more resting on the tail)
 
-enum { TUTOR_DRAG = 0, TUTOR_PEEK, TUTOR_FIND, TUTOR_REST, TUTOR_DONE };   // drag a word, peek, find the first pass letter, the closing tip, off
+enum { TUTOR_DRAG = 0, TUTOR_PEEK, TUTOR_FIND, TUTOR_REST, TUTOR_DONE };   // spell, read a clue, find a letter, finish the password, off
 
 // pause menu rows; the visible ones are listed by pauseRows, in the order RESUME, RESTART SHELF, HOW TO PLAY, QUIT
 // TO TITLE (Daily has no RESTART)
@@ -257,6 +262,7 @@ const char *boardLockdownName(int tier);            // "LOCKDOWN", "LOCKDOWN II"
 #define GM_DIM    "\005"
 #define GM_WHITE  "\006"
 const char *guideTitle(int page);
+int  guideTopic(int page);   // displayed page -> canonical animation/topic, with the goal first
 int  guideLines(int page, char out[GUIDE_MAX_LINES][GUIDE_LINE_BUF]);   // the page's lines ("" is a gap); returns how many
 int  guideVisibleLen(const char *line);                // characters on screen (colour codes do not count)
 void guideStrip(char *dst, const char *line);          // the line without colour codes
@@ -415,6 +421,7 @@ int  gfxCellAt(int px, int py, int *c, int *r);
 bool gfxInSubmit(int px, int py);
 bool gfxInClear(int px, int py);
 bool gfxInPeekButton(int px, int py);
+bool gfxInGoalButton(int px, int py);   // the password tracker opens the goal page without spending a turn
 int  gfxPauseRowAt(int px, int py, int rows);   // the pause menu row (0..rows-1) under a touch, -1 for none
 int  gfxShownScore(void);            // the score the HUD shows (counts up during the results tally)
 bool gfxInPauseButton(int px, int py);   // the 12 x 12 "II" button at the top of the panel

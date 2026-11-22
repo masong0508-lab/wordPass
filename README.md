@@ -1,9 +1,10 @@
 # wordPass
 
 **Bookworm × Minesweeper for the Nintendo DS.**
-Chain letters into words on a hex grid of gems. Behind the board hides a
-password. Hold a shoulder button to *peek*: peel away letters you can spare
-and uncover the pass. Spell weak words and the shelf catches fire.
+Find every letter of a hidden password to clear the shelf. Chain the visible
+letter gems into words to score, put out flames and earn clues. Hold a shoulder
+button to *peek*, read the clues, and peel chosen gems to uncover password
+letters. The slots fill automatically in any discovery order; no password typing.
 
 ![build](https://github.com/masong0508-lab/wordPass/actions/workflows/build.yml/badge.svg)
 
@@ -38,20 +39,34 @@ against the source and the data files by `tools/check_guide.py`, and every pictu
 
 ## How it plays
 
-- **Spell.** Drag the stylus across touching gems to chain a word (3+ letters),
+- **The goal.** Uncover all the password letters beneath the gems. The front
+  letters are for spelling words; they do not identify what is underneath.
+  The top screen keeps the goal visible, and the panel shows **FOUND x/y**.
+  Tap its password tracker to pause and open the goal explanation without
+  spending a turn. Back returns to pause; START or B resumes.
+- **Spell.** Drag the stylus across touching gems to chain a word (3+ gems),
   then tap **SUBMIT**, tap the last gem again, or press **A**. Scored tiles
   shatter and the column drops. Every word is a turn. The stylus is forgiving:
   a gem answers to a 12 px circle around its centre, a quick flick that skips a
   gem still picks it up when there is only one way through, and a drag never
   restarts the chain by accident (a gem it cannot reach flashes red instead).
-  Tap an earlier gem to cut the chain back to it.
+  Tap an earlier gem to cut the chain back to it. Each accepted word also earns
+  a **word clue at its last gem's location**, at no extra turn or heat cost.
+- **Read the clue.** A small corner tab marks that location. In PEEK it becomes
+  a numbered badge beside the front letter, and the latest clue's neighbours
+  are outlined automatically. The number counts adjacent password locations,
+  including found diamonds, and never counts the centre itself. The clue stays
+  fixed when gems fall or refill. A covered clue can still hide a password
+  letter, even when its number is zero. Reusing an endpoint repeats its clue;
+  ending a word elsewhere can add information.
 - **Peek.** Hold **L** or **R** (or press **X**, or tap the **PEEK** button, to
   latch it for one peel), then touch a gem to arm it and lift the stylus to
   peel it off the board. Slide off the gem before lifting to change your mind.
   Behind it is either a **pass letter** (a diamond you can still chain through)
-  or a **number**: how many of the six neighbouring cells hide a pass letter.
-  A peeled cell is a hole for the rest of the shelf; the gems below it still
-  refill. Every peel is a turn too, and warms the shelf like a short word.
+  or an empty **hole** with the same neighbour count as a word clue. The hole
+  stays for the shelf; the gems below it still refill. Peeling is always
+  available, without earning a token first. Every peel takes a turn and adds
+  heat. Find the last password letter and the shelf clears automatically.
 - **Fire.** Short words build **heat**: three letters add 3, four add 2, five
   or six add 1, seven and up are free; a peel adds 1 (2 in Lockdown). When the
   meter fills, the topmost gem of a column ignites. A new flame waits one turn
@@ -70,10 +85,14 @@ against the source and the data files by `tools/check_guide.py`, and every pictu
   run calls it out. It is a score reward and nothing else: the clear rates are the
   same with and without it, a player who never peels earns none of it and one
   who peels at random almost none.
-- **Hint.** SELECT shows a common word on the board with the ghost drag, twice a
-  shelf. It prioritizes extinguishing a flame, then an unplayed word, then
-  longer words (which normally add less heat), falling back to shorter or
-  previously played words if necessary. Ten idle seconds offer one for free.
+- **Word hint.** SELECT shows an accepted word on the board with the ghost drag,
+  twice a shelf. It first searches common short words, prioritizing a flame,
+  an unplayed word and then length. If none exists in that search, it tries
+  longer paths and allowed rare words under LIBRARY FULL; diamonds can start
+  a path too. A successful hint switches off latched PEEK so the next touch
+  chains gems. A held L/R must be released first and never wastes a hint.
+  Ten idle seconds offer one for free. A word hint shows a path; submitting
+  that word earns the neighbour clue.
 - **Shuffle.** A board with no word left is re-dealt once a shelf (+3 heat)
   instead of ending the shelf.
 - **Overtime.** Past turn 24 on a shelf (16 in Lockdown from shelf 10, later on
@@ -113,7 +132,7 @@ numbers.
 | --- | --- |
 | LIBRARY LOST | a flame was still on the bottom row when the fire advanced |
 | PASS DESTROYED | you scorched a cell that held a pass letter |
-| OUT OF WORDS | no 3- to 5-letter word is left on the board, a second time on the shelf (the first time the gems are shuffled) |
+| OUT OF WORDS | no accepted word remains after the shelf's rescue shuffle has been used or cannot produce one; longer words and diamond paths count too |
 
 ### Modes
 
@@ -237,7 +256,7 @@ in `tools/words/SOURCES.md`.
 ### Shelves
 
 Every shelf draws its pass from a themed pool, and the plaque on the top
-screen names it (PASS - BINDERY). The **word library** holds about 17,700
+screen names it (PASSWORD - BINDERY). The **word library** holds about 17,700
 pass words in 40 themes that cycle as you climb. The first eight shelves are
 the bookish ones: **Bindery** (book, page, spine, jacket ...), **Ink** (nib,
 font, quill, scribe ...), **Verse** (poem, rhyme, sonnet ...), **Tales**
@@ -308,9 +327,10 @@ three. Daily Pass has no bookmarks: one attempt.
 | B | step the chain back one gem; hold 20 frames to clear it |
 | CLEAR button / Y | clear chain |
 | D-pad | move the hex cursor (see below) |
-| Hold L or R | peek mode (touch a gem to arm it, lift to peel it; slide away to cancel) |
-| SELECT | a hint: the ghost drag traces a word on the board (two a shelf) |
+| Hold L or R | peek mode: read earned clues; touch a gem to arm it, lift to peel it, slide away to cancel |
+| SELECT | a word hint (two a shelf); a successful hint clears latched PEEK; release held L/R first |
 | X / PEEK button | latch peek on for one peel (press again to cancel); with the cursor shown, A then peels the gem under it |
+| Tap the password tracker / FOUND row | open the goal page without spending a turn; BACK returns to pause |
 | START / the II button on the panel | pause menu: RESUME, RESTART SHELF (costs a bookmark), HOW TO PLAY and QUIT TO TITLE. Up and down move the highlight, A or a tap on the lit row picks it (a tap on another row lights it first); RESTART and QUIT ask for a second pick within 90 frames. START or B resumes |
 | LEFT / RIGHT or L / R (title) | flip the tip cards on the top screen |
 | Y (title) | options |
@@ -321,19 +341,20 @@ three. Daily Pass has no bookmarks: one attempt.
 ### Guide
 
 HOW TO PLAY is eight pages of the rules you need, on the device. Open it with
-the **? GUIDE** button in the title's top corner (or **B** on the title), or with the
-HOW TO PLAY row of the pause menu in the middle of a shelf. Until the first
-guided shelf has been done the GUIDE button pulses and the title's tip card says
+the **? GUIDE** button in the title's top corner (or **B** on the title), with the
+HOW TO PLAY row of the pause menu, or by tapping the password tracker in play.
+It opens with **THE GOAL**; opening it during play pauses the shelf. Until the first
+guided shelf has actually been cleared the GUIDE button pulses and the title's tip card says
 NEW HERE? TAP GUIDE; the guided first shelf is the short form of the same
 lesson, the guide is the long one.
 
 | Page | What it teaches |
 | --- | --- |
-| 1 THE BOARD | dragging a chain, the gold ring, tapping the last gem (or SUBMIT or A), undo and cut back, the shuffle of a dead board, with INK worth +70 |
-| 2 SCORING | gem values, the length multiplier ladder, the flat +200 at seven letters, flames, diamonds, repeats, the combo, with Qu+I+Z worked out |
-| 3 PEEKING | the shoulder buttons, X and the PEEK button, arm and lift, the hole numbers and their colours, diamonds, the red gems that scorch |
-| 4 THE PASS | the hidden letters and their themes, the pass length by shelf, what a letter pays and the streak bonus, the shelf, speed, PERFECT and CLEAN bonuses |
-| 5 FIRE | the heat each word adds, what a peel adds, how a flame falls, chimneys and firebreaks, the three ways to lose a shelf |
+| 1 THE GOAL | the hidden password, words earning clues, neighbouring letters, peeling in any order, slots filling automatically, all letters found to win |
+| 2 THE BOARD | dragging a chain, the gold ring, tapping the last gem (or SUBMIT or A), undo and cut back, the clue at the word's endpoint, with INK worth +70 |
+| 3 PEEKING | the shoulder buttons, X and PEEK, arm and lift, word clues and hole numbers, found diamonds still counting, covered centres and scorch warnings |
+| 4 FIRE | the heat each word adds, what a peel adds, how a flame falls, chimneys and firebreaks, the three ways to lose a shelf |
+| 5 SCORING | gem values, the length multiplier ladder, the flat +200 at seven letters, flames, diamonds, repeats, the combo, with Qu+I+Z worked out |
 | 6 SHELVES | bookmarks, the three twists, Lockdown and its tiers, overtime |
 | 7 MODES | Classic, the Daily Pass (one scored try, then practice, the modifiers, the streak), THE LEDGER |
 | 8 CONTROLS | touch, d-pad, buttons, and the options that matter |
@@ -381,16 +402,16 @@ screen and the cursor goes away and the stylus takes over again.
 
 ## Interface
 
-Bejeweled on the front, N+ behind. Letter gems are faceted and glossy, colour
+The visible letter gems are faceted and glossy, colour
 coded by letter group (vowels ruby, common consonants sapphire, rare letters
-amber). The frame and pass plaque are gold. Everything else, including the
-whole back layer you see in peek mode, is flat black with thin lines and a
-single accent colour. Holding peek dims the gems to outlines with their letters
-still readable, so the layer you are reading is always the one in colour. Hole
-numbers are drawn large and colour coded (0 grey, 1 accent, 2 gold, 3 amber,
-4 and up white). Gems directly under a flame pulse red with a blinking `!`:
+amber). The frame and password plaque are gold. PEEK dims uncharted gems
+and displays earned word clues on filled plates with a compact letter and
+number badge. Empty hole numbers are larger and colour coded (0 grey,
+1 accent, 2 gold, 3 amber, 4 and up white). The latest clue's neighbours are
+outlined, and the panel identifies the nearby count. Gems directly under
+a flame pulse red with a blinking `!`:
 peeling one scorches the back layer (the panel says RED: SCORCH). The armed
-gem gets a pulsing double rim and a PEEL label.
+gem gets a double rim and a PEEL label; its rim stays red when peeling would scorch.
 
 Everything that happens gets juice: scored gems shatter into shards and the
 score floats up from the chain, a found pass letter cracks open in a ring of
@@ -400,7 +421,7 @@ in, and a failed run flashes and shakes the screen. The gold frames carry a
 travelling shimmer and the submit gem breathes while a valid word is chained.
 Shelves and the title open with an iris (a hardware window growing from the centre of both screens, nine frames, no CPU cost);
 a word's gems each send a chip flying to the score on the panel, which glows when they land, and a found pass letter
-sends two to the pass tracker; clearing a shelf rains confetti in the theme's colours (more for a perfect pass); the results
+sends two to its matching slot in the pass tracker; clearing a shelf rains confetti in the theme's colours (more for a perfect pass); the results
 and fail cards slide up on a small spring; the chain rope is five pixels thick, brightens toward the tail and carries a
 spark along its length; peek tints the board frame with the accent, and a flame on row 5 or lower makes the frame pulse
 red on a 2.5 Hz triangle (never faster than 3 Hz), deeper the lower it gets; the title's logo gems twinkle in turn and the
@@ -430,23 +451,26 @@ Fire reads without colour: a burning gem carries a light plate under a dark
 letter and a bright bar across its top, in every theme, so it stands out from
 a plain gem however the palette is tuned (the Clear theme is built for it).
 
-The first Classic shelf is guided until you have done each thing once: sticky
-prompts on the top screen ask you to drag a word, then to peek, say what the
-first hole's number means, and call out the first pass letter you find; a
+The first Classic shelf is guided until you have found the entire password: sticky
+prompts on the top screen ask you to drag a word, read its clue in PEEK, interpret
+the first peel and keep finding letters until all slots are filled. A
 callout takes the line for its moment and the prompt comes back. A prompt slides
 in from the right and settles. Each prompt also points at what to do on the
 board itself: after three idle seconds a ghost stylus traces a real word on your
 actual board, once; a valid chain gets a breathing ring and a bobbing stylus on
 its tail gem; the PEEK button gets a ring until you start peeking; an armed gem
 gets a stylus that lifts off it. A cue is gone the moment you act on it and
-never shows while the stylus is down. The guide ends
-for good once the closing tip has run or the shelf is cleared (the card
+never shows while the stylus is down. Finding one letter or waiting out a message
+does not finish the lesson. A failed or restarted first shelf begins it again on
+the new board; only clearing that Classic shelf marks it complete (the card
 remembers). Hints name the shoulder under your idle hand: HOLD L when you play
 right-handed, HOLD R when left-handed.
 
 The panel keeps the books for you. Under the score the pass is a row of
-small slots that fill with diamonds as you find its letters, then PEELS and
-TURN. A chained word shows what it is worth and its length multiplier (X2 to
+small slots that fill with diamonds as you find its letters, then FOUND x/y and
+TURN. Tap the tracker or FOUND row for goal help. In PEEK, CLUE and NEARBY explain
+the inspected number; the latest word endpoint is selected until you arm a gem
+or use the d-pad cursor. A chained word shows what it is worth and its length multiplier (X2 to
 X4), and the HEAT line previews what the word will add to the meter, Lockdown
 pulse and overtime included (NO HEAT for a free word). Past the turn budget
 the label reads OVERTIME. While a flame burns, a row of pips counts the turns

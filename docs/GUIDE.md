@@ -1,8 +1,9 @@
 # wordPass: the complete guide
 
-**Bookworm × Minesweeper for the Nintendo DS.** You chain letter gems into words on a hex grid. Behind the board hides a
-password, the *pass*. Hold a shoulder button to *peek*: peel away gems you can spare, read the numbers they leave behind,
-and uncover the pass letter by letter. Spell weak words and the shelf catches fire.
+**Bookworm × Minesweeper for the Nintendo DS.** Find every letter of the hidden password, the *pass*, to clear a shelf.
+Chain the visible letter gems into words to score, put out flames and earn clues about the password's location. Hold a
+shoulder button to *peek*, read those clues, then peel chosen gems to uncover the letters. Each letter fills its proper
+password slot automatically; there is nothing to type or guess.
 
 This guide is the long form of the game. It is written to be read once from the top, and then used as a reference: every
 number in it is checked against the game's source and data files by `tools/check_guide.py`, and every picture is taken from the
@@ -49,14 +50,15 @@ button (it pulses until you have finished your first guided shelf), 5 the BEST /
 screen tell you what to do next, and a ghost stylus shows a real word on your real board if you wait three seconds.
 
 ![Three snapshots of the guided first shelf: the first prompt, the ghost stylus tracing a word, and the peek prompt after the first word.](img/guided_first_shelf.png)
-*The guided first shelf. Left: "DRAG 3+ TOUCHING GEMS, TAP LAST ONE". Middle: after three idle seconds a ghost stylus traces a real word. Right: after your first word the prompt asks you to peek, and the PEEK button gets a ring.*
+*The guided first shelf. Left: the prompt asks for a word. Middle: after three idle seconds a ghost stylus traces a real word. Right: after your first word the prompt asks you to read its clue in PEEK, and the PEEK button gets a ring. The lesson stays active until you find the whole password.*
 
-**2. Read the screen.** The top screen says what you are looking for: `PASS - BINDERY`, and four empty slots. The pass is a four-letter
-word from the BINDERY theme (book words) and every slot will fill with a diamond as you find its letter. The touch screen is the
-board: seven columns of eight gems.
+**2. Read the goal.** The top screen says what you are looking for: `PASSWORD - BINDERY`, and four empty slots. This password is a
+four-letter word from the BINDERY theme (book words). Find its letters in any order: each one fills its proper slot. The touch
+screen has seven columns of eight gems, a smaller password tracker and **FOUND 0/4**. The visible gem letters are for making
+words; they do not tell you which password letters lie underneath. Tap the tracker whenever you need the goal explained again.
 
 ![The play screen with 19 numbered markers on every part of both screens.](img/play_layout.png)
-*Everything on the play screen. Top screen: 1 the mode (CLASSIC, LOCKDOWN, DAILY), 2 the pass plaque (one slot per letter; a found letter turns into a diamond), 3 the word you are building, large, with what it is worth, 4 the shelf number, 5 your score, 6 bookmarks, 7 the fire meter (it fills down to the lowest flame), 8 the ledger of your last words, 9 the shelf map. Touch screen: 10 the board, 11 the pause button, 12 the score, 13 the pass tracker, 14 PEELS and TURN, 15 the chain's word and value, 16 the HEAT line and heat bar, 17 SUBMIT, 18 CLEAR, 19 PEEK.*
+*Everything on the play screen. Top screen: 1 the mode (CLASSIC, LOCKDOWN, DAILY), 2 the password plaque (one slot per letter; a found letter turns into a diamond), 3 the word you are building, large, with what it is worth, 4 the shelf number, 5 your score, 6 bookmarks, 7 the fire meter (it fills down to the lowest flame), 8 the ledger of your last words, 9 the persistent goal. Touch screen: 10 the board, 11 the pause button, 12 the score, 13 the password tracker (tap for goal help), 14 FOUND and TURN, 15 the chain's word and value, 16 the HEAT line and heat bar, 17 SUBMIT, 18 CLEAR, 19 PEEK.*
 
 **3. Spell a word.** Press the stylus on a gem and drag across **touching** gems. Every gem you cross joins the chain, and a rope
 links them. You need at least **three gems**. When the chain spells a real word the rope turns the shelf's accent colour, the
@@ -65,20 +67,26 @@ last gem wears a gold ring and the panel shows what the word is worth and how mu
 ![A five-gem chain spelling STONE: gold ring on the last gem, accent rope, the panel shows +100 and X2 and +1 HEAT, the top screen shows STONE +100.](img/chain_valid.png)
 *A valid chain. 1 the gold ring on the last gem (tap it to submit), 2 the rope in the accent colour (it was gold while the word was not yet valid), 3 the word on the panel, 4 the length multiplier, 5 the heat the word will add, 6 the word and its value on the top screen, 7 SUBMIT glows.*
 
-**4. Submit it.** Tap the gold-ringed last gem again, or tap **SUBMIT**, or press **A**. The gems shatter, the column drops, new
-gems fall in, and the word scores. Every word is a **turn**.
+**4. Submit it.** Tap the gold-ringed last gem again, or tap **SUBMIT**, or press **A**. Ordinary gems shatter and refill, the word
+scores, and its **last gem's location earns a clue**: how many neighbouring cells hold password letters. A small corner tab marks
+that location. The clue stays there when the visible letters move. Every accepted word is one **turn**; its clue adds no extra
+turn or heat and does not uncover a password letter.
 
 ![The moment after submitting STONE: shards in the air, GOOD! over the board, SUBMIT flashing white.](img/chain_submit.png)
 *The submit moment: 1 shards of the gems you used, 2 the GOOD! callout, 3 the word and its points on the top screen, 4 the SUBMIT button flashing white, 5 the score has gone up.*
 
-**5. Peek.** Hold **L** or **R** (either shoulder; the game suggests the one under your idle hand), or press **X** or tap **PEEK** to latch peek on for one peel. The gems dim to outlines. Touch a gem to *arm* it (a double rim and a PEEL label), and **lift the stylus** to peel it off the board. If you change your mind, slide off the gem before you lift.
+**5. Read the clue, then peel.** Hold **L** or **R** (either shoulder; the game suggests the one under your idle hand), or press **X**
+or tap **PEEK** to latch peek on for one peel. Your word clue becomes a small numbered badge, and its neighbours are outlined
+before you touch anything. The panel says **CLUE** and **NEARBY**. Touch a chosen gem to *arm* it (a double rim and a PEEL label),
+then **lift the stylus** to peel it. If you change your mind, slide off before lifting.
 
 ![Three steps of a peel: touch to arm a gem, lift to peel it and see a number, then a gem hiding a pass letter turns into a diamond.](img/peel_flow.png)
-*A peel in three steps. 1 Touching a gem in peek mode only arms it. 2 Lifting the stylus peels it: the cell is now a hole showing a **2**: two of its six neighbours hide pass letters. 3 Peeling a gem that does hide a pass letter turns it into a diamond and pays +100 on shelf 1.*
+*A peel in three steps. 1 Touching a gem in peek mode only arms it. 2 Lifting the stylus peels it: the cell is now a hole showing a **2**: two of its six neighbours hold password letters. Found diamonds still count. 3 Peeling a gem that hides a password letter turns it into a diamond and pays +100 on shelf 1.*
 
-**6. Find the pass.** A peeled gem leaves a hole showing a number: how many of the **six cells around it** hide a pass letter.
-Zero means none of them do. A peeled gem that hides a letter becomes a **diamond** and pays **100 × shelf** points on the spot.
-Find every letter and the shelf is cleared. Section 6 teaches the whole art of reading the numbers.
+**6. Find the password.** Word clues and empty peeled holes use the same count: password letters in the **six cells around them**,
+including diamonds already found. The centre is never counted. A **covered** clue gem can still hide a letter, even when its
+badge is zero; an empty hole cannot. Peeling a hidden letter makes a **diamond**, pays **100 × shelf** and advances **FOUND**.
+Find every letter and the shelf clears automatically. Section 6 explains how to combine the clues.
 
 **7. Watch the fire.** Short words and every peel warm the shelf (the HEAT bar on the panel). When it fills, the top gem of a
 column catches fire and slowly creeps down. Put a flame out by spelling a word **through** it. Never peel a gem directly under a
@@ -107,7 +115,7 @@ That is the whole game. The rest of this guide explains every rule exactly, then
 | Fail card | a shelf is lost | why, the pass revealed, stats; tap to retry |
 | Options | OPTIONS or Y on the title | nine settings |
 | The Ledger | the BEST line or X on the title | lifetime statistics |
-| HOW TO PLAY | the GUIDE button or B on the title, or the pause menu | eight animated pages |
+| HOW TO PLAY | the GUIDE button or B on the title, the pause menu, or the password tracker in play | eight animated pages, starting with the goal |
 
 ### 2.2 Every control
 
@@ -124,12 +132,13 @@ That is the whole game. The rest of this guide explains every rule exactly, then
 | **B** | play | step the chain back one gem; hold for 20 frames (a third of a second) to clear it |
 | **Y** | play | clear the chain at once |
 | **D-pad** | play | move the hex cursor (up, down, left, right; it steps half a gem when the column changes parity) |
-| **L or R** (hold) | play | peek: touch a gem to arm it, lift to peel it, slide off to cancel |
+| **L or R** (hold) | play | peek: read earned clues; touch a gem to arm it, lift to peel it, slide off to cancel |
 | **X** | play | latch peek on for one peel; press again to cancel; with the cursor shown, **A** then peels the gem under it |
 | **PEEK button** | play | the same latch as X |
 | **START** | play | pause |
 | **II button** | play | pause |
-| **SELECT** | play | a **hint**: the ghost drag traces a common word on the board (two a shelf, section 5.6); on the title it starts the Daily |
+| **SELECT** | play | a **word hint**: the ghost drag traces an accepted word (two a shelf, section 5.6); clears a latched peek when a word is found; release held L/R first |
+| **Stylus tap on the password tracker / FOUND row** | play | pause and open the goal page; no turn or heat; BACK returns to pause |
 | **Stylus tap on a menu row** | pause | tap a row to light it, tap the lit row to pick it |
 | **D-pad up and down** | pause | move the highlight; **A** picks it; RESTART and QUIT ask for a second pick within 90 frames |
 | **START or B** | pause | resume |
@@ -182,25 +191,29 @@ left and right a column. **A** chains the gem under the cursor (it has to touch 
 
 ### 2.6 The in-game guide
 
-The game has its own eight-page, animated manual: **HOW TO PLAY**. Open it from the title (the **? GUIDE** button or **B**) or from the pause menu. The touch screen holds the words and the top screen plays a four-second looping story per page, drawn with the board's own gems, holes, flames and diamonds. Every number on a page is printed from the same tables the rules use. The eight pages are shown below.
+The game has its own eight-page, animated manual: **HOW TO PLAY**. Open it from the title (the **? GUIDE** button or **B**), from the
+pause menu, or by tapping the password tracker / FOUND row during play. It always opens with **THE GOAL**. Opening help from play
+pauses the shelf without spending a turn; BACK returns to the pause menu, where START or B resumes. The touch screen holds the
+words and the top screen plays a four-second looping story per page, drawn with the board's own gems, holes, flames and diamonds.
+Every number on a page is printed from the same tables the rules use. The eight pages are shown below.
 
 <details>
 <summary>The eight pages of HOW TO PLAY (click to open)</summary>
 
-![HOW TO PLAY page 1, THE BOARD.](img/guide_1.png)
-*Page 1, THE BOARD: dragging a chain, the gold ring, tapping the last gem, undo and cut back, the shuffle of a dead board.*
+![HOW TO PLAY page 1, THE GOAL.](img/guide_1.png)
+*Page 1, THE GOAL: the hidden password, words earning clues, reading neighbours, peeling letters in any order, and filling every slot to win without typing a password.*
 
-![HOW TO PLAY page 2, SCORING.](img/guide_2.png)
-*Page 2, SCORING: gem values, the length multipliers, the flat bonus for seven letters, flames, diamonds, repeats and the combo.*
+![HOW TO PLAY page 2, THE BOARD.](img/guide_2.png)
+*Page 2, THE BOARD: dragging a chain, the gold ring, tapping the last gem, undo and cut back, and earning a clue at the word's final location.*
 
 ![HOW TO PLAY page 3, PEEKING.](img/guide_3.png)
-*Page 3, PEEKING: the buttons, the numbers and their colours, diamonds, and the red gems that scorch.*
+*Page 3, PEEKING: reading word clues and hole numbers, counting found diamonds, the covered centre, arm and lift, and the red gems that scorch.*
 
-![HOW TO PLAY page 4, THE PASS.](img/guide_4.png)
-*Page 4, THE PASS: hidden letters, the themes, the pass length by shelf, and what each letter, a streak of letters and the shelf pay.*
+![HOW TO PLAY page 4, FIRE.](img/guide_4.png)
+*Page 4, FIRE: the heat each word adds, how a flame falls, chimneys and firebreaks, and the three ways to lose a shelf.*
 
-![HOW TO PLAY page 5, FIRE.](img/guide_5.png)
-*Page 5, FIRE: the heat each word adds, how a flame falls, chimneys and firebreaks, and the three ways to lose a shelf.*
+![HOW TO PLAY page 5, SCORING.](img/guide_5.png)
+*Page 5, SCORING: gem values, the length multipliers, the flat bonus for seven letters, flames, diamonds, repeats and the combo.*
 
 ![HOW TO PLAY page 6, SHELVES.](img/guide_6.png)
 *Page 6, SHELVES: bookmarks, the three twists, Lockdown and its tiers, overtime.*
@@ -249,6 +262,11 @@ number of neighbours the cell has (section 6.4).
 
 **Gems.** Every gem carries a letter and a colour by letter group. In the default JEWEL theme vowels (A E I O U) are **ruby**, the common consonants (R S T L N D) are **sapphire**, the
 awkward ones (J K Q X Z) are **amber**, the middle ones (V W Y F B) **amethyst**, and the rest (C G H M P) **emerald**. The colour is only a hint: the letter is what counts. In the CLEAR theme the groups are yellow, blue, magenta, teal and grey.
+
+**Word clues.** A small corner tab marks a location surveyed by an accepted word. In PEEK, its front letter remains visible beside
+a small number badge on a filled plate. It is still a covered gem, not an empty hole: it can hide a password letter and can be
+chained or peeled normally. The clue belongs to the fixed board location, so it survives refills. A word ending on a diamond
+also earns a clue there; the diamond remains reusable.
 
 **Flames.** A burning gem has a light plate under a dark letter, a bright bar across its top and tongues that rise over its edge, in every theme, so it can never be mistaken for a plain gem even without colour.
 
@@ -342,10 +360,13 @@ Try to submit a chain of three or more gems and the game either scores it or tel
 
 ### 4.5 Repeats and the ledger
 
-The shelf remembers the last **eight** words you spelled (the ledger; the top screen shows the last five). Spelling a word that is **in the ledger** again halves its score and calls out **AGAIN**. The comparison is on the whole word, so a repeat is found whatever its length.
+The shelf remembers the last **eight** words you spelled (the ledger; the top screen shows the last five). Spelling a word that is
+**in the ledger** again halves its score **before the combo bonus**, and can call out **AGAIN** (higher-priority callouts are in
+[section 5.3](#53-callouts)). The comparison is on the whole word, so a repeat is found whatever its length.
 
-![A repeated word: the second TONE is worth half the first, with the AGAIN callout over the board.](img/repeat_again.png)
-*A repeat: TONE twice. The second time it scored half of the first, and the callout said AGAIN.*
+![A repeated TONE scores 22 after the repeat penalty and second-word combo bonus, with the AGAIN callout.](img/repeat_again.png)
+*TONE twice with no peel between: the first scores 40; the repeat halves that to 20, then the second-word combo adds 10%, giving
+22. The total is 62 and the callout says AGAIN. A peel would reset the combo; reading a clue does not.*
 
 The ledger belongs to the shelf: a new shelf starts with an empty one. A word that leaves the ledger after eight others can be spelled at full value again.
 
@@ -499,9 +520,20 @@ Worked, for that card: the words scored 100 (STONE: 5 × 2 × 10), 160 (GARDEN: 
 | --- | --- | --- | --- | --- | --- | --- |
 | Bonus | +0% | +10% | +20% | +30% | +40% | +50% |
 
-A peel breaks the streak, so combos and peeling pull in opposite directions: the shelf is won by peeling, the score is made by words. The balance bot shows peeling alone wins most shelves, so the combo is a score reward, not a way to win (it does not change a shelf's clear rate).
+A peel breaks the combo, so extra word points compete with the speed bonus for finishing the password quickly. The combo itself
+changes only score. The clue earned by each accepted word is a separate reward: it can help you decide where to peel next.
 
-**Hints.** Press **SELECT** in play and the ghost drag traces a common word of three to five letters on the real board (the same breathing outline and trail the guided first shelf uses). When a flame burns, the hint looks first for a word through a flame. A shelf has **two hints**; the message line says how many are left. The hint hides at the first touch of the board, so SELECT does nothing (and costs no hint) while the stylus is down. Ten seconds with no input and hints in hand make the game offer one (`STUCK? PRESS SELECT FOR A HINT`), once a shelf; the offer is free.
+**Word hints.** Press **SELECT** in play and the ghost drag traces a word you can submit on the real board, including paths that
+start on a diamond. It first looks for common words of three to five gems, preferring a word through a flame, then an unplayed
+word, then a longer one. If that search finds nothing, it tries longer paths and, under LIBRARY FULL, allowed rare words; a
+common path takes priority when the fallback finds one. A shelf has **two hints**; the message line says how many are left.
+Only a demonstrated word spends a hint. This search is bounded to keep the game responsive, so no hint found is not proof that
+the board has no word.
+
+A successful hint switches off a peek latched with X or PEEK, so following the ghost chains gems. Release a held **L/R** first:
+SELECT asks you to do so without spending a hint. SELECT also spends nothing while the stylus is down, because the hint hides
+at the first board touch. Ten seconds with no input and hints in hand make the game offer one (`STUCK? PRESS SELECT FOR A HINT`),
+once a shelf; the offer is free. A **word hint** shows a playable word; a **word clue** is the neighbour number that submitting it earns.
 
 ### 5.7 Pass-letter streaks
 
@@ -520,12 +552,28 @@ It is a score reward and not a difficulty change: it never touches the heat, the
 
 ## 6. Peeking, the heart of the game
 
-Under the gems there is a second layer, the **back layer**, and on it the letters of the pass. Peeking is how you read it.
+Under the visible gems is a fixed **back layer** holding the password letters. The visible letters can fall and refill without
+moving that password. PEEK displays the information you have earned; peeling uncovers one location.
+
+### Word clues before your first peel
+
+Every accepted word records a clue at its **final gem's location**. In ordinary play a small corner tab marks it. In PEEK a small
+badge gives its neighbour count beside the still-visible front letter. The latest word clue's neighbours are outlined
+automatically; moving the d-pad cursor to another known clue inspects that one instead. Touching a gem still arms a peel, so
+read the highlighted region before touching. At an edge there are fewer than six neighbours.
+
+![A real PEEK screen after submitting STONE, with a numbered covered gem and its counted neighbours outlined.](img/word_clue.png)
+*A word has earned a clue of 1 at its final location. The small badge belongs to a covered gem; the outlined neighbours are the
+cells it counts, not a reveal of which one holds the letter. FOUND remains 0/4 because no password letter has been uncovered.*
+
+The clue survives gravity, refill and the rescue shuffle because it describes the fixed back layer. Ending another accepted
+word at the same location shows the same count; ending elsewhere can add information. The clue is included in the word's normal
+turn and heat cost. You can still peel without making a word first, and a clue never peels or reveals a letter for you.
 
 ### 6.1 How to peel
 
-1. **Peek on.** Hold **L** or **R**, or latch it with **X** or the **PEEK** button. The gems dim to outlines with their letters still readable, so the layer you are reading is always the one in colour.
-2. **Arm.** Touch a gem. It gets a pulsing double rim and a **PEEL** label.
+1. **Peek on.** Hold **L** or **R**, or latch it with **X** or the **PEEK** button. Uncharted gems dim; earned word clues show their number badges and peeled holes show their large digits.
+2. **Arm.** Touch a gem. It gets a double rim and a **PEEL** label. A scorch-risk rim stays red, including while armed.
 3. **Lift** the stylus. The gem is peeled. To cancel, slide off the gem (or onto another gem) before you lift: nothing happens.
 
 A latched peek (X or the button) is **one-shot**: it clears itself after a peel. Press X again to cancel it before. On the d-pad, X then **A** peels the gem under the cursor at once.
@@ -544,18 +592,22 @@ A peel can have three outcomes:
 
 If the peel finds the **last** pass letter, the shelf is cleared at once, even when that turn's heat would have lit a flame or the fire would have reached the floor.
 
-### 6.3 What a hole digit means
+### 6.3 What the numbers mean
 
-A hole shows **how many of the six cells around it hide a pass letter**. Cells are neighbours as in section 3.1, so you count the six cells that touch it: the one above, the one below and two on each side.
+A word-clue badge and a hole digit both count **password letters in the six cells around their location**. Cells are neighbours
+as in section 3.1: the one above, the one below and two on each side. The centre is excluded. A covered clue gem can itself hide
+a password letter even when its badge is **0**; a peeled empty hole cannot. Its front letter does not identify the hidden letter.
 
 ![Seven peeled cells showing 0 to 6, each with the hidden pass letters ringed.](img/peek_digits.png)
-*The numbers 0 to 6 for the same cell. The rings are added for the picture: the game never shows where the pass letters are. A 0 means none of its six neighbours is a pass letter; a 6 means all six are.*
+*The numbers 0 to 6 for the same cell. This figure's rings mark hidden password locations for illustration. In play, the PEEK
+outline marks every counted neighbour, without identifying which ones hold letters. A 0 means none of the neighbours holds a
+password letter; a 6 means all six do.*
 
 Three things to remember:
 
-* The number counts **every pass letter that touches the hole, including ones you have already found** (diamonds). A found letter does not stop counting. When you read a number, subtract the diamonds you can see around the hole.
-* The number counts the letters in the **unpeeled neighbours**. A neighbour that you have peeled and that did not turn into a diamond has no letter: it is safe.
-* The colour is only decoration: 0 grey, 1 the accent colour, 2 gold, 3 amber, 4 and up white.
+* The number counts **every password letter next to the clue, including ones you have already found** (diamonds). A found letter does not stop counting. Subtract the diamonds you can see to find how many hidden neighbours remain.
+* A neighbour that is an empty hole has no letter. After subtracting found diamonds, the remaining letters must be in the still-covered neighbours.
+* Hole colours are only decoration: 0 grey, 1 the accent colour, 2 gold, 3 amber, 4 and up white. Covered word clues use a compact badge so you can tell them apart from holes.
 
 ### 6.4 Edges and corners
 
@@ -573,7 +625,7 @@ A single number rarely tells you where the letter is. The numbers become powerfu
 
 **Puzzle 1: the last neighbour.** The middle hole (column 3, row 3) shows **1**. Its six neighbours are (3,2), (3,4), (2,3), (2,4), (4,3) and (4,4). Five of them are already holes. A hole holds no letter, so the one pass letter around the **1** must be in the sixth cell, (4,4). *Rule: a number minus the letters you already know, with only one unpeeled neighbour left, names that neighbour.*
 
-**Puzzle 2: a zero clears the way.** Three holes: (3,3) shows **2**, (4,3) shows **2**, and (2,4) shows **0**. The **0** says that none of its six neighbours, (2,3), (2,5), (1,3), (1,4), (3,3) and (3,4), hides a letter. Now look at the **2** at (3,3): its neighbours are (3,2), (3,4), (2,3), (2,4), (4,3) and (4,4). (2,4) and (4,3) are holes, and the **0** just cleared (3,4) and (2,3). That leaves only (3,2) and (4,4), and the **2** needs two letters: **both are pass letters**. The second **2**, at (4,3), agrees: (3,2) and (4,4) are two of its neighbours. *Rule: a zero is a safe zone. Peel zeros and their neighbours first.*
+**Puzzle 2: a zero clears the way.** Three holes: (3,3) shows **2**, (4,3) shows **2**, and (2,4) shows **0**. The **0** says that none of its six neighbours, (2,3), (2,5), (1,3), (1,4), (3,3) and (3,4), hides a letter. Now look at the **2** at (3,3): its neighbours are (3,2), (3,4), (2,3), (2,4), (4,3) and (4,4). (2,4) and (4,3) are holes, and the **0** just cleared (3,4) and (2,3). That leaves only (3,2) and (4,4), and the **2** needs two letters: **both are pass letters**. The second **2**, at (4,3), agrees: (3,2) and (4,4) are two of its neighbours. *Rule: use a zero to rule out its neighbours and narrow nearby clues; peeling a known-empty neighbour is useful only if you need its own number.*
 
 **Puzzle 3: the number equals the count.** The hole at (3,3) shows **3**. Its neighbours are (3,2), (2,4) and (4,4), which are holes, and (3,4), (2,3) and (4,3), which are still gems. Three letters to place among three gems: **all three are pass letters**. The three **2**s agree: each of those holes touches exactly two of them. *Rule: when the number equals the number of unpeeled neighbours, they are all letters.*
 
@@ -584,7 +636,9 @@ Two more rules come from reading two numbers that share neighbours:
 
 ### 6.6 Risk and what a peel is worth
 
-Every peel costs a turn and a point of heat, and a *wasted* peel (a plain gem) also costs you the PERFECT bonus. Peel where a number is likely to tell you the most: next to the cells you already know. A peel that lands on a pass letter is worth 100 × shelf and a step to the shelf bonus; a peel that finds a **0** is not wasted: it clears up to six cells at once.
+Every peel costs a turn and adds heat (1 normally, 2 in Lockdown), and an empty peel also costs you the PERFECT bonus. First read
+the clues your words have earned. If no letter is certain, a peel beside known cells can add useful information. A hit is worth
+100 × shelf and a step toward the shelf bonus; an empty **0** can still help by ruling out up to six neighbours.
 
 ### 6.7 Scorching
 
@@ -604,7 +658,7 @@ You always know where it is dangerous. While you peek, a gem directly under a fl
 
 ### 7.1 How the pass is chosen
 
-Every shelf draws its pass from a themed pool in `data/pools.bin`, and the plaque on the top screen names the theme (`PASS - BINDERY`).
+Every shelf draws its pass from a themed pool in `data/pools.bin`, and the plaque on the top screen names the theme (`PASSWORD - BINDERY`).
 
 * **Theme.** Classic shelf *n* uses theme `(n − 1) mod 40`: shelf 1 BINDERY, shelf 2 INK ... shelf 40 LEXICON, then round again from BINDERY.
 * **Length by shelf.** 4 letters on shelves 1 to 2, 5 on shelves 3 to 5, 6 on shelves 6 to 8, 7 on shelves 9 to 12, 8 from shelf 13. A **BURIED** twist adds one. If the theme has no word of that length the nearest length stands in (the longer one on a tie).
@@ -612,7 +666,7 @@ Every shelf draws its pass from a themed pool in `data/pools.bin`, and the plaqu
 * **No repeats.** The last **eight** passes of the run are not repeated while the pool has a choice.
 * **Daily Pass.** Theme and length come from the date (section 10) and the word from the first 200 words of that length, so it stays familiar.
 
-The pass words are checked against the dictionary, and the word library never goes rougher than a mild curse: the strongest words in it are *holy*, *damn*, *crappola* and *moobs*. The pass is placed on the back layer as a random walk that starts in rows at or below the shelf's **first pass row** and never climbs above it: the letters form one connected clump, deeper on harder shelves (section 9). Letters can be found in any order.
+The pass words are checked against the dictionary, and the word library never goes rougher than a mild curse: the strongest words in it are *holy*, *damn*, *crappola* and *moobs*. The pass is placed on the back layer as a random walk that starts in rows at or below the shelf's **first pass row** and never climbs above it: the letters form one connected clump, deeper on harder shelves (section 9). Letters can be found in any order. Each discovery fills its own slot automatically, including repeated letters; you do not need to trace the password as a word chain or enter it elsewhere.
 
 ### 7.2 The forty themes
 
@@ -775,16 +829,20 @@ The limit is 24 turns in Classic (so turn 25 is the first overtime turn; turn 36
 | --- | --- |
 | `LIBRARY LOST` | a flame was on the bottom row when the fire stepped, or a flame had nothing left to burn below it |
 | `PASS DESTROYED` | you scorched a cell that hid a pass letter (section 6.7) |
-| `OUT OF WORDS` | no word of 3 to 5 letters can be spelled from the gems left |
+| `OUT OF WORDS` | no accepted word remains after the shelf's rescue shuffle has been used or cannot produce one |
 
-OUT OF WORDS is checked after every turn by searching the board for any accepted word of 3 to 5 letters through gems, diamonds and flames: so the LIBRARY and SPELLING options matter (COMMON is stricter). **The first time a shelf runs dry it is not lost: the gems are shuffled** (section 8.8). The card appears only when a shelf runs dry a second time.
+After every turn the game checks for an accepted word through gems, diamonds and flames. It tries short words first, then
+longer paths, using the active LIBRARY and SPELLING rules. A board whose only word is longer than five letters can keep going.
+The longer search has a work limit; reaching that limit keeps the shelf alive rather than declaring it empty without proof.
+**The first time a shelf is confirmed dry, the gems are shuffled** (section 8.8). Failure follows if the rescue cannot make a
+word, or if a later turn leaves a confirmed dead board after the rescue has been used.
 
 ![The three fail cards: LIBRARY LOST, PASS DESTROYED, OUT OF WORDS, each with the pass revealed and the retry cost.](img/fail_cards.png)
 *The fail cards. Each shows why, the pass (the letters you had found stay lit, the others are shown red), your words, best word, peels and turns, and what the retry costs: the score the shelf started with, and the bookmarks left. The last card is a run over: no bookmark remained.*
 
 ### 8.8 The shuffle
 
-A shelf that has no word of 3 to 5 letters left (the OUT OF WORDS test of section 8.7) is **re-dealt once** instead of lost: every plain gem and every flame gets a new letter from the bag (diamonds, holes and the flames' places stay as they were), up to ten tries until a word exists, and the top screen says `NO WORDS: GEMS SHUFFLED, +3 HEAT` with a **SHUFFLE!** callout. The re-deal costs **3 heat**, like a three-letter word, and can light a flame. There is one re-deal per shelf (`SHUFFLES_PER_SHELF`); a second dead board loses the shelf, and a board that cannot be re-dealt into a word still does.
+A shelf confirmed to have no accepted word left (section 8.7) is **re-dealt once** instead of lost: every plain gem and every flame gets a new letter from the bag (diamonds, holes, earned clues and the flames' places stay as they were), up to ten tries until a word exists, and the top screen says `NO WORDS: GEMS SHUFFLED, +3 HEAT` with a **SHUFFLE!** callout. The re-deal costs **3 heat**, like a three-letter word, and can light a flame. There is one re-deal per shelf (`SHUFFLES_PER_SHELF`); a second dead board loses the shelf, and a board that cannot be re-dealt into a word still does.
 
 Why: the bot (`docs/BALANCE.md`) played 7,200 competent shelves per language and met no dead board in English and three in German, so the rule is a safety net, not a mechanic: a player can no longer lose a long run to a freak deal.
 
@@ -1029,15 +1087,17 @@ On early shelves a good word is worth a few hundred points. Clearing the shelf i
 | speed bonus for a 10-turn shelf | 2250 |
 | perfect pass bonus | 1200 |
 
-So the game is a **race**: every turn you spend costs 25 × shelf points of speed bonus, and the shelf bonus and pass letters dwarf any single word. Words are the tool that keeps the fire at bay and keeps your options open, not the goal. The words that *are* worth spelling are long ones (zero heat), flame-killers, and ones that keep you under the meter.
+Finishing the password is the goal. While the speed bonus remains, each extra turn costs 25 × shelf points, so make each word
+useful: score, extinguish a flame, or earn a clue beside an uncertain region. Long words add less base heat. There is no clock
+running while you think, inspect clues or read help; pressure advances when you take turns.
 
 ### 12.2 Openings and the first five turns
 
 1. **Look before you touch.** On shelf 1 the pass is a four-letter word in rows 1 to 7: **row 0 can never hold a pass letter.** On shelves 3 to 5, rows 0 to 2 are free, in Lockdown rows 0 to 3, from shelf 12 rows 0 to 4. Do not peel in the free zone unless you need its numbers.
-2. **Peek in the middle of the band.** The first peel is a guess; make it where a number tells you the most, in the middle of the rows that may hold the pass, so that the number counts the largest possible set of cells.
-3. **A zero is gold.** If the first peel is a 0, peel its neighbours' neighbours: you have cleared up to six cells for one turn.
-4. **A number greater than 0 is a direction.** Peel a neighbour that is *not* in the clump (open edge) and compare the two numbers.
-5. **Spell a word when the fire needs it, not by reflex.** On shelves 1 to 2 the meter is 10: you can take nine peels without a word and no flame appears at all. A long word on turn 1 scores, but costs a turn.
+2. **Earn a useful first clue.** Look for a word whose last gem is near the band where the password can lie. Submit it, then enter PEEK and read the highlighted neighbours before choosing a peel. A word ending far from every possible password location gives little information.
+3. **Use a zero to exclude neighbours.** Its centre is separate: a covered clue of 0 can still hide a letter. Compare the excluded neighbours with another clue instead of automatically peeling cells already known empty.
+4. **Combine positive clues.** Subtract visible diamonds and compare overlapping neighbours. A number narrows a region; it does not identify a particular gem by itself.
+5. **Choose words for a reason.** A new endpoint can earn information; a repeated endpoint repeats its clue. Weigh that information, score and flame removal against the word's turn and heat cost. Peeling remains available whenever you choose it.
 
 ### 12.3 Heat budgeting
 
@@ -1054,7 +1114,7 @@ Heat only goes up; it resets only when a gem ignites. A peel costs 1 and a long 
 ### 12.4 When to peel and when to chain
 
 * **Peel** when you know where to peel: a number has pinned a cell, or two numbers have. Every peel that finds a letter moves you toward the bonus.
-* **Chain** to kill a flame, to draw new gems when the board has no good long words or no safe peels, or to build a PASS LINK (below).
+* **Chain** to earn a clue near an uncertain region, kill a flame, draw fresh gems, or build a PASS LINK (below).
 * **Never peel under a flame.** First put the flame out with a word through it. Under a flame you risk the whole pass.
 
 ### 12.5 Reading the board for chain-through-diamond links
@@ -1089,7 +1149,7 @@ The meter is 8 on shelf 6, 6 on shelves 7 and 8, 5 on shelves 9 to 11 and 4 from
 7. Ignoring a flame near the floor: the lowest flame is on the top-screen fire meter.
 8. Spelling the same word twice: the second is halved.
 9. Restarting a shelf casually: it costs a bookmark.
-10. Skipping the numbers: a peel that reads a 0 is not wasted, but a peel without reading the board is.
+10. Treating a covered word clue as an empty hole: its number counts neighbours, never its own hidden letter.
 
 ### 12.10 The one-page cheat sheet
 
@@ -1195,11 +1255,11 @@ The first time the game starts, with no saved settings, it shows the **language 
 
 * **Tiles.** Each language has its own tile weights, letter values, vowels and rare letters, and the **Qu** tile only where the language has one. A letter a language hardly uses has no tile: no K or W in Spanish, no Q in Dutch, Swedish, Danish or Finnish.
 * **Words.** The dictionary accepts that language's words (the dictionaries are "every word a player is likely to type", not complete: see `docs/LANGUAGES-DATA.md`).
-* **Pass words.** Every shelf draws from a translated library of the **same 40 themes** in the same order, and the plaque and the shelf intro show the theme name in that language (`PASS - LIBROS`).
+* **Pass words.** Every shelf draws from a translated library of the **same 40 themes** in the same order, and the plaque and the shelf intro show the theme name in that language (`CLAVE - LIBROS`).
 * **Daily boards are per language.** The Daily uses the active language's letter bag and pass pool, so a Spanish Daily is a different board from the English one, and the same for everyone playing Spanish that day. Records (best scores, the streak and the Ledger) are shared across languages.
 
 ![A shelf in Espanol, Deutsch and Suomi: the plaque names the pass theme in the language and the tiles use its letters.](img/language_shelves.png)
-*The same game in three other languages. Top screens: the plaque (`PASS - LIBROS`, `PASS - BUCHER`, `PASS - KIRJAT`). Boards: the tiles come from each language's own letter frequencies.*
+*The same game in three other languages. Top screens: the plaque (`CLAVE - LIBROS`, `PASSWORT - BUCHER`, `SALASANA - KIRJAT`). Boards: the tiles come from each language's own letter frequencies.*
 
 ### 14.2 The limits
 
@@ -1213,6 +1273,17 @@ The first time the game starts, with no saved settings, it shows the **language 
 
 ## 15. Troubleshooting and FAQ
 
+**What is the password, and how do I enter it?** It is the hidden word whose slots appear on the top screen and beside FOUND.
+Peel locations that hold its letters. They fill the correct slots in any discovery order, and the shelf clears when all are
+found. There is no separate password-entry step, and chaining the visible gem letters does not fill those slots.
+
+**Why make words if peeling finds the password?** Every accepted word scores and earns a clue at its final location. It also
+puts out any flames included in the chain and refills ordinary gems. Use the clue to plan peels; use longer words to add less
+base heat. A word by itself does not uncover a password letter.
+
+**A clue says 0, but I found a letter under it. Is that wrong?** A covered clue counts only its neighbours. Zero excludes those
+neighbours; it says nothing about the covered centre. An empty peeled hole has already shown that its centre holds no letter.
+
 **Why was my word refused?** Section 4.4 lists the four messages. NOT IN THE LIBRARY: not a dictionary word. TOO OBSCURE: LIBRARY is COMMON. AMERICAN SPELLING / BRITISH SPELLING: the SPELLING option.
 
 **The game says SET CLOCK and Daily will not start.** The DS clock is unset (before 2025). Set it in the DS settings (or the emulator's date and time) and wait a second on the title.
@@ -1225,7 +1296,7 @@ The first time the game starts, with no saved settings, it shows the **language 
 
 **My stylus does not hit the gem I mean.** A gem answers to a 12-pixel circle around its centre, the dead zones are between three gems; drag more slowly across a tight chain or use the d-pad.
 
-**Why do hole numbers not go down when I find a letter?** They count every pass letter that touches the hole, found or not (section 6.3).
+**Why do clue numbers not go down when I find a letter?** Word clues and holes count every adjacent password letter, found or not. Subtract the visible diamonds when working out how many hidden neighbours remain (section 6.3).
 
 **I peeled under a flame and lost the pass!** Section 6.7. In peek mode the gems directly under a flame have a red double rim and the panel says RED: SCORCH.
 

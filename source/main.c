@@ -29,8 +29,8 @@ static void queueMsg(const char *m, int frames)
 
 // ---- the guided first shelf: sticky prompts on the top screen while Classic shelf 1 is new to the player.
 // TUTOR_DRAG: drag a word. TUTOR_PEEK: peek. TUTOR_FIND: (after the first peel) find a pass letter.
-// TUTOR_REST: the closing tip, whose end ends the guide. A gameplay message replaces a prompt for its
-// duration and the prompt comes back when it is over (tutorAfterMsg).
+// TUTOR_REST: keep finding letters until the whole password is revealed. Only a cleared
+// first shelf finishes the guide. Gameplay messages temporarily replace its next action.
 static bool tutorOn(void) { return G.mode == MODE_CLASSIC && G.shelf == 1 && !S.tutorDone && G.tutorStep < TUTOR_DONE; }
 
 static int foundCount(void)
@@ -46,8 +46,10 @@ static void tutorPrompt(void)
 {
     if (!tutorOn()) return;
     char t[MSG_LEN];
-    if (G.tutorStep == TUTOR_DRAG) setMsg(ui(UI_TU_DRAG), -1);
-    else if (G.tutorStep < TUTOR_REST) { uiFmt(t, sizeof t, UI_TU_PEEK, handKey()); setMsg(t, -1); }
+    if (G.tutorStep == TUTOR_PEEK || (G.tutorStep == TUTOR_DRAG && G.peekHeld)) { uiFmt(t, sizeof t, UI_TU_PEEK, handKey()); setMsg(t, -1); }
+    else if (G.tutorStep == TUTOR_DRAG) setMsg(ui(UI_TU_DRAG), -1);
+    else if (G.tutorStep == TUTOR_FIND) setMsg(ui(UI_TU_FIND), -1);
+    else { uiFmt(t, sizeof t, UI_TU_REST, foundCount(), G.passLen); setMsg(t, -1); }
 }
 
 static void tutorFinish(void)
@@ -56,12 +58,12 @@ static void tutorFinish(void)
     G.tutorStep = TUTOR_DONE;
 }
 
-// the message line just ran out: the guide's next prompt, or its end
+// The message line just ran out: restore the next useful action. A single found
+// letter is progress, not a completed lesson or a completed password.
 static void tutorAfterMsg(void)
 {
     if (!tutorOn()) return;
-    if (G.tutorStep == TUTOR_REST) { tutorFinish(); return; }
-    if (G.tutorStep == TUTOR_FIND && foundCount() >= 1) { G.tutorStep = TUTOR_REST; setMsg(ui(UI_TU_REST), 240); return; }
+    if (G.tutorStep == TUTOR_FIND && foundCount() >= 1) G.tutorStep = TUTOR_REST;
     tutorPrompt();
 }
 
@@ -87,7 +89,9 @@ static void tutorPeel(int res, int c, int r)   // a peel resolved: res as boardP
         }
     } else if (G.tutorStep == TUTOR_FIND && res == 2) {
         G.tutorStep = TUTOR_REST;
-        setMsg(ui(UI_TU_REST), 240);
+        tutorPrompt();
+    } else if (G.tutorStep == TUTOR_REST && res == 2) {
+        tutorPrompt();
     }
 }
 
@@ -105,6 +109,9 @@ static void dropStroke(void) { wasTouching = false; ignoreStroke = false; }
 
 static void startShelf(void)
 {
+    // A retry deals a new board with no earned clues. Restart the unfinished
+    // lesson too, so its next action and automatic word hint remain useful.
+    if (G.mode == MODE_CLASSIC && G.shelf == 1 && !S.tutorDone) G.tutorStep = TUTOR_DRAG;
     dropStroke();
     G.armed = 0; G.peekLatch = 0;
     G.cue = CUE_NONE; G.cueAge = 0; G.ghostDone = 0; G.idleFrames = 0; G.hintLen = 0;
@@ -404,10 +411,13 @@ static void useHint(void)
     if (G.hints <= 0) { setMsg(ui(UI_MS_NOHINT), 60); return; }
     boardClearChain(&G);
     dropStroke();                      // a stylus still down must not restart a chain and cancel the ghost
-    G.hintLen = boardHintChain(&G, G.hintC, G.hintR, 5);
+    G.hintLen = boardHintChain(&G, G.hintC, G.hintR, MAX_CHAIN);
     if (!G.hintLen) { setMsg(ui(UI_MS_NOHINTWORD), 60); return; }
     G.hints--;
-    G.hintReq = 1; G.hintIdle = 0;
+    // Following a word hint must chain gems. A one-shot PEEK latch otherwise
+    // turns that first touch into a destructive peel instead of the shown word.
+    G.peekLatch = 0; G.peekHeld = 0; G.armed = 0; musicPeek(false);
+    G.hintReq = 1; G.hintIdle = 0; G.cueAge = 0;
     char m[MSG_LEN]; uiFmt(m, sizeof m, UI_MS_HINT, G.hints);
     setMsg(m, 90);
     musicSfx(SFX_MENU, 0);
@@ -422,6 +432,7 @@ static void submitChain(void)
         cc[i] = G.chainC[i]; cr[i] = G.chainR[i];
         cl[i] = G.cell[cc[i]][cr[i]].letter;     // snapshot: gravity moves the letters
     }
+    bool newClue = cn >= 3 && !G.wordClue[cc[cn - 1]][cr[cn - 1]];
     int gained = boardSubmit(&G);
     if (gained > 0) {
         for (int i = 0; i < cn; i++) gfxBurst(cc[i], cr[i], BURST_SHATTER, cl[i]);
@@ -429,7 +440,6 @@ static void submitChain(void)
         gfxPopup(cc[cn / 2], cr[cn / 2], ps, 1);
         musicWord(G.lastWordLen, gained, G.lastWordBurn != 0);
         gfxSubmitFlash();
-        tutorWord();
         // callout, one per word, in priority order: the top-screen message and the word over the board
         if (G.lastWordLen >= 8) { setMsg(ui(UI_CO_SPECT), 60); gfxCallout(ui(UI_CO_SPECT), CALLOUT_GOLD); }
         else if (G.lastWordDiamonds >= 1) {
@@ -449,6 +459,13 @@ static void submitChain(void)
         else if (G.lastWordLen >= 5) { setMsg(ui(UI_CO_GOOD), 60); gfxCallout(ui(UI_CO_GOOD), CALLOUT_GOLD); }
         else if (G.lastWordRepeat) { setMsg(ui(UI_CO_AGAIN), 45); gfxCallout(ui(UI_CO_AGAIN), CALLOUT_ACCENT); }
         else if (G.lastWordTier == 2) { setMsg(ui(UI_CO_RARE), 60); gfxCallout(ui(UI_CO_RARE), CALLOUT_GOLD); }
+        if (newClue) {
+            int c = cc[cn - 1], r = cr[cn - 1];
+            char cm[MSG_LEN]; uiFmt(cm, sizeof cm, UI_MS_WORDCLUE, G.wordClue[c][r] - 1);
+            setMsg(cm, 150);
+            gfxPopup(c, r, ui(UI_POP_CLUE), 1);
+        }
+        tutorWord();
         burstNewFlames();
         if (!G.fail) announceShuffle();
         if (G.fail) enterFail();
@@ -471,6 +488,7 @@ static void enterPause(void)
     dropStroke();
     boardClearChain(&G);
     G.armed = 0; G.peekLatch = 0; G.peekHeld = 0; musicPeek(false);
+    if (tutorOn() && G.tutorStep == TUTOR_DRAG && G.msgTimer < 0) tutorPrompt();
     G.pauseRow = 0; G.pauseArm = 0;
     G.state = ST_PAUSE;
 }
@@ -511,23 +529,26 @@ static void updateCue(u32 held)
     int want = CUE_NONE;
     bool touching = (held & KEY_TOUCH) != 0;
     if (G.state == ST_PLAY && tutorOn() && !G.fail) {
-        if (held & (KEY_TOUCH | KEY_A | KEY_B | KEY_X | KEY_Y | KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT | KEY_L | KEY_R)) G.idleFrames = 0;
+        // A word gesture is only safe in chaining mode. Inspecting clues must
+        // not leave a ghost or submit ring that would instead peel on touch.
+        if (G.peekHeld && G.cue == CUE_GHOST && !G.hintReq && G.tutorStep == TUTOR_DRAG) G.ghostDone = 0;
+        if (G.peekHeld || (held & (KEY_TOUCH | KEY_A | KEY_B | KEY_X | KEY_Y | KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT | KEY_L | KEY_R))) G.idleFrames = 0;
         else G.idleFrames++;
-        if (G.tutorStep == TUTOR_DRAG && !touching) {
+        if (G.tutorStep == TUTOR_DRAG && !touching && !G.peekHeld) {
             char w[WORD_BUF];
             if (G.chainLen >= 3) { boardChainWord(&G, w); if (boardWordOk(w, (int)strlen(w))) want = CUE_TAIL; }
             else if (G.chainLen == 0 && (!G.ghostDone || G.cue == CUE_GHOST) && G.idleFrames >= GHOST_IDLE_FRAMES) want = CUE_GHOST;   // once: it keeps going until its own end
-        } else if (G.tutorStep == TUTOR_PEEK && !touching && G.chainLen == 0) {
+        } else if (G.tutorStep >= TUTOR_PEEK && !touching && G.chainLen == 0) {
             if (G.armed) want = CUE_ARMED;
             else if (!G.peekHeld) want = CUE_PEEKBTN;
-        } else if (G.tutorStep == TUTOR_PEEK && G.armed) want = CUE_ARMED;
+        } else if (G.tutorStep >= TUTOR_PEEK && G.armed) want = CUE_ARMED;
     } else G.idleFrames = 0;
     if (G.hintReq) {             // a hint: the same ghost drag, on request, until the player touches the board
-        if (G.state != ST_PLAY || touching || G.chainLen > 0 || G.fail) G.hintReq = 0;
+        if (G.state != ST_PLAY || G.peekHeld || touching || G.chainLen > 0 || G.fail) G.hintReq = 0;
         else want = CUE_GHOST;
     }
     if (want == CUE_GHOST && G.cue != CUE_GHOST && !G.hintReq) {
-        G.hintLen = boardHintChain(&G, G.hintC, G.hintR, 5);
+        G.hintLen = boardHintChain(&G, G.hintC, G.hintR, MAX_CHAIN);
         G.ghostDone = 1;                         // shown once: whatever happens next
         if (!G.hintLen) want = CUE_NONE;
     }
@@ -550,12 +571,21 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
     if (down & KEY_X) { G.peekLatch = !G.peekLatch; gfxPress(PRESS_PEEK); }
     if ((down & KEY_TOUCH) && gfxInPeekButton(t->px, t->py)) { G.peekLatch = !G.peekLatch; gfxPress(PRESS_PEEK); }
     if ((down & KEY_TOUCH) && gfxInPauseButton(t->px, t->py)) { enterPause(); return; }
+    if ((down & KEY_TOUCH) && gfxInGoalButton(t->px, t->py)) { enterPause(); openGuide(ST_PAUSE); return; }
     bool peekNow = (held & (KEY_L | KEY_R)) != 0 || G.peekLatch;
-    if (peekNow != G.peekHeld) { G.peekHeld = peekNow; musicPeek(peekNow); }
+    if (peekNow != G.peekHeld) {
+        G.peekHeld = peekNow; musicPeek(peekNow);
+        if (tutorOn() && G.tutorStep == TUTOR_DRAG && G.msgTimer < 0) tutorPrompt();
+    }
     if (!peekNow) G.armed = 0;
 
     if (down & KEY_START) { enterPause(); return; }
-    if ((down & KEY_SELECT) && !(held & KEY_TOUCH)) useHint();      // with the stylus down the hint would hide at once (it hides at the first touch): not spent
+    if ((down & KEY_SELECT) && !(held & KEY_TOUCH)) {
+        // Physical shoulders still mean PEEK until released. Do not spend a word
+        // hint the player cannot follow in the current input mode.
+        if (held & (KEY_L | KEY_R)) setMsg(ui(UI_MS_PEEKRELEASE), 120);
+        else useHint();
+    }
     // the idle offer: ten seconds of nothing with hints in hand, once a shelf (the guided shelf has its own ghost)
     if ((held & (KEY_TOUCH | KEY_A | KEY_B | KEY_X | KEY_Y | KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT | KEY_L | KEY_R)) || G.chainLen > 0) G.hintIdle = 0;
     else if (++G.hintIdle == HINT_IDLE_FRAMES && G.hints > 0 && !G.hintOffered && !tutorOn()) { G.hintOffered = 1; setMsg(ui(UI_MS_HINTIDLE), 150); }

@@ -18,7 +18,8 @@ How it works
   * Annotations are drawn on the pictures with PIL (numbered markers, arrows, rings) by the helpers below,
     so the sources of every annotated figure live in this file: there is no binary-only art.
 
-Requires py-desmume, Pillow and (for the symbol lookup) the toolchain image, like the other tools in tools/emu.
+Requires py-desmume, Pillow and the matching unstripped .elf beside the ROM. Symbol lookup uses local
+arm-none-eabi-nm or GNU nm, with the pinned toolchain image as a fallback, like the other tools in tools/emu.
 """
 import os, sys, subprocess, argparse, traceback, concurrent.futures, time
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -326,6 +327,7 @@ def options():
 
 @shot('guide_1.png', 'guide_2.png', 'guide_3.png', 'guide_4.png', 'guide_5.png', 'guide_6.png', 'guide_7.png', 'guide_8.png')
 def guide_pages():
+    """Display order: GOAL, BOARD, PEEKING, FIRE, SCORING, SHELVES, MODES, CONTROLS."""
     e = boot()
     e.tap(137, 15); e.run(150)
     assert e.state()['state'] == ST_GUIDE
@@ -410,6 +412,25 @@ def chain_shots():
     img = grab(e)
     save(annotate(img, 2, [('m', 1, 88, 192 + 100, 'L'), ('m', 2, 60, 192 + 75, 'L', 192 + 40), ('m', 3, 128, 108, 'L'), ('m', 4, 214, 192 + 132, 'R'), ('m', 5, 190, 30, 'R')], margin=40), 'chain_submit.png')
 
+@shot('word_clue.png')
+def word_clue():
+    """An unannotated game capture: submit a real word, then inspect its earned clue in PEEK."""
+    e = boot(); to_play(e); calm(e)
+    # Four hidden letters form a connected band. The endpoint itself holds the
+    # first one, but its clue counts only the adjacent second letter, not itself.
+    craft(e, LAYOUT_BOARD, back={(3, 4): 1, (4, 4): 2, (5, 4): 3, (6, 4): 4})
+    path = hit_path(e, 'stone', 3, 0)
+    before = e.state()
+    assert before['passLen'] == 4 and not any(before['found']), 'expected an untouched first password'
+    e.chain(path); e.press('A', settle=45)
+    g = e.state()
+    assert g['lastWord'] == 'stone' and g['turn'] == before['turn'] + 1, 'the word did not submit'
+    assert g['msg'].startswith('NEW CLUE: 1 '), f'the endpoint must count one neighbour, not its own hidden letter: {g["msg"]!r}'
+    assert not any(g['found']) and g['peels'] == 0, 'earning a clue must not uncover a letter'
+    peek(e)
+    assert e.state()['peek'] and not e.state()['armed'], 'the clue should be inspected without arming a peel'
+    save(grab(e), 'word_clue.png')
+
 @shot('peel_flow.png')
 def peel_flow():
     e = boot(); to_play(e); calm(e)
@@ -419,7 +440,7 @@ def peel_flow():
     e.hold('L', True); e.run(6)
     e.emu.input.touch_set_pos(*e.center(2, 4)); e.run(8)
     p1 = board_crop(grab(e), 2)
-    # 2: lift the stylus: the gem is peeled, the cell shows how many of its six neighbours hide pass letters
+    # 2: lift the stylus: the empty cell counts adjacent password locations, found or hidden
     e.emu.input.touch_release(); e.run(20)
     p2 = board_crop(grab(e), 2)
     # 3: a gem with a pass letter behind it: a diamond, +100
@@ -712,12 +733,23 @@ def repeat_again():
     e = boot(); to_play(e); calm(e); msg_off(e)
     craft(e, LAYOUT_BOARD, back={})
     w = hit_path(e, 'tone', 3, 1)
-    e.chain(w); e.press('A', settle=70); calm(e)
-    first = e.state()['score']
+    e.chain(w)
+    before = e.state()
+    assert before['combo'] == 0 and before['chainScore'] == e.word_score('tone') == 40
+    e.press('A', settle=70); calm(e)
+    first = e.state()
+    assert first['score'] - before['score'] == 40 and first['combo'] == 1, 'the first TONE must earn its normal score'
     craft(e, LAYOUT_BOARD, back={})
     w = hit_path(e, 'tone', 3, 1)
-    e.chain(w); e.press('A', hold=2, settle=6)
-    g = e.state(); assert (g['score'] - first) * 2 == first and g['callout'] == 'AGAIN', (first, g['score'], g['callout'])
+    e.chain(w)
+    preview = e.state()['chainScore']
+    # The repeat halves 40 to 20, then the second consecutive word earns its
+    # existing +10% combo bonus: 22. Reading a clue does not break a combo.
+    expected = e.word_score('tone', repeat=True, combo=1)
+    assert preview == expected == 22, f'repeat preview {preview}, expected {expected}'
+    e.press('A', hold=2, settle=6)
+    g = e.state()
+    assert g['score'] - first['score'] == expected and g['combo'] == 2 and g['callout'] == 'AGAIN', (first['score'], g['score'], g['combo'], g['callout'])
     save(zoom(grab(e), 2), 'repeat_again.png')
 
 @shot('refusals.png')
@@ -879,7 +911,7 @@ def guided_first_shelf():
     ws = e.find_words(g, maxlen=5)
     e.chain(ws[0][1]); e.press('A', settle=200)
     e.press('Y', settle=4)
-    panels.append(grab(e)); labels.append('after the first word: peek')
+    panels.append(grab(e)); labels.append('after the first word: read its clue in PEEK')
     save(montage(panels, 3, labels, k=1), 'guided_first_shelf.png')
 
 class FirstBootEmu(Emu):

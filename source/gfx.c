@@ -614,7 +614,10 @@ static void stepParticles(void)
         Particle *q = &P[i];
         if (!q->life) continue;
         if (q->kind >= P_FLYSCORE) {     // an eased flight: a seventh of the way to the target each frame, never slower than 1 px
-            int tx = (q->kind == P_FLYSCORE ? flyScoreX : flyPassX) * 8, ty = (q->kind == P_FLYSCORE ? flyScoreY : flyPassY) * 8;
+            // For a pass chip vx stores its password-slot index, not velocity.
+            // Each found letter must fly to its own slot, including repeated letters.
+            int tx = (q->kind == P_FLYSCORE ? flyScoreX : flyPassX + q->vx * 8) * 8;
+            int ty = (q->kind == P_FLYSCORE ? flyScoreY : flyPassY) * 8;
             int dx = tx - q->x, dy = ty - q->y;
             int ax = dx < 0 ? -dx : dx, ay = dy < 0 ? -dy : dy;
             if (ax + ay < 40) { q->life = 1; if (q->kind == P_FLYSCORE) scoreGlint = 7; else passGlint = 7; }
@@ -724,6 +727,7 @@ int gfxCellAt(int pxl, int pyl, int *c, int *r)
 bool gfxInSubmit(int x, int y) { return x >= PANEL_X && x < PANEL_X + 76 && y >= SUBMIT_Y && y < SUBMIT_Y + 24; }
 bool gfxInClear(int x, int y)  { return x >= PANEL_X && x < PANEL_X + 76 && y >= CLEAR_Y && y < CLEAR_Y + 16; }
 bool gfxInPeekButton(int x, int y) { return x >= PANEL_X && x < PANEL_X + 76 && y >= 174 && y < 190; }
+bool gfxInGoalButton(int x, int y) { return x >= PANEL_X && x < PANEL_X + 76 && y >= 40 && y < 64; }
 #define PAUSE_X (PANEL_X + 64)        // the 12 x 12 pause button; it answers to two more pixels on every side
 #define PAUSE_Y 6
 bool gfxInPauseButton(int x, int y) { return x >= PAUSE_X - 2 && x < PAUSE_X + 14 && y >= PAUSE_Y - 2 && y < PAUSE_Y + 14; }
@@ -765,7 +769,8 @@ void gfxBurst(int c, int r, int kind, int letter)
             spawn(P_STAR, cx, cy, dirx[a / 4] * 2, diry[a / 4] * 2, 16 + (i & 3) * 2, (i & 1) ? WHITE : GOLD_LT);
         }
         for (int i = 0; i < 8; i++) spawn(P_SPARK, cx + (rand() % 16) - 8, cy, 0, -(rand() % 8) - 2, 20, WHITE);
-        spawn(P_FLYPASS, cx, cy, 0, 0, 44, GOLD_LT); spawn(P_FLYPASS, cx, cy, 0, 0, 40, WHITE);     // the found letter flies to the pass tracker
+        int slot = G.back[c][r] > 0 ? G.back[c][r] - 1 : 0;
+        spawn(P_FLYPASS, cx, cy, slot, 0, 44, GOLD_LT); spawn(P_FLYPASS, cx, cy, slot, 0, 40, WHITE);
     } else if (kind == BURST_SCORCH) {
         for (int i = 0; i < 14; i++)
             spawn(P_SPARK, cx + (rand() % 16) - 8, cy + (rand() % 8), (rand() % 9) - 4, -(rand() % 14) - 4, 14 + rand() % 10, (i & 1) ? FIRE2 : FIRE1);
@@ -1003,6 +1008,34 @@ static void drawGhostCell(int x, int yd, int letter, bool risk)
     drawLetter(x, yd, letter, lerp15(pp->light, BLACK, 6), BLACK);
 }
 
+// A word clue remains on a covered gem: keep the front letter and a small
+// numbered badge on a filled plate. Empty peeled holes use a large bare digit.
+// This distinction matters: a covered clue can itself hide a password letter.
+static void drawWordClue(int x, int y, int letter, int n, bool risk)
+{
+    fillRect(x + 3, y + 3, TILE_W - 6, TILE_H - 6, lerp15(BLACK, ACCENT, 3));
+    rectOutline(x + 1, y + 1, TILE_W - 2, TILE_H - 2, risk ? FIRE1 : ACCENT);
+    if (risk) rectOutline(x + 2, y + 2, TILE_W - 4, TILE_H - 4, FIRE1);
+    if (letter == 'q' - 'a' && langQuTile()) drawText(x + 3, y + 3, "QU", INK, 1);
+    else drawChar(x + 3, y + 3, 'A' + letter, INK, 1);
+    fillRect(x + 14, y + 11, 8, 9, ACCENT);
+    drawChar(x + 16, y + 12, '0' + n, BLACK, 1);
+    if (risk && (frame & 16)) drawChar(x + 17, y + 3, '!', FIRE2, 1);
+}
+
+// PEEK first explains the latest earned clue without a touch. Touching still
+// arms a peel, and a moved d-pad cursor selects another already-known clue.
+static int inspectedClue(const Game *g, int *c, int *r)
+{
+    if (!g->peekHeld) return -1;
+    if (g->armed) { *c = g->armC; *r = g->armR; }
+    else if (g->curOn) { *c = g->curC; *r = g->curR; }
+    else { *c = g->wordClueC; *r = g->wordClueR; }
+    if (*c < 0 || *c >= COLS || *r < 0 || *r >= ROWS) return -1;
+    if (g->cell[*c][*r].state == CELL_HOLE) return boardBackNumber(g, *c, *r);
+    return g->wordClue[*c][*r] ? g->wordClue[*c][*r] - 1 : -1;
+}
+
 static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
 {
     bool peek = g->peekHeld;
@@ -1063,7 +1096,9 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
                 }
                 default:
                     if (peek) {
-                        drawGhostCell(x, yd, cl->letter, r > 0 && g->cell[c][r - 1].state == CELL_BURN);   // a peel under a flame scorches
+                        bool risk = r > 0 && g->cell[c][r - 1].state == CELL_BURN;
+                        if (g->wordClue[c][r]) drawWordClue(x, y, cl->letter, g->wordClue[c][r] - 1, risk);
+                        else drawGhostCell(x, yd, cl->letter, risk);   // a peel under a flame scorches
                     } else if (!sq && !lit && !cl->flash && yd + 1 >= clipY0 && yd + 1 + COMP_ROWS <= clipY1) {
                         blitComposite(gemLetter[cl->letter], x, yd + 1);   // the common case: one 48-byte move per row
                     } else {
@@ -1076,6 +1111,27 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
                         }
                         drawLetter(x, yd + sq / 2, cl->letter, lit ? WHITE : C(31,31,29), p->dark);
                     }
+            }
+            // A small corner tab marks known word clues in normal play without
+            // obscuring the letter (including Qu). The clue stays with the cell.
+            if (g->wordClue[c][r] && cl->state != CELL_HOLE && !(peek && cl->state == CELL_TILE)) {
+                fillRect(x + 19, y + 18, 4, 3, ACCENT);
+                if (peek) {
+                    // A diamond or flame keeps its distinctive gem/rim, while
+                    // a compact letter leaves a separate area for the badge.
+                    // Painting a badge over the large letter would crop it.
+                    u16 plate = cl->state == CELL_SECRET ? GEM_DIAMOND.light : GEM_FIRE.light;
+                    fillRect(x + 2, y + 3, TILE_W - 4, TILE_H - 6, plate);
+                    if (cl->letter == 'q' - 'a' && cl->state != CELL_SECRET && langQuTile())
+                        drawText(x + 3, y + 4, "QU", BLACK, 1);
+                    else drawChar(x + 3, y + 4, 'A' + cl->letter, BLACK, 1);
+                    fillRect(x + 14, y + 11, 8, 9, BLACK);
+                    drawChar(x + 16, y + 12, '0' + g->wordClue[c][r] - 1, ACCENT, 1);
+                    if (cl->state == CELL_BURN) {
+                        rectOutline(x + 1, y + 1, TILE_W - 2, TILE_H - 2, FIRE1);
+                        if (frame & 16) drawChar(x + 17, y + 3, '!', FIRE2, 1);
+                    }
+                }
             }
             if (cl->flash) {
                 rectOutline(x, y, TILE_W, TILE_H, lerp15(BLACK, WHITE, cl->flash > 14 ? 16 : cl->flash + 2));
@@ -1091,10 +1147,22 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
         }
         clipY0 = outerClip;
     }
+    // Outline exactly the six counted neighbors, never the clue's own square.
+    int clueC, clueR;
+    if (inspectedClue(g, &clueC, &clueR) >= 0) {
+        int nc[6], nr[6], n = boardNeighbors(clueC, clueR, nc, nr);
+        for (int i = 0; i < n; i++) {
+            int x, y; cellOrigin(nc[i], nr[i], &x, &y);
+            bool risk = g->cell[nc[i]][nr[i]].state == CELL_BURN ||
+                        (nr[i] > 0 && g->cell[nc[i]][nr[i] - 1].state == CELL_BURN);
+            rectOutline(x, y, TILE_W, TILE_H, risk ? FIRE1 : GOLD_LT);
+        }
+    }
     // the d-pad cursor: a 2 px rim alternating white and accent, with a notch above it
     if (g->curOn) {
         int x, y; cellOrigin(g->curC, g->curR, &x, &y);
-        bool risk = peek && g->curR > 0 && g->cell[g->curC][g->curR - 1].state == CELL_BURN;
+        bool risk = peek && (g->cell[g->curC][g->curR].state == CELL_BURN ||
+                            (g->curR > 0 && g->cell[g->curC][g->curR - 1].state == CELL_BURN));
         u16 cc = risk ? FIRE2 : ((frame >> 3) & 1) ? ACCENT : WHITE;
         rectOutline(x, y, TILE_W, TILE_H, cc);
         rectOutline(x + 1, y + 1, TILE_W - 2, TILE_H - 2, cc);
@@ -1103,7 +1171,9 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
     // the armed peel: a pulsing double rim and a PEEL label that the release will act on
     if (g->armed) {
         int x, y; cellOrigin(g->armC, g->armR, &x, &y);
-        u16 ac = lerp15(ACCENT, WHITE, (frame & 7) * 2);
+        bool risk = g->cell[g->armC][g->armR].state == CELL_BURN ||
+                    (g->armR > 0 && g->cell[g->armC][g->armR - 1].state == CELL_BURN);
+        u16 ac = risk ? FIRE1 : lerp15(ACCENT, WHITE, (frame & 7) * 2);
         rectOutline(x, y, TILE_W, TILE_H, ac);
         rectOutline(x + 2, y + 2, TILE_W - 4, TILE_H - 4, ac);
         const char *peelTag = ui(UI_PEELTAG);
@@ -1145,7 +1215,7 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
         }
     }
     // a valid word: a gold ring on the tail gem advertises the tap that submits it
-    if (chainValid) {
+    if (chainValid && !peek) {
         int x, y; cellOrigin(g->chainC[g->chainLen - 1], g->chainR[g->chainLen - 1], &x, &y);
         y -= 2;
         rectOutline(x, y, TILE_W, TILE_H, GOLD_LT);
@@ -1204,7 +1274,7 @@ static void panelRow(int y, const char *label, const char *val, u16 vcol)
 }
 
 // Panel rows (every string is at most 12 characters, 71 px, so it fits the 76 px panel):
-//   6 logo and pause   22 score   38 streak pips   42 pass tracker   55 PEELS   64 TURN   74 chain word (or the peek hint)
+//   6 logo and pause   22 score   38 streak pips   42 pass tracker   55 FOUND   64 TURN   74 chain word (or the peek clue)
 //   84 chain value   94 HEAT / OVERTIME and the heat preview   102 heat bar   111 fire countdown
 //   120 SUBMIT   150 CLEAR   166 RED: SCORCH   174 PEEK
 static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
@@ -1222,7 +1292,7 @@ static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
     }
     char s[32];
     fmtInt(s, shownScore);
-    flyScoreX = PANEL_X + 24; flyScoreY = 28; flyPassX = PANEL_X + 4 + 8 * (g->passLen > 0 ? 0 : 0); flyPassY = 47;
+    flyScoreX = PANEL_X + 24; flyScoreY = 28; flyPassX = PANEL_X + 3; flyPassY = 47;
     u16 scoreCol = scoreGlint ? lerp15(GOLD, WHITE, scoreGlint * 2) : GOLD;
     if (textWidth(s, 2) <= 80) drawTextShadow(PANEL_X, 22, s, scoreCol, 2);   // 80 px of panel: six digits at 2x
     else drawTextShadow(PANEL_X, 26, s, scoreCol, 1);                           // a million and up drops to 1x
@@ -1243,16 +1313,24 @@ static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
         for (int i = 0; i < STREAK_CAP + 1; i++)
             fillRect(PANEL_X + i * 8, 38, 6, 3, i < pips ? (g->hitStreak > STREAK_CAP ? GOLD_LT : ACCENT) : DIM);
     }
-    fmtInt(s, g->peels); panelRow(55, ui(UI_PEELS), s, WHITE);
+    int found = 0;
+    for (int i = 0; i < g->passLen; i++) found += g->found[i] != 0;
+    siprintf(s, "%d/%d", found, g->passLen);
+    panelRow(55, ui(UI_P_FOUND), s, ACCENT);
+    drawChar(PANEL_X + textWidth(ui(UI_P_FOUND), 1) + 2, 55, '?', DIM_TEXT, 1);
+    hline(PANEL_X, 62, 76, GOLD_DK);   // the tracker is also the goal/help touch target
     fmtInt(s, g->turn);  panelRow(64, ui(UI_TURN), s, g->overtime ? FIRE1 : WHITE);
 
     char w[WORD_BUF]; strcpy(w, chainWordNow);
     for (char *p = w; *p; p++) *p -= 32;
     bool valid = chainValidNow, peek = g->peekHeld != 0;
     if (strlen(w) > 12) { memmove(w + 1, w + strlen(w) - 11, 12); w[0] = '.'; }   // the last 11 letters fit the panel
-    if (w[0]) drawText(PANEL_X, 74, w, valid ? GOLD_LT : WHITE, 1);
+    int clueC, clueR, clue = inspectedClue(g, &clueC, &clueR);
+    if (peek && clue >= 0) { fmtInt(s, clue); panelRow(74, ui(UI_P_CLUE), s, ACCENT); }
+    else if (w[0]) drawText(PANEL_X, 74, w, valid ? GOLD_LT : WHITE, 1);
     else if (!peek) { char hp[24]; uiFmt(hp, sizeof hp, UI_P_HOLDPEEK, S.hand == HAND_LEFT ? "R" : "L"); drawText(PANEL_X, 74, hp, DIM_TEXT, 1); }   // the shoulder under the idle hand
-    if (g->chainLen >= 3 && !peek) {
+    if (peek && clue >= 0) drawText(PANEL_X, 84, ui(UI_P_NEARBY), DIM_TEXT, 1);
+    else if (g->chainLen >= 3 && !peek) {
         if (valid) {   // what the word is worth, and its length multiplier
             s[0] = '+'; fmtInt(s + 1, chainScoreNow);
             drawText(PANEL_X, 84, s, GOLD_LT, 1);
@@ -1303,17 +1381,18 @@ static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
     }
 
     // submit button: jeweled, pulses when a valid word is chained; sunk by two pixels while pressed
-    u16 bc = valid ? lerp15(GOLD_DK, GOLD, ((frame & 31) < 16) ? (frame & 15) : 15 - (frame & 15)) : DIM;
-    if (submitFlash) bc = WHITE;
+    bool ready = !peek && (valid || submitFlash);
+    u16 bc = preview ? lerp15(GOLD_DK, GOLD, ((frame & 31) < 16) ? (frame & 15) : 15 - (frame & 15)) : DIM;
+    if (ready && submitFlash) bc = WHITE;
     bool pr = pressSubmit > 0;
     int in = pr ? 2 : 0;
     if (pr) fillRect(PANEL_X, SUBMIT_Y, 76, 24, DIM2);
     roundRect(PANEL_X + in, SUBMIT_Y + in, 76 - in * 2, 24 - in * 2, bc);
-    if (valid || submitFlash) {
+    if (ready) {
         hline(PANEL_X + 3 + in, SUBMIT_Y + 2 + in, 70 - in * 2, pr ? GOLD_DK : GOLD_LT);
         hline(PANEL_X + 2 + in, SUBMIT_Y + 21 - in, 72 - in * 2, pr ? GOLD_LT : GOLD_DK);
     }
-    drawTextCenter(PANEL_X + 38, SUBMIT_Y + 8 + (pr ? 1 : 0), ui(UI_P_SUBMIT), (valid || submitFlash) ? BLACK : INK, 1);
+    drawTextCenter(PANEL_X + 38, SUBMIT_Y + 8 + (pr ? 1 : 0), ui(UI_P_SUBMIT), ready ? BLACK : INK, 1);
     if (pressClear > 0) {
         fillRect(PANEL_X, CLEAR_Y, 76, 16, lerp15(BLACK, INK, 3));
         rectOutline(PANEL_X + 2, CLEAR_Y + 2, 72, 12, INK);
@@ -2112,7 +2191,7 @@ static void drawTopGuide(const Game *g)
     hline(16, 25, 224, GOLD_DK);
     int t = gTick(), sf = frame;
     frame = t * 4;                              // the game's pulses (hole digits, flames, sparkles) now follow the loop, not the clock
-    switch (g->guidePage) {
+    switch (guideTopic(g->guidePage)) {
         case 0: gdBoard(t); break;
         case 1: gdScoring(t); break;
         case 2: gdPeek(t); break;
@@ -2553,14 +2632,10 @@ static void drawTop(const Game *g)
         }
     }
 
-    // shelf map: twenty boxes, wrapping to the next page of twenty past shelf 20
-    int mapBase = ((g->shelf - 1) / 20) * 20;
-    for (int i = 0; i < 20; i++) {
-        int x = 18 + i * 11, y = 150, sh = mapBase + i + 1;
-        if (sh < g->shelf) fillRect(x, y, 8, 8, ACCENT);
-        else if (sh == g->shelf) rectOutline(x, y, 8, 8, (frame & 16) ? WHITE : ACCENT);
-        else rectOutline(x, y, 8, 8, DIM);
-    }
+    // The objective remains visible when score callouts replace the message line.
+    // The shelf number already identifies progression at the top of the screen.
+    if (g->state == ST_PLAY || g->state == ST_PAUSE)
+        drawTextCenter(128, 150, ui(UI_H_GOAL), ACCENT, 1);
 
     // message: pops in at double size, then settles
     if (g->state == ST_FAIL) {                  // a lost shelf says why on this screen as well as on the card

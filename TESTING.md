@@ -25,15 +25,22 @@ word for every `recentPass` state, lengths by shelf), Daily determinism, the Dai
 for libnds (types, `ARGB16`, empty placement attributes, the PSG calls) and
 `tools/check/stubs.c` defines `S`, `dict_bin` and the sound stubs. When board.c or music.c
 starts calling a new gfx*/music*/sound* symbol, add it to stubs.c or the link will say so.
+
+The cohesion fixtures in `board_test.c` cover the word-clue model: only an accepted word writes its tail clue, the fixed
+back-layer count includes adjacent diamonds and excludes the centre, refilling and later peeling preserve it, a repeated word
+ending on a diamond can earn a known-zero clue, rejected words do not mutate it, and a new shelf clears both clues and focus.
+Search fixtures cover a word whose only usable start is a diamond, a six-gem-only RHYTHM board, allowed rare-word fallback,
+LIBRARY restrictions and the bounded longer search. The fast common-word hint priorities remain covered separately.
+
 **The FAT rig.** `tools/emu/fatrig.py` gives the emulator a CompactFlash FAT card (DeSmuME's GBAMP device, a raw image file that survives resets): `patch_dldi(rom, copy)` patches a private copy of the ROM with that driver, `make_card(img, [(name, bytes)])` builds a FAT16 image (`fatimg.py`), `FatEmu(rom, elf, img, argv=True)` is a `wp.Emu` on it with `flags()` (fatReady, fsReady, rawOk, saveFailed), `cwd()` (the C library's default device and directory: `nitro:/` once NitroFS reads the card itself), `power_cycle()` (reset, same card; use it instead of a second object, which crashes the interpreter) and `read_cfg(img)`/`cfg_fields()`/`card_files(img)` to read what reached the card. `argv=False` clears the loader's argv, and a card without `wordPass.nds` makes libfilesystem fall back to card reads: the two setups where the default device moves to the ROM. `python3 tools/emu/test_fat.py wordPass.nds wordPass.elf DIR` (prints `FAT OK`) saves, powers off, reboots and loads in all three situations (argv and ROM on the card, argv without the ROM, no argv); it needs the `.elf` of the build for the static flags. The ROM on the card must be named like the ROM that boots (DeSmuME hands over `fat:/<that name>` as argv[0]).
 
 `make check` first runs `tools/check/settings_test.c`, which compiles `source/settings.c` against a stub `fat.h` and tests the pure encode/decode (CRC, WPS1 migration, clamping), the streak arithmetic and backup-preserving saves on scratch files in `build/`. Its libfat-style rename wrapper and short-write injection cover failed promotion, failed rollback, backup refusal, recovery from a sole temporary image and an interrupted retry. The WPS2 layout and WPS1 migration stay unchanged.
 `tools/check/lang_test.c` loads all thirty files of `data/lang` (ten languages, three files each) with the game's own `dict.c` and `pools.c` pointed at buffers, and checks: records a-z only and sorted, every word found with its tier, the Qu rule, word counts inside 80k..250k, common tier 15k..35k, pool files (40 themes, names A-Z up to 7 letters, every pool word in the dictionary and in one theme only, tile letters only), letters (weights sum 100, values 1..10, Qu flag, vowel set), known words accepted and non-words rejected per language, the manifest, and that the three English files still match their sha256 pin (`python3 tools/lang/build_all.py --manifest` re-pins them after an intended English change). Its last line is `LANG OK: 0 failure(s)`; the existing check still ends the run with `CHECK OK`.
-`tools/check/ui_test.c` checks the interface text layer (`source/ui.c`, `source/ui_strings.c`, generated from `tools/lang/ui_strings.tsv` by `tools/lang/gen_ui.py`): every string of every language (every id of `ui_strings.tsv`, 385, x 11) measured at its scale with its sample numbers against its pixel budget, only glyphs the font has, the same slots as the English text, and the formatter (`%d`, `%s`, `%02d`, positional `%2$s`, truncation). It prints the widest string per language and ends `UI TEST OK`; the generator runs the same width check, so `python3 tools/lang/gen_ui.py --check` is the quick loop while translating.
+`tools/check/ui_test.c` checks the interface text layer (`source/ui.c`, `source/ui_strings.c`, generated from `tools/lang/ui_strings.tsv` by `tools/lang/gen_ui.py`): every id in all eleven languages measured at its scale with its sample numbers against its pixel budget, only glyphs the font has, the same slots as the English text, and the formatter (`%d`, `%s`, `%02d`, positional `%2$s`, truncation). It prints the widest string per language and ends `UI TEST OK`; the generator runs the same width check, so `python3 tools/lang/gen_ui.py --check` is the quick loop while translating.
 `tools/check/board_test.c` also runs the runtime half for all ten languages through the real loader (`source/langload.c`, reading `data/lang/<code>/` where the ROM reads `nitro:/lang/<code>/`) and `source/lang.c`: English byte-identical (a hash of 2000 bag draws and of 60 whole first boards, pinned from the build before languages existed), loading and tables, known words accepted and non-words rejected, LIBRARY COMMON through the tier bit, SPELLING ignored, pools (names, a-z, in the dictionary, tile letters only), the bag dealing every tile letter and nothing else, 40 whole shelves per language (pass in the pool and the dictionary, tiles from the alphabet), a spelled word scored with the language's letter values, switching back to English restoring everything, and a bad letters image refused. `tools/check/settings_test.c` checks the saved language (round trip, unknown falls back to English). See `docs/LANGUAGES-DATA.md`.
 Saving: `settings_test.c` covers write failures and recovery. `test_fat.py`, now run in default CI, verifies actual ARM9/libfat saves and reboot restoration with a FAT card image, including options and run-end saves. `tools/check/save_sites.py` separately guards named `settingsSave()` call sites in `main.c` against accidental deletion. These emulator scenarios do not replace physical card/power-loss testing or prove every save timing permutation.
 `make check` also fails when `source/ui_strings.c/.h` differ from what `gen_ui.py` generates from the tsv, or `source/songs.c` from `songs_src.py`; `make music-check` fails when the tracked `docs/music` WAV and MIDI files differ from a fresh render.
-CI: see `.github/workflows/build.yml`: native/data/localization checks, guide and deterministic music checks, both ROM builds and linked-memory budgets, retail smoke, FAT-card saves and corrupted-pack fallback, Cyrillic gameplay and heap-lifetime tests, and the **complete rules suite on every PR, main build, tag and manual run**. The full suite includes all-language gameplay/layout, both-hand controls, guide pages, scoring, Daily, music and frame cadence; its former filtered subsets are not repeated separately.
+CI: see `.github/workflows/build.yml`: native/data/localization checks, guide and deterministic music checks, both ROM builds and linked-memory budgets, retail smoke, FAT-card saves and corrupted-pack fallback, Cyrillic gameplay and heap-lifetime tests, the focused word/clue/password integration suite, and the **complete rules suite on every PR, main build, tag and manual run**. The full suite includes all-language gameplay/layout, both-hand controls, guide pages, scoring, Daily, music and frame cadence; its former filtered subsets are not repeated separately.
 
 `tools/check/rom_budget.py` emits JSON reports retained inside each ROM artifact. It checks the 18 MiB ROM limit, at least 64 KiB of linker heap span after the largest active pack, ITCM/DTCM boundaries, absence of full floating printf, and retail exclusion of preview symbols. This is a static budget before filesystem/allocator costs, not a measured free-memory/FPS result. See `docs/PERFORMANCE.md`.
 
@@ -72,7 +79,7 @@ library, heatThreshold, burnEvery, burnTimer, optRow, pulseEvery, lockTier, over
 chainScore, speedBonus, peelBonus, passBonusKind, ledgerN, newBest, lives, passTheme,
 twist, calloutLife, pressBits, shownScore, pauseRow, pauseArm`; `shownScore` is the score the HUD shows
 (it counts up during the results tally), `pauseRow` the highlighted pause row and `pauseArm` the frames left of a
-RESTART/QUIT confirmation; `tutorStep` (0 drag, 1 peek, 2 find, 3 closing tip, 4 off), `tutorDone` (S.tutorDone), `tipIndex` (the title's tip card) and `msgTimer` (frames left of the message line, -1 sticky); `guidePage` (0..7) and `guideFrom` (ST_TITLE or ST_PAUSE) belong to the in-game guide (`ST_GUIDE` is state 7); `msg` mirrors the first 31 characters of the message line; `callout` is the text of the board callout (`calloutLife` frames left;
+RESTART/QUIT confirmation; `tutorStep` (0 spell, 1 read a clue in PEEK, 2 find a letter, 3 finish the password, 4 off), `tutorDone` (S.tutorDone), `tipIndex` (the title's tip card) and `msgTimer` (frames left of the message line, -1 sticky); `guidePage` (0..7) and `guideFrom` (ST_TITLE or ST_PAUSE) belong to the in-game guide (`ST_GUIDE` is state 7); `msg` mirrors the first 31 characters of the message line; `callout` is the text of the board callout (`calloutLife` frames left;
 `pressBits` bit 0 SUBMIT, 1 CLEAR, 2 PEEK, 3 pause pressed, 4 the SUBMIT flash); `chainScore` is `boardChainScore(g)` every frame, the exact gain the current chain
 would submit for; `passTheme` indexes `wp.PASS_THEMES`, `twist` is 0 none, 1 INK SPILL,
 2 DAMP, 3 BURIED),
@@ -182,11 +189,72 @@ The panel scenarios (`panel HUD`, both hands) read the screenshot rather than th
 
 ## Options, onboarding and accessibility
 
-`options` (both hands) pokes nothing: it taps the real screen. It flips HAND from the options and compares the pixels of the list before and after (the labels, the highlight and the frame must not move), taps the left and right half of rows (THEME wraps onto CLEAR), watches the chevron flash on the tapped side for about six frames (the screenshot lags the game by a frame or two, so it polls ten frames rather than reading one), walks every row with the d-pad and asserts that the help line keeps clear of the plaque border, checks colours inside the sample board (a ruby, the accent-rimmed hole, the burning gem's light plate, the chained gem's white rim) and that CLEAR adds its own second line. `CLEAR theme` picks the theme through the options and samples a gem of each group on the board (yellow, blue, magenta, teal, grey) and the plate, glyph and bar of two burning gems (a letter and a Qu). `guided first shelf` follows the prompts through `msg` and `msgTimer` (sticky = -1): drag, the first word, a callout that takes the line and gives it back, the first hole's number message (a pass letter is poked beside the cell so its number is 1), the closing tip, and `tutorDone` going to 1 only when the tip has run; a second scenario starts with a peel that finds a pass letter and clears the shelf mid-tip. `title tip cards` presses LEFT, RIGHT, L and R, reads `tipIndex`, checks the dots and that no card text touches the plaque border, and waits out the 420 frame timer. `side-aware hints` tells HOLD L from HOLD R by one pixel of the glyph, on the panel and on the title card. `make check` covers the CLEAR theme in the settings file.
+`options` (both hands) pokes nothing: it taps the real screen. It flips HAND from the options and compares the pixels of the list before and after (the labels, the highlight and the frame must not move), taps the left and right half of rows (THEME wraps onto CLEAR), watches the chevron flash on the tapped side for about six frames (the screenshot lags the game by a frame or two, so it polls ten frames rather than reading one), walks every row with the d-pad and asserts that the help line keeps clear of the plaque border, checks colours inside the sample board (a ruby, the accent-rimmed hole, the burning gem's light plate, the chained gem's white rim) and that CLEAR adds its own second line. `CLEAR theme` picks the theme through the options and samples a gem of each group on the board (yellow, blue, magenta, teal, grey) and the plate, glyph and bar of two burning gems (a letter and a Qu).
+
+`guided first shelf` follows `msg` and `msgTimer` (sticky = -1) through spelling, the earned-clue announcement, the PEEK prompt,
+the first hole's number and the first found letter. It waits beyond the old closing-tip duration and requires the unfinished
+password prompt to remain sticky with `tutorDone == 0`. It then opens goal help through the real tracker tap, checks that
+score/turn/heat/peels/found are unchanged, returns through pause, and finds every remaining letter. Only the resulting clear
+sets `tutorDone == 1`. A second scenario makes the first peel a letter and clears the shelf during its introductory message.
+
+`title tip cards` presses LEFT, RIGHT, L and R, reads `tipIndex`, checks the dots and that no card text touches the plaque border,
+and waits out the 420 frame timer. `side-aware hints` tells HOLD L from HOLD R by one pixel of the glyph, on the panel and on the
+title card. `make check` covers the CLEAR theme in the settings file.
+
+### Word, clue and password integration
+
+    python3 tools/emu/test_cohesion.py wordPass.nds cohesion-out
+
+This focused real-ROM suite runs ten scenarios in both hands, twenty cases total. It reads `Game.wordClue`, its latest endpoint and the hint paths
+using offsets from the matching ELF's DWARF; it does not extend the pinned debug mirror or assume the current source layout.
+Fixtures use the existing poke channel, but submit, PEEK, hint, help, retry and discovery actions use real controls.
+
+The cue-mode scenario keeps latched PEEK on past the automatic tutorial's idle delay and requires no word gesture to appear.
+After leaving PEEK, the free ghost must start and remain usable. Interrupting it with a shoulder hides it and allows it to
+return after inspection. The selected word's tail cue also hides during PEEK. X/L/R each cancel an active paid hint without
+another charge. The sticky first-word prompt describes the current mode without changing the tutorial stage. The pre-fix ROM
+offers a word gesture while PEEK would peel, failing this case in both hands. A separate pixel scenario checks that the gold
+tail ring and SUBMIT ready bevel disappear during PEEK, return afterward with the selected chain intact, and lead to a real
+tail submission without a peel.
+
+The scenarios check SELECT from latched PEEK followed by actually spelling the hint, physical L/R refusal without a hint charge,
+a diamond-start CAT path, and a RHYTHM-only board surviving a turn and offering a usable six-gem hint. The clue scenario submits
+onto a location that hides a password letter and has an adjacent found diamond. It checks the fixed neighbour count, unchanged
+back layer and discovery progress, one normal word turn, automatic neighbour outlines while reading PEEK, no resource cost for
+reading or goal help, and a later peel revealing the clue's own hidden centre. A surveyed burning gem must keep its red warning
+rim and blinking exclamation above the compact clue plate; the pixel regression fails the pre-fix ROM in both hands.
+Another scenario fails the unfinished tutorial,
+retries and requires empty clues plus a fresh word prompt. Screenshots are retained in the output directory, including failures.
+
+The deduction scenario earns a clue of 1 beside five visible empty holes and one covered neighbour. It checks the rendered
+badge against the seven pixel rows of the numeral 1 as well as its stored count. Its choice of where to peel uses only that
+clue, board geometry, visible cell states and known diamonds, with no hidden-map lookup or preselected target.
+The real peel must reveal the inferred letter, advance FOUND by exactly one and leave the clue's own covered centre intact.
+`clue_deduction_before_*.png` and `clue_deduction_after_*.png` show that information-to-discovery step in both hands.
+
+Two latency scenarios submit BED by tapping its tail on a near-all-E board, with real bag entries reordered to force EEE or
+OAE refills while preserving the bag's letter distribution. Each requires the normal scored word turn, an empty chain, the
+dead-board rescue and a subsequent front-buffer swap within 12 emulated scans of pen-down. The previous ROM (`f2b473e`) fails
+all four latency cases while passing the original twelve. The separate `chain input` scenarios keep an untouched CAT so
+their gesture assertions do not depend on whether a random refill creates a dead board; their existing waits and assertions
+remain unchanged. `repetitive_refill_*.png` captures each latency deadline, including failures.
+
+The native bounded search deliberately treats its work limit as uncertainty: board-existence checks keep the shelf alive,
+while a hint is returned only for a proven accepted path. These tests do not equate "no hint found" with a dead board.
 
 ## The in-game guide
 
-`source/guide.c` builds the eight HOW TO PLAY pages as text from the rules' own tables and functions (`boardLenMult`, `boardHeatFor`, `boardWordPoints`, `boardShelfRules`, `boardPassLenFor`, the bonus and shelf macros in `game.h`), and `tools/check/board_test.c` is its test: eight pages, no visible line over 38 characters, no page taller than 139 px (10 px a line, 4 a gap), a glyph for every character, and for each page the numbers it prints are compared with the game (the multiplier ladder, the heat table, the pass-length ladder, the theme count, the bonuses, the Lockdown tiers, and the example words INK = +70 and Qu+I+Z = +210 against `boardChainScore` on a real board). `boardShelfRules` and `boardDailyRules` are compared with what `boardNewShelf` sets up on shelves 1 to 24 and for every Daily modifier. The top-screen captions and diagrams are drawn code, so the emulator scenarios read the pixels instead.
+`source/guide.c` builds the eight HOW TO PLAY pages as text from the rules' own tables and functions. Display order is **GOAL,
+BOARD, PEEKING, FIRE, SCORING, SHELVES, MODES, CONTROLS**. `guideTopic(page)` maps that order to canonical topics for both text
+and animations; native assertions key on the topic so reordering cannot silently test a different subject.
+
+`tools/check/board_test.c` checks eight pages, no visible line over 38 characters, no page taller than 139 px (10 px a line,
+4 a gap), a glyph for every character, and printed rule values such as multipliers, heat and Lockdown tiers. INK = +70 and
+Qu+I+Z = +210 are checked against `boardChainScore` on a real board. The first page must explain the separate hidden layer,
+automatic slot placement, any discovery order, word endpoint clues, adjacent diamonds and the covered centre. Reward helpers
+retain separate numeric checks even though the goal page now prioritizes the objective. `boardShelfRules` and `boardDailyRules`
+are compared with `boardNewShelf` on shelves 1 to 24 and every Daily modifier. The top-screen captions and diagrams are drawn
+code, so the emulator scenarios read the pixels instead.
 
 The `guide` scenarios in `test_rules.py` open the guide from the title (the GUIDE button at BX 112..162, y 7..24, and B) and from the pause menu (the third row, GUIDE in `pause_rows()`; the second row in Daily), flip all eight pages with NEXT, PREV, the dots, the d-pad, L and R and A, and check that BACK, B and START return to the right state (BACK sits at (230, 13) right-handed and (26, 13) left-handed; NEXT and PREV at (238, 178) and (18, 178); the dots at x = 79 + 14 i, y 178). For each page they take a screenshot per hand (`rules_guide_{right,left}_N.png`, the top half is the diagram, the bottom the words), check that the diagram moves, `Emu.fps()` is 120/120, and watch a whole four second loop of both screens (one screenshot per four frames) for any lit pixel outside the plaque, in the two columns inside its border, or in the margins and above the buttons of the touch screen. `guide cue` checks that the GUIDE button pulses and the title says NEW HERE? TAP GUIDE until `tutorDone` (`e.set_tutor(0)` makes it false) and that both rest afterwards.
 
@@ -196,7 +264,7 @@ To look at a page, `from wp import Emu`, tap the GUIDE button (`e.tap(137, 15)` 
 
 While a guide diagram is drawn, `frame` is replaced by the loop's tick (`frame >> 2`, 64 ticks, 256 frames), so every pulse in the board's own helpers loops with it. `guide animation` takes a screenshot of the diagram region every four frames for two loops of every page and asserts that the picture changes (at least 12 different pictures and 20 changes per loop), that the second loop is byte for byte the first (the loop closes exactly) and that `Emu.fps()` is 120/120, then takes start, mid and end screenshots (`rules_guide_anim_{right,left}_N_{start,mid,end}.png`). `guide text` counts the lit pixels of the words 9 frames after a flip (still typing in), checks that pressing X (otherwise unbound in the guide) finishes them at once, and that the finished page matches a page left alone. `guide buttons` uses `POKE_GUIDENAV` (`e.poke(POKE_GUIDENAV)`) to make the PREV/NEXT buttons unused again and watches their border pulse until one is used.
 
-The guided-shelf cues are mirrored as `cue` (`CUE_NONE`, `CUE_GHOST`, `CUE_TAIL`, `CUE_PEEKBTN`, `CUE_ARMED`), `cueAge` (frames) and `hintLen` (gems of the ghost drag). `guided shelf cues` waits for the ghost after idle frames, checks it ends by itself and is not shown again, that a touch cancels it, that a held chain shows no cue and the lifted valid chain points at its tail gem, that scoring moves the cue to the PEEK button (a ring is drawn around it), that holding L stops it, that an armed cell is pointed at, and that a finished guide shows none, with `Emu.fps()` held through every state. `guided prompt` reads the left edge of the sticky prompt over 28 frames: it starts to the right of its place and glides to it. `make check` covers `boardHintChain` (a real, common word on the board, along touching cells).
+The guided-shelf cues are mirrored as `cue` (`CUE_NONE`, `CUE_GHOST`, `CUE_TAIL`, `CUE_PEEKBTN`, `CUE_ARMED`), `cueAge` (frames) and `hintLen` (gems of the ghost drag). `guided shelf cues` waits for the ghost after idle frames, checks it ends by itself and is not shown again, that a touch cancels it, that a held chain shows no cue and the lifted valid chain points at its tail gem, that scoring moves the cue to the PEEK button (a ring is drawn around it), that holding L stops it, that an armed cell is pointed at, and that a finished guide shows none, with `Emu.fps()` held through every state. `guided prompt` reads the left edge of the sticky prompt over 28 frames: it starts to the right of its place and glides to it. `make check` covers `boardHintChain`: a proven accepted word along touching, non-repeated cells, with common short words preferred and bounded longer/rare fallback.
 
 ## Languages (emulator)
 
@@ -242,6 +310,12 @@ with a freshly booted ROM (`--jobs` at a time), pins the DS clock with `set_cloc
 numbered markers), so the sources of every annotated figure are in the script. To add a picture: write a function, decorate it,
 use it in the guide with alt text and an italic caption on the next line, run `make guide`. The peek puzzles are solved by
 brute force inside the script, which refuses to draw a puzzle that has more than one answer.
+
+`word_clue` captures the unannotated live screen after an actual STONE submission and a PEEK hold, with no touch armed. It
+asserts the clue announcement, one added word turn and no peel/discovery progress before saving `word_clue.png`. Its crafted
+back layer puts one hidden letter beneath the endpoint and one next to it, demonstrating that the displayed 1 counts only the
+neighbour. `guide_pages` follows the goal-first display order above. Regenerate changed captures from the matching new ROM;
+do not replace them with diagrams or placeholder images, and do not waive the guide check's missing-image failure.
 
 `tools/check_guide.py` parses the guide and fails on drift. Tables marked `<!-- check:NAME -->` are compared with the game: the
 numbers come from a small C program the script compiles against `source/board.c` (the same way `make check` builds it), so the
