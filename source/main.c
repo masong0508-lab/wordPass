@@ -581,10 +581,22 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
 
     if (down & KEY_START) { enterPause(); return; }
     if ((down & KEY_SELECT) && !(held & KEY_TOUCH)) {
-        // Physical shoulders still mean PEEK until released. Do not spend a word
-        // hint the player cannot follow in the current input mode.
-        if (held & (KEY_L | KEY_R)) setMsg(ui(UI_MS_PEEKRELEASE), 120);
-        else useHint();
+        // A physical shoulder still means PEEK. Instead of charging for a
+        // word hint that cannot be followed, SELECT scans already-visible
+        // numbered clues and moves the cursor to one worth inspecting.
+        // A latched-only PEEK still uses the established SELECT word hint.
+        if (held & (KEY_L | KEY_R)) {
+            int c, r;
+            int afterC = G.curOn ? G.curC : G.wordClueC;
+            int afterR = G.curOn ? G.curR : G.wordClueR;
+            if (boardNextUsefulClue(&G, afterC, afterR, &c, &r) >= CLUE_UNDECIDED) {
+                G.curC = c; G.curR = r; G.curOn = 1; G.armed = 0;
+                int total = G.cell[c][r].state == CELL_HOLE
+                          ? boardBackNumber(&G, c, r) : G.wordClue[c][r] - 1;
+                char msg[MSG_LEN]; uiFmt(msg, sizeof msg, UI_MS_WORDCLUE, total);
+                setMsg(msg, 120); musicSfx(SFX_MENU, 0);
+            } else setMsg(ui(UI_MS_PEEKRELEASE), 120);
+        } else useHint();
     }
     // the idle offer: ten seconds of nothing with hints in hand, once a shelf (the guided shelf has its own ghost)
     if ((held & (KEY_TOUCH | KEY_A | KEY_B | KEY_X | KEY_Y | KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT | KEY_L | KEY_R)) || G.chainLen > 0) G.hintIdle = 0;
