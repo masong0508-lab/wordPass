@@ -2302,20 +2302,19 @@ static int scriptQuoteTierNow;
 // once on a language/image change, and draw each tile by its symbol ID.
 // ROM glyph pointers are stable even when the dictionary is unloaded.
 static const u8 *scriptGlyphById[WPD4_MAX_SYMBOLS];
-static const u8 *scriptGlyphImage;
-static int scriptGlyphLanguage = -1;
+static uint32_t scriptGlyphEpochSeen = UINT32_MAX;
 // Observable in the test ELF, so the emulator can prove that 120 consecutive
 // frames never rebuild the cache; incremented only on alphabet changes.
 unsigned scriptGlyphCacheBuilds;
 static void scriptRefreshGlyphs(void)
 {
     const V4Dict *dict = &scriptPreviewDict;
-    if (dict->image == scriptGlyphImage &&
-        scriptGlyphLanguage == scriptPreviewLanguage) return;
+    // A new image can reuse an old malloc address. The producer's successful
+    // open epoch is a stronger invalidation key than pointer or language.
+    if (scriptGlyphEpochSeen == scriptPreviewGlyphEpoch) return;
     for (unsigned id = 0; id < dict->symbols; id++)
         scriptGlyphById[id] = fontGlyphCodepoint(dict->alphabet[id]);
-    scriptGlyphImage = dict->image;
-    scriptGlyphLanguage = scriptPreviewLanguage;
+    scriptGlyphEpochSeen = scriptPreviewGlyphEpoch;
     scriptGlyphCacheBuilds++;
 }
 // Developer-only Cyrillic board uses the ACTUAL two-screen VRAM renderer and
