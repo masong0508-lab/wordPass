@@ -215,6 +215,15 @@ static int knownSecretsNear(int c, int r)
 
 static int passLeft(void) { int k = 0; for (int i = 0; i < G.passLen; i++) if (!G.found[i]) k++; return k; }
 
+// Only clues the player can see: opened holes publish their adjacent count;
+// submitted words publish a count at their fixed endpoint. The unopened
+// back map is never consulted for either a word clue or an unknown gem.
+static int visibleClueNumber(int c, int r)
+{
+    if (G.cell[c][r].state == CELL_HOLE) return boardBackNumber(&G, c, r);
+    return G.wordClue[c][r] ? G.wordClue[c][r] - 1 : -1;
+}
+
 // The chance that each peelable gem hides a pass letter, from what a player can see
 static int regionMinRow(void)
 {
@@ -236,15 +245,16 @@ static void computeOdds(Odds *o, int level)
             int s = G.cell[c][r].state;
             if ((s == CELL_TILE || s == CELL_BURN) && r >= minRow) { o->p[c][r] = -2; free++; }   // -2: still to estimate
         }
-    // constraints: every hole shows how many of its neighbours hide a pass letter
+    // Use visible clues from uncovered holes and accepted-word endpoints.
+    // Both are player-facing Minesweeper counts over fixed back locations.
     double cons[COLS][ROWS];
     for (int c = 0; c < COLS; c++) for (int r = 0; r < ROWS; r++) cons[c][r] = -1;
     int certain[COLS][ROWS];
     memset(certain, 0, sizeof certain);
     for (int c = 0; c < COLS; c++)
         for (int r = 0; r < ROWS; r++) {
-            if (G.cell[c][r].state != CELL_HOLE) continue;
-            int n = boardBackNumber(&G, c, r);
+            int n = visibleClueNumber(c, r);
+            if (n < 0 || n > 6) continue;
             int nc[6], nr[6], k = boardNeighbors(c, r, nc, nr);
             int known = 0, un = 0, ucc[6], urr[6];
             for (int i = 0; i < k; i++) {
@@ -253,7 +263,8 @@ static void computeOdds(Odds *o, int level)
                 else if (s == CELL_TILE || s == CELL_BURN) { ucc[un] = nc[i]; urr[un] = nr[i]; un++; }
             }
             int m = n - known;
-            if (un == 0) continue;
+            // Inconsistent/corrupted/debug-poked clues cannot force a peel.
+            if (un == 0 || m < 0 || m > un) continue;
             for (int i = 0; i < un; i++) {
                 int uc = ucc[i], ur = urr[i];
                 if (m <= 0) { certain[uc][ur] = -1; cons[uc][ur] = 0; }
@@ -291,10 +302,10 @@ static void computeOdds(Odds *o, int level)
                 int nc[6], nr[6], n = boardNeighbors(c, r, nc, nr);
                 for (int i = 0; i < n; i++) {
                     int s = G.cell[nc[i]][nr[i]].state;
-                    if (s == CELL_SECRET || (s == CELL_HOLE && boardBackNumber(&G, nc[i], nr[i]) > 0)) p = 0.5;
+                    if (s == CELL_SECRET || visibleClueNumber(nc[i], nr[i]) > 0) p = 0.5;
                 }
                 for (int i = 0; i < n; i++)
-                    if (G.cell[nc[i]][nr[i]].state == CELL_HOLE && boardBackNumber(&G, nc[i], nr[i]) == 0) { p = 0.0; break; }
+                    if (visibleClueNumber(nc[i], nr[i]) == 0) { p = 0.0; break; }
             }
             o->p[c][r] = p;
         }
@@ -681,6 +692,41 @@ static void streakReport(int n)
         }
 }
 
+// Recreate the inference from the *player-visible* layer. Deliberately
+// change unopened secret locations without changing the published count; a
+// bot that accidentally reads hidden letters would fail this regression.
+static int clueOddsSelftest(void)
+{
+    int fails = 0;
+    memset(&G, 0, sizeof G);
+    G.shelf = 1; G.passLen = 8;
+    for (int c = 0; c < COLS; c++)
+        for (int r = 0; r < ROWS; r++) { G.cell[c][r].state = CELL_TILE; G.cell[c][r].letter = 0; }
+    Odds o;
+    G.wordClue[2][2] = 1; // published zero: neighbors certainly empty
+    computeOdds(&o, 2);
+    if (o.p[2][3] != 0.0) { puts("FAIL bot ignores a zero word clue"); fails++; }
+    computeOdds(&o, 1);
+    if (o.p[2][3] != 0.0) { puts("FAIL weak bot ignores a zero word clue"); fails++; }
+    G.wordClue[2][2] = 7; // published six: all six covered neighbors must be secrets
+    computeOdds(&o, 2);
+    if (o.p[2][3] != 1.0) { puts("FAIL competent bot ignores a forced pass neighbor"); fails++; }
+    computeOdds(&o, 1);
+    if (o.p[2][3] != 0.5) { puts("FAIL weak bot ignores a positive word clue"); fails++; }
+    G.back[2][3] = 4; // unpublished back-layer change is not evidence
+    computeOdds(&o, 2);
+    if (o.p[2][3] != 1.0) { puts("FAIL bot read hidden pass location instead of word clue"); fails++; }
+    G.wordClue[2][2] = 0;
+    computeOdds(&o, 2);
+    if (o.p[2][3] == 1.0 || o.p[2][3] == 0.0) { puts("FAIL invisible word clue was used"); fails++; }
+    G.cell[2][2].state = CELL_HOLE;
+    memset(G.back, 0, sizeof G.back);
+    computeOdds(&o, 2);
+    if (o.p[2][3] != 0.0) { puts("FAIL published zero from a hole no longer works"); fails++; }
+    printf(fails ? "BOT CLUES FAIL: %d\n" : "BOT CLUES OK: 0 failure(s)\n", fails);
+    return fails;
+}
+
 static int selftest(void)
 {
     int fails = 0;
@@ -695,6 +741,7 @@ static int selftest(void)
     rseed(77); setupClassic(5, 99); int ra = playShelf(&COMPETENT, &a, false); int sa = G.score;
     rseed(77); setupClassic(5, 99); int rb = playShelf(&COMPETENT, &b, false); int sb = G.score;
     if (ra != rb || sa != sb || a.turns != b.turns) { printf("FAIL the bot is not deterministic\n"); fails++; }
+    fails += clueOddsSelftest();
     free(t);
     printf(fails ? "BOT FAIL: %d\n" : "BOT OK: 0 failure(s)\n", fails);
     return fails;
