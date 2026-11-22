@@ -22,6 +22,7 @@ Example:
 import argparse
 import hashlib
 import json
+import random
 from pathlib import Path
 import sys
 import unicodedata
@@ -121,9 +122,39 @@ def rank_words(path, index):
     return ranked
 
 
+def sample_sourced_forms(code, words, required, limit):
+    """Reproducible *unranked* spelling coverage, not a frequency claim.
+
+    The upstream Hunspell dictionary is often too large for DS RAM.
+    Draw deterministically within 3-6, 7-9 and 10-20 letter bands, keeping
+    every validated themed password. The original source and notice remain
+    pinned in the manifest and distributed alongside the opt-in build.
+    """
+    if limit < len(required):
+        raise ValueError("source sampling limit would discard themed passwords")
+    if len(words) <= limit:
+        return words
+    rng = random.Random(0x20161122 if code == "ru" else 0x20261122)
+    available = [sorted(w for w in (words - required) if lo <= len(w) <= hi)
+                 for lo, hi in ((3, 6), (7, 9), (10, d4.MAX_LEN))]
+    left = limit - len(required)
+    quotas = [left * 65 // 100, left * 30 // 100, left]
+    quotas[2] -= quotas[0] + quotas[1]
+    chosen = set(required)
+    for group, quota in zip(available, quotas):
+        chosen.update(rng.sample(group, min(len(group), quota)))
+    if len(chosen) < limit:
+        # Redistribute unused quota across bands without creating a false
+        # word-frequency ranking or discarding any mandatory password.
+        others = sorted(words - chosen)
+        chosen.update(rng.sample(others, limit - len(chosen)))
+    assert len(chosen) == limit and required <= chosen
+    return chosen
+
+
 def build(code, dic, aff, notice, origin, out,
           rank=None, max_words=0, max_dict_bytes=DEFAULT_BUDGET,
-          extra_themes=None):
+          extra_themes=None, sample_words=0):
     if code not in ("ru", "uk"):
         raise ValueError("supported Cyrillic source codes: ru, uk")
     if not origin or not origin.startswith(("https://", "http://")):
@@ -167,6 +198,10 @@ def build(code, dic, aff, notice, origin, out,
         raise ValueError(f"--max-words={max_words} would discard mandatory "
                          f"themed passwords ({len(required)})")
 
+    if sample_words:
+        if rank or max_words:
+            raise ValueError("--sample-words is separate from frequency ranking or --max-words")
+        words = sample_sourced_forms(code, words, required, sample_words)
     ranked = rank_words(rank, index)
     if max_words and len(words) > max_words:
         if not ranked:
@@ -228,6 +263,11 @@ def build(code, dic, aff, notice, origin, out,
         "apostrophe_policy": "Preserve source spelling; reject apostrophe forms until a non-tile separator is implemented",
         "retained_word_count": len(words),
         "common_tier_count": len(common),
+        "unranked_source_sampling_limit": sample_words if sample_words else None,
+        "unranked_source_sampling_policy": (
+            "65 percent 3-6 letters, 30 percent 7-9 letters, remainder 10-20; "
+            "seeded uniform selection within length bands, mandatory themes kept; "
+            "not frequency reviewed" if sample_words else "none"),
         "starter_theme_count": 40, "starter_password_count": 160,
         "extra_password_count": len(extras),
         "total_password_count": report["words"],
@@ -362,17 +402,19 @@ def main():
     p.add_argument("--rank")
     p.add_argument("--extra-themes", help="JSON: unreviewed, source-backed themed candidates")
     p.add_argument("--max-words", type=int, default=0)
+    p.add_argument("--sample-words", type=int, default=0,
+                   help="bounded, deterministic unranked source coverage, NOT frequency")
     p.add_argument("--max-dict-bytes", type=int, default=DEFAULT_BUDGET)
     args = p.parse_args()
     if args.selftest:
         selftest(args.selftest)
     elif all((args.code, args.dic, args.aff, args.notice, args.origin, args.out)):
-        if args.max_words < 0 or args.max_dict_bytes < 1024:
+        if args.max_words < 0 or args.sample_words < 0 or args.max_dict_bytes < 1024:
             p.error("word and byte budgets must be positive")
         build(args.code, args.dic, args.aff, args.notice, args.origin, args.out,
               rank=args.rank, max_words=args.max_words,
               max_dict_bytes=args.max_dict_bytes,
-              extra_themes=args.extra_themes)
+              extra_themes=args.extra_themes, sample_words=args.sample_words)
     else:
         p.error("provide --selftest or --code, --dic, --aff, --notice, --origin and --out")
 
