@@ -31,7 +31,16 @@ def main(rom, output):
     check(e.state()["state"] == 8, "title language badge did not open chooser")
     e.shot(str(out / "russian-ukrainian-chooser.png"))
     # Preview-only rows 11 and 12: y=23+11*12+6 and 23+12*12+6.
+    # The extended-NitroFS ROM occasionally drops the very first emulated
+    # touch-down after opening this menu. A longer second press is allowed
+    # ONLY when the state is still the picker and the preview loader has
+    # never been called. A genuine load failure (diagnostic != 0) or an
+    # unexpected game state is not retried or disguised as success.
     e.tap(80, 161, settle=24)
+    if (e.state()["state"] == 8 and not get_int(e, "scriptPreviewOpenError")):
+        e.tap(80, 161, hold=18, settle=60)
+    if e.state()["state"] != 9:
+        e.shot(str(out / "ru-sourced-launch-failed.png"))
     check(e.state()["state"] == 9,
           f"Русский DEMO launch failed: state={e.state()['state']}, "
           f"resource-stage={get_int(e, 'scriptPreviewOpenError')}")
