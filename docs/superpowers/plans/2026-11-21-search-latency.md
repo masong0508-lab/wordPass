@@ -47,7 +47,7 @@
 - [x] **Step 3: Implement the per-call cache.** One slot per prefix length stores exact bytes, clamped length bounds, and an empty/false/true state. Initialize once per public search, share across its traversal stages, and preserve all existing branch order and node decrements.
 - [x] **Step 4: Isolate the chain grammar fixture.** Plant CAT in column 0, rows 4 through 6. Preserve all existing tail-tap, score, empty-chain, and FPS assertions.
 - [x] **Step 5: Verify native equivalence.** Run `make check`, board ASan/UBSan, and `tools/check/benchmark_search.py --baseline f2b473eb383a4bc3bc8a956a83a4669abd80a24a --samples 100`. Require exact result/path parity and unchanged board/RNG state, including existing filters, Qu, maximum-depth, and exhausted-budget cases.
-- [ ] **Step 6: Document and commit.** Record the reproduced cause, cache lifetime/memory scope, and new latency coverage; commit the repair and tests together.
+- [x] **Step 6: Document and commit.** Record the reproduced cause, cache lifetime/memory scope, and new latency coverage; commit the repair and tests together.
 - [ ] **Step 7: Verify the rebuilt ROM and merge.** Require the new latency cases, complete cohesion suite, both memory budgets, compiled stack review, and the full rules/layout CI gate. Compare the merged tree with the tested tree.
 
 ### Task 2: Keep word cues coherent with PEEK
@@ -59,3 +59,13 @@
 - [x] Add a real-ROM regression for latched PEEK before an automatic hint, interrupting/resuming it with a shoulder, hiding the tail cue in PEEK, and X/L/R interruption of paid hints without an additional charge. Observe the pre-fix failure.
 - [x] Gate word cues while PEEK is active, reset the automatic hint idle counter, rearm an interrupted automatic demonstration, and cancel paid requests on deliberate PEEK entry.
 - [ ] Run the complete focused suite on the rebuilt ROM, repeat native/Python/guide checks, and obtain the same reviewer's verification of this finding. Include the fix in the final full CI gate before merge.
+
+### Task 3: Match submit affordances and the tutorial prompt to PEEK
+
+**Files:** `source/gfx.c`, `source/main.c`, `tools/emu/test_cohesion.py`, `TESTING.md`.
+
+**Interfaces:** No shared interfaces. Use existing `peekHeld` and the renderer's `preview` predicate; reuse localized `TU_PEEK` and `TU_DRAG` without changing the tutorial stage.
+
+- [x] Verify the pre-fix gold submit ring stays visible during PEEK. Add pixel checks for the ring and button before, during and after PEEK, plus real tail submission after exit; assert the first-word sticky prompt follows the active input mode.
+- [x] Hide the independent gold tail ring in PEEK, use the existing active-preview predicate for the submit button, and refresh the sticky first-word prompt on PEEK changes while preserving timed gameplay messages.
+- [ ] Verify the final compiled ROM, obtain the existing reviewer's focused follow-up and complete all final gates before merge.

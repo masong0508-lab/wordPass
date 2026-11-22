@@ -142,6 +142,28 @@ def main():
         assert after['found'] == before['found'] and after['peels'] == before['peels'], 'word play altered password discovery'
 
     def word_cues_respect_peek():
+        e.set_tutor(0)
+        restart(disable_tutorial=False)
+        for _ in range(240):
+            if e.state()['msgTimer'] == -1:
+                break
+            e.run(1)
+        assert e.state()['msgTimer'] == -1 and e.state()['msg'].startswith('SPELL A WORD'), 'fresh tutorial did not explain spelling'
+        e.press('X', settle=8)
+        assert e.state()['msgTimer'] == -1 and e.state()['msg'].startswith('HOLD '), 'latched PEEK kept instructing the player to spell'
+        e.press('X', settle=8)
+        assert e.state()['msgTimer'] == -1 and e.state()['msg'].startswith('SPELL A WORD'), 'leaving PEEK did not restore the word prompt'
+        for via_goal in (False, True):
+            e.press('X', settle=8)
+            if via_goal:
+                e.tap((4 if e.bx else 176) + 24, 55, settle=8)
+                assert e.state()['state'] == ST_GUIDE, 'goal tap did not open the guide'
+                e.press('B', settle=8)
+            else:
+                e.press('START', settle=8)
+            assert e.state()['state'] == ST_PAUSE and not e.state()['peek'], 'pause kept peeling mode active'
+            e.press('START', settle=8)
+            assert e.state()['state'] == ST_PLAY and e.state()['msg'].startswith('SPELL A WORD'), 'resuming from PEEK kept the peeling prompt'
         path = fixture(keep_word=True)
         e.set_tutor(0)
         before = resources()
@@ -189,6 +211,35 @@ def main():
             else:
                 e.hold(shoulder, False)
         e.shot(str(args.output / f'word_cue_modes_{e.bx}.png'))
+
+    def submit_affordances_respect_peek():
+        path = fixture(keep_word=True)
+        e.chain(path)
+        e.run(8)
+        before = resources()
+        x, y, _, _ = e.cell_rect(*path[-1])
+        points = ((x, y - 2), (x + 23, y - 2), (x, y + 19), (x + 23, y + 19))
+
+        def rims():
+            pixels = e.pixels()
+            return [pixels[point] for point in points]
+
+        ready = rims()
+        assert len(set(ready)) == 1 and ready[0][0] >= 230 and ready[0][1] >= 180, f'valid word lacks its gold tail ring: {ready}'
+        e.press('X', settle=8)
+        assert e.state()['peek'] and e.state()['chain'] == path, 'PEEK discarded the selected word'
+        e.shot(str(args.output / f'selected_word_peek_{e.bx}.png'))
+        assert all(color != ready[0] for color in rims()), 'PEEK still advertises a destructive tail tap as submit'
+        # The submit button is inactive in PEEK. Its bright ready bevel must
+        # disappear along with the tail's ready ring, then return on exit.
+        panel_x = 4 if e.bx else 176
+        assert e.pixels()[panel_x + 10, 192 + 122] != ready[0], 'SUBMIT still looks ready in PEEK'
+        assert resources() == before, 'changing the input mode spent a resource'
+        e.press('X', settle=8)
+        assert rims() == ready and e.pixels()[panel_x + 10, 192 + 122] == ready[0], 'returning to chaining did not restore submit affordances'
+        e.tap(*e.center(*path[-1]), settle=45)
+        g = e.state()
+        assert g['lastWord'] == 'cat' and g['score'] > before['score'] and g['peels'] == before['peels'], 'restored tail affordance did not submit CAT safely'
 
     def longer_word():
         path = fixture('rhythm')
@@ -393,6 +444,7 @@ def main():
         assert bool(e.state()['settings']['hand']) == left
 
     scenarios = (('SELECT leaves PEEK safely', select_from_peek),
+                 ('submit ring and button match chaining or PEEK mode', submit_affordances_respect_peek),
                  ('word cues stay coherent when entering and leaving PEEK', word_cues_respect_peek),
                  ('diamond starts a usable word hint', diamond_hint),
                  ('six-gem-only shelf survives and offers a hint', longer_word),

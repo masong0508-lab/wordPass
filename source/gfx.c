@@ -1215,7 +1215,7 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
         }
     }
     // a valid word: a gold ring on the tail gem advertises the tap that submits it
-    if (chainValid) {
+    if (chainValid && !peek) {
         int x, y; cellOrigin(g->chainC[g->chainLen - 1], g->chainR[g->chainLen - 1], &x, &y);
         y -= 2;
         rectOutline(x, y, TILE_W, TILE_H, GOLD_LT);
@@ -1381,17 +1381,18 @@ static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
     }
 
     // submit button: jeweled, pulses when a valid word is chained; sunk by two pixels while pressed
-    u16 bc = valid ? lerp15(GOLD_DK, GOLD, ((frame & 31) < 16) ? (frame & 15) : 15 - (frame & 15)) : DIM;
-    if (submitFlash) bc = WHITE;
+    bool ready = !peek && (valid || submitFlash);
+    u16 bc = preview ? lerp15(GOLD_DK, GOLD, ((frame & 31) < 16) ? (frame & 15) : 15 - (frame & 15)) : DIM;
+    if (ready && submitFlash) bc = WHITE;
     bool pr = pressSubmit > 0;
     int in = pr ? 2 : 0;
     if (pr) fillRect(PANEL_X, SUBMIT_Y, 76, 24, DIM2);
     roundRect(PANEL_X + in, SUBMIT_Y + in, 76 - in * 2, 24 - in * 2, bc);
-    if (valid || submitFlash) {
+    if (ready) {
         hline(PANEL_X + 3 + in, SUBMIT_Y + 2 + in, 70 - in * 2, pr ? GOLD_DK : GOLD_LT);
         hline(PANEL_X + 2 + in, SUBMIT_Y + 21 - in, 72 - in * 2, pr ? GOLD_LT : GOLD_DK);
     }
-    drawTextCenter(PANEL_X + 38, SUBMIT_Y + 8 + (pr ? 1 : 0), ui(UI_P_SUBMIT), (valid || submitFlash) ? BLACK : INK, 1);
+    drawTextCenter(PANEL_X + 38, SUBMIT_Y + 8 + (pr ? 1 : 0), ui(UI_P_SUBMIT), ready ? BLACK : INK, 1);
     if (pressClear > 0) {
         fillRect(PANEL_X, CLEAR_Y, 76, 16, lerp15(BLACK, INK, 3));
         rectOutline(PANEL_X + 2, CLEAR_Y + 2, 72, 12, INK);

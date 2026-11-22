@@ -46,8 +46,8 @@ static void tutorPrompt(void)
 {
     if (!tutorOn()) return;
     char t[MSG_LEN];
-    if (G.tutorStep == TUTOR_DRAG) setMsg(ui(UI_TU_DRAG), -1);
-    else if (G.tutorStep == TUTOR_PEEK) { uiFmt(t, sizeof t, UI_TU_PEEK, handKey()); setMsg(t, -1); }
+    if (G.tutorStep == TUTOR_PEEK || (G.tutorStep == TUTOR_DRAG && G.peekHeld)) { uiFmt(t, sizeof t, UI_TU_PEEK, handKey()); setMsg(t, -1); }
+    else if (G.tutorStep == TUTOR_DRAG) setMsg(ui(UI_TU_DRAG), -1);
     else if (G.tutorStep == TUTOR_FIND) setMsg(ui(UI_TU_FIND), -1);
     else { uiFmt(t, sizeof t, UI_TU_REST, foundCount(), G.passLen); setMsg(t, -1); }
 }
@@ -488,6 +488,7 @@ static void enterPause(void)
     dropStroke();
     boardClearChain(&G);
     G.armed = 0; G.peekLatch = 0; G.peekHeld = 0; musicPeek(false);
+    if (tutorOn() && G.tutorStep == TUTOR_DRAG && G.msgTimer < 0) tutorPrompt();
     G.pauseRow = 0; G.pauseArm = 0;
     G.state = ST_PAUSE;
 }
@@ -572,7 +573,10 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
     if ((down & KEY_TOUCH) && gfxInPauseButton(t->px, t->py)) { enterPause(); return; }
     if ((down & KEY_TOUCH) && gfxInGoalButton(t->px, t->py)) { enterPause(); openGuide(ST_PAUSE); return; }
     bool peekNow = (held & (KEY_L | KEY_R)) != 0 || G.peekLatch;
-    if (peekNow != G.peekHeld) { G.peekHeld = peekNow; musicPeek(peekNow); }
+    if (peekNow != G.peekHeld) {
+        G.peekHeld = peekNow; musicPeek(peekNow);
+        if (tutorOn() && G.tutorStep == TUTOR_DRAG && G.msgTimer < 0) tutorPrompt();
+    }
     if (!peekNow) G.armed = 0;
 
     if (down & KEY_START) { enterPause(); return; }

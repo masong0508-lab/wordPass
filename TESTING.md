@@ -205,14 +205,17 @@ title card. `make check` covers the CLEAR theme in the settings file.
 
     python3 tools/emu/test_cohesion.py wordPass.nds cohesion-out
 
-This focused real-ROM suite runs nine scenarios in both hands, eighteen cases total. It reads `Game.wordClue`, its latest endpoint and the hint paths
+This focused real-ROM suite runs ten scenarios in both hands, twenty cases total. It reads `Game.wordClue`, its latest endpoint and the hint paths
 using offsets from the matching ELF's DWARF; it does not extend the pinned debug mirror or assume the current source layout.
 Fixtures use the existing poke channel, but submit, PEEK, hint, help, retry and discovery actions use real controls.
 
 The cue-mode scenario keeps latched PEEK on past the automatic tutorial's idle delay and requires no word gesture to appear.
 After leaving PEEK, the free ghost must start and remain usable. Interrupting it with a shoulder hides it and allows it to
 return after inspection. The selected word's tail cue also hides during PEEK. X/L/R each cancel an active paid hint without
-another charge. The pre-fix ROM offers a word gesture while PEEK would peel, failing this case in both hands.
+another charge. The sticky first-word prompt describes the current mode without changing the tutorial stage. The pre-fix ROM
+offers a word gesture while PEEK would peel, failing this case in both hands. A separate pixel scenario checks that the gold
+tail ring and SUBMIT ready bevel disappear during PEEK, return afterward with the selected chain intact, and lead to a real
+tail submission without a peel.
 
 The scenarios check SELECT from latched PEEK followed by actually spelling the hint, physical L/R refusal without a hint charge,
 a diamond-start CAT path, and a RHYTHM-only board surviving a turn and offering a usable six-gem hint. The clue scenario submits
