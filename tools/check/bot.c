@@ -7,8 +7,9 @@
 //   build/bot --boards [--lang xx]                                                    fresh-board quality only
 //   build/bot --selftest                                                              a few seconds, exit status = failures
 //
-// The bot never reads the back layer except where a player can see it: the numbers on holes, the diamonds it has
-// found, and the pass word on the plaque.
+// The bot never reads unrevealed back cells. It uses published clues on
+// opened holes and accepted-word endpoints, visible diamonds, and the pass
+// word on the plaque. This models the Word -> clue -> PEEK loop.
 #include "game.h"
 #include "dict_bin.h"
 #include "pools_bin.h"
