@@ -57,8 +57,7 @@ def main():
         "seed schedule. **These are bot-policy outcomes, not human clear rates.**",
         "Shelves 14 and 19 are unchanged controls and must have identical full CSV rows.",
         "",
-        "| Language | Player | Baseline 14-19 clear rates | Staged 14-19 clear rates |",
-        "  Largest consecutive drop: baseline / staged |",
+        "| Language | Player | Baseline 14-19 clear rates | Staged 14-19 clear rates | Largest consecutive drop: baseline / staged |",
         "| --- | --- | --- | --- | --- |",
     ]
     comparisons = []
