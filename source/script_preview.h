@@ -32,6 +32,9 @@ extern int scriptPreviewHelp; // localized instructions overlay (top LCD only)
 extern int scriptPreviewLastTier;
 extern int scriptPreviewLastScore;
 extern uint32_t scriptPreviewSeed;
+// Incremented ONLY when a full Russian/Ukrainian dictionary image is loaded.
+// Forces font-cache renewal even when malloc reuses the previous file address.
+extern uint32_t scriptPreviewGlyphEpoch;
 
 bool scriptPreviewOpen(int language, uint32_t seed);
 void scriptPreviewClose(void);

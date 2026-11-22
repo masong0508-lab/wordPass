@@ -59,6 +59,9 @@ as available in the in-game language picker.
 ### Milestone 1 — UTF-8 and Cyrillic foundations
 
 - [x] Strict UTF-8 decoding for interface strings, avoiding dynamic allocation.
+- [x] Cache the Russian/Ukrainian preview's glyph pointers on successful
+      dictionary load; no repeat codepoint switch for 56 tiles per frame.
+      Test cache invalidation across languages and 120/120 emulator cadence.
 - [x] Hand-drawn 5×7 Russian and Ukrainian uppercase glyph coverage with
       ASCII fast path, malformed-input fallback and native regressions.
 - [x] Pixel centering uses displayed glyph counts rather than UTF-8 byte counts.

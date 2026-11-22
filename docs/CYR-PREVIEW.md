@@ -62,7 +62,11 @@ perform peels; the new cues never grant a free turn, hint or automatic reveal.
 
 The touch screen uses real 7×8 hex-grid coordinates and the same bitmap VRAM
 banks as the production game. Cyrillic glyphs render directly on gems without
-a new framebuffer, a full gem cache or per-frame allocation. The top screen
+a new framebuffer, a full gem cache or per-frame allocation. A small static
+alphabet-to-bitmap pointer table is generated only once per successful
+Russian/Ukrainian language load; normal frames reuse it rather than resolving
+all 56 Unicode tile glyphs repeatedly. The cache does not pre-render images,
+read unrevealed password locations or share the two languages' alphabets. The top screen
 shows the masked password, theme name, current Cyrillic chain and preview score.
 
 ## Building

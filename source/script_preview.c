@@ -22,6 +22,7 @@ int scriptPreviewDaily, scriptPreviewDailyDate, scriptPreviewDailyClockError;
 int scriptPreviewHelp;
 int scriptPreviewLastTier, scriptPreviewLastScore;
 uint32_t scriptPreviewSeed;
+uint32_t scriptPreviewGlyphEpoch;
 
 static unsigned char *images[3];
 // Only an advance banks a completed shelf. Retrying/re-dealing rolls this
@@ -141,6 +142,10 @@ bool scriptPreviewOpen(int language, uint32_t seed)
     scriptPreviewThemeCount = scriptPreviewPools.themes;
     scriptPreviewScore = 0;
     if (!scriptPreviewNewPass(seed)) { scriptPreviewClose(); return false; }
+    // The glyph cache is read by the renderer, never by the word parser.
+    // Bump only on a successful RU/UK resource load so an allocator reusing
+    // the same image pointer cannot cause stale Cyrillic glyphs.
+    scriptPreviewGlyphEpoch++;
     return true;
 }
 bool scriptPreviewToggleDaily(int date, uint32_t freeSeed)
