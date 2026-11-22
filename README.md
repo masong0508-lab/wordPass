@@ -18,6 +18,11 @@ letters. The slots fill automatically in any discovery order; no password typing
 
 ## Roadmap and additional writing systems
 
+The separate Russian/Ukrainian engineering ROM is still a **demo**, but it
+now gives fair Minesweeper-style numbered clues instead of showing which
+unopened tiles hide password letters. Russian and Ukrainian remain distinct
+languages with separate alphabet/data packs, not a language named Cyrillic.
+
 **[docs/ROADMAP.md](docs/ROADMAP.md)** tracks the remaining release work and
 the staged expansion from the current 11 playable languages into Cyrillic,
 Japanese, Korean and Chinese. The first step is a strict UTF-8 text renderer
