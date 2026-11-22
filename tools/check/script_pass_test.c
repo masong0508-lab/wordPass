@@ -89,7 +89,7 @@ static void clueTests(void)
     CHECK(scriptBoardClueInference(&b, 2, 3, &remaining, &covered) == SCRIPT_CLUE_UNKNOWN &&
           remaining == 0 && covered == 0,
           "already explored ring never offers a phantom free peel");
-    printf("SCRIPT CLUES OK: visible-only evidence, diamonds, holes and forced deduction\\n");
+    printf("SCRIPT CLUES OK: visible-only evidence, diamonds, holes and forced deduction\n");
 }
 
 static void suite(const char *dictPath, const char *tilePath, const char *poolPath, bool uk)
