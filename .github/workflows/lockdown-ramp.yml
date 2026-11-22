@@ -47,11 +47,27 @@ jobs:
           --input build/staged-ramp
           --languages en es fr de it pt nl sv pl da fi
           --first 14 --last 19
+      - name: Replicate across all 11 languages with independent seeds
+        run: >
+          python3 tools/check/balance_sweep.py
+          --baseline b02d7268ea9ff5ad5e053dd8914cb95992a924d6
+          --languages en es fr de it pt nl sv pl da fi
+          --first 14 --last 19 --attempts 60
+          --seed-base 750001
+          --output build/staged-ramp-replication
+      - name: Verify replication controls and report progression
+        run: >
+          python3 tools/check/balance_ramp_report.py
+          --input build/staged-ramp-replication
+          --languages en es fr de it pt nl sv pl da fi
+          --first 14 --last 19
       - name: Upload paired outcomes and report
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: wordPass-staged-ramp-balance
-          path: build/staged-ramp/
+          path: |
+            build/staged-ramp/
+            build/staged-ramp-replication/
           if-no-files-found: warn
           retention-days: 14
