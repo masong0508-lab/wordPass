@@ -1,0 +1,143 @@
+name: WordPass sourced Russian and Ukrainian experimental ROM
+
+on:
+  pull_request:
+    paths:
+      - 'data/cyrlex/*_source_candidates.json'
+      - 'tools/lang/fetch_cyr_upstream.py'
+      - 'tools/lang/import_cyr_hunspell.py'
+      - 'tools/lang/install_cyr_preview.py'
+      - 'tools/lang/hunspell.py'
+      - '.github/workflows/sourced-cyr-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-packs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 85
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check pinned-source integrity and importer selftests offline
+        run: |
+          python3 tools/lang/fetch_cyr_upstream.py --selftest
+          python3 tools/lang/import_cyr_hunspell.py --selftest build/source-intake-fixtures
+          python3 tools/lang/install_cyr_preview.py --selftest build/source-install-fixtures
+      - name: Fetch exact LibreOffice source commit with original notices
+        run: python3 tools/lang/fetch_cyr_upstream.py --out source-cache
+      - name: Import real source-backed Russian dictionary and themed vocabulary
+        run: |
+          python3 tools/lang/import_cyr_hunspell.py \
+            --code ru --dic source-cache/ru_RU/ru_RU.dic \
+            --aff source-cache/ru_RU/ru_RU.aff \
+            --notice source-cache/ru_RU/README_ru_RU.txt \
+            --origin "https://github.com/LibreOffice/dictionaries/tree/c0865a85eb67dc377f2cf8e8fe2c4fa9e53f0dcb/ru_RU" \
+            --extra-themes data/cyrlex/ru_source_candidates.json \
+            --sample-words 100000 --out sourced-preview/ru
+      - name: Import real source-backed Ukrainian dictionary and themed vocabulary
+        run: |
+          python3 tools/lang/import_cyr_hunspell.py \
+            --code uk --dic source-cache/uk_UA/uk_UA.dic \
+            --aff source-cache/uk_UA/uk_UA.aff \
+            --notice source-cache/uk_UA/README_uk_UA.txt \
+            --origin "https://github.com/LibreOffice/dictionaries/tree/c0865a85eb67dc377f2cf8e8fe2c4fa9e53f0dcb/uk_UA" \
+            --extra-themes data/cyrlex/uk_source_candidates.json \
+            --sample-words 100000 --out sourced-preview/uk
+      - name: Validate WPD4 WPP2 40 themes and both source manifests
+        run: |
+          python3 tools/lang/dict_v4.py --verify sourced-preview/ru/dict.bin
+          python3 tools/lang/dict_v4.py --verify sourced-preview/uk/dict.bin
+          python3 tools/lang/pools_v2.py --verify sourced-preview/ru/dict.bin sourced-preview/ru/pools.bin
+          python3 tools/lang/pools_v2.py --verify sourced-preview/uk/dict.bin sourced-preview/uk/pools.bin
+          python3 tools/lang/install_cyr_preview.py --input-root sourced-preview --output-root staged-preview
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          for code, count in (("ru", 187), ("uk", 173)):
+              m = json.loads((Path("sourced-preview")/code/"SOURCE-MANIFEST.json").read_text())
+              assert m["retained_word_count"] == 100000, m
+              assert m["starter_password_count"] == 160, m
+              assert m["extra_password_count"] == count, m
+              assert m["total_password_count"] == 160 + count, m
+              assert m["dictionary_bytes"] <= 1536*1024, m
+          print("SOURCED RU/UK OK: 100k words each, 347/333 attested password candidates")
+          PY
+      - name: Upload source dictionaries, original notices and tested packs
+        uses: actions/upload-artifact@v7
+        with:
+          name: wordPass-ru-uk-sourced-lexicons
+          path: |
+            source-cache/
+            sourced-preview/
+          retention-days: 21
+
+  sourced-rom:
+    needs: source-packs
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitarm:20240511
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          name: wordPass-ru-uk-sourced-lexicons
+          path: .
+      - name: Build opt-in Nintendo DS ROM with real RU/UK dictionary content
+        run: |
+          test -s sourced-preview/ru/dict.bin
+          test -s sourced-preview/uk/dict.bin
+          make clean
+          make WP_CYR_PREVIEW=1 CYR_EXTERNAL_DIR=sourced-preview
+          mv wordPass.nds wordPass-ru-uk-sourced-preview.nds
+          mv wordPass.elf wordPass-ru-uk-sourced-preview.elf
+          python3 tools/check/rom_budget.py \
+            --rom wordPass-ru-uk-sourced-preview.nds \
+            --elf wordPass-ru-uk-sourced-preview.elf \
+            --mode preview --preview-root nitrofiles/cyrpreview \
+            --nm "$DEVKITARM/bin/arm-none-eabi-nm" \
+            --forbid-float-printf --output build/rom-budget-sourced.json
+      - name: Upload sourced experimental ROM and attribution (not retail)
+        uses: actions/upload-artifact@v7
+        with:
+          name: wordPass-real-RU-UK-experimental-ROM
+          path: |
+            wordPass-ru-uk-sourced-preview.nds
+            wordPass-ru-uk-sourced-preview.elf
+            build/rom-budget-sourced.json
+            sourced-preview/ru/LICENSE-SOURCE.txt
+            sourced-preview/uk/LICENSE-SOURCE.txt
+            sourced-preview/ru/SOURCE-MANIFEST.json
+            sourced-preview/uk/SOURCE-MANIFEST.json
+            source-cache/SOURCE-LOCK.json
+          retention-days: 21
+
+  emulator:
+    needs: sourced-rom
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SDL_VIDEODRIVER: dummy
+      SDL_AUDIODRIVER: dummy
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          name: wordPass-real-RU-UK-experimental-ROM
+          path: .
+      - name: Install emulator and image checks
+        run: python3 -m pip install py-desmume pillow numpy
+      - name: Play real Russian and Ukrainian sourced word boards
+        timeout-minutes: 23
+        run: |
+          python3 tools/emu/test_cyr_preview.py \
+            wordPass-ru-uk-sourced-preview.nds sourced-preview-out
+      - name: Retain sourced-ROM emulator screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: wordPass-ru-uk-sourced-screenshots
+          path: sourced-preview-out/**/*.png
+          if-no-files-found: ignore
+          retention-days: 7
