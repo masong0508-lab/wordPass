@@ -58,9 +58,23 @@ def settle_state(e, state, language, script_language=None):
 
 def expect_retail(e, saved, state=0, language=6):
     settle_state(e, state, language)
+    # Source-backed dictionary switching releases half-megabyte Cyrillic
+    # images before restoring the selected retail language (Dutch here).
+    # The state mirror can report TITLE/OPTIONS and the desired language
+    # while the blocking retail FAT/NitroFS reload is still in progress.
+    # Require actual complete pointers + closed preview buffers, not only
+    # the state number, before interpreting memory ownership as a failure.
+    if "sourced" in str(e.rom_elf):
+        for _ in range(2400):
+            p = retail_buffers(e)
+            q = preview_buffers(e)
+            if (all(p) if language else not any(p)) and not any(q):
+                break
+            e.run(1)
     pointers = retail_buffers(e)
     need(all(pointers) if language else not any(pointers),
-         'retail runtime must own exactly its current language buffers')
+         f'retail buffers not restored: language={language}, pointers={pointers}, '
+         f'preview={preview_buffers(e)}, load-error={value(e, "scriptPreviewOpenError")}')
     need(not any(preview_buffers(e)), 'all three preview images must close before retail reload')
     need(preferences(e) == saved, 'temporary preview must preserve every saved preference')
 
