@@ -197,6 +197,66 @@ static bool prefixAtLength(const V4Dict *view, const uint8_t key[16],
     }
     return false;
 }
+// Read one prevalidated packed Unicode symbol directly from the WPD4 word
+// record. No word buffer, key packing, or per-bit loop. A second byte is
+// read only when it belongs to the fixed-width record.
+static unsigned recordSymbol(const uint8_t *record, unsigned stride,
+                             unsigned bits, unsigned position)
+{
+    unsigned bit = position * bits;
+    unsigned at = bit >> 3;
+    unsigned pair = (unsigned)record[at] << 8;
+    if (at + 1u < stride) pair |= record[at + 1u];
+    return (pair >> (16u - bits - (bit & 7u))) & ((1u << bits) - 1u);
+}
+
+bool v4DictNarrowPrefixLengthId(const V4Dict *view, int wordLength,
+                                int position, uint8_t symbol,
+                                uint32_t *first, uint32_t *past)
+{
+    if (!view || !view->image || !first || !past ||
+        wordLength < WPD4_MIN_WORD || wordLength > WPD4_MAX_WORD ||
+        position < 0 || position >= wordLength || symbol >= view->symbols)
+        return false;
+    uint32_t lo = *first, hi = *past;
+    if (lo >= hi || hi > view->count[wordLength]) return false;
+    const unsigned stride = width(wordLength, view->bits);
+    const uint8_t *base = view->base[wordLength];
+    // Within an interval that matches the preceding symbols, the next
+    // symbol is monotonically ordered. A singleton prefix takes O(1), a
+    // dense prefix takes O(log(interval)) rather than O(log(group)).
+    unsigned smallest = recordSymbol(base + (size_t)lo * stride, stride,
+                                     view->bits, (unsigned)position);
+    unsigned largest = recordSymbol(base + (size_t)(hi - 1u) * stride, stride,
+                                    view->bits, (unsigned)position);
+    if (symbol < smallest || symbol > largest) return false;
+    if (smallest == largest) return true;
+    // Lower bound for symbol, using no memory writes or heap allocation.
+    uint32_t left = lo, right = hi;
+    while (left < right) {
+        uint32_t mid = left + ((right - left) >> 1);
+        unsigned value = recordSymbol(base + (size_t)mid * stride, stride,
+                                      view->bits, (unsigned)position);
+        if (value < symbol) left = mid + 1u;
+        else right = mid;
+    }
+    if (left == hi ||
+        recordSymbol(base + (size_t)left * stride, stride,
+                     view->bits, (unsigned)position) != symbol) return false;
+    uint32_t begin = left;
+    left++; right = hi;
+    while (left < right) {
+        uint32_t mid = left + ((right - left) >> 1);
+        unsigned value = recordSymbol(base + (size_t)mid * stride, stride,
+                                      view->bits, (unsigned)position);
+        if (value <= symbol) left = mid + 1u;
+        else right = mid;
+    }
+    *first = begin;
+    *past = left;
+    return true;
+}
+
 bool v4DictHasPrefixLengthIds(const V4Dict *view, const uint8_t *ids,
                              int count, int wordLength)
 {
