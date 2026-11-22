@@ -23,6 +23,28 @@ def main(rom, output):
     out = Path(output)
     out.mkdir(parents=True, exist_ok=True)
     e = Emu(rom)
+    sourced = "sourced" in Path(rom).name
+    def await_preview(language):
+        # Reading + structurally validating the large 100k-word WPD4 image
+        # is a synchronous ARM9 operation; game language/state globals are
+        # updated only when that load and board setup have completed.
+        # The tiny built-in engineering demo keeps its original short gate.
+        if sourced:
+            for _ in range(40):
+                if (e.state()["state"] == 9 and
+                    get_int(e, "scriptPreviewLanguage") == language):
+                    break
+                if get_int(e, "scriptPreviewOpenError"):
+                    break
+                e.run(60)
+
+    def await_title():
+        if sourced:
+            for _ in range(24):
+                if e.state()["state"] == 0:
+                    break
+                e.run(60)
+
     e.run(90)
     check(e.state()["state"] == 0, "expected title after selecting English")
     # Tap the actual LANGUAGE badge on the title screen. Only the separate
@@ -220,6 +242,7 @@ def main(rom, output):
           get_int(e, "scriptPreviewShelf") == 1,
           "Russian first-shelf replay must discard its attempt score")
     e.press("X", settle=20)
+    await_preview(1)
     check(e.state()["state"] == 9 and get_int(e, "scriptPreviewLanguage") == 1,
           "X should switch to Ukrainian without changing the release locale")
     check(get_int(e, "scriptPreviewThemeCount") == 40, "Ukrainian preview should contain 40 seeded themes")
@@ -327,16 +350,19 @@ def main(rom, output):
           get_int(e, "scriptPreviewTurns") == 0,
           "retrying shelf two must retain only the already completed shelf")
     e.press("START", settle=20)
+    await_title()
     check(e.state()["state"] == 0, "START should return to the untouched 11-language title")
     # The second choice must work independently from the same visible menu,
     # without first launching Russian and pressing X.
     e.tap(55, 14, settle=14)
     check(e.state()["state"] == 8, "returning title badge should reopen chooser")
     e.tap(80, 173, settle=22)
+    await_preview(1)
     check(e.state()["state"] == 9 and get_int(e, "scriptPreviewLanguage") == 1,
           "Українська DEMO option failed to start Ukrainian independently")
     e.shot(str(out / "ukrainian-direct-menu.png"))
     e.press("B", settle=16)
+    await_title()
     check(e.state()["state"] == 0, "B must exit Ukrainian DEMO to normal title")
     # Also cover controller-only selection. The normal saved language stays
     # English, so UP from the first entry must wrap to Ukrainian DEMO.
@@ -344,14 +370,17 @@ def main(rom, output):
     check(e.state()["state"] == 8, "cannot reopen language menu for D-pad test")
     e.press("UP", settle=6)
     e.press("A", settle=18)
+    await_preview(1)
     check(e.state()["state"] == 9 and get_int(e, "scriptPreviewLanguage") == 1,
           "D-pad UP wrapping / A should choose Українська DEMO")
     e.press("START", settle=16)
+    await_title()
     check(e.state()["state"] == 0, "controller-selected Ukrainian DEMO must exit safely")
     # L+SELECT offers UNRANKED Daily practice in the separate demo ROM.
     # On an emulator with no valid DS RTC, it must refuse the mode safely.
     e.tap(55, 14, settle=12)
     e.tap(80, 161, settle=20)
+    await_preview(0)
     check(e.state()["state"] == 9 and get_int(e, "scriptPreviewLanguage") == 0,
           "Daily practice requires a real Russian menu-selected board")
     e.hold("L")
@@ -375,6 +404,7 @@ def main(rom, output):
               get_int(e, "scriptPreviewSeed") != first_seed,
               "Ukrainian Daily must preserve the day but use its own board")
         e.press("X", settle=18)
+        await_preview(0)
         check(get_int(e, "scriptPreviewDaily") == 1 and
               get_int(e, "scriptPreviewSeed") == first_seed,
               "switching back to Russian on the same date restores daily seed")
@@ -387,6 +417,7 @@ def main(rom, output):
         check(get_int(e, "scriptPreviewDailyClockError") == 1,
               "invalid RTC must prevent Daily practice and show clock feedback")
     e.press("START", settle=18)
+    await_title()
     check(e.state()["state"] == 0, "Daily demo exits safely without changing retail Daily")
     print("RUSSIAN/UKRAINIAN DS OK: menu, hints, score/retry banking, combo, Daily practice seed and safe exit")
     from cyr_lifecycle import exercise
