@@ -77,7 +77,7 @@ turn or heat and does not uncover a password letter.
 
 **5. Read the clue, then peel.** Hold **L** or **R** (either shoulder; the game suggests the one under your idle hand), or press **X**
 or tap **PEEK** to latch peek on for one peel. Your word clue becomes a small numbered badge, and its neighbours are outlined
-before you touch anything. The panel says **CLUE** and **NEARBY**. Touch a chosen gem to *arm* it (a double rim and a PEEL label),
+before you touch anything. The panel says **CLUE** and **NEARBY**. While holding L or R, press **SELECT** to jump to a numbered clue with an inspectable neighbor (without using a word hint); pressing again cycles clues. Touch a chosen gem to *arm* it (a double rim and a PEEL label),
 then **lift the stylus** to peel it. If you change your mind, slide off before lifting.
 
 ![Three steps of a peel: touch to arm a gem, lift to peel it and see a number, then a gem hiding a pass letter turns into a diamond.](img/peel_flow.png)
@@ -137,7 +137,7 @@ That is the whole game. The rest of this guide explains every rule exactly, then
 | **PEEK button** | play | the same latch as X |
 | **START** | play | pause |
 | **II button** | play | pause |
-| **SELECT** | play | a **word hint**: the ghost drag traces an accepted word (two a shelf, section 5.6); clears a latched peek when a word is found; release held L/R first |
+| **SELECT** | play | a **word hint** while not holding L/R (two a shelf, section 5.6); hold L/R + SELECT to navigate existing numbered clues instead, without charge |
 | **Stylus tap on the password tracker / FOUND row** | play | pause and open the goal page; no turn or heat; BACK returns to pause |
 | **Stylus tap on a menu row** | pause | tap a row to light it, tap the lit row to pick it |
 | **D-pad up and down** | pause | move the highlight; **A** picks it; RESTART and QUIT ask for a second pick within 90 frames |
@@ -530,8 +530,8 @@ common path takes priority when the fallback finds one. A shelf has **two hints*
 Only a demonstrated word spends a hint. This search is bounded to keep the game responsive, so no hint found is not proof that
 the board has no word.
 
-A successful hint switches off a peek latched with X or PEEK, so following the ghost chains gems. Release a held **L/R** first:
-SELECT asks you to do so without spending a hint. SELECT also spends nothing while the stylus is down, because the hint hides
+A successful hint switches off a peek latched with X or PEEK, so following the ghost chains gems. If **L/R is held**, SELECT instead
+locates an actionable visible clue without charging a hint; when none is available it asks you to release L/R before a word hint. SELECT also spends nothing while the stylus is down, because the hint hides
 at the first board touch. Ten seconds with no input and hints in hand make the game offer one (`STUCK? PRESS SELECT FOR A HINT`),
 once a shelf; the offer is free. A **word hint** shows a playable word; a **word clue** is the neighbour number that submitting it earns.
 
@@ -565,6 +565,8 @@ read the highlighted region before touching. At an edge there are fewer than six
 ![A real PEEK screen after submitting STONE, with a numbered covered gem and its counted neighbours outlined.](img/word_clue.png)
 *A word has earned a clue of 1 at its final location. The small badge belongs to a covered gem; the outlined neighbours are the
 cells it counts, not a reveal of which one holds the letter. FOUND remains 0/4 because no password letter has been uncovered.*
+
+**Find the next deduction:** in shoulder-held PEEK mode, press **SELECT** to move the cursor to a clue with a non-burning, still-covered neighbor. A clue with a certain result (all or none of its covered neighbors hide pass letters) is preferred; otherwise SELECT moves to a still-useful unresolved clue. Repeated presses move to further clues. No hidden password cells are consulted, and locating a clue costs no hint, turn, or peel. This is a reading aid, **not** an automatic peel or a guarantee of fire safety.
 
 The clue survives gravity, refill and the rescue shuffle because it describes the fixed back layer. Ending another accepted
 word at the same location shows the same count; ending elsewhere can add information. The clue is included in the word's normal

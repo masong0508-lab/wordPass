@@ -148,6 +148,63 @@ int boardClueInference(const Game *g, int c, int r, int *remaining, int *covered
     return CLUE_UNDECIDED;
 }
 
+// Explicit PEEK navigation: scan at most one board from the next location,
+// wrapping exactly once. Prefer clues that force a decision (all/no nearby
+// hidden pass cells), otherwise visit the first unresolved numbered clue.
+// All input is on-screen information. A clue with no non-burning plain gem
+// to inspect is not actionable, so never suggest a destructive scorch peel.
+// This runs only for a SELECT press with a held shoulder, not per frame.
+int boardNextUsefulClue(const Game *g, int afterC, int afterR, int *outC, int *outR)
+{
+    if (outC) *outC = -1;
+    if (outR) *outR = -1;
+    bool havePrevious = afterC >= 0 && afterC < COLS && afterR >= 0 && afterR < ROWS;
+    int start = havePrevious ? afterC * ROWS + afterR : COLS * ROWS - 1;
+    int fallback = -1, current = -1, currentKind = CLUE_NO_DATA;
+    for (int step = 1; step <= COLS * ROWS; step++) {
+        int idx = (start + step) % (COLS * ROWS), c = idx / ROWS, r = idx % ROWS;
+        int left = 0, covered = 0;
+        int inference = boardClueInference(g, c, r, &left, &covered);
+        if (inference == CLUE_NO_DATA || covered == 0 || left < 0 || left > covered)
+            continue;
+        int nc[6], nr[6], n = boardNeighbors(c, r, nc, nr);
+        bool canInspect = false;
+        for (int i = 0; i < n; i++) {
+            int cc = nc[i], rr = nr[i];
+            if (g->cell[cc][rr].state == CELL_TILE &&
+                (rr == 0 || g->cell[cc][rr - 1].state != CELL_BURN)) {
+                canInspect = true;
+                break;
+            }
+        }
+        if (!canInspect) continue;
+        // Visit the current clue last, and only if nothing else qualifies.
+        // Otherwise a single forced clue would trap repeated SELECT presses
+        // even when other informative (but not decisive) clues are available.
+        if (havePrevious && idx == start) {
+            current = idx; currentKind = inference;
+            continue;
+        }
+        if (inference == CLUE_PASS || inference == CLUE_SAFE) {
+            if (outC) *outC = c;
+            if (outR) *outR = r;
+            return inference;
+        }
+        if (fallback < 0) fallback = idx;
+    }
+    if (fallback >= 0) {
+        if (outC) *outC = fallback / ROWS;
+        if (outR) *outR = fallback % ROWS;
+        return CLUE_UNDECIDED;
+    }
+    if (current >= 0) {
+        if (outC) *outC = current / ROWS;
+        if (outR) *outR = current % ROWS;
+        return currentKind;
+    }
+    return CLUE_NO_DATA;
+}
+
 // Bury the pass: a random walk that starts at or below minRow and never climbs above it,
 // so the whole pass sits in rows minRow..ROWS-1 (the fallback for a stuck walk keeps to
 // the same rows).

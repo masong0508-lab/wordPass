@@ -68,6 +68,13 @@ against the source and the data files by `tools/check_guide.py`, and every pictu
   A covered clue can still hide a password
   letter, even when its number is zero. Reusing an endpoint repeats its clue;
   ending a word elsewhere can add information.
+- **Find a useful clue.** While holding **L or R**, press **SELECT** to move the
+  d-pad cursor to a visible word clue or opened-hole number with an inspectable
+  neighbor. It prioritizes clues that logically prove all or none of the
+  neighboring covered cells contain password letters. Repeated presses cycle
+  to further clues. This costs **no word hints, turns, peels, or heat**. A red
+  fire hazard is never recommended as a safe peel. If there is no useful clue,
+  release L/R and SELECT still offers the usual word hint.
 - **Peek.** Hold **L** or **R** (or press **X**, or tap the **PEEK** button, to
   latch it for one peel), then touch a gem to arm it and lift the stylus to
   peel it off the board. Slide off the gem before lifting to change your mind.
@@ -99,7 +106,8 @@ against the source and the data files by `tools/check_guide.py`, and every pictu
   an unplayed word and then length. If none exists in that search, it tries
   longer paths and allowed rare words under LIBRARY FULL; diamonds can start
   a path too. A successful hint switches off latched PEEK so the next touch
-  chains gems. A held L/R must be released first and never wastes a hint.
+  chains gems. Holding L/R with SELECT navigates existing numbered clues
+  instead; it never spends a word hint.
   Ten idle seconds offer one for free. A word hint shows a path; submitting
   that word earns the neighbour clue.
 - **Shuffle.** A board with no word left is re-dealt once a shelf (+3 heat)
@@ -337,7 +345,7 @@ three. Daily Pass has no bookmarks: one attempt.
 | CLEAR button / Y | clear chain |
 | D-pad | move the hex cursor (see below) |
 | Hold L or R | peek mode: read earned clues; touch a gem to arm it, lift to peel it, slide away to cancel |
-| SELECT | a word hint (two a shelf); a successful hint clears latched PEEK; release held L/R first |
+| SELECT | word hint (two a shelf); latches clear on a found word; hold L/R + SELECT to navigate visible clues free of charge |
 | X / PEEK button | latch peek on for one peel (press again to cancel); with the cursor shown, A then peels the gem under it |
 | Tap the password tracker / FOUND row | open the goal page without spending a turn; BACK returns to pause |
 | START / the II button on the panel | pause menu: RESUME, RESTART SHELF (costs a bookmark), HOW TO PLAY and QUIT TO TITLE. Up and down move the highlight, A or a tap on the lit row picks it (a tap on another row lights it first); RESTART and QUIT ask for a second pick within 90 frames. START or B resumes |

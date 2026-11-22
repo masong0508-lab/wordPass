@@ -198,6 +198,60 @@ static void clueInferenceTests(void)
     CHECK("an already explored ring has no action to mark", boardClueInference(&g, 2, 3, &remaining, &covered) == CLUE_UNDECIDED && remaining == 0 && covered == 0);
 }
 
+// A SELECT scan must use only the numbered evidence a human can see, and
+// must never alter heat, moves, word-hint stock or the hidden back layer.
+static void clueNavigationTests(void)
+{
+    boardOf('x'); plantWord();
+    int c = -2, r = -2;
+    CHECK("clue navigation has nothing to target before words or peels",
+          boardNextUsefulClue(&g, 0, 0, &c, &r) == CLUE_NO_DATA && c == -1 && r == -1);
+
+    g.wordClue[2][2] = 7;  // a visible six: all six still-covered neighbors hide a pass letter
+    g.wordClue[5][4] = 1;  // a visible zero: all covered neighbors are password-safe
+    Game before = g;
+    CHECK("PEEK SELECT moves to next safe, still-covered clue",
+          boardNextUsefulClue(&g, 2, 2, &c, &r) == CLUE_SAFE && c == 5 && r == 4);
+    CHECK("PEEK SELECT wraps from safe to forced-pass clue",
+          boardNextUsefulClue(&g, 5, 4, &c, &r) == CLUE_PASS && c == 2 && r == 2);
+    CHECK("invalid prior coordinate starts a deterministic board scan",
+          boardNextUsefulClue(&g, -3, ROWS + 2, &c, &r) == CLUE_PASS && c == 2 && r == 2);
+    CHECK("clue navigation makes no mutation or resource charge", !memcmp(&g, &before, sizeof g));
+    g.wordClue[5][4] = 0;
+    g.wordClue[4][4] = 4; // one uncertain clue after the single forced one
+    CHECK("one decisive clue cannot trap repeated SELECT away from other evidence",
+          boardNextUsefulClue(&g, 2, 2, &c, &r) == CLUE_UNDECIDED && c == 4 && r == 4);
+    CHECK("after an unresolved clue, navigation cycles back to the forced clue",
+          boardNextUsefulClue(&g, 4, 4, &c, &r) == CLUE_PASS && c == 2 && r == 2);
+    g.wordClue[4][4] = 0;
+    CHECK("a single actionable clue can still be reselected",
+          boardNextUsefulClue(&g, 2, 2, &c, &r) == CLUE_PASS && c == 2 && r == 2);
+    g.wordClue[5][4] = 1;
+
+    // An unopened back cell cannot influence a published word clue.
+    g.back[2][3] = 4;
+    CHECK("clue locator never reads a hidden pass position",
+          boardNextUsefulClue(&g, 5, 4, &c, &r) == CLUE_PASS && c == 2 && r == 2);
+    g.back[2][3] = 0;
+    g.wordClue[2][2] = 8; // corrupt (more than six adjacent locations)
+    CHECK("invalid clue cannot be suggested as certain",
+          boardNextUsefulClue(&g, 5, 4, &c, &r) == CLUE_SAFE && c == 5 && r == 4);
+    g.wordClue[5][4] = 0;
+    g.wordClue[2][2] = 4; // three among six: information, but no forced peel
+    CHECK("when no forced clue exists, PEEK SELECT still finds a useful number",
+          boardNextUsefulClue(&g, 5, 4, &c, &r) == CLUE_UNDECIDED && c == 2 && r == 2);
+    g.wordClue[2][2] = 0;
+    CHECK("without visible clues no cursor target can be manufactured",
+          boardNextUsefulClue(&g, 2, 2, &c, &r) == CLUE_NO_DATA && c == -1 && r == -1);
+
+    // A nearby burning tile is never presented as an actionable safe peel.
+    g.wordClue[2][2] = 1;
+    int nc[6], nr[6], n = boardNeighbors(2, 2, nc, nr);
+    for (int i = 0; i < n; i++) set(nc[i], nr[i], CELL_BURN, 'x');
+    CHECK("clue scan skips rings with no peelable non-burning tile",
+          boardNextUsefulClue(&g, 0, 0, &c, &r) == CLUE_NO_DATA && c == -1 && r == -1);
+}
+
 static void wordClueTests(void)
 {
     boardOf('x'); plantWord();
@@ -880,6 +934,7 @@ int main(int argc, char **argv)
     prefixTests();
     cohesionSearchTests();
     clueInferenceTests();
+    clueNavigationTests();
     wordClueTests();
 
     // ---- long words: the dictionary holds words up to 20 letters

@@ -385,6 +385,10 @@ int  boardBackNumber(const Game *g, int c, int r);
 // secret back layer (except the number already displayed on an opened hole).
 enum { CLUE_NO_DATA = -1, CLUE_UNDECIDED, CLUE_SAFE, CLUE_PASS };
 int  boardClueInference(const Game *g, int c, int r, int *remaining, int *covered);
+// On explicit input only: cycle to a visible numbered clue with an actionable
+// non-burning covered neighbor. Returns its inference or CLUE_NO_DATA.
+// Uses no unexposed password cells, RNG, heap or persistent state.
+int  boardNextUsefulClue(const Game *g, int afterC, int afterR, int *outC, int *outR);
 bool boardHasWords(const Game *g);
 int  boardHintChain(const Game *g, u8 *outC, u8 *outR, int max);   // a path spelling a common word of 3 to 5 letters on this board: its length, 0 if none
 bool boardWordOk(const char *w, int len);     // accepted under the current LIBRARY setting
