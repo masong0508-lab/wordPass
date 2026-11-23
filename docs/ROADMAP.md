@@ -111,6 +111,10 @@ as available in the in-game language picker.
       theme-aware 4–6-symbol chain. The seed varies word/column, protects
       hidden password tiles, and supports the existing bounded hint solver;
       native checks cover all 40 themes in both languages.
+- [x] On new RU/UK experimental shelves, plant up to two separate
+      source-verified words in disjoint column groups. A scored word's
+      refill cannot erase the other opening chain; preserve single-word
+      rescue and fixed RAM/60-FPS budgets. Native tests cover all 40 themes.
 - [x] Replace hidden-password cheat marks in the Cyrillic renderer with
       legitimate numbered peels and accepted-word endpoint clues. The seven
       survey row masks preserve fixed back-layer clues through gravity;
