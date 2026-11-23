@@ -98,6 +98,38 @@ def main(rom, output):
           board_ptr + clues_offset["surveyed"]:
           board_ptr + clues_offset["surveyed"] + 7])),
           "fresh Russian shelf starts without any word-earned clues")
+    # Retail-style peek safety: merely touching a gem is NOT a peel.
+    # A drift onto the neighboring gem must disarm without consuming a
+    # turn, changing the board or accidentally beginning a word chain.
+    board_ptr = symbol(e.rom_elf, "scriptPreviewBoard")
+    untouched = bytes(e.mem.unsigned[board_ptr:board_ptr + 336])
+    e.hold("L")
+    e.emu.input.touch_set_pos(*e.center(0, 0))
+    e.run(5)
+    check(get_int(e, "scriptPreviewPeels") == 0,
+          "initial L+touch must only arm a peel until stylus release")
+    e.emu.input.touch_set_pos(*e.center(0, 1))
+    e.run(5)
+    e.emu.input.touch_release()
+    e.run(8)
+    e.hold("L", False)
+    check(get_int(e, "scriptPreviewPeels") == 0 and
+          get_int(e, "scriptPreviewTurns") == 0 and
+          bytes(e.mem.unsigned[board_ptr:board_ptr + 336]) == untouched,
+          "sliding from an armed gem must cancel with zero peel/turn/mutation")
+    # Releasing the shoulder before lifting also cancels. The touch
+    # must not be reinterpreted as a regular front-letter word stroke.
+    e.hold("L")
+    e.emu.input.touch_set_pos(*e.center(0, 0))
+    e.run(5)
+    e.hold("L", False)
+    e.run(4)
+    e.emu.input.touch_release()
+    e.run(8)
+    check(get_int(e, "scriptPreviewPeels") == 0 and
+          get_int(e, "scriptPreviewTurns") == 0 and
+          bytes(e.mem.unsigned[board_ptr:board_ptr + 336]) == untouched,
+          "shoulder release mid-peek must cancel without a chain or heat")
     # The old preview painted a gold pixel under EVERY hidden pass cell,
     # leaking the entire secret. Changing one still-covered back value
     # must not change any pixel on the touch-screen board without a peel.
