@@ -42,7 +42,15 @@ cancelled gesture and retains the existing valid-peel-on-release checks.
 
 ## Fast stylus tracing and input safety
 
-The experimental Russian/Ukrainian ROM now bridges a rapid straight stylus
+The experimental Russian/Ukrainian ROM now lets a fresh second tap on a
+selected word's final gem submit it, matching the regular game's one-handed
+word confirmation. This uses the same validated submit bridge as controller
+A: a too-short word, invalid dictionary word or tap elsewhere cannot score
+or spend a turn; a submitted chain cannot be scored again on another tap.
+Simply holding the stylus on the tail during a drag never submits.
+Native tests and a real-Russian-ROM scenario verify the separate contact.
+
+The experimental Russian/Ukrainian ROM also bridges a rapid straight stylus
 drag with a bounded set of real hex-board hit tests between consecutive
 touch samples. Previously it only attempted the final sampled gem; a
 fast vertical sweep could jump over several actual letters and leave a
