@@ -26,6 +26,7 @@ import pools_v2 as pools
 
 RESOURCE_MAX = {"dict.bin": 1536 * 1024, "tiles.bin": 512, "pools.bin": 256 * 1024}
 META_FILES = ("SOURCE-MANIFEST.json", "LICENSE-SOURCE.txt")
+EXTRA_FILE = "THEME-EXTRAS.json"
 
 
 def _sha(data):
@@ -74,20 +75,69 @@ def _inspect(source, code, synthetic=False):
             manifest.get("starter_password_count") != 160 or
             manifest.get("retained_word_count") != d["words"]):
         raise ValueError(f"{code}: source counts contradict binary packs")
+    extra_count = manifest.get("extra_password_count", 0)
+    total = manifest.get("total_password_count", 160)
+    if (type(extra_count) is not int or extra_count < 0 or
+            type(total) is not int or total != 160 + extra_count or
+            total != p["words"]):
+        raise ValueError(f"{code}: theme expansion counts do not match WPP2")
+    expansion_file = folder / EXTRA_FILE
+    if extra_count:
+        extras = expansion_file.read_bytes()
+        if (manifest.get("theme_expansion_status") != "unreviewed-candidates" or
+                not extras or manifest.get("theme_expansion_sha256") != _sha(extras)):
+            raise ValueError(f"{code}: theme expansion source has changed")
+        info = json.loads(extras.decode("utf-8"))
+        if (not isinstance(info, dict) or info.get("language") != code or
+                info.get("review_status") != "unreviewed-candidates" or
+                not isinstance(info.get("themes"), dict) or
+                sum(len(words) for words in info["themes"].values()
+                    if isinstance(words, list)) != extra_count):
+            raise ValueError(f"{code}: malformed theme expansion provenance")
+        assets[EXTRA_FILE] = extras
+    elif (expansion_file.exists() or
+          manifest.get("theme_expansion_sha256") not in (None, "") or
+          manifest.get("theme_expansion_status", "none") != "none"):
+        raise ValueError(f"{code}: unexpected theme expansion file/manifest")
     assets["LICENSE-SOURCE.txt"] = notice
     assets["SOURCE-MANIFEST.json"] = manifest_bytes
     return assets, d, p
 
 
-def install(source, dest, synthetic=False):
-    """Validate BOTH languages before publishing either. On failure leave dest
-    untouched. Images, original notices and manifests stay paired."""
+def install(source, dest, synthetic=False, _test_fail_promotion=False):
+    """Validate both source packs, stage them together and preserve old data.
+
+    A complete old installation moves to a sibling backup rather than being
+    deleted before the new staged image is ready. Failed promotion restores
+    the backup; the next call also recovers an interrupted prior promotion.
+    """
+    destination = Path(dest)
+    origin = Path(source)
+    if origin.resolve() == destination.resolve():
+        raise ValueError("source and destination cannot be the same directory")
     validated = {}
     for code in ("ru", "uk"):
         validated[code] = _inspect(source, code, synthetic)
-    destination = Path(dest)
     destination.parent.mkdir(parents=True, exist_ok=True)
     stage = destination.parent / (destination.name + ".installing")
+    backup = destination.parent / (destination.name + ".previous")
+    # Recover a previously interrupted two-rename promotion. Never discard
+    # the only available copy of a user's prior preview packs.
+    if backup.exists():
+        if not destination.exists():
+            backup.rename(destination)
+        else:
+            # Both directories exist if the new stage was promoted before a
+            # crash during backup cleanup. Keep the newly installed image
+            # only if BOTH languages and attribution are still valid.
+            try:
+                for code in ("ru", "uk"):
+                    _inspect(destination, code, synthetic)
+            except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+                shutil.rmtree(destination)
+                backup.rename(destination)
+            else:
+                shutil.rmtree(backup)
     if stage.exists():
         shutil.rmtree(stage)
     try:
@@ -96,18 +146,27 @@ def install(source, dest, synthetic=False):
             folder.mkdir(parents=True, exist_ok=True)
             for filename, payload in assets.items():
                 (folder / filename).write_bytes(payload)
-        # The pack files are immutable inputs to the ROM builder. We publish
-        # only after both complete sets exist, keeping half-installed languages
-        # out of the preview's folder.
-        if destination.exists():
-            shutil.rmtree(destination)
-        stage.rename(destination)
+        old_exists = destination.exists()
+        if old_exists:
+            destination.rename(backup)
+        try:
+            if _test_fail_promotion:
+                raise OSError("injected staging failure for rollback test")
+            stage.rename(destination)
+        except BaseException:
+            # Directory rename cannot expose a half-written pack. If it
+            # failed, restore the old complete directory before rethrowing.
+            if old_exists and backup.exists() and not destination.exists():
+                backup.rename(destination)
+            raise
     finally:
         if stage.exists():
             shutil.rmtree(stage)
+    if backup.exists():
+        shutil.rmtree(backup)
     for code, (_, d, p) in validated.items():
         print(f"CYR IMPORTED PREVIEW {code}: {d['words']} sourced words, "
-              f"{p['themes']} starter themes, {p['words']} draft passes "
+              f"{p['themes']} themes, {p['words']} unreviewed candidate passwords "
               "(NOT a certified playable locale)")
 
 
@@ -119,9 +178,28 @@ def selftest(folder):
     dest = root / "installed"
     install(source, dest, synthetic=True)
     for code in ("ru", "uk"):
-        for file in (*RESOURCE_MAX, *META_FILES):
+        for file in (*RESOURCE_MAX, *META_FILES, EXTRA_FILE):
             assert (dest / code / file).read_bytes() == (source / code / file).read_bytes()
     before = (dest / "ru" / "dict.bin").read_bytes()
+    # Exercise failure after old destination was moved to a recovery backup:
+    # previous RU and UK data must both remain present and no partial stage
+    # may survive. This is a real file-system rollback test, not a mock pass.
+    try:
+        install(source, dest, synthetic=True, _test_fail_promotion=True)
+    except OSError:
+        pass
+    else:
+        raise AssertionError("injected failed pack promotion unexpectedly succeeded")
+    assert (dest / "ru" / "dict.bin").read_bytes() == before
+    assert (dest / "uk" / EXTRA_FILE).is_file()
+    assert not (root / "installed.installing").exists()
+    assert not (root / "installed.previous").exists()
+    # Simulate interruption after moving a valid installation to backup.
+    backup = root / "installed.previous"
+    dest.rename(backup)
+    install(source, dest, synthetic=True)
+    assert (dest / "ru" / "dict.bin").read_bytes() == before
+    assert not backup.exists(), "recovery must clean up stale backup"
     license_path = source / "uk" / "LICENSE-SOURCE.txt"
     original = license_path.read_bytes()
     license_path.write_bytes(original + b"altered")
@@ -135,6 +213,21 @@ def selftest(folder):
         assert (dest / "ru" / "dict.bin").read_bytes() == before
     finally:
         license_path.write_bytes(original)
+    # A changed editorial-candidate file must not install even if its
+    # dictionary and pool binaries remain otherwise valid.
+    extra_path = source / "uk" / EXTRA_FILE
+    original_extra = extra_path.read_bytes()
+    extra_path.write_bytes(original_extra + b" ")
+    try:
+        try:
+            install(source, dest, synthetic=True)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("tampered thematic candidate attribution accepted")
+        assert (dest / "ru" / "dict.bin").read_bytes() == before
+    finally:
+        extra_path.write_bytes(original_extra)
     # A checksum-free identity attack is also rejected: IDs for Ukrainian
     # and Russian cannot be interchanged even with 33-symbol headers.
     bad_dict = source / "ru" / "dict.bin"

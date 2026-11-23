@@ -235,16 +235,24 @@ static void suite(const char *dictPath, const char *tilePath, const char *poolPa
     // or move tiles through the already-open hole.
     const uint32_t four[] = {uk?0x0407u:0x0401u,0x0416u,
                              uk?0x0410u:0x0418u,0x041au}; // ЇЖАК / ЁЖИК
+    uint8_t fourIds[4] = {0};
     for (int row=0;row<4;row++) {
         int id=v4DictSymbol(&d,four[row]);
         CHECK(id>=0,"four-gem word's letter exists");
+        fourIds[row] = (uint8_t)(id < 0 ? 0 : id);
         b.tile[1][row]=(uint8_t)(id<0?0:id);
         b.state[1][row]=SCRIPT_TILE;
         CHECK(scriptBoardAdd(&b,1,row), "script chain goes down adjacent hex cells");
     }
     int tier=0;
     int points=scriptBoardPreview(&b,&d,&t,&tier);
-    CHECK(points>0 && tier==1,"Cyrillic word scored on pass puzzle board");
+    // The small built-in fixtures mark this word COMMON, but a licensed
+    // source pack can legitimately classify it RARE. Require the exact
+    // validated dictionary tier rather than assuming a particular editor's
+    // frequency classification.
+    int actualTier = v4DictLookupIds(&d, fourIds, 4);
+    CHECK(points>0 && actualTier>=1 && tier==actualTier,
+          "Cyrillic word scored on pass puzzle board at source dictionary tier");
     uint8_t secretC[WPP2_MAX_LEN],secretR[WPP2_MAX_LEN];
     int k=0;
     for(int col=0;col<SCRIPT_COLS;col++)

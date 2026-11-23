@@ -120,6 +120,11 @@ as available in the in-game language picker.
       L+R after a turn can plant one valid word around burns/holes, costs
       heat and time, breaks combos, never awards points, and avoids hidden
       passwords. Includes fail-atomic and real emulator input tests.
+- [x] Add an opt-in, source-verified RU/UK theme expansion importer:
+      preserve 160 original starters, accept editorial candidates only if
+      present in the correctly licensed source dictionary, validate 40-theme
+      identities and all counts, and retain a tamper-checked provenance JSON.
+      Default ROMs remain unchanged and no new vocabulary is auto-created.
 - [ ] Expand every draft theme beyond four starter passwords, edit native
       vocabulary and balance word lengths/weighted tiles. The seeded helper
       and limited rescue offer bounded help when a safe path exists; they do
