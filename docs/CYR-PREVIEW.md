@@ -26,11 +26,15 @@ setting; after leaving a demo, the selected retail locale is unchanged.
 The old **hold L+R and press Y** developer shortcut from the title still
 opens Russian for debugging, but is no longer needed to find these modes.
 
-- Draw a word chain with the stylus; every generated shelf now plants
-  **one real, dictionary-validated 4–6-letter word** from that shelf's theme
-  (or a nearby theme for a sparse draft pool). The word and its column
-  change with the seed instead of always showing ПРИВЕТ / ПРИВІТ.
-  Press **R** for a hint to discover a playable chain.
+- Draw a word chain with the stylus. Each new shelf seeds **up to two
+  different, dictionary-validated 4–6-letter words** on independent columns,
+  from its theme whenever possible (or a nearby theme for a sparse pool).
+  Both chains are genuine board words, not repeated fixed greetings. Clearing
+  one chain cannot destroy the other through gravity. The second opening word
+  is optional when no distinct eligible source word exists; there is still at
+  least one playable chain. Press **R** for your one free path hint per shelf.
+  The separate **L+R** recovery still plants exactly one word at its normal
+  heat and turn cost, never two.
 - Press A to submit, Y to clear the chain, **R for one free word hint per shelf**,
   X to switch the language
 - Hold L and tap a letter to peel it: hidden pass letters become permanent
