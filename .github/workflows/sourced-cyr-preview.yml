@@ -6,6 +6,7 @@ on:
       - 'data/cyrlex/*_source_candidates.json'
       - 'tools/lang/fetch_cyr_upstream.py'
       - 'tools/lang/import_cyr_hunspell.py'
+      - 'tools/lang/audit_sourced_cyr.py'
       - 'tools/lang/install_cyr_preview.py'
       - 'tools/lang/hunspell.py'
       - 'tools/emu/test_cyr_preview.py'
@@ -72,6 +73,11 @@ jobs:
               assert m["dictionary_bytes"] <= 1536*1024, m
           print("SOURCED RU/UK OK: 100k words each, 347/333 attested password candidates")
           PY
+      - name: Audit sourced Russian and Ukrainian themed-word review queue
+        run: |
+          python3 tools/lang/audit_sourced_cyr.py \
+            --packs sourced-preview --min-source-words 100000 \
+            --out build/cyr-native-review
       - name: Validate real 100k-word files in the actual native C password engine
         run: |
           gcc -std=gnu11 -O2 -Wall -Wextra -Wshadow -I source \
@@ -89,6 +95,7 @@ jobs:
           path: |
             source-cache/
             sourced-preview/
+            build/cyr-native-review/
           retention-days: 21
 
   sourced-rom:

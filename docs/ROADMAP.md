@@ -155,6 +155,11 @@ strings, guide text, memory/FPS measurements and save compatibility are open
 release blockers. See `docs/CYR-PREVIEW.md` for how to try both languages
 and test unranked Daily Practice.
 
+- [x] Add a reproducible 40-theme source-backed Russian/Ukrainian word
+      review queue (Markdown + JSON), validating 100k-word WPD4 packs,
+      external candidate provenance and packed pool membership. Keep
+      native-speaker editorial approval as an explicit release blocker.
+
 ### Milestone 3 — Ukrainian
 
 - [x] Audit source-only Ukrainian spellings with U+0027, U+2019 and U+02BC
