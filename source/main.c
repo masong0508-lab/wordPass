@@ -247,9 +247,19 @@ void gameSetLanguage(int idx)
 // reload them only after every preview image is closed. S.language remains
 // the player's saved preference throughout this temporary runtime switch.
 static int scriptReturnLanguage = -1;
+// Match the retail peek safety rule: touch arms, moving off cancels, and only
+// lifting on that same gem peels it. No board fields, heap or frame searches.
+// "scriptPeekStroke" keeps a cancelled peel from turning into a word stroke.
+static bool scriptPeekStroke, scriptPeelArmed;
+static int scriptPeelCol, scriptPeelRow;
+static void scriptDropPeekStroke(void)
+{
+    scriptPeekStroke = scriptPeelArmed = false;
+}
 
 static void leaveScriptPreview(void)
 {
+    scriptDropPeekStroke();
     scriptPreviewClose();
     int language = scriptReturnLanguage;
     scriptReturnLanguage = -1;
@@ -266,6 +276,7 @@ static void leaveScriptPreview(void)
 
 static bool enterScriptPreview(int language, u32 seed, int from)
 {
+    scriptDropPeekStroke();
     G.langFrom = from == ST_OPTIONS ? ST_OPTIONS : ST_TITLE;
     scriptReturnLanguage = langCur();
     (void)langLoad(LANG_EN); // built-in data; frees all three retail buffers
@@ -865,6 +876,11 @@ int main(void)
 
 #ifdef WP_CYR_PREVIEW
             case ST_SCRIPT_PREVIEW: {
+                // Non-stylus actions must cancel any pending peel before
+                // changing the board, language, help card or current word.
+                if (down & (KEY_A | KEY_B | KEY_X | KEY_Y | KEY_R |
+                            KEY_SELECT | KEY_START))
+                    scriptDropPeekStroke();
                 // L+Y opens localized rules without losing a selected chain.
                 // B closes the rules instead of unexpectedly quitting to title.
                 if ((down & KEY_Y) && (held & KEY_L)) {
@@ -918,11 +934,37 @@ int main(void)
                 }
                 if (held & KEY_TOUCH) {
                     int col, row;
-                    if (gfxCellAt(t.px, t.py, &col, &row)) {
-                        if (held & KEY_L) {
-                            if (down & KEY_TOUCH) (void)scriptPreviewPeel(col, row);
-                        } else (void)scriptPreviewChain(col, row);
+                    if (down & KEY_TOUCH) {
+                        // L at the beginning of the stroke determines the
+                        // gesture: it must never turn into letter chaining
+                        // after a cancelled peek or a released shoulder.
+                        scriptPeekStroke = (held & KEY_L) != 0;
+                        scriptPeelArmed = false;
+                        if (scriptPeekStroke &&
+                            gfxCellAt(t.px, t.py, &col, &row)) {
+                            scriptPeelArmed = true;
+                            scriptPeelCol = col;
+                            scriptPeelRow = row;
+                        }
                     }
+                    if (scriptPeekStroke) {
+                        // Moving away (even to another gem) or releasing L
+                        // disarms permanently until a fresh stylus stroke.
+                        if (scriptPeelArmed &&
+                            (!(held & KEY_L) ||
+                             !gfxCellAt(t.px, t.py, &col, &row) ||
+                             col != scriptPeelCol || row != scriptPeelRow))
+                            scriptPeelArmed = false;
+                    } else if (!(held & KEY_L) &&
+                               gfxCellAt(t.px, t.py, &col, &row)) {
+                        (void)scriptPreviewChain(col, row);
+                    }
+                } else if (keysUp() & KEY_TOUCH) {
+                    // A real peel is a single irreversible turn; canceling a
+                    // drag costs zero turns, heat or clues, like retail.
+                    if (scriptPeekStroke && scriptPeelArmed && (held & KEY_L))
+                        (void)scriptPreviewPeel(scriptPeelCol, scriptPeelRow);
+                    scriptDropPeekStroke();
                 }
                 break;
             }
