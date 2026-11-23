@@ -2440,7 +2440,12 @@ static void drawScriptPreviewBoard(void)
     hline(px0 + 2, 107, 70, GOLD_DK);
     // Give each action its own readable row instead of an English
     // controller-code cram. Full outcome text already lives on the top LCD.
-    drawText(px0 + 4, 113, scriptPreviewLanguage ? "L+TAP ВІДК" : "L+TAP ОТКР", WHITE, 1);
+    // Contextual control: the very same peel action is L+touch when the
+    // stylus is active, or L+A with a visible D-pad focus. No second HUD.
+    drawText(px0 + 4, 113, scriptPreviewCursorActive ?
+             (scriptPreviewLanguage ? "L+A ВІДК" : "L+A ОТКР") :
+             (scriptPreviewLanguage ? "L+TAP ВІДК" : "L+TAP ОТКР"),
+             WHITE, 1);
     drawText(px0 + 4, 124, scriptPreviewLanguage ? "A ПРИЙНЯТИ" : "A ПРИНЯТЬ", WHITE, 1);
     drawText(px0 + 4, 135, scriptPreviewLanguage ? "Y ОЧИСТИТИ" : "Y СБРОС", WHITE, 1);
     drawText(px0 + 4, 146, scriptPreviewLanguage ? "R ПІДКАЗКА" : "R ПОДСКАЗКА", WHITE, 1);
