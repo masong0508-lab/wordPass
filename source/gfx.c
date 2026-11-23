@@ -2460,8 +2460,8 @@ static void drawScriptPreviewHelp(void)
                    (uk ? "SELECT: НОВА СПРОБА" : "SELECT: НОВАЯ ПОПЫТКА"), INK, 1);
     drawTextCenter(128, 113, uk ? "L+SELECT: ДЕНЬ БЕЗ РЕКОРДУ" :
                                "L+SELECT: ДЕНЬ БЕЗ РЕКОРДА", INK, 1);
-    drawTextCenter(128, 126, uk ? "СЛОВО ДАЄ ЧИСЛО; +/− ПІДКАЗКА" :
-                               "СЛОВО ДАЁТ ЧИСЛО; +/− ПОДСКАЗКА", DIM_TEXT, 1);
+    drawTextCenter(128, 126, uk ? "СЛОВО ДАЄ ЧИСЛО; +/- ПІДКАЗКА" :
+                               "СЛОВО ДАЁТ ЧИСЛО; +/- ПОДСКАЗКА", DIM_TEXT, 1);
     drawTextCenter(128, 139, uk ? "L+R: НОВЕ СЛОВО (1 РАЗ)" :
                                "L+R: НОВОЕ СЛОВО (1 РАЗ)", ACCENT, 1);
     drawTextCenter(128, 152, uk ? "1 ХІД / СПЕКА +2 АБО БІЛЬШЕ" :
