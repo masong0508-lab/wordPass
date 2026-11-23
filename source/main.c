@@ -894,7 +894,14 @@ int main(void)
                     }
                     if (!(down & KEY_START)) break;
                 }
-                if (down & (KEY_B | KEY_START)) {
+                // B erases one controller-selected letter first. With no
+                // active chain it preserves the existing exit shortcut.
+                if (down & KEY_B) {
+                    if (scriptPreviewCursorBacktrack()) break;
+                    leaveScriptPreview();
+                    break;
+                }
+                if (down & KEY_START) {
                     leaveScriptPreview();
                     break;
                 }
@@ -920,6 +927,12 @@ int main(void)
                     } else (void)scriptPreviewNewPass(seedCounter);
                     break;
                 }
+                if ((down & (KEY_LEFT | KEY_RIGHT | KEY_UP | KEY_DOWN)) &&
+                    !(held & KEY_TOUCH)) {
+                    int dc = !!(down & KEY_RIGHT) - !!(down & KEY_LEFT);
+                    int dr = !!(down & KEY_DOWN) - !!(down & KEY_UP);
+                    scriptPreviewCursorMove(dc, dr);
+                }
                 if (down & KEY_Y) scriptBoardClearChain(&scriptPreviewBoard);
                 if (down & KEY_R) {
                     if (held & KEY_L) (void)scriptPreviewRescue();
@@ -930,11 +943,18 @@ int main(void)
                         (void)scriptPreviewAdvance(seedCounter);
                     else if (scriptPreviewRules.status == SCRIPT_FAILED)
                         (void)scriptPreviewNewPass(seedCounter);
-                    else (void)scriptPreviewSubmit();
+                    else if (scriptPreviewCursorActive) {
+                        if (held & KEY_L) (void)scriptPreviewCursorPeel();
+                        else (void)scriptPreviewCursorSelect();
+                    } else if (!(held & KEY_L))
+                        (void)scriptPreviewSubmit();
                 }
                 if (held & KEY_TOUCH) {
                     int col, row;
                     if (down & KEY_TOUCH) {
+                        // A real stylus stroke takes focus away from D-pad
+                        // selection without modifying the game board.
+                        scriptPreviewCursorHide();
                         // L at the beginning of the stroke determines the
                         // gesture: it must never turn into letter chaining
                         // after a cancelled peek or a released shoulder.
