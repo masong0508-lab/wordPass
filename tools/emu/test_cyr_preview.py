@@ -283,7 +283,10 @@ def main(rom, output):
           "Russian renderer must cache a real score and tier for the selected word")
     e.shot(str(out / "ru-selected-word.png"))
     check(e.fps() == 120, "selected Cyrillic word must retain 120/120 emulator frame cadence")
-    e.press("A", settle=24)
+    # Match retail's one-hand submit gesture: lift after selecting the word,
+    # then tap its final gem AGAIN. Unlike hovering during a held drag, a
+    # second fresh contact on a dictionary-valid tail submits exactly once.
+    e.tap(*e.center(*russian_path[-1]), settle=24)
     # A submitted word publishes a genuine fixed-position clue at its tail.
     # Temporarily remove only that public-bit marker: the numbered badge
     # should vanish, while scores and secret data remain unchanged.
