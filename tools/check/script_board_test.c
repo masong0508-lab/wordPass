@@ -20,6 +20,82 @@ static uint8_t *readFile(const char *name, size_t *size)
     if (fread(p, 1, (size_t)n, f) != (size_t)n) { free(p); fclose(f); return NULL; }
     fclose(f); *size = (size_t)n; return p;
 }
+// Every fresh script-ID board receives the same fixed 100-letter weighted
+// bag; reordering it for vowel coverage must never alter the distribution,
+// RNG, hidden-password positions, or the deterministic Daily practice seed.
+static void vowelFloorRegression(const V4Tiles *tiles, const char *tag)
+{
+    unsigned total = 0;
+    for (unsigned id = 0; id < tiles->symbols; id++)
+        if ((tiles->vowels >> id) & UINT64_C(1)) total += tiles->weight[id];
+    CHECK(total >= 10, "%s WPL2 bag has at least ten vowels", tag);
+    const unsigned target = total >= 14 ? 14 : total;
+    for (uint32_t n = 1; n <= 256; n++) {
+        uint32_t seed = n * 7919u + 0x9e3779b9u;
+        ScriptBoard board, repeat;
+        CHECK(scriptBoardStart(&board, tiles, seed) &&
+              scriptBoardStart(&repeat, tiles, seed) &&
+              !memcmp(&board, &repeat, sizeof board),
+              "%s seed %u opens deterministically", tag, n);
+        CHECK(board.bagPos == SCRIPT_COLS * SCRIPT_ROWS,
+              "%s seed %u consumes exactly the 56 opening tiles", tag, n);
+        unsigned histogram[WPD4_MAX_SYMBOLS] = {0};
+        unsigned frontVowels = 0;
+        for (int i = 0; i < WPL2_BAG_SIZE; i++) {
+            unsigned id = board.bag[i];
+            CHECK(id < tiles->symbols, "%s seed %u bag contains valid ID", tag, n);
+            if (id >= tiles->symbols) continue;
+            histogram[id]++;
+            if (i < SCRIPT_COLS * SCRIPT_ROWS) {
+                frontVowels += (unsigned)((tiles->vowels >> id) & UINT64_C(1));
+                CHECK(board.tile[i / SCRIPT_ROWS][i % SCRIPT_ROWS] == id &&
+                      board.state[i / SCRIPT_ROWS][i % SCRIPT_ROWS] == SCRIPT_TILE,
+                      "%s seed %u board matches weighted bag", tag, n);
+            }
+        }
+        CHECK(frontVowels >= target,
+              "%s seed %u opening board has at least %u vowels (got %u)",
+              tag, n, target, frontVowels);
+        for (unsigned id = 0; id < tiles->symbols; id++)
+            CHECK(histogram[id] == tiles->weight[id],
+                  "%s seed %u keeps original frequency/rarity of symbol %u",
+                  tag, n, id);
+        for (int c = 0; c < SCRIPT_COLS; c++) {
+            unsigned vowels = 0;
+            for (int r = 0; r < SCRIPT_ROWS; r++) {
+                unsigned id = board.tile[c][r];
+                vowels += (unsigned)((tiles->vowels >> id) & UINT64_C(1));
+            }
+            CHECK(vowels >= (total >= 14 ? 2u : 1u),
+                  "%s seed %u column %d retains enough vowels (got %u)",
+                  tag, n, c, vowels);
+        }
+    }
+}
+static void sparseVowelFloorRegression(void)
+{
+    // Construct a valid weighted-bag shape with only ten vowels among 100
+    // letters (the WPL2 loader's lower bound) and one with exactly fourteen.
+    // This exercises the corner cases in which the remaining 44 tiles may
+    // contain most vowels, without relying on natural-language frequencies.
+    for (int count = 10; count <= 14; count += 4) {
+        V4Tiles table = {0};
+        table.valid = true;
+        table.symbols = 7;
+        table.vowels = UINT64_C(1) << 4;
+        const uint8_t weights[7] = {20, 20, 20, 20, 10, 5, 5};
+        memcpy(table.weight, weights, sizeof weights);
+        // Shift four tiles from the last consonant to the vowel for the
+        // 14-vowel fixture while retaining an exactly 100-tile histogram.
+        if (count == 14) {
+            table.weight[4] = 14;
+            table.weight[5] = 3;
+            table.weight[6] = 3;
+        }
+        vowelFloorRegression(&table, count == 10 ? "10-vowel" : "14-vowel");
+    }
+}
+
 static void hintTargetRegression(void)
 {
     // Valid two-symbol dictionary: BBBBBB is playable, while AAAAAAAAAA...
@@ -78,6 +154,7 @@ static void test(const char *dictFile, const char *tileFile, bool uk)
     CHECK(scriptBoardStart(&copy, &t, 0x12345678) &&
           memcmp(&b, &copy, sizeof b) == 0, "seeded script deal reproducible");
     CHECK(sizeof b <= 384, "prototype state uses less than 384 bytes of RAM");
+    vowelFloorRegression(&t, uk ? "Ukrainian" : "Russian");
     const char *word=uk?"ПРИВІТ":"ПРИВЕТ";
     const uint32_t cps[]={0x041f,0x0420,0x0418,0x0412,uk?0x0406:0x0415,0x0422};
     for (int r=0; r<6; r++) {
@@ -141,6 +218,7 @@ int main(int argc,char **argv)
 {
     if(argc!=5) { fprintf(stderr,"usage: %s ru.wpd4 uk.wpd4 ru.wpl2 uk.wpl2\n",argv[0]);return 2; }
     hintTargetRegression();
+    sparseVowelFloorRegression();
     test(argv[1],argv[3],false);
     test(argv[2],argv[4],true);
     printf(failures?"SCRIPT BOARD FAILED: %d failures\n":"SCRIPT BOARD OK: 33-letter hex chains, preview, submit, deterministic refill\n",failures);
