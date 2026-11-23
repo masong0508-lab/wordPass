@@ -142,9 +142,11 @@ def main(rom, output):
     e.shot(str(out / "russian-controller-cursor.png"))
     with Image.open(out / "ru-board.png") as no_cursor, Image.open(
             out / "russian-controller-cursor.png") as with_cursor:
-        region = (*e.cell_rect(4, 4)[:2],)
-        px, py = region
-        region = (px, 192 + py, px + 24, 192 + py + 22)
+        # cell_rect() already returns coordinates in the combined
+        # 256x384 image, including the touch LCD's +192 row offset.
+        # Do NOT add 192 again: the previous test cropped empty space.
+        px, py, x1, y1 = e.cell_rect(4, 4)
+        region = (px, py, x1, y1)
         check(ImageChops.difference(
             no_cursor.convert("RGB").crop(region),
             with_cursor.convert("RGB").crop(region)).getbbox() is not None,
