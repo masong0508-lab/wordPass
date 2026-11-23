@@ -48,6 +48,15 @@ opens Russian for debugging, but is no longer needed to find these modes.
   logically empty neighbor can still cost a dangerous peel under fire
 - Press Select for a fresh attempt on the current shelf, Start or B to leave the preview
 
+Password lengths now vary with shelf progression rather than requesting
+five letters forever: shelves 1–3 use a four/five-letter target, shelves
+4–9 five/six, shelves 10–19 five through seven, shelves 20–34 six through
+eight, and later shelves six through nine. A theme without an exact length
+uses the nearest actual sourced word; small draft packs never manufacture
+missing passwords. These are preliminary difficulty windows, **not yet
+native-player-balanced**, and Daily Practice remains deterministic per date
+and language.
+
 Replaying a free-play shelf discards the **current attempt's** word points
 and completion bonus. Points from previously completed shelves stay banked.
 Press **A after completing the password** to bank that shelf and advance;

@@ -115,6 +115,11 @@ as available in the in-game language picker.
       source-verified words in disjoint column groups. A scored word's
       refill cannot erase the other opening chain; preserve single-word
       rescue and fixed RAM/60-FPS budgets. Native tests cover all 40 themes.
+- [x] Progress Russian/Ukrainian experimental password-length targets
+      across 4–9 letters by shelf tier, using only words actually present
+      in the active WPP2 theme and a deterministic nearest-length fallback.
+      Daily retries are stable; native C tests cover bands and all available
+      theme word lengths. Difficulty needs real-player balancing.
 - [x] Replace hidden-password cheat marks in the Cyrillic renderer with
       legitimate numbered peels and accepted-word endpoint clues. The seven
       survey row masks preserve fixed back-layer clues through gravity;
