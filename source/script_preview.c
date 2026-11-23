@@ -288,6 +288,18 @@ bool scriptPreviewChain(int c, int r)
     if (added) scriptPreviewRescueError = 0;
     return added;
 }
+bool scriptPreviewTrySubmitTail(int c, int r)
+{
+    const ScriptBoard *b = &scriptPreviewBoard;
+    if (!scriptPreviewDict.image || scriptPreviewRules.status != SCRIPT_RUNNING ||
+        b->chainLen < WPD4_MIN_WORD || b->chainLen > SCRIPT_MAX_CHAIN)
+        return false;
+    int tail = b->chainLen - 1;
+    if (b->chainC[tail] != c || b->chainR[tail] != r) return false;
+    // Only accepted words count. Invalid/short/non-tail taps never consume a
+    // turn, heat, clue or score, and keep the chain for correction.
+    return scriptPreviewSubmit() > 0;
+}
 bool scriptPreviewHint(void)
 {
     if (!scriptPreviewDict.image || scriptPreviewRules.status != SCRIPT_RUNNING ||
