@@ -30,6 +30,8 @@ static uint8_t *readFile(const char *path, size_t *size)
 static void start(unsigned seed, unsigned turns, unsigned tick)
 {
     CHECK(scriptPreviewNewPass(seed), "start real preview shelf seed %u", seed);
+    CHECK(scriptPreviewOpeningWords >= 1 && scriptPreviewOpeningWords <= 2,
+          "new Russian/Ukrainian shelf plants one or two real words");
     scriptPreviewRules.turns = (uint16_t)turns;
     scriptPreviewRules.burnTick = (uint8_t)tick;
     scriptPreviewTurns = (int)turns;
@@ -154,6 +156,7 @@ static void failedGeneration(void)
     ScriptRules rules = scriptPreviewRules;
     ScriptLedger ledger = scriptPreviewLedger;
     int score = scriptPreviewScore, shelf = scriptPreviewShelf;
+    int openingWords = scriptPreviewOpeningWords;
     uint32_t seed = scriptPreviewSeed;
     // Simulate an unavailable pool after play began. Starting a replacement
     // must fail without resetting the old clock/board/selection or score.
@@ -161,6 +164,7 @@ static void failedGeneration(void)
     scriptPreviewPools.themes = 0;
     CHECK(!scriptPreviewNewPass(421) && scriptPreviewSeed == seed &&
           scriptPreviewScore == score && scriptPreviewShelf == shelf &&
+          scriptPreviewOpeningWords == openingWords &&
           !memcmp(&board, &scriptPreviewBoard, sizeof board) &&
           !memcmp(&rules, &scriptPreviewRules, sizeof rules) &&
           !memcmp(&ledger, &scriptPreviewLedger, sizeof ledger),
