@@ -46,6 +46,14 @@ bool scriptBoardStartPass(ScriptBoard *board, const V4Dict *dictionary,
 bool scriptBoardPlantThemeWord(ScriptBoard *board, const V4Dict *dictionary,
                                const V4Tiles *tiles, const V4Pools *pools,
                                uint32_t seed);
+// On a NEW Russian/Ukrainian shelf only, plant up to two DISTINCT valid
+// themed word chains using disjoint columns. They survive one another's
+// submit/refill, never touch the hidden pass, and never consume the tile bag.
+// Returns 0 on failure, 1 for sparse packs, or 2 when both are available.
+// Rescue still calls the single-word API above and keeps its heat cost.
+int scriptBoardPlantOpeningWords(ScriptBoard *board, const V4Dict *dictionary,
+                                 const V4Tiles *tiles, const V4Pools *pools,
+                                 uint32_t seed);
 // A peel returns -1 for invalid action, 0 for empty hole, or 1..passLen for
 // the hidden symbol it revealed. Revealed diamonds are permanent firebreaks.
 int scriptBoardPeel(ScriptBoard *board, int col, int row);
