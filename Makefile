@@ -45,6 +45,10 @@ CFLAGS   := -g -Wall -Wextra -Wshadow -O2 -ffunction-sections -fdata-sections\
 ifeq ($(WP_CYR_PREVIEW),1)
 CFLAGS += -DWP_CYR_PREVIEW
 endif
+# Compile an immutable revision string into both ROM flavors. Archive builds
+# without .git still identify themselves as BUILD source, never a random date.
+WP_BUILD_REV ?= $(shell git rev-parse --short=7 HEAD 2>/dev/null || printf source)
+CFLAGS += -DWP_BUILD_REV=\"$(WP_BUILD_REV)\"
 CXXFLAGS := $(CFLAGS) -fno-rtti -fno-exceptions
 ASFLAGS  := -g $(ARCH)
 LDFLAGS   = -specs=ds_arm9.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
@@ -135,6 +139,10 @@ check:
 	$(BUILD)/lang_check
 	gcc -std=gnu11 -Wall -Wextra -Wshadow -I tools/check/stub -I source tools/check/ui_test.c source/ui.c source/ui_strings.c -o $(BUILD)/ui_check
 	$(BUILD)/ui_check
+	gcc -std=gnu11 -Wall -Wextra -Werror -I source tools/check/build_info_test.c -o $(BUILD)/build_info_retail_check
+	$(BUILD)/build_info_retail_check
+	gcc -std=gnu11 -Wall -Wextra -Werror -I source -DWP_CYR_PREVIEW -DWP_BUILD_REV='"123abcd"' -DBUILD_INFO_TEST_OVERRIDE tools/check/build_info_test.c -o $(BUILD)/build_info_preview_check
+	$(BUILD)/build_info_preview_check
 	gcc -std=gnu11 -Wall -Wextra -Wshadow -I tools/check/stub -I source tools/check/font_utf8_test.c source/font.c -o $(BUILD)/font_utf8_check
 	$(BUILD)/font_utf8_check
 	python3 tools/lang/dict_v4.py --selftest $(BUILD)
