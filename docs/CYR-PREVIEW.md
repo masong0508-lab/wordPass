@@ -48,6 +48,15 @@ opens Russian for debugging, but is no longer needed to find these modes.
   logically empty neighbor can still cost a dangerous peel under fire
 - Press Select for a fresh attempt on the current shelf, Start or B to leave the preview
 
+The top screen makes the goal explicit with **НАЙДЕНО x/y** (Russian) or
+**ЗНАЙДЕНО x/y** (Ukrainian): the number of hidden password letters already
+uncovered out of the total. These are not the ordinary front-letter gems used
+to spell words. Press **L+Y** during the demo for a short localized rules card:
+form words to earn numbered neighbor clues, then hold **L** and tap a gem to
+peel its back and uncover password letters or a numbered hole. The card also
+shows that **A** submits a word; **Y** cancels a chain on the board panel.
+This is explanation-only UI, with no automatic reveals or change to scoring.
+
 Replaying a free-play shelf discards the **current attempt's** word points
 and completion bonus. Points from previously completed shelves stay banked.
 Press **A after completing the password** to bank that shelf and advance;
