@@ -169,6 +169,12 @@ and test unranked Daily Practice.
       external candidate provenance and packed pool membership. Keep
       native-speaker editorial approval as an explicit release blocker.
 
+- [x] Give fresh 7×8 Russian/Ukrainian preview boards a deterministic
+      Qu-free vowel floor: at least one per opening column (two where the
+      existing 100-tile bag permits 14), preserving every weighted letter,
+      original RNG seed and the 60-FPS/no-heap runtime budget. Native tests
+      exercise 10-vowel and 14-vowel sparse packs and both languages.
+
 ### Milestone 3 — Ukrainian
 
 - [x] Audit source-only Ukrainian spellings with U+0027, U+2019 and U+02BC

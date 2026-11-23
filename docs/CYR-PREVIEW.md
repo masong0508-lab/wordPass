@@ -73,6 +73,16 @@ publicly earned by a word or revealed by a peel. An unopened, unsurveyed cell
 never gets its own secret-indicating glyph. The player must still choose and
 perform peels; the new cues never grant a free turn, hint or automatic reveal.
 
+The experimental Russian/Ukrainian board also now reorders its **existing**
+weighted 100-letter bag at shelf creation to avoid consonant-only columns.
+When the bag contains at least 14 vowels, each of the seven initial
+columns starts with two or more; even a legal 10-vowel bag spreads at
+least one vowel into every column. No tile values, symbol counts, hidden
+password positions, or later refill inventory change. The same date +
+language + seed always creates the same board. This occurs only on shelf
+creation, not during rendering, word tracing or hints. The 11 retail
+language engines and their saved puzzles are unaffected.
+
 The touch screen uses real 7×8 hex-grid coordinates and the same bitmap VRAM
 banks as the production game. Cyrillic glyphs render directly on gems without
 a new framebuffer, a full gem cache or per-frame allocation. A small static

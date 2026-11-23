@@ -65,6 +65,17 @@ int main(int argc, char **argv)
             uint32_t num = 0x4891bda5u + (uint32_t)seed * 7919u +
                            (uint32_t)pass * 100003u;
             if (!scriptBoardStart(&board, &tiles, num)) return 3;
+            // Compare the prefix-search algorithms on IDENTICAL board
+            // positions. Production shelf dealing may change independently
+            // (e.g. its vowel-floor fair shuffle). Regenerate a canonical
+            // WPL2 bag using the same seed and replace only the 56 visible
+            // tile IDs before timing the hint. Both old/new compilers use
+            // this exact harness and therefore start from equal evidence.
+            uint8_t canonical[WPL2_BAG_SIZE];
+            if (!v4TilesFill(&tiles, canonical, num)) return 3;
+            for (int col = 0; col < SCRIPT_COLS; col++)
+                for (int row = 0; row < SCRIPT_ROWS; row++)
+                    board.tile[col][row] = canonical[col * SCRIPT_ROWS + row];
             snapshot = board;
             uint8_t c[SCRIPT_HINT_MAX] = {0}, r[SCRIPT_HINT_MAX] = {0};
             int n = scriptBoardHint(&board, &dict, &tiles, c, r);
