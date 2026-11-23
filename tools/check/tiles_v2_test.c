@@ -54,6 +54,30 @@ static void exercise(const char *dictFile, const char *tilesFile, bool uk)
         CHECK(counts[i] == t.weight[i], "bag frequency for symbol %u", i);
         CHECK((t.weight[i] != 0) == (t.value[i] != 0), "tile values only for present letters");
     }
+    // A once-valid view can be corrupted in RAM. A refill must reject
+    // over/underfilled weights BEFORE writing any caller-owned bag bytes.
+    // In particular, a 101-tile table must never overrun the 100-byte bag.
+    V4Tiles damaged = t;
+    unsigned first = 0;
+    while (first < t.symbols && !t.weight[first]) first++;
+    CHECK(first < t.symbols, "validated WPL2 has a weighted symbol");
+    uint8_t untouched[WPL2_BAG_SIZE], guard[WPL2_BAG_SIZE];
+    memset(untouched, 0xa5, sizeof untouched);
+    memcpy(guard, untouched, sizeof guard);
+    damaged.weight[first]++;
+    CHECK(!v4TilesFill(&damaged, guard, 12345) &&
+          !memcmp(guard, untouched, sizeof guard),
+          "overfilled bag fails without touching caller memory");
+    damaged = t;
+    damaged.weight[first]--;
+    CHECK(!v4TilesFill(&damaged, guard, 12345) &&
+          !memcmp(guard, untouched, sizeof guard),
+          "underfilled bag fails without touching caller memory");
+    damaged = t;
+    damaged.symbols = WPD4_MAX_SYMBOLS + 1;
+    CHECK(!v4TilesFill(&damaged, guard, 12345) &&
+          !memcmp(guard, untouched, sizeof guard),
+          "out-of-range symbol count fails before table or bag access");
     CHECK(!v4TilesOpen(&t, tb, ts, NULL), "missing dictionary rejected");
     CHECK(!v4TilesFill(&t, a, 7), "invalidated tile table cannot deal a bag");
     CHECK(!v4TilesOpen(NULL, tb, ts, &dict), "NULL output rejected");
