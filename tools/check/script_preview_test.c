@@ -121,6 +121,86 @@ static void passLengthProgression(void)
     CHECK(scriptPreviewNewPass(617), "reset test to first shelf");
 }
 
+// Controller-only Cyrillic gameplay must share the exact same validated
+// chain/peel/score functions as the stylus, without new board state or
+// hidden-position information in its focus system.
+static void controllerOnly(void)
+{
+    CHECK(scriptPreviewNewPass(551) && !scriptPreviewCursorActive,
+          "fresh Cyrillic shelf has no inherited controller cursor");
+    ScriptBoard board = scriptPreviewBoard;
+    ScriptRules rules = scriptPreviewRules;
+    ScriptLedger ledger = scriptPreviewLedger;
+    CHECK(!scriptPreviewCursorSelect() && scriptPreviewCursorPeel() == -1 &&
+          !scriptPreviewCursorBacktrack(),
+          "controller actions without a focused tile are harmless");
+    scriptPreviewCursorMove(1, 0);
+    CHECK(scriptPreviewCursorActive && scriptPreviewCursorCol == 4 &&
+          scriptPreviewCursorRow == 4,
+          "first D-pad step starts at board center and moves right");
+    for (int i = 0; i < 20; i++) scriptPreviewCursorMove(-1, -1);
+    CHECK(scriptPreviewCursorCol == 0 && scriptPreviewCursorRow == 0,
+          "controller cursor clamps safely at upper left");
+    for (int i = 0; i < 20; i++) scriptPreviewCursorMove(1, 1);
+    CHECK(scriptPreviewCursorCol == SCRIPT_COLS - 1 &&
+          scriptPreviewCursorRow == SCRIPT_ROWS - 1,
+          "controller cursor clamps safely at lower right");
+    CHECK(!memcmp(&board, &scriptPreviewBoard, sizeof board) &&
+          !memcmp(&rules, &scriptPreviewRules, sizeof rules) &&
+          !memcmp(&ledger, &scriptPreviewLedger, sizeof ledger) &&
+          scriptPreviewTurns == 0 && scriptPreviewScore == 0,
+          "D-pad navigation is read-only and does not consume turns");
+    // Choose the first unobstructed top tile with cursor-only input and
+    // undo it with B; no accidental back-to-title action.
+    for (int i = 0; i < 20; i++) scriptPreviewCursorMove(-1, -1);
+    CHECK(scriptPreviewCursorSelect() && scriptPreviewBoard.chainLen == 1 &&
+          scriptPreviewCursorBacktrack() && !scriptPreviewBoard.chainLen &&
+          !scriptPreviewCursorBacktrack() && !scriptPreviewTurns,
+          "A selects a letter and B undoes it without leaving the shelf");
+    CHECK(scriptPreviewNewPass(552) && !scriptPreviewCursorActive &&
+          scriptPreviewHint() && !scriptPreviewCursorActive,
+          "a real hint selects a word without activating a stale D-pad cursor");
+    int len = scriptPreviewBoard.chainLen;
+    int tailC = scriptPreviewBoard.chainC[len - 1];
+    int tailR = scriptPreviewBoard.chainR[len - 1];
+    scriptPreviewCursorMove(0, 0);
+    CHECK(scriptPreviewCursorActive && scriptPreviewCursorCol == tailC &&
+          scriptPreviewCursorRow == tailR,
+          "D-pad after a hint focuses the last selected letter");
+    CHECK(scriptPreviewCursorSelect() && scriptPreviewScore > 0 &&
+          scriptPreviewTurns == 1 && !scriptPreviewBoard.chainLen,
+          "A on selected word tail submits a real word, scores and costs one turn");
+    CHECK(!scriptPreviewCursorBacktrack(), "no empty post-submit chain to undo");
+    // L+A on a discovered cursor coordinate peels exactly once; revealing a
+    // secret is still governed by the real fire/turn/password mechanics.
+    CHECK(scriptPreviewNewPass(553), "reset for controller-only secret peel");
+    int secretC = -1, secretR = -1, secretIndex = 0;
+    for (int c = 0; c < SCRIPT_COLS && secretIndex == 0; c++)
+        for (int rr = 0; rr < SCRIPT_ROWS; rr++)
+            if (scriptPreviewBoard.back[c][rr]) {
+                secretC = c; secretR = rr;
+                secretIndex = scriptPreviewBoard.back[c][rr];
+                break;
+            }
+    CHECK(secretIndex > 0 && !scriptPreviewCursorActive,
+          "real Cyrillic pass has a covered controller-peel target");
+    scriptPreviewCursorMove(0, 0);
+    while (scriptPreviewCursorCol != secretC || scriptPreviewCursorRow != secretR)
+        scriptPreviewCursorMove((secretC > scriptPreviewCursorCol) -
+                                (secretC < scriptPreviewCursorCol),
+                                (secretR > scriptPreviewCursorRow) -
+                                (secretR < scriptPreviewCursorRow));
+    CHECK(scriptPreviewCursorPeel() == secretIndex &&
+          scriptPreviewBoard.found[secretIndex - 1] == 1 &&
+          scriptPreviewPeels == 1 && scriptPreviewTurns == 1,
+          "controller L+A uses the identical real peel and turn rules");
+    scriptPreviewCursorHide();
+    CHECK(!scriptPreviewCursorActive && scriptPreviewCursorPeel() == -1,
+          "touch handoff clears D-pad focus and cannot cause extra peels");
+    CHECK(scriptPreviewNewPass(554) && !scriptPreviewCursorActive,
+          "shelf replay clears controller focus without changing save format");
+}
+
 static void retryScores(void)
 {
     CHECK(scriptPreviewNewPass(314), "start a fresh score/retry scenario");
@@ -243,6 +323,7 @@ static void exercise(const char *dictPath, const char *tilesPath,
     scriptPreviewLanguage = language;
     scriptPreviewShelf = 1;
     passLengthProgression();
+    controllerOnly();
 
     retryScores();
     failedGeneration();
