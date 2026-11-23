@@ -282,16 +282,25 @@ int scriptBoardSubmit(ScriptBoard *b, const V4Dict *dict,
     // gravity replaces the gem at its tail. Invalid words publish nothing.
     const int tail = b->chainLen - 1;
     const int clueC = b->chainC[tail], clueR = b->chainR[tail];
-    for (unsigned i = 0; i < b->chainLen; i++) {
-        int c = b->chainC[i], r = b->chainR[i];
-        if (b->state[c][r] == SCRIPT_TILE || b->state[c][r] == SCRIPT_BURN)
-            b->state[c][r] = SCRIPT_EMPTY;
+    // Refill is normally guaranteed by validated WPL2 packs. If a damaged
+    // in-memory table ever refuses a new bag, do not leave the live board
+    // partially cleared or consume a valid chain without awarding its score.
+    // A fixed-size stack copy is used only on SUBMIT, never per frame.
+    ScriptBoard next = *b;
+    for (unsigned i = 0; i < next.chainLen; i++) {
+        int c = next.chainC[i], r = next.chainR[i];
+        if (next.state[c][r] == SCRIPT_TILE || next.state[c][r] == SCRIPT_BURN)
+            next.state[c][r] = SCRIPT_EMPTY;
     }
-    if (!compact(b, tiles)) return 0;
-    b->surveyed[clueC] |= (uint8_t)(1u << clueR);
-    b->clueC = (uint8_t)clueC;
-    b->clueR = (uint8_t)clueR;
-    b->chainLen = 0;
+    if (!compact(&next, tiles)) {
+        if (tier) *tier = 0;
+        return 0;
+    }
+    next.surveyed[clueC] |= (uint8_t)(1u << clueR);
+    next.clueC = (uint8_t)clueC;
+    next.clueR = (uint8_t)clueR;
+    next.chainLen = 0;
+    *b = next;
     return pts;
 }
 // Start a flame at the highest unprotected tile, favoring columns without

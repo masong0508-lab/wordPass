@@ -197,6 +197,19 @@ static void test(const char *dictFile, const char *tileFile, bool uk)
           scriptBoardSubmit(&b,&d,&t,&tier)==0 && b.chainLen==6,
           "corrupted tile refuses submit without losing chain");
     b.tile[0][1]=save;
+    // Exhaust the current bag and damage the NEXT shuffle's weights so
+    // refill must fail. A valid word cannot partially clear the real board,
+    // consume its seed, publish a clue, or pretend it was scored.
+    V4Tiles damaged = t;
+    damaged.weight[0]++;
+    uint8_t originalPos = b.bagPos;
+    b.bagPos = WPL2_BAG_SIZE;
+    ScriptBoard rejected = b;
+    tier = 99;
+    CHECK(scriptBoardSubmit(&b,&d,&damaged,&tier)==0 && tier==0 &&
+          !memcmp(&b,&rejected,sizeof b),
+          "failed refill leaves full Cyrillic board, chain, RNG and clues unchanged");
+    b.bagPos = originalPos;
     ScriptBoard before=b;
     CHECK(scriptBoardSubmit(&b,&d,&t,&tier)==pts && !b.chainLen, "submit refreshes consumed cells");
     CHECK(scriptBoardSubmit(&copy,&d,&t,&tier)==0, "unselected chain never submits");
