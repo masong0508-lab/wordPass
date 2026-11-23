@@ -2449,10 +2449,10 @@ static void drawScriptPreviewHelp(void)
     drawTextCenter(128, 16, uk ? "УКРАЇНСЬКА / ПРАВИЛА" :
                               "РУССКИЙ / ПРАВИЛА", GOLD_LT, 1);
     hline(25, 28, 206, GOLD_DK);
-    drawTextCenter(128, 34, uk ? "З'ЄДНУЙТЕ СУСІДНІ ЛІТЕРИ" :
-                              "СОЕДИНЯЙТЕ СОСЕДНИЕ БУКВЫ", ACCENT, 1);
-    drawTextCenter(128, 48, uk ? "A: ПРИЙНЯТИ / Y: ОЧИСТИТИ" :
-                              "A: ПРИНЯТЬ / Y: СБРОС", WHITE, 1);
+    drawTextCenter(128, 34, uk ? "МЕТА: ВІДКРИТИ ВЕСЬ ПАРОЛЬ" :
+                              "ЦЕЛЬ: ОТКРЫТЬ ВЕСЬ ПАРОЛЬ", ACCENT, 1);
+    drawTextCenter(128, 48, uk ? "ТЯГНІТЬ ЛІТЕРИ / A: ПРИЙНЯТИ" :
+                              "ТЯНИТЕ БУКВЫ / A: ПРИНЯТЬ", WHITE, 1);
     drawTextCenter(128, 61, uk ? "L+ДОТИК: ВІДКРИТИ ЛІТЕРУ" :
                               "L+КАСАНИЕ: ОТКРЫТЬ БУКВУ", INK, 1);
     drawTextCenter(128, 74, uk ? "R: ОДНА ПІДКАЗКА НА ПОЛИЦЮ" :
@@ -2465,8 +2465,8 @@ static void drawScriptPreviewHelp(void)
                    (uk ? "SELECT: НОВА СПРОБА" : "SELECT: НОВАЯ ПОПЫТКА"), INK, 1);
     drawTextCenter(128, 113, uk ? "L+SELECT: ДЕНЬ БЕЗ РЕКОРДУ" :
                                "L+SELECT: ДЕНЬ БЕЗ РЕКОРДА", INK, 1);
-    drawTextCenter(128, 126, uk ? "ПОВТОР -50% / СЕРІЯ: БОНУС" :
-                               "ПОВТОР -50% / СЕРИЯ: БОНУС", DIM_TEXT, 1);
+    drawTextCenter(128, 126, uk ? "СЛОВО ДАЄ ЧИСЛО: +/- ПІДКАЗКА" :
+                               "СЛОВО ДАЁТ ЧИСЛО: +/- ПОДСКАЗКА", DIM_TEXT, 1);
     drawTextCenter(128, 139, uk ? "L+R: НОВЕ СЛОВО (1 РАЗ)" :
                                "L+R: НОВОЕ СЛОВО (1 РАЗ)", ACCENT, 1);
     drawTextCenter(128, 152, uk ? "1 ХІД / СПЕКА +2 АБО БІЛЬШЕ" :
@@ -2516,6 +2516,18 @@ static void drawScriptPreviewTop(void)
         masked[at] = 0;
         drawTextCenter(128, 70, masked, scriptBoardPassComplete(b) ? GOLD_LT : WHITE, 2);
     }
+    // Clarify the objective: front gems make words, while peels uncover
+    // hidden password symbols. This is the same FOUND x/y information shown
+    // in retail, now localized for both independent Cyrillic demo languages.
+    // At most nine flags are counted only during the top-LCD redraw.
+    unsigned revealed = 0;
+    for (unsigned i = 0; i < b->passLen; i++)
+        revealed += b->found[i] != 0;
+    char progress[48];
+    sniprintf(progress, sizeof progress,
+             scriptPreviewLanguage ? "ЗНАЙДЕНО %u/%u" : "НАЙДЕНО %u/%u",
+             revealed, (unsigned)b->passLen);
+    drawTextCenter(128, 88, progress, ACCENT, 1);
     hline(26, 96, 204, DIM);
     char chain[88] = {0};
     if (scriptBoardChainUtf8(b, &scriptPreviewDict, chain, sizeof chain)) {

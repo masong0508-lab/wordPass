@@ -25,10 +25,13 @@ languages with separate alphabet/data packs, not a language named Cyrillic.
 
 **[docs/ROADMAP.md](docs/ROADMAP.md)** tracks the remaining release work and
 the staged expansion from the current 11 playable languages into Cyrillic,
-Japanese, Korean and Chinese. The first step is a strict UTF-8 text renderer
-with hand-drawn Russian/Ukrainian glyphs; **new languages are not playable
-yet**. Their full dictionaries, pass pools, alphabet rules and UI translations
-will be separate milestones with hardware and emulator validation.
+Japanese, Korean and Chinese. The separate engineering ROM already lets you **play Russian and Ukrainian
+demo shelves**, including themed passwords, word chaining, peels and numbered
+clues. **Neither language is finished or available in the normal retail
+Classic/Daily picker.** The optional source-backed variant includes much larger
+unreviewed word lists; complete UI translations, native-speaker proofreading,
+rights review, mode parity and physical-hardware performance validation remain
+open. Japanese, Korean and Chinese are still future milestones.
 
 ## The guide
 
