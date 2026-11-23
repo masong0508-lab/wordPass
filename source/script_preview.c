@@ -22,6 +22,7 @@ int scriptPreviewDaily, scriptPreviewDailyDate, scriptPreviewDailyClockError;
 int scriptPreviewHelp;
 int scriptPreviewLastTier, scriptPreviewLastScore;
 uint32_t scriptPreviewSeed;
+int scriptPreviewOpeningWords;
 uint32_t scriptPreviewGlyphEpoch;
 int scriptPreviewOpenError;
 
@@ -77,6 +78,7 @@ void scriptPreviewClose(void)
     scriptPreviewDaily = scriptPreviewDailyDate = scriptPreviewDailyClockError = 0;
     scriptPreviewHelp = 0;
     scriptPreviewLastTier = scriptPreviewLastScore = 0;
+    scriptPreviewOpeningWords = 0;
 }
 static bool startPass(unsigned shelf, uint32_t seed, int bankedScore)
 {
@@ -95,13 +97,17 @@ static bool startPass(unsigned shelf, uint32_t seed, int bankedScore)
     // lacks that length, the prototype picks its nearest valid word length.
     if (!scriptBoardStartPass(&nextBoard, &scriptPreviewDict,
                               &scriptPreviewTiles, &scriptPreviewPools,
-                              seed, 5) ||
-        !scriptBoardPlantThemeWord(&nextBoard, &scriptPreviewDict,
-                                   &scriptPreviewTiles, &scriptPreviewPools,
-                                   seed)) return false;
+                              seed, 5)) return false;
+    // Generate up to two distinct legal opening words; explicit L+R rescue
+    // still plants only one word after charging its normal turn and heat.
+    int openingWords = scriptBoardPlantOpeningWords(
+        &nextBoard, &scriptPreviewDict, &scriptPreviewTiles,
+        &scriptPreviewPools, seed);
+    if (!openingWords) return false;
     // Generate both the hidden password and a playable word before replacing
     // a live shelf. A refused generation must not erase its score or state.
     scriptPreviewBoard = nextBoard;
+    scriptPreviewOpeningWords = openingWords;
     scriptPreviewRules = nextRules;
     scriptPreviewShelf = nextRules.shelf;
     scriptPreviewSeed = seed;
