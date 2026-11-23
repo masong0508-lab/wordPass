@@ -23,6 +23,23 @@ Unicode-script prototype without changing the released 11-language engine.
   modifiers are **not** implemented by this preliminary rules module.
   Enabling these languages in Classic/Daily remains blocked on full parity.
 
+## Accidental-peel protection (experimental DS previews)
+
+The Russian/Ukrainian demo now uses the same deliberate peek gesture as the
+regular game: **hold L and touch a gem to arm it, then lift on that SAME gem
+to peel**. Merely touching does not spend a turn. Moving the stylus off the
+armed gem (including onto a neighboring gem) permanently cancels the peel for
+that stroke; releasing L before lifting cancels too. A cancelled peek cannot
+silently turn into a normal word chain. Starting a new stroke is required to
+arm another gem, and the regular non-peek word drag is unchanged.
+
+This protects the hidden-password search from accidental taps without
+granting extra peels, reveals or hints. The small gesture state lives only
+inside the optional preview's input handler, requires no heap or board
+schema changes, and never runs a dictionary search per frame. The DeSmuME
+scenario checks no score, heat, turn, board or word-chain mutation on a
+cancelled gesture and retains the existing valid-peel-on-release checks.
+
 ## Deterministic themed password lengths
 
 The experimental Russian and Ukrainian preview used to ask the WPP2
