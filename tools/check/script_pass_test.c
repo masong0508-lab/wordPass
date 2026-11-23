@@ -172,6 +172,44 @@ static void suite(const char *dictPath, const char *tilePath, const char *poolPa
                   !memcmp(b.bag,before.bag,sizeof b.bag) &&
                   b.seed==before.seed && b.bagPos==before.bagPos,
                   "playable word cannot change password locations or RNG");
+            // The new shelf-only pathway places a second distinct word in
+            // fully independent columns when this dictionary permits it.
+            // Both source-backed and compact 40-theme pools must remain
+            // reproducible and preserve hidden pass locations and bag state.
+            ScriptBoard opening, openingCopy;
+            CHECK(scriptBoardStartPass(&opening,&d,&t,&p,seed,5),
+                  "start separate two-word opening");
+            int openings=scriptBoardPlantOpeningWords(&opening,&d,&t,&p,seed);
+            CHECK(openings>=1 && openings<=2,
+                  "theme=%u variant=%u has bounded legal opening words",theme,variation);
+            CHECK(scriptBoardStartPass(&openingCopy,&d,&t,&p,seed,5) &&
+                  scriptBoardPlantOpeningWords(&openingCopy,&d,&t,&p,seed)==openings &&
+                  !memcmp(&opening,&openingCopy,sizeof opening),
+                  "two-opening word placement must remain deterministic");
+            CHECK(!memcmp(opening.back,before.back,sizeof before.back) &&
+                  !memcmp(opening.pass,before.pass,sizeof before.pass) &&
+                  !memcmp(opening.bag,before.bag,sizeof before.bag) &&
+                  opening.seed==before.seed && opening.bagPos==before.bagPos,
+                  "two starting words must preserve all password cells and the tile bag");
+            // The optimized hint engine must find a real word on the board.
+            // After its submission the independently seeded other column
+            // should still be hintable, without using the one-use rescue.
+            if(openings==2) {
+                uint8_t c1[SCRIPT_HINT_MAX],r1[SCRIPT_HINT_MAX];
+                int n1=scriptBoardHint(&opening,&d,&t,c1,r1);
+                CHECK(n1>=WPD4_MIN_WORD,"two-word board has its first legal word");
+                if(n1>0) {
+                    for(int j=0;j<n1;j++)
+                        CHECK(scriptBoardAdd(&opening,c1[j],r1[j]),
+                              "two-word first hint follows real hex adjacency");
+                    CHECK(scriptBoardSubmit(&opening,&d,&t,NULL)>0,
+                          "first opening word submits and refills normally");
+                    uint8_t c2[SCRIPT_HINT_MAX],r2[SCRIPT_HINT_MAX];
+                    int n2=scriptBoardHint(&opening,&d,&t,c2,r2);
+                    CHECK(n2>=WPD4_MIN_WORD,
+                          "second independent word survives first word refill");
+                }
+            }
             uint8_t hc[SCRIPT_HINT_MAX], hr[SCRIPT_HINT_MAX];
             int hn = scriptBoardHint(&b,&d,&t,hc,hr);
             CHECK(hn>=WPD4_MIN_WORD && hn<=SCRIPT_HINT_MAX,
