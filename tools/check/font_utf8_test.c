@@ -26,6 +26,21 @@ int main(void)
     checkText("ПРИВІТ", 6, 0);
     checkText("УКРАЇНСЬКА", 10, 0);
     checkText("Ґ Є І Ї", 7, 0);
+    // The opt-in Russian/Ukrainian goal HUD and help must fit the 206px
+    // top-LCD plaque and use only supported 5x7 glyphs. UTF-8 bytes are
+    // deliberately NOT equated with visible characters in these checks.
+    checkText("НАЙДЕНО 0/9", 11, 0);
+    checkText("ЗНАЙДЕНО 9/9", 12, 0);
+    checkText("ЦЕЛЬ: ОТКРЫТЬ ВЕСЬ ПАРОЛЬ", 25, 0);
+    checkText("МЕТА: ВІДКРИТИ ВЕСЬ ПАРОЛЬ", 26, 0);
+    checkText("ТЯНИТЕ БУКВЫ / A: ПРИНЯТЬ", 25, 0);
+    checkText("ТЯГНІТЬ ЛІТЕРИ / A: ПРИЙНЯТИ", 28, 0);
+    checkText("СЛОВО ДАЁТ ЧИСЛО: +/- ПОДСКАЗКА", 31, 0);
+    checkText("СЛОВО ДАЄ ЧИСЛО: +/- ПІДКАЗКА", 29, 0);
+    CHECK(fontTextColumns("СЛОВО ДАЁТ ЧИСЛО: +/- ПОДСКАЗКА") * 6 <= 206,
+          "Russian help line fits inside the top screen plaque");
+    CHECK(fontTextColumns("СЛОВО ДАЄ ЧИСЛО: +/- ПІДКАЗКА") * 6 <= 206,
+          "Ukrainian help line fits inside the top screen plaque");
     checkText("привет", 6, 0);
     checkText("日本語", 3, 1);    // CJK needs a full-size atlas, not this 5x7 font.
     checkText("한글", 2, 1);      // Hangul needs composition and a larger atlas.
