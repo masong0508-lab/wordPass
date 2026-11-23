@@ -63,6 +63,24 @@ neighbors, the DS marks them with +/- cues while retaining red fire danger.
 This adds no automatic reveal, hint resource, turn, heap allocation or texture
 asset. It does **not** make Ukrainian/Russian complete retail languages.
 
+## Refill corruption safety (RU/UK engineering ROM)
+
+The validated 100-tile WPL2 bag now gets a cheap preflight weight sum **before**
+any shuffle writes to the caller's 100-byte output buffer. A damaged in-RAM
+weight table totaling 99 or 101 tiles, or an impossible symbol count, fails
+closed without changing the output buffer. The normal checksum/loader already
+rejects malformed files; this additionally protects refills after loading.
+
+Submitting a legitimate word now stages its affected 7×8 board in one small
+stack copy. The word, falling tiles, clue survey and bag RNG are committed
+**together** only when refill succeeds. A failed refill cannot remove half a
+word, spend the tile bag, reveal a clue, or report a scored word. Native
+regressions force a valid chain to encounter a damaged next bag, then verify
+that its chain and all other board bytes remain unchanged. Neither change
+adds heap, a framebuffer or per-frame search work; normal, valid dictionaries
+use the identical deterministic shuffle, score and clue result. The 11-language
+retail engine, save files and daily puzzles are untouched.
+
 ## Memory and rendering
 
 The rules state is a few dozen bytes, uses stack-bounded searches and has
