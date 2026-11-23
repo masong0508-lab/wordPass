@@ -16,6 +16,11 @@ typedef struct {
 
 // A new shelf resets the heat and turn clock; score is kept separately.
 void scriptRulesStart(ScriptRules *rules, unsigned shelf, uint32_t seed);
+// Deterministic engineering-preview password-length target (4..9).
+// The board chooses the nearest real word length within its actual theme
+// when the requested length is not in that language's WPP2 source pool.
+// No additional ROM data, save format changes or per-frame work.
+int scriptRulesPassTarget(unsigned shelf, uint32_t seed);
 // Call once after a successful word or an accepted peel (including a fatal
 // scorch). Returns a pass bonus, otherwise 0. Handles heat, flames, overtime,
 // failure and completion in one place, allowing deterministic replays.
