@@ -102,7 +102,7 @@ static bool startPass(unsigned shelf, uint32_t seed, int bankedScore)
     // still plants only one word after charging its normal turn and heat.
     int openingWords = scriptBoardPlantOpeningWords(
         &nextBoard, &scriptPreviewDict, &scriptPreviewTiles,
-        &scriptPreviewPools, seed);
+        &scriptPreviewPools, seed, NULL, NULL, NULL);
     if (!openingWords) return false;
     // Generate both the hidden password and a playable word before replacing
     // a live shelf. A refused generation must not erase its score or state.
