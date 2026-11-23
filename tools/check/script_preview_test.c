@@ -78,6 +78,49 @@ static void refused(int error, const char *why)
     CHECK(scriptPreviewRescueError == error, "%s reports expected error", why);
 }
 
+// Audit actual shelf-length selection against the real source-derived
+// WPP2 theme counts rather than just testing the pure requested target.
+// A theme may lack a 4/9-letter option, so the existing nearest legal word
+// fallback (shorter before longer) must remain deterministic.
+static int nearestThemeLength(int theme, int requested)
+{
+    for (int d = 0; d <= WPP2_MAX_LEN - WPP2_MIN_LEN; d++) {
+        int shorter = requested - d, longer = requested + d;
+        if (shorter >= WPP2_MIN_LEN &&
+            v4PoolsCount(&scriptPreviewPools, theme, shorter)) return shorter;
+        if (longer <= WPP2_MAX_LEN &&
+            v4PoolsCount(&scriptPreviewPools, theme, longer)) return longer;
+    }
+    return 0;
+}
+static void passLengthProgression(void)
+{
+    const unsigned shelves[] = {1, 3, 4, 9, 10, 19, 20, 34, 35, 55};
+    for (unsigned i = 0; i < sizeof shelves / sizeof shelves[0]; i++) {
+        scriptPreviewShelf = (int)shelves[i];
+        for (unsigned variant = 0; variant < 16; variant++) {
+            uint32_t seed = 81u + variant * 7919u + shelves[i] * 37u;
+            CHECK(scriptPreviewNewPass(seed),
+                  "shelf %u seed %u starts a complete Cyrillic password",
+                  shelves[i], seed);
+            int requested = scriptRulesPassTarget(shelves[i], scriptPreviewSeed);
+            int actual = nearestThemeLength(scriptPreviewBoard.passTheme,
+                                            requested);
+            CHECK(scriptPreviewBoard.passLen == actual &&
+                  actual >= WPP2_MIN_LEN && actual <= WPP2_MAX_LEN &&
+                  scriptPreviewRules.shelf == shelves[i],
+                  "shelf %u selects nearest source-backed pass length %d",
+                  shelves[i], actual);
+            CHECK(scriptPreviewOpeningWords >= 1 &&
+                  scriptPreviewOpeningWords <= 2 &&
+                  hintable(&scriptPreviewBoard) >= WPD4_MIN_WORD,
+                  "staged length keeps at least one playable real word");
+        }
+    }
+    scriptPreviewShelf = 1;
+    CHECK(scriptPreviewNewPass(617), "reset test to first shelf");
+}
+
 static void retryScores(void)
 {
     CHECK(scriptPreviewNewPass(314), "start a fresh score/retry scenario");
@@ -199,6 +242,7 @@ static void exercise(const char *dictPath, const char *tilesPath,
     if (!valid) { free(dict); free(tiles); free(pools); return; }
     scriptPreviewLanguage = language;
     scriptPreviewShelf = 1;
+    passLengthProgression();
 
     retryScores();
     failedGeneration();
