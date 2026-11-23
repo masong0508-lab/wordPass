@@ -885,9 +885,15 @@ int main(void)
             case ST_SCRIPT_PREVIEW: {
                 // Non-stylus actions must cancel any pending peel before
                 // changing the board, language, help card or current word.
-                if (down & (KEY_A | KEY_B | KEY_X | KEY_Y | KEY_R |
-                            KEY_SELECT | KEY_START))
+                const bool scriptKeyAction =
+                    (down & (KEY_A | KEY_B | KEY_X | KEY_Y | KEY_R |
+                             KEY_SELECT | KEY_START)) != 0;
+                if (scriptKeyAction) {
                     scriptDropPeekStroke();
+                    // A submitted word or Y clearing it while the stylus
+                    // remains down must not start a second phantom chain.
+                    if (held & KEY_TOUCH) scriptWordStrokeSuppressed = true;
+                }
                 // L+Y opens localized rules without losing a selected chain.
                 // B closes the rules instead of unexpectedly quitting to title.
                 if ((down & KEY_Y) && (held & KEY_L)) {
@@ -963,7 +969,9 @@ int main(void)
                         // selection without modifying the game board.
                         scriptPreviewCursorHide();
                         scriptWordStrokeActive = false;
-                        scriptWordStrokeSuppressed = false;
+                        // A physical touch that arrives together with a
+                        // non-touch command cannot chain letters twice.
+                        scriptWordStrokeSuppressed = scriptKeyAction;
                         // L at the beginning of the stroke determines the
                         // gesture: it must never turn into letter chaining
                         // after a cancelled peek or a released shoulder.
