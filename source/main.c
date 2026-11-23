@@ -982,6 +982,16 @@ int main(void)
                             scriptPeelArmed = true;
                             scriptPeelCol = col;
                             scriptPeelRow = row;
+                        } else if (!scriptPeekStroke &&
+                                   !scriptWordStrokeSuppressed &&
+                                   gfxCellAt(t.px, t.py, &col, &row) &&
+                                   scriptPreviewTrySubmitTail(col, row)) {
+                            // Only a FRESH contact on the already-selected
+                            // end of a valid word submits it. Continuing a
+                            // held drag across the same gem never submits.
+                            // Suppress the rest of this touch so the newly
+                            // cleared word cannot start another chain.
+                            scriptWordStrokeSuppressed = true;
                         }
                     }
                     if (scriptPeekStroke) {
