@@ -43,8 +43,11 @@ platform compatibility, balancing, broader tests and script expansion.
       Finnish inflections and false-positive/false-negative word acceptance.
 - [x] CI creates a deterministic, SHA-256-verified ZIP containing the retail
       and separate experimental Cyrillic ROMs, a source-commit manifest,
-      usage instructions and license notices. Both stand-alone ROM artifacts
-      remain available. Verify the complete bundle on real hardware.
+      usage instructions and license notices. The v2 bundle also includes the
+      full third-party/Cyrillic provenance inventory and checks SHA-256 for
+      every notice; old v1 ZIPs remain readable by the verifier. This is
+      integrity checking, **not** a licence clearance. Both stand-alone ROM
+      artifacts remain available. Verify the bundle on real hardware.
 - [x] Display a compact build revision and RETAIL / CYR DEMO flavor at the
       bottom of the title's top screen. The stamp uses a fixed compile-time
       string (Git short SHA, or `source` for source archives), no new assets,
