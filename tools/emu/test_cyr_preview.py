@@ -182,10 +182,20 @@ def main(rom, output):
     check(e.state()["state"] == 9 and
           int(e.mem.unsigned[board_ptr + 152]) == 3,
           "B must undo a STYLUS-chosen letter without exiting the demo")
+    # Clear during an ongoing touch and continue moving: a simultaneous
+    # Y action must cancel the entire stroke rather than silently start a
+    # second chain as the stylus remains on the screen.
+    e.emu.input.touch_set_pos(*e.center(0, 0))
+    e.run(5)
     e.press("Y", settle=5)
+    e.emu.input.touch_set_pos(*e.center(0, 4))
+    e.run(5)
     check(int(e.mem.unsigned[board_ptr + 152]) == 0 and
-          get_int(e, "scriptPreviewTurns") == 0 and
-          bytes(e.mem.unsigned[board_ptr:board_ptr + 112]) == untouched[:112],
+          get_int(e, "scriptPreviewTurns") == 0,
+          "Y during a held touch must clear once and suppress phantom word segments")
+    e.emu.input.touch_release()
+    e.run(6)
+    check(bytes(e.mem.unsigned[board_ptr:board_ptr + 112]) == untouched[:112],
           "fast drag and backtrack change only the public word selection")
     # Switching to peek while a normal word stroke is still down must
     # freeze that stroke, even if L is released before the stylus lifts.
