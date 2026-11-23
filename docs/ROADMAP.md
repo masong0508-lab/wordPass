@@ -45,8 +45,10 @@ platform compatibility, balancing, broader tests and script expansion.
       and separate experimental Cyrillic ROMs, a source-commit manifest,
       usage instructions and license notices. Both stand-alone ROM artifacts
       remain available. Verify the complete bundle on real hardware.
-- [ ] Add a user-facing build/version marker without spending meaningful DS
-      RAM, rendering time or localization space.
+- [x] Display a compact build revision and RETAIL / CYR DEMO flavor at the
+      bottom of the title's top screen. The stamp uses a fixed compile-time
+      string (Git short SHA, or `source` for source archives), no new assets,
+      dynamic allocation or translation strings, and two native flavor tests.
 
 ## Multiscript expansion, with honest feature gates
 
