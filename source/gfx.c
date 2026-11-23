@@ -2402,6 +2402,19 @@ static void drawScriptPreviewBoard(void)
             }
         }
     }
+    // The separate controller cursor marks only the public 7x8 board
+    // coordinates. Never peek at back[][]: no password information leaks.
+    // Two thin outlines are the only additional per-frame draw cost when
+    // controller navigation is active; touch gameplay remains unchanged.
+    if (scriptPreviewCursorActive &&
+        scriptPreviewCursorCol >= 0 && scriptPreviewCursorCol < SCRIPT_COLS &&
+        scriptPreviewCursorRow >= 0 && scriptPreviewCursorRow < SCRIPT_ROWS) {
+        int c = scriptPreviewCursorCol, r = scriptPreviewCursorRow;
+        int x = gridX + c * TILE_W;
+        int y = GRID_Y + r * TILE_H + ((c & 1) ? ODD_SHIFT : 0);
+        rectOutline(x, y, TILE_W, TILE_H, WHITE);
+        rectOutline(x + 2, y + 2, TILE_W - 4, TILE_H - 4, ACCENT);
+    }
     const int px0 = panelX + 2;
     rectOutline(panelX, 2, 78, 188, GOLD_DK);
     // Show the active LANGUAGE, never an invented "Cyrillic" locale.
@@ -2453,8 +2466,8 @@ static void drawScriptPreviewHelp(void)
                               "СОЕДИНЯЙТЕ СОСЕДНИЕ БУКВЫ", ACCENT, 1);
     drawTextCenter(128, 48, uk ? "A: ПРИЙНЯТИ / Y: ОЧИСТИТИ" :
                               "A: ПРИНЯТЬ / Y: СБРОС", WHITE, 1);
-    drawTextCenter(128, 61, uk ? "L+ДОТИК: ВІДКРИТИ ЛІТЕРУ" :
-                              "L+КАСАНИЕ: ОТКРЫТЬ БУКВУ", INK, 1);
+    drawTextCenter(128, 61, uk ? "D-PAD: КУРСОР / L+A: ВІДКР" :
+                              "D-PAD: КУРСОР / L+A: ОТКР", INK, 1);
     drawTextCenter(128, 74, uk ? "R: ОДНА ПІДКАЗКА НА ПОЛИЦЮ" :
                               "R: ОДНА ПОДСКАЗКА НА ПОЛКУ", INK, 1);
     // Numbered clues: safe and certain neighboring tiles are marked with
