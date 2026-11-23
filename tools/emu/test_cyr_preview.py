@@ -130,6 +130,39 @@ def main(rom, output):
           get_int(e, "scriptPreviewTurns") == 0 and
           bytes(e.mem.unsigned[board_ptr:board_ptr + 336]) == untouched,
           "shoulder release mid-peek must cancel without a chain or heat")
+    # Controller-only demo inputs use real ARM9 D-pad and button events:
+    # move focus, choose a front gem with A, undo with B without exiting,
+    # and keep the entire hidden-password/heat/turn state untouched.
+    initial_controller_board = bytes(e.mem.unsigned[board_ptr:board_ptr + 336])
+    e.press("RIGHT", settle=6)
+    check(get_int(e, "scriptPreviewCursorActive") == 1 and
+          get_int(e, "scriptPreviewCursorCol") == 4 and
+          get_int(e, "scriptPreviewCursorRow") == 4,
+          "RIGHT should show a bounded Cyrillic D-pad cursor")
+    e.shot(str(out / "russian-controller-cursor.png"))
+    with Image.open(out / "ru-board.png") as no_cursor, Image.open(
+            out / "russian-controller-cursor.png") as with_cursor:
+        # cell_rect() already returns coordinates in the combined
+        # 256x384 image, including the touch LCD's +192 row offset.
+        # Do NOT add 192 again: the previous test cropped empty space.
+        px, py, x1, y1 = e.cell_rect(4, 4)
+        region = (px, py, x1, y1)
+        check(ImageChops.difference(
+            no_cursor.convert("RGB").crop(region),
+            with_cursor.convert("RGB").crop(region)).getbbox() is not None,
+            "D-pad focus must be visible on the actual bottom LCD")
+    e.press("A", settle=6)
+    check(int(e.mem.unsigned[board_ptr + 152]) == 1 and
+          get_int(e, "scriptPreviewTurns") == 0,
+          "controller A should select exactly one front gem at no turn cost")
+    e.press("B", settle=6)
+    check(e.state()["state"] == 9 and
+          int(e.mem.unsigned[board_ptr + 152]) == 0 and
+          get_int(e, "scriptPreviewTurns") == 0 and
+          bytes(e.mem.unsigned[board_ptr:board_ptr + 112]) ==
+          initial_controller_board[:112],
+          "B must undo a controller word, not quit or change board tiles")
+    e.press("Y", settle=5)
     # The old preview painted a gold pixel under EVERY hidden pass cell,
     # leaking the entire secret. Changing one still-covered back value
     # must not change any pixel on the touch-screen board without a peel.
@@ -360,8 +393,26 @@ def main(rom, output):
                       "hidden Cyrillic password index corrupted or duplicated")
                 secrets[index] = (col, row)
     check(len(secrets) == pass_len, "every hidden password symbol must have a tile")
+    # Peel the first actual hidden symbol using D-pad selection + L+A,
+    # then finish with the stylus. No mock peel or code-level reveal is used.
+    # Both input paths must consume one real turn per password letter.
+    e.press("RIGHT", settle=6)
+    dest_col, dest_row = secrets[1]
+    while get_int(e, "scriptPreviewCursorCol") != dest_col:
+        step = "RIGHT" if get_int(e, "scriptPreviewCursorCol") < dest_col else "LEFT"
+        e.press(step, settle=2)
+    while get_int(e, "scriptPreviewCursorRow") != dest_row:
+        step = "DOWN" if get_int(e, "scriptPreviewCursorRow") < dest_row else "UP"
+        e.press(step, settle=2)
     e.hold("L")
-    for index in range(1, pass_len + 1):
+    e.press("A", settle=5)
+    e.hold("L", False)
+    check(get_int(e, "scriptPreviewTurns") == 1 and
+          get_int(e, "scriptPreviewPeels") == 1 and
+          int(e.mem.unsigned[board + 218]) == 1,
+          "controller L+A must reveal the first real secret for exactly one turn")
+    e.hold("L")
+    for index in range(2, pass_len + 1):
         e.tap(*e.center(*secrets[index]), settle=5)
     e.hold("L", False)
     check(get_int(e, "scriptPreviewTurns") == pass_len,

@@ -2402,6 +2402,19 @@ static void drawScriptPreviewBoard(void)
             }
         }
     }
+    // The separate controller cursor marks only the public 7x8 board
+    // coordinates. Never peek at back[][]: no password information leaks.
+    // Two thin outlines are the only additional per-frame draw cost when
+    // controller navigation is active; touch gameplay remains unchanged.
+    if (scriptPreviewCursorActive &&
+        scriptPreviewCursorCol >= 0 && scriptPreviewCursorCol < SCRIPT_COLS &&
+        scriptPreviewCursorRow >= 0 && scriptPreviewCursorRow < SCRIPT_ROWS) {
+        int c = scriptPreviewCursorCol, r = scriptPreviewCursorRow;
+        int x = gridX + c * TILE_W;
+        int y = GRID_Y + r * TILE_H + ((c & 1) ? ODD_SHIFT : 0);
+        rectOutline(x, y, TILE_W, TILE_H, WHITE);
+        rectOutline(x + 2, y + 2, TILE_W - 4, TILE_H - 4, ACCENT);
+    }
     const int px0 = panelX + 2;
     rectOutline(panelX, 2, 78, 188, GOLD_DK);
     // Show the active LANGUAGE, never an invented "Cyrillic" locale.
@@ -2427,7 +2440,12 @@ static void drawScriptPreviewBoard(void)
     hline(px0 + 2, 107, 70, GOLD_DK);
     // Give each action its own readable row instead of an English
     // controller-code cram. Full outcome text already lives on the top LCD.
-    drawText(px0 + 4, 113, scriptPreviewLanguage ? "L+TAP ВІДК" : "L+TAP ОТКР", WHITE, 1);
+    // Contextual control: the very same peel action is L+touch when the
+    // stylus is active, or L+A with a visible D-pad focus. No second HUD.
+    drawText(px0 + 4, 113, scriptPreviewCursorActive ?
+             (scriptPreviewLanguage ? "L+A ВІДК" : "L+A ОТКР") :
+             (scriptPreviewLanguage ? "L+TAP ВІДК" : "L+TAP ОТКР"),
+             WHITE, 1);
     drawText(px0 + 4, 124, scriptPreviewLanguage ? "A ПРИЙНЯТИ" : "A ПРИНЯТЬ", WHITE, 1);
     drawText(px0 + 4, 135, scriptPreviewLanguage ? "Y ОЧИСТИТИ" : "Y СБРОС", WHITE, 1);
     drawText(px0 + 4, 146, scriptPreviewLanguage ? "R ПІДКАЗКА" : "R ПОДСКАЗКА", WHITE, 1);
@@ -2453,8 +2471,8 @@ static void drawScriptPreviewHelp(void)
                               "ЦЕЛЬ: ОТКРЫТЬ ВЕСЬ ПАРОЛЬ", ACCENT, 1);
     drawTextCenter(128, 48, uk ? "ТЯГНІТЬ ЛІТЕРИ / A: ПРИЙНЯТИ" :
                               "ТЯНИТЕ БУКВЫ / A: ПРИНЯТЬ", WHITE, 1);
-    drawTextCenter(128, 61, uk ? "L+ДОТИК: ВІДКРИТИ ЛІТЕРУ" :
-                              "L+КАСАНИЕ: ОТКРЫТЬ БУКВУ", INK, 1);
+    drawTextCenter(128, 61, uk ? "D-PAD: КУРСОР / L+A: ВІДКР" :
+                              "D-PAD: КУРСОР / L+A: ОТКР", INK, 1);
     drawTextCenter(128, 74, uk ? "R: ОДНА ПІДКАЗКА НА ПОЛИЦЮ" :
                               "R: ОДНА ПОДСКАЗКА НА ПОЛКУ", INK, 1);
     // Numbered clues: safe and certain neighboring tiles are marked with
