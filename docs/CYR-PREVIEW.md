@@ -3,10 +3,13 @@
 **Russian (Русский) and Ukrainian (Українська) are two separate languages.**
 Cyrillic is the writing system they share, not a third game language.
 This project builds a **separate, experimental DS ROM** alongside the
-ordinary 11-language wordPass.nds. The draft lexicons contain about 170
-words and all 40 theme headings, but only FOUR starter passwords per theme.
-These are NOT complete dictionaries, reviewed translations or finished
-Classic/Daily modes, and are not enabled in the production ROM.
+ordinary 11-language wordPass.nds. The **compact demo** has small draft
+lexicons (about 170 words per language) and four starter passwords in each
+of 40 themes. A **different, source-backed optional demo** tests 100,000
+words per language and 347 Russian / 333 Ukrainian unreviewed themed
+password candidates. Both remain engineering experiments: neither provides
+complete reviewed translations, full Classic/Daily parity or languages
+selectable in the regular 11-language production ROM.
 
 ## Choose a language on the handheld
 
@@ -78,6 +81,15 @@ uses the nearest actual sourced word; small draft packs never manufacture
 missing passwords. These are preliminary difficulty windows, **not yet
 native-player-balanced**, and Daily Practice remains deterministic per date
 and language.
+
+The top screen makes the goal explicit with **НАЙДЕНО x/y** (Russian) or
+**ЗНАЙДЕНО x/y** (Ukrainian): the number of hidden password letters already
+uncovered out of the total. These are not the ordinary front-letter gems used
+to spell words. Press **L+Y** during the demo for a short localized rules card:
+form words to earn numbered neighbor clues, then hold **L** and tap a gem to
+peel its back and uncover password letters or a numbered hole. The card also
+shows that **A** submits a word; **Y** cancels a chain on the board panel.
+This is explanation-only UI, with no automatic reveals or change to scoring.
 
 Replaying a free-play shelf discards the **current attempt's** word points
 and completion bonus. Points from previously completed shelves stay banked.
