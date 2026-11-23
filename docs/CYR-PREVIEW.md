@@ -26,6 +26,28 @@ setting; after leaving a demo, the selected retail locale is unchanged.
 The old **hold L+R and press Y** developer shortcut from the title still
 opens Russian for debugging, but is no longer needed to find these modes.
 
+### Controller-only play (no stylus required)
+
+In the **separate Russian/Ukrainian demo ROM**, the D-pad moves a visible,
+bounded 7×8 cursor over the actual gems and numbered holes. Press **A** to
+select a front letter at that cursor. Continue moving to adjacent letters;
+press **A again on the last selected letter** once the chain has at least
+three symbols to submit the accepted dictionary word. **B** removes the
+last selected letter without spending a turn. With no controller-selected
+chain to undo, **B** retains its existing back-to-title action. **Y** clears
+the whole chain; **R** selects one free word hint and allows a plain **A**
+to submit it immediately.
+
+Hold **L+A** to peel the selected gem at the cursor; the same fire, secret,
+score, clue and turn rules apply as with the stylus. Invalid positions,
+unearned clues and holes are never converted into free hints. Pressing a
+stylus tile hides the controller focus and restores normal drag or
+hold-L-to-peel operation, including its slide-away-to-cancel safeguard.
+The cursor exposes only its public coordinate and never the hidden pass
+locations. It consumes no turn/heat when moved and adds just two outlines
+to the active cursor frame; normal game saves, 11 retail languages and
+Daily scores are unchanged.
+
 - Draw a word chain with the stylus. Each new shelf seeds **up to two
   different, dictionary-validated 4–6-letter words** on independent columns,
   from its theme whenever possible (or a nearby theme for a sparse pool).
