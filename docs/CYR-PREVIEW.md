@@ -36,9 +36,9 @@ bounded 7×8 cursor over the actual gems and numbered holes. Press **A** to
 select a front letter at that cursor. Continue moving to adjacent letters;
 press **A again on the last selected letter** once the chain has at least
 three symbols to submit the accepted dictionary word. **B** removes the
-last selected letter without spending a turn. With no controller-selected
-chain to undo, **B** retains its existing back-to-title action. **Y** clears
-the whole chain; **R** selects one free word hint and allows a plain **A**
+last selected letter without spending a turn, whether it came from the
+D-pad or stylus. With no active chain to undo, **B** returns to the title.
+**Y** clears the whole chain; **R** selects one free word hint and allows a plain **A**
 to submit it immediately.
 
 Hold **L+A** to peel the selected gem at the cursor; the same fire, secret,
