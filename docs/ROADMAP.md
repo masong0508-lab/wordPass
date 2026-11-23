@@ -125,6 +125,12 @@ as available in the in-game language picker.
       present in the correctly licensed source dictionary, validate 40-theme
       identities and all counts, and retain a tamper-checked provenance JSON.
       Default ROMs remain unchanged and no new vocabulary is auto-created.
+- [x] Prepare genuine source-backed, independently screened Russian
+      (187) and Ukrainian (173) themed candidate words across all 40 themes,
+      using pinned upstream Hunspell headwords and source attribution.
+      Add a 100k-word-per-language opt-in DS build/test workflow with
+      verified original sources, memory-budget checks and emulator playthrough.
+      These candidates still require native-speaker review and production gates.
 - [ ] Expand every draft theme beyond four starter passwords, edit native
       vocabulary and balance word lengths/weighted tiles. The seeded helper
       and limited rescue offer bounded help when a safe path exists; they do

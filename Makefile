@@ -147,6 +147,7 @@ check:
 	$(BUILD)/script_board_check $(BUILD)/wpd4_ru.bin $(BUILD)/wpd4_uk.bin $(BUILD)/wpl2_ru.bin $(BUILD)/wpl2_uk.bin
 	python3 tools/lang/pools_v2.py --selftest $(BUILD)
 	python3 tools/lang/check_cyr_seeds.py
+	python3 tools/lang/fetch_cyr_upstream.py --selftest
 	python3 tools/lang/import_cyr_hunspell.py --selftest $(BUILD)/cyr-source-intake
 	python3 tools/lang/install_cyr_preview.py --selftest $(BUILD)/cyr-pack-install
 	python3 tools/lang/build_preview.py $(BUILD)/cyrpreview

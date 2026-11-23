@@ -34,26 +34,53 @@ def preferences(e):
     return bytes(e.mem.unsigned[address + 8:address + 20])
 
 
-def settle_state(e, state, language):
-    for _ in range(600):
+def settle_state(e, state, language, script_language=None):
+    # Source-backed 100k-word WPD4 loads and validation are synchronous.
+    # State remains the picker on entry, or the old preview during a switch,
+    # until the new dictionary has finished opening. Never confuse that
+    # short-lived previous-state snapshot with a completed language change.
+    sourced = "sourced" in str(e.rom_elf)
+    maximum = 2400 if sourced else 600
+    for _ in range(maximum):
         current = e.state()
-        if current['state'] == state and (language is None or current['language'] == language):
+        if (current['state'] == state and
+            (language is None or current['language'] == language) and
+            (script_language is None or
+             value(e, 'scriptPreviewLanguage') == script_language)):
             return
+        if state == 9 and value(e, 'scriptPreviewOpenError'):
+            break  # an actual malformed/unavailable resource is not a timeout
         e.run(1)
-    raise AssertionError(f'preview transition did not reach state={state}, language={language}')
+    raise AssertionError(
+        f'preview transition did not reach state={state}, language={language}, '
+        f'script-language={script_language}, load-stage={value(e, "scriptPreviewOpenError")}')
 
 
 def expect_retail(e, saved, state=0, language=6):
     settle_state(e, state, language)
+    # Source-backed dictionary switching releases half-megabyte Cyrillic
+    # images before restoring the selected retail language (Dutch here).
+    # The state mirror can report TITLE/OPTIONS and the desired language
+    # while the blocking retail FAT/NitroFS reload is still in progress.
+    # Require actual complete pointers + closed preview buffers, not only
+    # the state number, before interpreting memory ownership as a failure.
+    if "sourced" in str(e.rom_elf):
+        for _ in range(2400):
+            p = retail_buffers(e)
+            q = preview_buffers(e)
+            if (all(p) if language else not any(p)) and not any(q):
+                break
+            e.run(1)
     pointers = retail_buffers(e)
     need(all(pointers) if language else not any(pointers),
-         'retail runtime must own exactly its current language buffers')
+         f'retail buffers not restored: language={language}, pointers={pointers}, '
+         f'preview={preview_buffers(e)}, load-error={value(e, "scriptPreviewOpenError")}')
     need(not any(preview_buffers(e)), 'all three preview images must close before retail reload')
     need(preferences(e) == saved, 'temporary preview must preserve every saved preference')
 
 
 def expect_preview(e, saved, language):
-    settle_state(e, 9, None)
+    settle_state(e, 9, None, language)
     need(value(e, 'scriptPreviewLanguage') == language, 'wrong preview language')
     need(not any(retail_buffers(e)), 'retail language buffers must be freed while preview owns the heap')
     need(e.state()['language'] == 0, 'preview must leave the retail runtime on built-in English')

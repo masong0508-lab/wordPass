@@ -23,6 +23,7 @@ int scriptPreviewHelp;
 int scriptPreviewLastTier, scriptPreviewLastScore;
 uint32_t scriptPreviewSeed;
 uint32_t scriptPreviewGlyphEpoch;
+int scriptPreviewOpenError;
 
 static unsigned char *images[3];
 // Only an advance banks a completed shelf. Retrying/re-dealing rolls this
@@ -121,30 +122,42 @@ bool scriptPreviewNewPass(uint32_t seed)
 bool scriptPreviewOpen(int language, uint32_t seed)
 {
     scriptPreviewClose();
-    if (language != 0 && language != 1) return false;
+    scriptPreviewOpenError = 0;
+    if (language != 0 && language != 1) {
+        scriptPreviewOpenError = 1;
+        return false;
+    }
     const char *code = language ? "uk" : "ru";
     size_t sizes[3] = {0};
     images[0] = readPreview(code, "dict.bin", 2u << 20, &sizes[0]);
     images[1] = readPreview(code, "tiles.bin", 512u, &sizes[1]);
     images[2] = readPreview(code, "pools.bin", 256u << 10, &sizes[2]);
-    if (!images[0] || !images[1] || !images[2] ||
-        !v4DictOpen(&scriptPreviewDict, images[0], sizes[0]) ||
-        !v4TilesOpen(&scriptPreviewTiles, images[1], sizes[1],
-                     &scriptPreviewDict) ||
-        !v4PoolsOpen(&scriptPreviewPools, images[2], sizes[2],
-                     &scriptPreviewDict) ||
-        !v4PoolsMatches(&scriptPreviewPools, &scriptPreviewDict)) {
+    // Diagnostic stages separate missing/FAT/malloc reads from validation
+    // and gameplay generation. These values are never rendered as secrets.
+    int error = !images[0] ? 2 : !images[1] ? 3 : !images[2] ? 4 : 0;
+    if (!error && !v4DictOpen(&scriptPreviewDict, images[0], sizes[0])) error = 5;
+    if (!error && !v4TilesOpen(&scriptPreviewTiles, images[1], sizes[1],
+                                &scriptPreviewDict)) error = 6;
+    if (!error && !v4PoolsOpen(&scriptPreviewPools, images[2], sizes[2],
+                                &scriptPreviewDict)) error = 7;
+    if (!error && !v4PoolsMatches(&scriptPreviewPools, &scriptPreviewDict))
+        error = 8;
+    if (error) {
         scriptPreviewClose();
+        scriptPreviewOpenError = error;
         return false;
     }
     scriptPreviewLanguage = language;
     scriptPreviewShelf = 1;
     scriptPreviewThemeCount = scriptPreviewPools.themes;
     scriptPreviewScore = 0;
-    if (!scriptPreviewNewPass(seed)) { scriptPreviewClose(); return false; }
-    // The glyph cache is read by the renderer, never by the word parser.
-    // Bump only on a successful RU/UK resource load so an allocator reusing
-    // the same image pointer cannot cause stale Cyrillic glyphs.
+    if (!scriptPreviewNewPass(seed)) {
+        scriptPreviewClose();
+        scriptPreviewOpenError = 9;
+        return false;
+    }
+    // Invalidate cached glyphs on each *successful* dictionary load, even
+    // when malloc reuses an earlier image address.
     scriptPreviewGlyphEpoch++;
     return true;
 }

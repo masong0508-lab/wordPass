@@ -166,3 +166,55 @@ Native validation: `python3 tools/lang/install_cyr_preview.py --selftest
 build/cyr-pack-install`. The test checks both language installs, attribution
 tampering and cross-language pack rejection. These offline checks do not
 substitute for native speaker approval or hardware playtesting.
+
+## Real sourced-RU/UK content build (separate experiment)
+
+The project now has two committed, individually edited **unreviewed candidate**
+theme maps: `data/cyrlex/ru_source_candidates.json` has **187** distinct
+Russian headwords and `data/cyrlex/uk_source_candidates.json` has **173**
+distinct Ukrainian headwords, each assigned to a specific one of the existing
+40 themes. All these additions were verified against lowercase headword
+entries in the upstream LibreOffice spelling dictionaries at commit
+`c0865a85eb67dc377f2cf8e8fe2c4fa9e53f0dcb`; no Russian dictionary is used
+as a substitute for Ukrainian. With the 160 original starters, that yields
+**347 Russian** and **333 Ukrainian** experimental password candidates.
+
+The file `tools/lang/fetch_cyr_upstream.py` fetches the pinned RU/UK
+`.dic`, `.aff` and original README notice files, and **verifies their exact
+Git blob hashes** before parsing. The sources were not copied into the retail
+ROM or silently rewritten. Its offline integrity selftest runs with
+`make check`. Upstream references:
+
+- Russian: [LibreOffice ru_RU at pinned commit](https://github.com/LibreOffice/dictionaries/tree/c0865a85eb67dc377f2cf8e8fe2c4fa9e53f0dcb/ru_RU).
+  The README credits Alexander I. Lebedev and grants BSD-like source/binary
+  redistribution with attribution, full disclaimer and modification labeling.
+- Ukrainian: [LibreOffice uk_UA at pinned commit](https://github.com/LibreOffice/dictionaries/tree/c0865a85eb67dc377f2cf8e8fe2c4fa9e53f0dcb/uk_UA).
+  The README credits Andriy Rysin/dict_uk and identifies Mozilla Public
+  License 1.1. Source-availability obligations must be reviewed before
+  distributing a release.
+
+A dedicated GitHub Actions workflow, `sourced-cyr-preview.yml`, fetches
+these sources and makes two **100,000-word, source-derived** candidate
+dictionaries, retaining all 347/333 thematic passwords. Its opt-in
+`--sample-words` option favors shorter spellable chains by length band
+(65% from lengths 3–6, 30% from 7–9, 5% from 10–20) with deterministic,
+non-frequency sampling and mandatory theme preservation. **It is NOT a
+frequency estimate**, and neither spells nor themed associations are
+native-speaker reviewed. All ordinary extra words are classed rare unless
+a separate reviewed rank source is provided. Sampling prevents the much larger
+Hunspell-expanded word corpus exceeding the Nintendo DS's dictionary RAM
+budget; the script records the policy in each source manifest.
+
+The workflow builds a **separate experimental DS preview ROM** from those
+actual source packs; it never enables these two locales in the ordinary
+11-language retail ROM. Download the `wordPass-real-RU-UK-experimental-ROM`
+and `wordPass-ru-uk-sourced-lexicons` Actions artifacts together, so
+modified binary packs, exact original source files, licenses, manifests and
+source links remain available. The build validates WPD4/WPL2/WPP2 consistency
+and actual DS ROM memory budgets. Its emulator job exercises both languages.
+
+This is a genuine source-backed development milestone, **not** complete
+translation, fully ranked vocabulary or redistribution clearance. Native
+speakers need to review misspellings, semantic theme assignments, apostrophe
+coverage, profanity and frequency before any public release or default menu
+integration.

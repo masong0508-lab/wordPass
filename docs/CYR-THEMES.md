@@ -33,6 +33,8 @@ The following two starter entries were corrected against dictionary entries:
 | Russian / SMITHY | МЕЧЬ | ГОРН | [Gramota's dictionary entry](https://gramota.ru/meta/gorn) lists the forge/furnace sense. This supplies a valid four-letter smithy term without retaining the misspelled sword entry. |
 | Ukrainian / MOODS | СУМОК | СМУТОК | [СУМ-11 dictionary entry](https://sum11.com.ua/smutok/) defines the intended sad mood. The corrected spelling fits the existing 4..9-symbol password limit. |
 
+| Ukrainian / ARCHIVE | ПАПКА | ТЕКА | The [Ukrainian explanatory dictionary](https://slovnyk.ua/index.php?swrd=%D1%82%D0%B5%D0%BA%D0%B0) identifies ТЕКА as a folder for documents. The pinned LibreOffice uk_UA source contains lowercase `тека` but the importer's full Hunspell expansion does not contain ПАПКА; prefer the verified native-language synonym instead of adding an unsupported source word. |
+
 Both retain four distinct candidates per theme and are included in the
 generated preview dictionary and pools. These corrections do not constitute
 native-speaker approval of the remaining draft catalog.
