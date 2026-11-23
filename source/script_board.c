@@ -405,7 +405,8 @@ static bool plantThemeWord(ScriptBoard *b, const V4Dict *dict,
                            const V4Tiles *tiles, const V4Pools *pools,
                            uint32_t seed, uint8_t reserved[SCRIPT_COLS],
                            const uint8_t avoid[WPP2_MAX_LEN], int avoidLen,
-                           uint8_t planted[WPP2_MAX_LEN], int *plantedLen)
+                           uint8_t planted[WPP2_MAX_LEN], int *plantedLen,
+                           uint8_t pathC[6], uint8_t pathR[6])
 {
     if (!b || !b->passLen || b->passLen > WPP2_MAX_LEN ||
         !sameAlphabet(dict, tiles) || !pools || !pools->image ||
@@ -468,6 +469,8 @@ static bool plantThemeWord(ScriptBoard *b, const V4Dict *dict,
                             int r = order == 5 ? 4 : order;
                             b->tile[c][r] = ids[i];
                             if (reserved) reserved[c] = 1;
+                            if (pathC) pathC[i] = (uint8_t)c;
+                            if (pathR) pathR[i] = (uint8_t)r;
                         }
                         if (planted) memcpy(planted, ids, (size_t)length);
                         if (plantedLen) *plantedLen = length;
@@ -486,24 +489,34 @@ bool scriptBoardPlantThemeWord(ScriptBoard *b, const V4Dict *dict,
 {
     // Single-word rescue retains its original behavior and heat cost.
     return plantThemeWord(b, dict, tiles, pools, seed, NULL, NULL, 0,
-                          NULL, NULL);
+                          NULL, NULL, NULL, NULL);
 }
 
 int scriptBoardPlantOpeningWords(ScriptBoard *b, const V4Dict *dict,
                                   const V4Tiles *tiles, const V4Pools *pools,
-                                  uint32_t seed)
+                                  uint32_t seed,
+                                  uint8_t pathC[2][6], uint8_t pathR[2][6],
+                                  uint8_t lengths[2])
 {
     // This is called only at shelf creation, never per frame or on rescue.
     // No extra board fields, static arrays, or dynamic allocations are used.
     uint8_t reserved[SCRIPT_COLS] = {0};
     uint8_t firstWord[WPP2_MAX_LEN] = {0};
     int firstLen = 0;
+    if (lengths) lengths[0] = lengths[1] = 0;
     if (!plantThemeWord(b, dict, tiles, pools, seed, reserved, NULL, 0,
-                        firstWord, &firstLen)) return 0;
+                        firstWord, &firstLen,
+                        pathC ? pathC[0] : NULL, pathR ? pathR[0] : NULL)) return 0;
+    if (lengths) lengths[0] = (uint8_t)firstLen;
     // Preserve the first word's path by reserving whole columns. Its
     // submit/refill cannot disturb a second opening chain in another column.
+    int secondLen = 0;
     if (plantThemeWord(b, dict, tiles, pools, seed ^ 0x9e3779b9u, reserved,
-                       firstWord, firstLen, NULL, NULL)) return 2;
+                       firstWord, firstLen, NULL, &secondLen,
+                       pathC ? pathC[1] : NULL, pathR ? pathR[1] : NULL)) {
+        if (lengths) lengths[1] = (uint8_t)secondLen;
+        return 2;
+    }
     return 1;  // sparse packs remain playable with at least one legal word
 }
 int scriptBoardPeel(ScriptBoard *b, int col, int row)
