@@ -98,7 +98,19 @@ static uint32_t nextRand(uint32_t *state)
 }
 bool v4TilesFill(const V4Tiles *tiles, uint8_t out[WPL2_BAG_SIZE], uint32_t seed)
 {
-    if (!tiles || !tiles->valid || !out) return false;
+    if (!tiles || !tiles->valid || !out ||
+        tiles->symbols < 2 || tiles->symbols > WPD4_MAX_SYMBOLS) return false;
+    // Validate the complete weighted bag BEFORE touching caller memory.
+    // Checked files have exactly 100 tiles, but reject an invalidated or
+    // damaged in-RAM table rather than writing past a 100-byte output.
+    // This scan runs only when a bag is dealt/refilled, not per rendered frame.
+    unsigned total = 0;
+    for (unsigned i = 0; i < tiles->symbols; i++) {
+        unsigned weight = tiles->weight[i];
+        if (weight > WPL2_BAG_SIZE - total) return false;
+        total += weight;
+    }
+    if (total != WPL2_BAG_SIZE) return false;
     unsigned pos = 0;
     for (unsigned i = 0; i < tiles->symbols; i++)
         for (unsigned j = 0; j < tiles->weight[i]; j++)
