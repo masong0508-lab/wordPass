@@ -209,6 +209,38 @@ static void controllerOnly(void)
           "shelf replay clears controller focus without changing save format");
 }
 
+static void tailTapSubmission(void)
+{
+    CHECK(scriptPreviewNewPass(666), "prepare a Cyrillic tail-tap scenario");
+    CHECK(!scriptPreviewTrySubmitTail(0, 0) &&
+          scriptPreviewScore == 0 && scriptPreviewTurns == 0,
+          "tap without a selected word cannot submit or spend a turn");
+    CHECK(scriptPreviewChain(0, 0) && scriptPreviewChain(0, 1) &&
+          !scriptPreviewTrySubmitTail(0, 1) &&
+          scriptPreviewBoard.chainLen == 2 &&
+          scriptPreviewTurns == 0 && scriptPreviewScore == 0,
+          "double-tapping a too-short two-symbol chain never auto-submits");
+    scriptBoardClearChain(&scriptPreviewBoard);
+    CHECK(scriptPreviewHint(), "valid dictionary word available for tail-tap test");
+    int n = scriptPreviewBoard.chainLen;
+    int c = scriptPreviewBoard.chainC[n - 1];
+    int rr = scriptPreviewBoard.chainR[n - 1];
+    ScriptBoard selected = scriptPreviewBoard;
+    ScriptRules rules = scriptPreviewRules;
+    CHECK(!scriptPreviewTrySubmitTail((c + 1) % SCRIPT_COLS, rr) &&
+          !memcmp(&scriptPreviewBoard, &selected, sizeof selected) &&
+          !memcmp(&scriptPreviewRules, &rules, sizeof rules),
+          "non-tail tap cannot submit, reveal clue or consume selected word");
+    CHECK(scriptPreviewTrySubmitTail(c, rr) &&
+          scriptPreviewScore > 0 && scriptPreviewTurns == 1 &&
+          scriptPreviewBoard.chainLen == 0,
+          "second fresh tail tap scores real word through normal submit path");
+    int scored = scriptPreviewScore, turns = scriptPreviewTurns;
+    CHECK(!scriptPreviewTrySubmitTail(c, rr) &&
+          scriptPreviewScore == scored && scriptPreviewTurns == turns,
+          "repeated tail taps after a submit cannot score the word twice");
+}
+
 static void retryScores(void)
 {
     CHECK(scriptPreviewNewPass(314), "start a fresh score/retry scenario");
@@ -332,6 +364,7 @@ static void exercise(const char *dictPath, const char *tilesPath,
     scriptPreviewShelf = 1;
     passLengthProgression();
     controllerOnly();
+    tailTapSubmission();
 
     retryScores();
     failedGeneration();
