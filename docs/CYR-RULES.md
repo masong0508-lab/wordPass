@@ -23,6 +23,26 @@ Unicode-script prototype without changing the released 11-language engine.
   modifiers are **not** implemented by this preliminary rules module.
   Enabling these languages in Classic/Daily remains blocked on full parity.
 
+## Deterministic themed password lengths
+
+The experimental Russian and Ukrainian preview used to ask the WPP2
+selector for five-letter passwords on every shelf even when sourced
+dictionaries included substantial four-, six-, seven-, eight- and
+nine-letter options. The preview now varies the requested password
+length as the challenge progresses: shelves 1–3 target 4–5 letters;
+4–9 target 5–6; 10–19 target 5–7; 20–34 target 6–8; 35+ target
+6–9 letters. The actual pass is still chosen **only** from dictionary-
+validated WPP2 words in the active localized theme, with the nearest
+available length if no word of the requested length exists. Equal-
+distance alternatives prefer the shorter word. No artificial spelling,
+extra gem type or secret location is generated.
+
+The length calculation is deterministic and needs no new board memory,
+RNG state, frame-time work or new asset. For unranked Daily Practice
+the date/language seed remains the same on every replay. The early
+and late bands are engineering defaults, **not** evidence of a
+native-player-tested difficulty curve or Classic/Daily parity.
+
 ## Word-earned and peel-earned numbered clues (RU/UK demo)
 
 Both experimental language engines now use the genuine shifted-hex
