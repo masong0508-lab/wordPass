@@ -163,6 +163,47 @@ def main(rom, output):
           initial_controller_board[:112],
           "B must undo a controller word, not quit or change board tiles")
     e.press("Y", settle=5)
+    # A fast stylus drag between two video samples must pick up every
+    # intervening adjacent letter, not leave a two-cell gap in the chain.
+    # The upper five rows are always ordinary front gems at shelf start.
+    untouched = bytes(e.mem.unsigned[board_ptr:board_ptr + 336])
+    e.emu.input.touch_set_pos(*e.center(0, 0))
+    e.run(5)
+    e.emu.input.touch_set_pos(*e.center(0, 3))  # jump three gem rows in 1 frame
+    e.run(5)
+    check(int(e.mem.unsigned[board_ptr + 152]) == 4 and
+          [int(e.mem.unsigned[board_ptr + 112 + i]) for i in range(4)] == [0] * 4 and
+          [int(e.mem.unsigned[board_ptr + 132 + i]) for i in range(4)] == [0, 1, 2, 3] and
+          get_int(e, "scriptPreviewTurns") == 0,
+          "fast vertical Cyrillic drag must bridge every real intervening gem")
+    e.emu.input.touch_release()
+    e.run(6)
+    e.press("B", settle=5)
+    check(e.state()["state"] == 9 and
+          int(e.mem.unsigned[board_ptr + 152]) == 3,
+          "B must undo a STYLUS-chosen letter without exiting the demo")
+    e.press("Y", settle=5)
+    check(int(e.mem.unsigned[board_ptr + 152]) == 0 and
+          get_int(e, "scriptPreviewTurns") == 0 and
+          bytes(e.mem.unsigned[board_ptr:board_ptr + 112]) == untouched[:112],
+          "fast drag and backtrack change only the public word selection")
+    # Switching to peek while a normal word stroke is still down must
+    # freeze that stroke, even if L is released before the stylus lifts.
+    e.emu.input.touch_set_pos(*e.center(0, 0))
+    e.run(5)
+    e.hold("L")
+    e.emu.input.touch_set_pos(*e.center(0, 3))
+    e.run(5)
+    e.hold("L", False)
+    e.emu.input.touch_set_pos(*e.center(0, 4))
+    e.run(5)
+    e.emu.input.touch_release()
+    e.run(8)
+    check(int(e.mem.unsigned[board_ptr + 152]) == 1 and
+          get_int(e, "scriptPreviewPeels") == 0 and
+          get_int(e, "scriptPreviewTurns") == 0,
+          "pressing and releasing L mid-word must not trigger a peel or extra word cells")
+    e.press("Y", settle=6)
     # The old preview painted a gold pixel under EVERY hidden pass cell,
     # leaking the entire secret. Changing one still-covered back value
     # must not change any pixel on the touch-screen board without a peel.
