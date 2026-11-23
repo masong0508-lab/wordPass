@@ -431,6 +431,12 @@ new experimental Cyrillic shelf/daily seed, not saved or retail puzzles.
 The native board regression verifies 256 seeds per supported language
 and 256 seeds each for 10- and 14-vowel constructed bags; it checks
 exact bag histograms, deterministic deals and 7-column coverage.
+The independent Cyrillic hint-search speed benchmark deliberately
+reconstructs the **same canonical WPL2 board tiles** in its baseline and
+optimized executables before searching. Its path-fingerprint equality
+therefore tests the search algorithm rather than failing merely because
+production shelf dealing now distributes vowels differently. Both engines
+still use exactly the same real word-search code on that common board.
 Actual DS/DSi timing and real-user playability still need hardware
 measurements. This is an opening-board fairness improvement, not proof
 of complete Russian/Ukrainian game balance.
