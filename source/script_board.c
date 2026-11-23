@@ -395,9 +395,17 @@ bool scriptBoardStartPass(ScriptBoard *b, const V4Dict *dict,
 // hidden pass cells (bottom three rows) and the board's tile bag intact.
 // The chosen 4..6-symbol path is guaranteed geometrically adjacent and safe
 // for the six-symbol hint solver. All loops and buffers have fixed bounds.
-bool scriptBoardPlantThemeWord(ScriptBoard *b, const V4Dict *dict,
-                               const V4Tiles *tiles, const V4Pools *pools,
-                               uint32_t seed)
+// Shared bounded word planter. A newly generated shelf can request two
+// distinct opening words on disjoint columns, without touching either secret
+// locations or the persistent 100-letter bag. Rescue remains a SINGLE word.
+// "reserved" is an optional 7-byte stack-only column mask. On success, a
+// seeded word reserves each column it uses, so clearing/refilling that word
+// cannot destroy the other seeded word in another column.
+static bool plantThemeWord(ScriptBoard *b, const V4Dict *dict,
+                           const V4Tiles *tiles, const V4Pools *pools,
+                           uint32_t seed, uint8_t reserved[SCRIPT_COLS],
+                           const uint8_t avoid[WPP2_MAX_LEN], int avoidLen,
+                           uint8_t planted[WPP2_MAX_LEN], int *plantedLen)
 {
     if (!b || !b->passLen || b->passLen > WPP2_MAX_LEN ||
         !sameAlphabet(dict, tiles) || !pools || !pools->image ||
@@ -409,8 +417,8 @@ bool scriptBoardPlantThemeWord(ScriptBoard *b, const V4Dict *dict,
     const int preferredCol = (int)((choice >> 5) % SCRIPT_COLS);
     const int preferredReverse = (int)((choice >> 10) & 1u);
 
-    // Theme-first, with fallback only when a tiny draft pool lacks any
-    // four-to-six-letter entry. Source packs may have fewer than 40 themes.
+    // Prefer the active theme; use a nearby theme only when its draft pool
+    // offers no short playable word. Never create a synthetic dictionary word.
     for (int step = 0; step < pools->themes; step++) {
         int theme = (b->passTheme + step) % pools->themes;
         for (int lengthStep = 0; lengthStep < 3; lengthStep++) {
@@ -423,20 +431,21 @@ bool scriptBoardPlantThemeWord(ScriptBoard *b, const V4Dict *dict,
                 uint8_t ids[WPP2_MAX_LEN];
                 if (!v4PoolsWord(pools, theme, length, pick, ids) ||
                     !v4DictLookupIds(dict, ids, length)) continue;
-                // Prefer another valid shelf word over simply showing the
-                // exact secret in an immediately playable tile chain.
+                // Never make the hidden pass itself the obvious opening
+                // word when alternate choices exist in the pool.
                 if (count > 1 && length == b->passLen &&
                     memcmp(ids, b->pass, (size_t)length) == 0) continue;
-                // New shelves prefer one seeded column. On an already
-                // played board a peel-hole or moving flame might block it;
-                // try the remaining columns and both directions instead of
-                // overwriting a hazard, diamond or password location.
-                // This is only called on new shelf or explicit L+R rescue.
+                // Even an extremely small pack must not seed the same word
+                // twice. The second path is optional when none other exists.
+                if (avoid && length == avoidLen &&
+                    memcmp(ids, avoid, (size_t)length) == 0) continue;
+                // Both paths are anchored at deterministic hex coordinates;
+                // no mutation occurs until all candidate cells are legal.
                 for (int columnTry = 0; columnTry < SCRIPT_COLS; columnTry++) {
                     int col = (preferredCol + columnTry) % SCRIPT_COLS;
                     int beside = col == 0 ? 1 :
-                                 col == SCRIPT_COLS-1 ? col-1 :
-                                 ((choice >> 13) & 1u) ? col-1 : col+1;
+                                 col == SCRIPT_COLS - 1 ? col - 1 :
+                                 ((choice >> 13) & 1u) ? col - 1 : col + 1;
                     for (int dirTry = 0; dirTry < 2; dirTry++) {
                         int reverse = preferredReverse ^ dirTry;
                         bool eligible = true;
@@ -446,27 +455,56 @@ bool scriptBoardPlantThemeWord(ScriptBoard *b, const V4Dict *dict,
                             int r = order == 5 ? 4 : order;
                             if (ids[i] >= tiles->symbols ||
                                 !tiles->weight[ids[i]] ||
-                                b->state[c][r] != SCRIPT_TILE || b->back[c][r]) {
+                                b->state[c][r] != SCRIPT_TILE ||
+                                b->back[c][r] || (reserved && reserved[c])) {
                                 eligible = false;
                                 break;
                             }
                         }
                         if (!eligible) continue;
-                        // Confirm every tile before writing: a failed rescue
-                        // leaves the board, hidden symbols and RNG unchanged.
                         for (int i = 0; i < length; i++) {
                             int order = reverse ? length - 1 - i : i;
                             int c = order == 5 ? beside : col;
                             int r = order == 5 ? 4 : order;
                             b->tile[c][r] = ids[i];
+                            if (reserved) reserved[c] = 1;
                         }
+                        if (planted) memcpy(planted, ids, (size_t)length);
+                        if (plantedLen) *plantedLen = length;
                         return true;
                     }
                 }
             }
         }
     }
-    return false; // fail closed, never silently start an unsolvable shelf
+    return false;  // fail closed; never invent words or overwrite secrets
+}
+
+bool scriptBoardPlantThemeWord(ScriptBoard *b, const V4Dict *dict,
+                               const V4Tiles *tiles, const V4Pools *pools,
+                               uint32_t seed)
+{
+    // Single-word rescue retains its original behavior and heat cost.
+    return plantThemeWord(b, dict, tiles, pools, seed, NULL, NULL, 0,
+                          NULL, NULL);
+}
+
+int scriptBoardPlantOpeningWords(ScriptBoard *b, const V4Dict *dict,
+                                  const V4Tiles *tiles, const V4Pools *pools,
+                                  uint32_t seed)
+{
+    // This is called only at shelf creation, never per frame or on rescue.
+    // No extra board fields, static arrays, or dynamic allocations are used.
+    uint8_t reserved[SCRIPT_COLS] = {0};
+    uint8_t firstWord[WPP2_MAX_LEN] = {0};
+    int firstLen = 0;
+    if (!plantThemeWord(b, dict, tiles, pools, seed, reserved, NULL, 0,
+                        firstWord, &firstLen)) return 0;
+    // Preserve the first word's path by reserving whole columns. Its
+    // submit/refill cannot disturb a second opening chain in another column.
+    if (plantThemeWord(b, dict, tiles, pools, seed ^ 0x9e3779b9u, reserved,
+                       firstWord, firstLen, NULL, NULL)) return 2;
+    return 1;  // sparse packs remain playable with at least one legal word
 }
 int scriptBoardPeel(ScriptBoard *b, int col, int row)
 {
