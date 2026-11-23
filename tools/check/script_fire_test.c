@@ -126,6 +126,32 @@ static void exercise(const char *dbFile,const char *tbFile,const char *pbFile, b
               "scorched Cyrillic password ends as a fatal peel");
     }
 
+    // Every tier is deterministic across seeds but actually exercises its
+    // requested lengths, instead of silently keeping ALL passwords at 5.
+    // These targets are editorial/engineering balance scaffolding and the
+    // WPP2 picker still chooses only a real source-backed password.
+    const struct { unsigned shelf; int low, high; } windows[] = {
+        {1,4,5}, {3,4,5}, {4,5,6}, {9,5,6}, {10,5,7},
+        {19,5,7}, {20,6,8}, {34,6,8}, {35,6,9}, {99,6,9}
+    };
+    CHECK(scriptRulesPassTarget(1,0x1234u)==
+          scriptRulesPassTarget(1,0x1234u),
+          "same shelf and seed reproduce password length");
+    for (unsigned w=0; w<sizeof windows/sizeof windows[0]; w++) {
+        unsigned seen=0;
+        for (uint32_t seed=1;seed<=256;seed++) {
+            int length=scriptRulesPassTarget(windows[w].shelf,seed);
+            CHECK(length>=windows[w].low && length<=windows[w].high,
+                  "shelf %u password length stays inside its difficulty band",
+                  windows[w].shelf);
+            seen |= 1u << length;
+        }
+        unsigned expected=0;
+        for(int len=windows[w].low;len<=windows[w].high;len++)
+            expected |= 1u << len;
+        CHECK((seen & expected)==expected,
+              "every configured target length appears across deterministic seeds");
+    }
     ScriptRules rules;
     scriptRulesStart(&rules,1,730);
     CHECK(rules.shelf==1 && rules.turns==0 && rules.heat==0 &&
