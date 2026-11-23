@@ -64,12 +64,11 @@ bool scriptPreviewCursorSelect(void)
 {
     if (!scriptPreviewCursorActive || !scriptPreviewDict.image ||
         scriptPreviewRules.status != SCRIPT_RUNNING) return false;
-    const ScriptBoard *board = &scriptPreviewBoard;
-    int tail = board->chainLen - 1;
-    if (tail >= WPD4_MIN_WORD - 1 &&
-        board->chainC[tail] == scriptPreviewCursorCol &&
-        board->chainR[tail] == scriptPreviewCursorRow)
-        return scriptPreviewSubmit() > 0; // A twice on a valid tail submits
+    // Both cursor A and a second fresh stylus tap use the exact same
+    // dictionary-validated submit operation, so one input cannot score a
+    // rejected word or spend turns that the other input would refuse.
+    if (scriptPreviewTrySubmitTail(scriptPreviewCursorCol,
+                                   scriptPreviewCursorRow)) return true;
     return scriptPreviewChain(scriptPreviewCursorCol, scriptPreviewCursorRow);
 }
 int scriptPreviewCursorPeel(void)
