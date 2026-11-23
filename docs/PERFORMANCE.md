@@ -413,3 +413,30 @@ into the ROM. It compiles the exact baseline source commit
 matching host compiler settings and board seeds, asserts identical found
 counts and path fingerprints, and retains Markdown/JSON timings. Host timing
 ratios are observational only and are NOT physical DS FPS/cycle measurements.
+
+## Fresh Russian/Ukrainian board vowel distribution
+
+`scriptBoardStart` retains the existing deterministic 100-symbol WPL2
+weighted shuffle and the original 7×8 game board. Before the first 56
+tiles are consumed it now performs a small fixed number of exchanges
+within that same 100-slot bag, making Cyrillic words less prone to
+consonant-only columns. Each of seven columns gets at least one vowel;
+where at least 14 vowel tiles exist in the bag, it gets two. A sparse
+valid 10-vowel bag uses its available vowels without fabricating tiles.
+
+The algorithm adds no new runtime fields, heap allocations, per-frame
+font work, image assets or framebuffers. All 100 tile-ID frequencies,
+including rare letters, remain unchanged. Reordering affects only the
+new experimental Cyrillic shelf/daily seed, not saved or retail puzzles.
+The native board regression verifies 256 seeds per supported language
+and 256 seeds each for 10- and 14-vowel constructed bags; it checks
+exact bag histograms, deterministic deals and 7-column coverage.
+The independent Cyrillic hint-search speed benchmark deliberately
+reconstructs the **same canonical WPL2 board tiles** in its baseline and
+optimized executables before searching. Its path-fingerprint equality
+therefore tests the search algorithm rather than failing merely because
+production shelf dealing now distributes vowels differently. Both engines
+still use exactly the same real word-search code on that common board.
+Actual DS/DSi timing and real-user playability still need hardware
+measurements. This is an opening-board fairness improvement, not proof
+of complete Russian/Ukrainian game balance.

@@ -93,11 +93,13 @@ static bool startPass(unsigned shelf, uint32_t seed, int bankedScore)
     ScriptBoard nextBoard;
     ScriptRules nextRules;
     scriptRulesStart(&nextRules, shelf, seed);
-    // 5 and 6 are both represented in the tiny fixtures; if a sampled theme
-    // lacks that length, the prototype picks its nearest valid word length.
+    // Scale password length across shelves using only attested words from
+    // the selected theme. Small draft pools fall back to their nearest
+    // available length; sourced RU/UK packs can exercise 4..9-letter passes.
+    int target = scriptRulesPassTarget(shelf, seed);
     if (!scriptBoardStartPass(&nextBoard, &scriptPreviewDict,
                               &scriptPreviewTiles, &scriptPreviewPools,
-                              seed, 5)) return false;
+                              seed, target)) return false;
     // Generate up to two distinct legal opening words; explicit L+R rescue
     // still plants only one word after charging its normal turn and heat.
     int openingWords = scriptBoardPlantOpeningWords(

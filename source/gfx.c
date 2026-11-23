@@ -2,6 +2,7 @@
 // particles, floating popups, hardware fades and screen shake.
 #include "game.h"
 #include "script_preview.h"
+#include "build_info.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -1525,6 +1526,10 @@ static void drawTopTitle(void)
         return;
     }
     drawTipCard(tipIndex);
+    // Quiet, fixed-width identifiers for screenshots and hardware bug reports.
+    // The left label ends before the pager dots; the flavor stays at the right.
+    drawText(16, 175, WP_BUILD_LABEL, DIM_TEXT, 1);
+    drawText(192, 175, WP_BUILD_FLAVOR, DIM_TEXT, 1);
     if (G.msg[0]) drawTextCenter(128, 158, G.msg, GOLD_LT, 1);   // e.g. SET THE DS CLOCK FOR DAILY
     else if (!S.tutorDone) drawTextCenter(128, 158, ui(UI_T_NEWHERE), ACCENT, 1);   // until the first guided shelf is done
 }

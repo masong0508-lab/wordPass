@@ -51,6 +51,15 @@ opens Russian for debugging, but is no longer needed to find these modes.
   logically empty neighbor can still cost a dangerous peel under fire
 - Press Select for a fresh attempt on the current shelf, Start or B to leave the preview
 
+Password lengths now vary with shelf progression rather than requesting
+five letters forever: shelves 1–3 use a four/five-letter target, shelves
+4–9 five/six, shelves 10–19 five through seven, shelves 20–34 six through
+eight, and later shelves six through nine. A theme without an exact length
+uses the nearest actual sourced word; small draft packs never manufacture
+missing passwords. These are preliminary difficulty windows, **not yet
+native-player-balanced**, and Daily Practice remains deterministic per date
+and language.
+
 The top screen makes the goal explicit with **НАЙДЕНО x/y** (Russian) or
 **ЗНАЙДЕНО x/y** (Ukrainian): the number of hidden password letters already
 uncovered out of the total. These are not the ordinary front-letter gems used
@@ -75,6 +84,16 @@ back layer **only** to count neighboring pass positions when a number is
 publicly earned by a word or revealed by a peel. An unopened, unsurveyed cell
 never gets its own secret-indicating glyph. The player must still choose and
 perform peels; the new cues never grant a free turn, hint or automatic reveal.
+
+The experimental Russian/Ukrainian board also now reorders its **existing**
+weighted 100-letter bag at shelf creation to avoid consonant-only columns.
+When the bag contains at least 14 vowels, each of the seven initial
+columns starts with two or more; even a legal 10-vowel bag spreads at
+least one vowel into every column. No tile values, symbol counts, hidden
+password positions, or later refill inventory change. The same date +
+language + seed always creates the same board. This occurs only on shelf
+creation, not during rendering, word tracing or hints. The 11 retail
+language engines and their saved puzzles are unaffected.
 
 The touch screen uses real 7×8 hex-grid coordinates and the same bitmap VRAM
 banks as the production game. Cyrillic glyphs render directly on gems without

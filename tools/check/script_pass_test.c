@@ -92,6 +92,40 @@ static void clueTests(void)
     printf("SCRIPT CLUES OK: visible-only evidence, diamonds, holes and forced deduction\n");
 }
 
+// Also used by the 100k-word sourced RU/UK CI build: verify the actual
+// imported tile weights, not only the small built-in language fixtures.
+static void checkSourcedVowelFloor(const V4Tiles *tiles, bool uk)
+{
+    unsigned total = 0;
+    for (unsigned i = 0; i < tiles->symbols; i++)
+        if ((tiles->vowels >> i) & UINT64_C(1)) total += tiles->weight[i];
+    CHECK(total >= 10, "sourced %s weighted bag retains WPL2 vowel minimum",
+          uk ? "Ukrainian" : "Russian");
+    for (uint32_t seed = 1; seed <= 128; seed++) {
+        ScriptBoard b, copy;
+        uint32_t actual = seed * 127u + 0x20261122u;
+        CHECK(scriptBoardStart(&b, tiles, actual) &&
+              scriptBoardStart(&copy, tiles, actual) &&
+              !memcmp(&b, &copy, sizeof b),
+              "sourced Cyrillic initial vowel distribution is deterministic");
+        unsigned front = 0;
+        for (int c = 0; c < SCRIPT_COLS; c++) {
+            unsigned inColumn = 0;
+            for (int r = 0; r < SCRIPT_ROWS; r++) {
+                unsigned id = b.tile[c][r];
+                inColumn += (unsigned)((tiles->vowels >> id) & UINT64_C(1));
+            }
+            front += inColumn;
+            CHECK(inColumn >= (total >= 14 ? 2u : 1u),
+                  "sourced Cyrillic seed %u column %d has playable vowels",
+                  seed, c);
+        }
+        CHECK(front >= (total >= 14 ? 14u : total),
+              "sourced Cyrillic seed %u opening grid meets total vowel floor",
+              seed);
+    }
+}
+
 static void suite(const char *dictPath, const char *tilePath, const char *poolPath, bool uk)
 {
     size_t dl=0, tl=0, pl=0;
@@ -107,6 +141,7 @@ static void suite(const char *dictPath, const char *tilePath, const char *poolPa
           v4PoolsOpen(&p,pb,pl,&d), "validate complete Cyrillic resources");
     CHECK(v4PoolsMatches(&p, &d), "pool matches active dictionary exactly");
     CHECK(sizeof(ScriptBoard) <= 384, "prototype stays under 384 bytes of board RAM");
+    checkSourcedVowelFloor(&t, uk);
     ScriptBoard b, repeat;
     CHECK(scriptBoardStart(&b,&t,17), "basic board start");
     CHECK(scriptBoardPeel(&b,0,0) == -1 &&

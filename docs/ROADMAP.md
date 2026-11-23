@@ -45,8 +45,10 @@ platform compatibility, balancing, broader tests and script expansion.
       and separate experimental Cyrillic ROMs, a source-commit manifest,
       usage instructions and license notices. Both stand-alone ROM artifacts
       remain available. Verify the complete bundle on real hardware.
-- [ ] Add a user-facing build/version marker without spending meaningful DS
-      RAM, rendering time or localization space.
+- [x] Display a compact build revision and RETAIL / CYR DEMO flavor at the
+      bottom of the title's top screen. The stamp uses a fixed compile-time
+      string (Git short SHA, or `source` for source archives), no new assets,
+      dynamic allocation or translation strings, and two native flavor tests.
 
 ## Multiscript expansion, with honest feature gates
 
@@ -115,6 +117,11 @@ as available in the in-game language picker.
       source-verified words in disjoint column groups. A scored word's
       refill cannot erase the other opening chain; preserve single-word
       rescue and fixed RAM/60-FPS budgets. Native tests cover all 40 themes.
+- [x] Progress Russian/Ukrainian experimental password-length targets
+      across 4–9 letters by shelf tier, using only words actually present
+      in the active WPP2 theme and a deterministic nearest-length fallback.
+      Daily retries are stable; native C tests cover bands and all available
+      theme word lengths. Difficulty needs real-player balancing.
 - [x] Replace hidden-password cheat marks in the Cyrillic renderer with
       legitimate numbered peels and accepted-word endpoint clues. The seven
       survey row masks preserve fixed back-layer clues through gravity;
@@ -163,6 +170,12 @@ and test unranked Daily Practice.
       review queue (Markdown + JSON), validating 100k-word WPD4 packs,
       external candidate provenance and packed pool membership. Keep
       native-speaker editorial approval as an explicit release blocker.
+
+- [x] Give fresh 7×8 Russian/Ukrainian preview boards a deterministic
+      Qu-free vowel floor: at least one per opening column (two where the
+      existing 100-tile bag permits 14), preserving every weighted letter,
+      original RNG seed and the 60-FPS/no-heap runtime budget. Native tests
+      exercise 10-vowel and 14-vowel sparse packs and both languages.
 
 ### Milestone 3 — Ukrainian
 

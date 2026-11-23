@@ -89,12 +89,78 @@ static bool take(ScriptBoard *b, const V4Tiles *tiles, uint8_t *out)
     *out = b->bag[b->bagPos++];
     return true;
 }
+// WPL2 guarantees at least ten vowels in its full 100-letter bag, but a
+// naive shuffle can leave most of them below the first 56 playable tiles,
+// or cluster them into only a few columns. Reorder existing IDs *inside*
+// this one 100-tile bag at deal time: two vowels per hex column when the
+// bag permits 14, otherwise at least one per column. No tiles are created,
+// no rarity/letter weights change, and the refill bag retains every symbol.
+// Called only on a fresh shelf/re-deal; never on a frame or hint DFS.
+static bool vowelId(const V4Tiles *tiles, uint8_t id)
+{
+    return id < tiles->symbols &&
+           ((tiles->vowels >> id) & UINT64_C(1)) != 0;
+}
+static int columnVowels(const ScriptBoard *b, const V4Tiles *tiles, int col)
+{
+    int count = 0;
+    for (int r = 0; r < SCRIPT_ROWS; r++)
+        count += vowelId(tiles, b->bag[col * SCRIPT_ROWS + r]);
+    return count;
+}
+static void spreadOpeningVowels(ScriptBoard *b, const V4Tiles *tiles,
+                                uint32_t seed)
+{
+    const int firstUnused = SCRIPT_COLS * SCRIPT_ROWS;
+    // Preserve every bag entry exactly; perform only a bounded sequence
+    // of swaps. The second pass aims for two vowels per column rather than
+    // a game-wide total that could still leave an unusable consonant lane.
+    for (int minimum = 1; minimum <= 2; minimum++) {
+        for (int col = 0; col < SCRIPT_COLS; col++) {
+            if (columnVowels(b, tiles, col) >= minimum) continue;
+            int donor = -1;
+            // Prefer an unconsumed vowel, so the visible board gains one.
+            for (int i = firstUnused; i < WPL2_BAG_SIZE; i++) {
+                if (vowelId(tiles, b->bag[i])) { donor = i; break; }
+            }
+            if (donor < 0) {
+                // When all vowels already landed in the opening 56 slots,
+                // borrow from a column holding more than this minimum.
+                for (int other = 0; other < SCRIPT_COLS && donor < 0; other++) {
+                    if (other == col ||
+                        columnVowels(b, tiles, other) <= minimum) continue;
+                    for (int row = 0; row < SCRIPT_ROWS; row++) {
+                        int at = other * SCRIPT_ROWS + row;
+                        if (vowelId(tiles, b->bag[at])) { donor = at; break; }
+                    }
+                }
+            }
+            // WPL2 normally has >=10 vowels, but a valid sparse pack may
+            // not have enough for 2 in all seven lanes. Do not fabricate a
+            // vowel: keep the best distribution it supports.
+            if (donor < 0) continue;
+            int startRow = (int)((seed + (uint32_t)(col * 5 + minimum * 3)) %
+                                  SCRIPT_ROWS);
+            for (int step = 0; step < SCRIPT_ROWS; step++) {
+                int row = (startRow + step) % SCRIPT_ROWS;
+                int at = col * SCRIPT_ROWS + row;
+                if (vowelId(tiles, b->bag[at])) continue;
+                uint8_t tmp = b->bag[at];
+                b->bag[at] = b->bag[donor];
+                b->bag[donor] = tmp;
+                break;
+            }
+        }
+    }
+}
+
 bool scriptBoardStart(ScriptBoard *b, const V4Tiles *tiles, uint32_t seed)
 {
     if (!b || !tiles || !tiles->valid) return false;
     memset(b, 0, sizeof(*b));
     b->seed = seed ? seed : 0x9e3779b9u;
     if (!v4TilesFill(tiles, b->bag, b->seed)) return false;
+    spreadOpeningVowels(b, tiles, b->seed);
     for (int c = 0; c < SCRIPT_COLS; c++)
         for (int r = 0; r < SCRIPT_ROWS; r++) {
             b->tile[c][r] = b->bag[b->bagPos++];

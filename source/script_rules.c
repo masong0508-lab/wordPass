@@ -4,6 +4,25 @@
 #include "script_rules.h"
 #include <string.h>
 
+int scriptRulesPassTarget(unsigned shelf, uint32_t seed)
+{
+    // Small introduction, then gradually broaden password lengths. A
+    // successful word or pass may still demand several turns of reasoning.
+    // This chooses a TARGET, never invents a password missing from WPP2.
+    unsigned low = 4, range = 2;
+    if (shelf >= 35) { low = 6; range = 4; }
+    else if (shelf >= 20) { low = 6; range = 3; }
+    else if (shelf >= 10) { low = 5; range = 3; }
+    else if (shelf >= 4) { low = 5; range = 2; }
+    // Mix the shelf identity into the free-play seed without RNG state;
+    // Daily Practice receives the same date/language target on every retry.
+    uint32_t roll = seed ^ (shelf * 0x9e3779b9u);
+    roll ^= roll >> 16;
+    roll *= 0x7feb352du;
+    roll ^= roll >> 15;
+    return (int)(low + roll % range);
+}
+
 void scriptRulesStart(ScriptRules *rules, unsigned shelf, uint32_t seed)
 {
     if (!rules) return;
