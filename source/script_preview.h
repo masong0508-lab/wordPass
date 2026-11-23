@@ -40,6 +40,18 @@ extern uint32_t scriptPreviewGlyphEpoch;
 // Diagnostic stage for a failed source-backed preview launch (0 = success).
 // Exposed to the test ELF; never persisted in normal saves.
 extern int scriptPreviewOpenError;
+// Optional demo's controller-only focus, independent of the saved Game and
+// board binary format. Zero means touch/normal hint selection is active.
+extern int scriptPreviewCursorActive, scriptPreviewCursorCol, scriptPreviewCursorRow;
+// D-pad can focus any of the 7x8 slots, including clues/holes. A chains or
+// submits when pressed on the selected word's tail; L+A peels a selected
+// covered gem. B steps back one letter, or exits if no chain remains.
+// Invalid controller actions never consume a turn/heat or alter the board.
+void scriptPreviewCursorMove(int dc, int dr);
+void scriptPreviewCursorHide(void);
+bool scriptPreviewCursorSelect(void);
+int scriptPreviewCursorPeel(void);
+bool scriptPreviewCursorBacktrack(void);
 
 bool scriptPreviewOpen(int language, uint32_t seed);
 void scriptPreviewClose(void);
