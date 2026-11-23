@@ -81,6 +81,24 @@ packed derivative, never the original file. CC BY and CC BY-SA ask for that to b
 * **Hunspell dictionaries** (GPL, LGPL, MPL, BSD): the authors are credited in `data/lang/NOTICE`; the dictionaries
   themselves are not shipped, only word lists derived from them.
 
+## What travels with the GitHub Actions ROM set
+
+The `wordPass-complete-ROM-set` artifact contains a reproducible ZIP with
+both the regular 11-language ROM and the **separate experimental** RU/UK ROM.
+The v2 ZIP includes this full attribution inventory and `docs/CYR-SOURCES.md`,
+plus the original code licence, root and data notices, GPL-2.0 and WordNet
+licence copies. Its `MANIFEST.json` lists a SHA-256 and uncompressed byte
+count for **each** accompanying licence/attribution document, as well as for
+each ROM, and the verification tool rejects a missing, changed or duplicate
+notice. It can still read the historical v1 ZIP member set for compatibility.
+
+This is a technical provenance-integrity measure, not legal authorization:
+missing upstream licence texts and the owner decisions below remain open.
+A checked digest does not demonstrate that derivative redistribution rights
+were obtained or that the music's original composer/sample provenance is
+cleared. Do not mark the release's licensing gate complete solely because
+the package includes these texts.
+
 ## Decisions only the owner can make
 
 1. **Licence of `data/`.** The repository is MIT as a whole, but the data files derive from GPL-2.0-or-later (Finnish
