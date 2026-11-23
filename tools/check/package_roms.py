@@ -22,7 +22,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
 ROM_NAMES = ("wordPass.nds", "wordPass-cyr-preview.nds")
-DOCS = (
+DOCS_V1 = (
     "LICENSE",
     "NOTICE",
     "data/NOTICE",
@@ -30,6 +30,9 @@ DOCS = (
     "LICENSES/GPL-2.0.txt",
     "LICENSES/WordNet-3.0.txt",
 )
+# v2 contains the actual attribution/source inventory, not just short notices.
+# Distinguish the old v1 file set when verifying already distributed bundles.
+DOCS = DOCS_V1 + ("docs/THIRD-PARTY.md", "docs/CYR-SOURCES.md")
 STAMP = (1980, 1, 1, 0, 0, 0)
 HOW_TO = """WORDPASS — COMPLETE NINTENDO DS HOMEBREW ROM SET
 
@@ -60,7 +63,12 @@ INSTALL
 INTEGRITY AND LICENSES
   MANIFEST.json and SHA256SUMS.txt record the uncompressed ROM hashes.
   The accompanying .sha256 file (outside the ZIP) verifies the entire ZIP.
-  Third-party data and license notices are included inside the archive.
+  Third-party data, attribution inventory and license notices are included
+  inside the archive and individually checked against MANIFEST.json.
+  The data is NOT covered by the code's MIT license alone. Consult
+  docs/THIRD-PARTY.md and docs/CYR-SOURCES.md: rights and redistribution
+  obligations still require the owner's review; this archive does not grant
+  permission for any source beyond its actual terms.
   Repository: https://github.com/masong0508-lab/wordPass
 """
 
@@ -80,7 +88,15 @@ def verify(path):
     """Prove archive membership, both uncompressed hashes and source notices."""
     with zipfile.ZipFile(path, "r") as z:
         names = z.namelist()
-        expected = set(ROM_NAMES) | set(DOCS) | {
+        manifest = json.loads(z.read("MANIFEST.json").decode("utf-8"))
+        version = manifest.get("format")
+        if version == "wordPass-ROM-set-v1":
+            required_docs = DOCS_V1  # legacy archive verification
+        elif version == "wordPass-ROM-set-v2":
+            required_docs = DOCS
+        else:
+            raise ValueError("unrecognized ROM bundle manifest")
+        expected = set(ROM_NAMES) | set(required_docs) | {
             "HOW-TO-PLAY.txt", "MANIFEST.json", "SHA256SUMS.txt"
         }
         if set(names) != expected or len(names) != len(expected):
@@ -92,9 +108,6 @@ def verify(path):
                 raise ValueError("non-deterministic timestamp")
             if z.getinfo(name).file_size == 0:
                 raise ValueError("empty ZIP entry")
-        manifest = json.loads(z.read("MANIFEST.json").decode("utf-8"))
-        if manifest.get("format") != "wordPass-ROM-set-v1":
-            raise ValueError("unrecognized manifest")
         if set(manifest.get("roms", {})) != set(ROM_NAMES):
             raise ValueError("missing ROM manifest entry")
         actual = []
@@ -109,6 +122,20 @@ def verify(path):
             raise ValueError("SHA256SUMS does not match uncompressed ROMs")
         if z.read(ROM_NAMES[0]) == z.read(ROM_NAMES[1]):
             raise ValueError("retail and experimental preview are identical")
+        if version == "wordPass-ROM-set-v2":
+            # A human still has to clear source licensing obligations. This
+            # machine check prevents unnoticed post-build alteration or
+            # omission of the provenance that accompanies the game's data.
+            notices = manifest.get("notices")
+            if not isinstance(notices, dict) or set(notices) != set(DOCS):
+                raise ValueError("incomplete v2 notice and attribution manifest")
+            for name in DOCS:
+                rec = notices[name]
+                data = z.read(name)
+                if (not isinstance(rec, dict) or
+                        rec.get("bytes") != len(data) or
+                        rec.get("sha256") != digest(data)):
+                    raise ValueError("notice integrity check failed for " + name)
     return manifest
 
 
@@ -129,8 +156,12 @@ def create(retail, preview, output, commit, root=ROOT):
             raise ValueError("missing/empty license or notice: " + name)
         blobs[name] = data
     manifest = {
-        "format": "wordPass-ROM-set-v1",
+        "format": "wordPass-ROM-set-v2",
         "source_commit": commit,
+        "notices": {
+            name: {"bytes": len(blobs[name]), "sha256": digest(blobs[name])}
+            for name in DOCS
+        },
         "roms": {
             "wordPass.nds": {
                 "role": "retail-11-language",
@@ -178,7 +209,39 @@ def selftest():
         one, _ = create(retail, preview, root / "a" / "roms.zip", "a" * 40, root)
         two, _ = create(retail, preview, root / "b" / "roms.zip", "a" * 40, root)
         assert one.read_bytes() == two.read_bytes(), "archive is not reproducible"
-        assert verify(one)["roms"]["wordPass.nds"]["role"] == "retail-11-language"
+        verified = verify(one)
+        assert verified["roms"]["wordPass.nds"]["role"] == "retail-11-language"
+        assert verified["format"] == "wordPass-ROM-set-v2"
+        assert set(verified["notices"]) == set(DOCS)
+        # Tampering with a NOTICE must fail even if the two ROM hashes remain
+        # unchanged and the ZIP itself has a valid compression structure.
+        corrupted = root / "corrupt-notice.zip"
+        with zipfile.ZipFile(one, "r") as source, zipfile.ZipFile(corrupted, "w") as target:
+            for name in source.namelist():
+                payload = source.read(name)
+                if name == "NOTICE":
+                    payload += b"unauthorized edit\n"
+                info, _ = archive_member(name, payload)
+                target.writestr(info, payload, compresslevel=9)
+        try:
+            verify(corrupted)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("tampered provenance notice passed v2 manifest verification")
+        # The new checker continues to recognize older, already distributed
+        # v1 bundle manifests without requiring the new v2 inventory files.
+        legacy = root / "legacy.zip"
+        v1_manifest = dict(verified)
+        v1_manifest["format"] = "wordPass-ROM-set-v1"
+        v1_manifest.pop("notices", None)
+        with zipfile.ZipFile(one, "r") as source, zipfile.ZipFile(legacy, "w") as target:
+            for name in (*ROM_NAMES, "HOW-TO-PLAY.txt", "MANIFEST.json", "SHA256SUMS.txt", *DOCS_V1):
+                payload = ((json.dumps(v1_manifest, sort_keys=True, indent=2) + "\n").encode("utf-8")
+                           if name == "MANIFEST.json" else source.read(name))
+                info, _ = archive_member(name, payload)
+                target.writestr(info, payload, compresslevel=9)
+        assert verify(legacy)["format"] == "wordPass-ROM-set-v1"
         with zipfile.ZipFile(one, "a") as z:
             z.writestr("extra.txt", "unsolicited")
         try:
