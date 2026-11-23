@@ -25,6 +25,65 @@ uint32_t scriptPreviewSeed;
 int scriptPreviewOpeningWords;
 uint32_t scriptPreviewGlyphEpoch;
 int scriptPreviewOpenError;
+int scriptPreviewCursorActive, scriptPreviewCursorCol, scriptPreviewCursorRow;
+
+void scriptPreviewCursorHide(void)
+{
+    scriptPreviewCursorActive = 0;
+}
+void scriptPreviewCursorMove(int dc, int dr)
+{
+    if (!scriptPreviewDict.image || scriptPreviewRules.status != SCRIPT_RUNNING)
+        return;
+    if (!scriptPreviewCursorActive) {
+        // The first controller input focuses the end of an existing hint
+        // or chain, otherwise the central board tile. No hidden back data
+        // influences navigation and the board itself is never modified.
+        if (scriptPreviewBoard.chainLen) {
+            int tail = scriptPreviewBoard.chainLen - 1;
+            scriptPreviewCursorCol = scriptPreviewBoard.chainC[tail];
+            scriptPreviewCursorRow = scriptPreviewBoard.chainR[tail];
+        } else {
+            scriptPreviewCursorCol = SCRIPT_COLS / 2;
+            scriptPreviewCursorRow = SCRIPT_ROWS / 2;
+        }
+        scriptPreviewCursorActive = 1;
+    }
+    // One bounded step per button edge, keeping the same simple axis rules
+    // as the production D-pad. Positions are allowed over opened holes.
+    int c = scriptPreviewCursorCol + (dc > 0) - (dc < 0);
+    int r = scriptPreviewCursorRow + (dr > 0) - (dr < 0);
+    if (c < 0) c = 0;
+    if (c >= SCRIPT_COLS) c = SCRIPT_COLS - 1;
+    if (r < 0) r = 0;
+    if (r >= SCRIPT_ROWS) r = SCRIPT_ROWS - 1;
+    scriptPreviewCursorCol = c;
+    scriptPreviewCursorRow = r;
+}
+bool scriptPreviewCursorSelect(void)
+{
+    if (!scriptPreviewCursorActive || !scriptPreviewDict.image ||
+        scriptPreviewRules.status != SCRIPT_RUNNING) return false;
+    const ScriptBoard *board = &scriptPreviewBoard;
+    int tail = board->chainLen - 1;
+    if (tail >= WPD4_MIN_WORD - 1 &&
+        board->chainC[tail] == scriptPreviewCursorCol &&
+        board->chainR[tail] == scriptPreviewCursorRow)
+        return scriptPreviewSubmit() > 0; // A twice on a valid tail submits
+    return scriptPreviewChain(scriptPreviewCursorCol, scriptPreviewCursorRow);
+}
+int scriptPreviewCursorPeel(void)
+{
+    if (!scriptPreviewCursorActive) return -1;
+    return scriptPreviewPeel(scriptPreviewCursorCol, scriptPreviewCursorRow);
+}
+bool scriptPreviewCursorBacktrack(void)
+{
+    if (!scriptPreviewCursorActive || !scriptPreviewBoard.chainLen ||
+        scriptPreviewRules.status != SCRIPT_RUNNING) return false;
+    scriptPreviewBoard.chainLen--;
+    return true; // B on a selected chain cannot accidentally exit the demo
+}
 
 static unsigned char *images[3];
 // Only an advance banks a completed shelf. Retrying/re-dealing rolls this
@@ -79,6 +138,7 @@ void scriptPreviewClose(void)
     scriptPreviewHelp = 0;
     scriptPreviewLastTier = scriptPreviewLastScore = 0;
     scriptPreviewOpeningWords = 0;
+    scriptPreviewCursorActive = scriptPreviewCursorCol = scriptPreviewCursorRow = 0;
 }
 static bool startPass(unsigned shelf, uint32_t seed, int bankedScore)
 {
@@ -118,6 +178,7 @@ static bool startPass(unsigned shelf, uint32_t seed, int bankedScore)
     scriptPreviewRescues = scriptPreviewRescueError = 0;
     scriptPreviewLastTier = scriptPreviewLastScore = 0;
     scriptLedgerReset(&scriptPreviewLedger);
+    scriptPreviewCursorActive = scriptPreviewCursorCol = scriptPreviewCursorRow = 0;
     // Each generated shelf now guarantees a valid dictionary word from its
     // own theme when possible, instead of always spelling ПРИВЕТ/ПРИВІТ.
     // This includes Daily Practice: identical date + language => same word.
@@ -236,6 +297,9 @@ bool scriptPreviewHint(void)
     memcpy(scriptPreviewBoard.chainC, c, (size_t)n);
     memcpy(scriptPreviewBoard.chainR, r, (size_t)n);
     scriptPreviewBoard.chainLen = (uint8_t)n;
+    // The next plain A should submit the hinted word, not append an old
+    // controller focus left over from a previous attempted chain.
+    scriptPreviewCursorHide();
     scriptPreviewRescueError = 0;
     scriptPreviewHints++;
     return true;
