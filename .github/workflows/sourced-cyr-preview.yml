@@ -6,6 +6,7 @@ on:
       - 'data/cyrlex/*_source_candidates.json'
       - 'tools/lang/fetch_cyr_upstream.py'
       - 'tools/lang/import_cyr_hunspell.py'
+      - 'tools/lang/audit_sourced_cyr.py'
       - 'tools/lang/install_cyr_preview.py'
       - 'tools/lang/hunspell.py'
       - 'tools/emu/test_cyr_preview.py'
