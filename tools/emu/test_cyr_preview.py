@@ -80,6 +80,8 @@ def main(rom, output):
     check(get_int(e, "scriptPreviewLanguage") == 0, "Russian menu entry selected wrong board")
     check(get_int(e, "scriptPreviewThemeCount") == 40, "Russian preview should contain 40 seeded themes")
     check(get_int(e, "scriptPreviewShelf") == 1, "Cyrillic first shelf should start at 1")
+    check(1 <= get_int(e, "scriptPreviewOpeningWords") <= 2,
+          "Russian shelf must start with one or two real playable word chains")
     e.shot(str(out / "ru-board.png"))
     check(get_int(e, "scriptPreviewScore") == 0, "initial score is zero")
     # The glyph cache is built when the first Russian frame is drawn and
@@ -246,6 +248,8 @@ def main(rom, output):
     check(e.state()["state"] == 9 and get_int(e, "scriptPreviewLanguage") == 1,
           "X should switch to Ukrainian without changing the release locale")
     check(get_int(e, "scriptPreviewThemeCount") == 40, "Ukrainian preview should contain 40 seeded themes")
+    check(1 <= get_int(e, "scriptPreviewOpeningWords") <= 2,
+          "Ukrainian shelf must independently seed real playable words")
     check(bytes(e.mem.unsigned[ledger:ledger + 194])[184] == 0,
           "switching languages must not leak Russian word history into Ukrainian")
     e.shot(str(out / "uk-board.png"))

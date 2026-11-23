@@ -111,6 +111,10 @@ as available in the in-game language picker.
       theme-aware 4–6-symbol chain. The seed varies word/column, protects
       hidden password tiles, and supports the existing bounded hint solver;
       native checks cover all 40 themes in both languages.
+- [x] On new RU/UK experimental shelves, plant up to two separate
+      source-verified words in disjoint column groups. A scored word's
+      refill cannot erase the other opening chain; preserve single-word
+      rescue and fixed RAM/60-FPS budgets. Native tests cover all 40 themes.
 - [x] Replace hidden-password cheat marks in the Cyrillic renderer with
       legitimate numbered peels and accepted-word endpoint clues. The seven
       survey row masks preserve fixed back-layer clues through gravity;
@@ -154,6 +158,11 @@ four-password-per-theme seed pools; native-speaker dictionaries, all 385 UI
 strings, guide text, memory/FPS measurements and save compatibility are open
 release blockers. See `docs/CYR-PREVIEW.md` for how to try both languages
 and test unranked Daily Practice.
+
+- [x] Add a reproducible 40-theme source-backed Russian/Ukrainian word
+      review queue (Markdown + JSON), validating 100k-word WPD4 packs,
+      external candidate provenance and packed pool membership. Keep
+      native-speaker editorial approval as an explicit release blocker.
 
 - [x] Give fresh 7×8 Russian/Ukrainian preview boards a deterministic
       Qu-free vowel floor: at least one per opening column (two where the

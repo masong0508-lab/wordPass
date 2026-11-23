@@ -218,3 +218,33 @@ translation, fully ranked vocabulary or redistribution clearance. Native
 speakers need to review misspellings, semantic theme assignments, apostrophe
 coverage, profanity and frequency before any public release or default menu
 integration.
+
+## Source-backed Russian/Ukrainian editorial QA (not native-speaker approval)
+
+Run `python3 tools/lang/audit_sourced_cyr.py --out build/cyr-editorial`
+to produce per-theme Russian and Ukrainian candidate review queues using
+the independent 40-theme source catalogs. With the paired externally
+licensed resources, run:
+
+```sh
+python3 tools/lang/audit_sourced_cyr.py \
+  --packs sourced-preview --min-source-words 100000 \
+  --out build/cyr-native-review
+```
+
+This checks the original four starter passwords per theme against **all**
+source-backed additions, detects wrong alphabet/Unicode, duplicate words,
+missing/extra theme IDs, and revalidates the exact WPD4/WPP2 file and
+candidate-manifest SHA-256 against both language packs. It records the
+dictionary and theme-pool sizes, Ukrainian excluded apostrophe count,
+password lengths and underpopulated themes. The reproducible Markdown
+and JSON artifacts enumerate the candidate words by localized title so
+native-speaker editors can check semantic fit, everyday frequency,
+natural inflection and appropriateness. The sourced-ROM CI workflow
+attaches these reports to its original source/notices/ROM assets.
+
+Passing this tool **does not imply** the Russian/Ukrainian words are
+correctly assigned to themes, statistically common, suitable for minors,
+or ready for retail localization. Human review and upstream licensing
+work remain mandatory. No new words are invented or copied into the
+normal 11-language ROM by this report.

@@ -207,6 +207,75 @@ static void suite(const char *dictPath, const char *tilePath, const char *poolPa
                   !memcmp(b.bag,before.bag,sizeof b.bag) &&
                   b.seed==before.seed && b.bagPos==before.bagPos,
                   "playable word cannot change password locations or RNG");
+            // The new shelf-only pathway places a second distinct word in
+            // fully independent columns when this dictionary permits it.
+            // Both source-backed and compact 40-theme pools must remain
+            // reproducible and preserve hidden pass locations and bag state.
+            ScriptBoard opening, openingCopy;
+            CHECK(scriptBoardStartPass(&opening,&d,&t,&p,seed,5),
+                  "start separate two-word opening");
+            uint8_t openC[2][6] = {{0}}, openR[2][6] = {{0}};
+            uint8_t openLen[2] = {0};
+            int openings=scriptBoardPlantOpeningWords(&opening,&d,&t,&p,seed,
+                                                       openC,openR,openLen);
+            CHECK(openings>=1 && openings<=2,
+                  "theme=%u variant=%u has bounded legal opening words",theme,variation);
+            CHECK(scriptBoardStartPass(&openingCopy,&d,&t,&p,seed,5) &&
+                  scriptBoardPlantOpeningWords(&openingCopy,&d,&t,&p,seed,
+                                                NULL,NULL,NULL)==openings &&
+                  !memcmp(&opening,&openingCopy,sizeof opening),
+                  "two-opening word placement must remain deterministic");
+            CHECK(!memcmp(opening.back,before.back,sizeof before.back) &&
+                  !memcmp(opening.pass,before.pass,sizeof before.pass) &&
+                  !memcmp(opening.bag,before.bag,sizeof before.bag) &&
+                  opening.seed==before.seed && opening.bagPos==before.bagPos,
+                  "two starting words must preserve all password cells and the tile bag");
+            // Check the exact two separately seeded words, not an arbitrary
+            // hint, which could legitimately cross both column groups.
+            // Following the FIRST seeded path must leave the SECOND word
+            // intact and scoring the same after one gravity/refill pass.
+            int expected[2]={0};
+            uint8_t colsUsed[2][SCRIPT_COLS] = {{0}};
+            for(int word=0;word<openings;word++) {
+                CHECK(openLen[word]>=4 && openLen[word]<=6,
+                      "opening word has a bounded 4..6-symbol path");
+                ScriptBoard selected = opening;
+                for(int j=0;j<openLen[word];j++) {
+                    int col=openC[word][j],row=openR[word][j];
+                    CHECK(col>=0 && col<SCRIPT_COLS &&
+                          row>=0 && row<SCRIPT_ROWS-3,
+                          "opening stays above secret password rows");
+                    if(col>=0 && col<SCRIPT_COLS)
+                        colsUsed[word][col]=1;
+                    CHECK(scriptBoardAdd(&selected,col,row),
+                          "every opening tile is adjacent and chainable");
+                }
+                expected[word]=scriptBoardPreview(&selected,&d,&t,NULL);
+                CHECK(expected[word]>0,
+                      "each seeded RU/UK opening is an accepted real word");
+            }
+            if(openings==2 && expected[0]>0 && expected[1]>0) {
+                for(int col=0;col<SCRIPT_COLS;col++)
+                    CHECK(!colsUsed[0][col] || !colsUsed[1][col],
+                          "opening words reserve separate whole columns");
+                bool different=openLen[0]!=openLen[1];
+                for(int j=0;j<openLen[0] && !different;j++)
+                    if(opening.tile[openC[0][j]][openR[0][j]] !=
+                       opening.tile[openC[1][j]][openR[1][j]])
+                        different=true;
+                CHECK(different,"two opening words must have different spellings");
+                ScriptBoard played=opening;
+                for(int j=0;j<openLen[0];j++)
+                    CHECK(scriptBoardAdd(&played,openC[0][j],openR[0][j]),
+                          "trace first actual planted word for submit");
+                CHECK(scriptBoardSubmit(&played,&d,&t,NULL)==expected[0],
+                      "first planted word submits for its previewed score");
+                for(int j=0;j<openLen[1];j++)
+                    CHECK(scriptBoardAdd(&played,openC[1][j],openR[1][j]),
+                          "second opening remains on the board after refill");
+                CHECK(scriptBoardPreview(&played,&d,&t,NULL)==expected[1],
+                      "second independent word survives first seeded word refill");
+            }
             uint8_t hc[SCRIPT_HINT_MAX], hr[SCRIPT_HINT_MAX];
             int hn = scriptBoardHint(&b,&d,&t,hc,hr);
             CHECK(hn>=WPD4_MIN_WORD && hn<=SCRIPT_HINT_MAX,

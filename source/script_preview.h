@@ -32,6 +32,8 @@ extern int scriptPreviewHelp; // localized instructions overlay (top LCD only)
 extern int scriptPreviewLastTier;
 extern int scriptPreviewLastScore;
 extern uint32_t scriptPreviewSeed;
+// 1..2 guaranteed legal opening words for the current demo shelf.
+extern int scriptPreviewOpeningWords;
 // Incremented ONLY when a full Russian/Ukrainian dictionary image is loaded.
 // Forces font-cache renewal even when malloc reuses the previous file address.
 extern uint32_t scriptPreviewGlyphEpoch;
