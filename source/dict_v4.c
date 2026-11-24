@@ -4,7 +4,7 @@
 // Format (little endian unless noted):
 //    0..3  "WPD4"
 //    4     version = 1
-//    5     flags = 0
+//    5     flags = 0 (legacy) or 1 (Ukrainian orthographic separators)
 //    6     alphabet size, 2..64
 //    7     bits/symbol (minimal 1..6)
 //    8..9  min/max word size, 3 and 20 Unicode scalars
@@ -16,6 +16,10 @@
 //          sorted variable-length records: ceil((wordLen*bits + 1)/8) bytes,
 //          symbols stored MSB-first; last byte bit 0 is tier (0 common/1 rare).
 //          Every unused padding bit must be zero when built.
+//          Flag 1 only: after ALL unchanged packed letter records, append
+//          one little-endian 24-bit apostrophe mask per record, in exactly
+//          the same length-group/record order. Bit i means U+02BC before
+//          letter i. No extra tile, changed record stride, or prefix index.
 //
 // This is deliberately a parallel parser, not an implicit replacement for the
 // current word-game tile pipeline. Future migration must be atomic across
@@ -41,6 +45,17 @@ static unsigned width(int len, int bits)
 {
     return ((unsigned)len * (unsigned)bits + 1u + 7u) / 8u;
 }
+static uint32_t mask24(const uint8_t *p)
+{
+    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+           ((uint32_t)p[2] << 16);
+}
+static bool apostropheVowel(uint32_t cp)
+{
+    return cp == 0x042f || cp == 0x042e || cp == 0x0404 || cp == 0x0407;
+}
+static unsigned recordSymbol(const uint8_t *record, unsigned stride,
+                             unsigned bits, unsigned position);
 static bool scalar(uint32_t cp)
 {
     return cp >= 0x21 && cp <= 0x10ffff && !(cp >= 0xd800 && cp <= 0xdfff);
@@ -50,7 +65,8 @@ bool v4DictOpen(V4Dict *view, const uint8_t *data, size_t bytes)
     if (!view) return false;
     memset(view, 0, sizeof(*view));
     if (!data || bytes < HEADER || bytes > MAX_BYTES ||
-        memcmp(data, "WPD4", 4) != 0 || data[4] != 1 || data[5] ||
+        memcmp(data, "WPD4", 4) != 0 || data[4] != 1 ||
+        (data[5] & ~WPD4_UK_APOSTROPHE) ||
         data[6] < 2 || data[6] > WPD4_MAX_SYMBOLS ||
         data[7] < 1 || data[7] > 6 ||
         data[8] != WPD4_MIN_WORD || data[9] != WPD4_MAX_WORD ||
@@ -67,6 +83,17 @@ bool v4DictOpen(V4Dict *view, const uint8_t *data, size_t bytes)
         uint32_t cp = le32(data + HEADER + 4u * i);
         if (!scalar(cp) || cp <= prev) return false;
         view->alphabet[i] = prev = cp;
+    }
+    if (data[5] & WPD4_UK_APOSTROPHE) {
+        // Only the exact 33-letter Ukrainian alphabet supports this flag.
+        // Older RU and generic WPD4 views retain their original semantics.
+        if (n != 33 || view->alphabet[0] != 0x0404 ||
+            view->alphabet[1] != 0x0406 || view->alphabet[2] != 0x0407 ||
+            view->alphabet[29] != 0x042c || view->alphabet[30] != 0x042e ||
+            view->alphabet[31] != 0x042f || view->alphabet[32] != 0x0490)
+            return false;
+        for (unsigned i = 3; i < 29; i++)
+            if (view->alphabet[i] != 0x0410u + i - 3u) return false;
     }
     size_t offset = head;
     uint64_t words = 0;
@@ -112,7 +139,32 @@ bool v4DictOpen(V4Dict *view, const uint8_t *data, size_t bytes)
         }
         offset += (size_t)num * rec;
     }
-    if (offset != bytes || !words) return false;
+    if (!words) return false;
+    if (data[5] & WPD4_UK_APOSTROPHE) {
+        bool haveSeparator = false;
+        for (int k = WPD4_MIN_WORD; k <= WPD4_MAX_WORD; k++) {
+            uint32_t count = view->count[k];
+            if (count > (bytes - offset) / 3u) return false;
+            view->apostrophe[k] = data + offset;
+            unsigned stride = width(k, bits);
+            uint32_t allowed = ((1u << k) - 1u) & ~1u;
+            for (uint32_t i = 0; i < count; i++) {
+                uint32_t mask = mask24(data + offset + (size_t)i * 3u);
+                if (mask & ~allowed) return false; // no first/trailing separator
+                if (!mask) continue;
+                haveSeparator = true;
+                const uint8_t *word = view->base[k] + (size_t)i * stride;
+                for (unsigned j = 1; j < (unsigned)k; j++) {
+                    if (!(mask & (1u << j))) continue;
+                    unsigned id = recordSymbol(word, stride, bits, j);
+                    if (!apostropheVowel(view->alphabet[id])) return false;
+                }
+            }
+            offset += (size_t)count * 3u;
+        }
+        if (!haveSeparator) return false;
+    }
+    if (offset != bytes) return false;
     view->image = data;
     view->bits = (uint8_t)bits;
     view->symbols = (uint8_t)n;
@@ -147,8 +199,10 @@ static bool packIds(const V4Dict *view, const uint8_t *ids, int count,
     }
     return true;
 }
-int v4DictLookupIds(const V4Dict *view, const uint8_t *ids, int symbols)
+int v4DictLookupSpellingIds(const V4Dict *view, const uint8_t *ids,
+                           int symbols, uint32_t *apostropheMask)
 {
+    if (apostropheMask) *apostropheMask = 0;
     if (!view || !view->image || !ids || symbols < WPD4_MIN_WORD ||
         symbols > WPD4_MAX_WORD || !view->count[symbols]) return 0;
     unsigned rec = width(symbols, view->bits);
@@ -163,10 +217,18 @@ int v4DictLookupIds(const V4Dict *view, const uint8_t *ids, int symbols)
             uint8_t last = word[rec - 1u] & 0xfeu;
             cmp = (last > key[rec - 1u]) - (last < key[rec - 1u]);
         }
-        if (!cmp) return 1 + (word[rec - 1u] & 1);
+        if (!cmp) {
+            if (apostropheMask && view->apostrophe[symbols])
+                *apostropheMask = mask24(view->apostrophe[symbols] + (size_t)mid * 3u);
+            return 1 + (word[rec - 1u] & 1);
+        }
         if (cmp < 0) lo = mid + 1; else hi = mid - 1;
     }
     return 0;
+}
+int v4DictLookupIds(const V4Dict *view, const uint8_t *ids, int symbols)
+{
+    return v4DictLookupSpellingIds(view, ids, symbols, NULL);
 }
 // Test a packed Unicode symbol-ID prefix, ignoring the record's rare/common
 // tier bit and any trailing bits beyond this prefix. The WPD4 reader already
@@ -322,12 +384,25 @@ int v4DictLookup(const V4Dict *view, const char *utf8)
     const unsigned char *p = (const unsigned char *)utf8;
     uint8_t ids[WPD4_MAX_WORD];
     int n = 0;
+    uint32_t supplied = 0;
     while (*p) {
         uint32_t cp;
-        if (n == WPD4_MAX_WORD || !nextCp(&p, &cp)) return 0;
+        if (!nextCp(&p, &cp)) return 0;
+        if (view->apostrophe[WPD4_MIN_WORD] &&
+            (cp == 0x0027 || cp == 0x2019 || cp == 0x02bc)) {
+            // Canonical equivalent spellings are accepted. Leading,
+            // trailing, repeated and misplaced punctuation is not.
+            if (!n || n >= WPD4_MAX_WORD || !*p ||
+                (supplied & (1u << n))) return 0;
+            supplied |= 1u << n;
+            continue;
+        }
+        if (n == WPD4_MAX_WORD) return 0;
         int id = v4DictSymbol(view, cp);
         if (id < 0) return 0;
         ids[n++] = (uint8_t)id;
     }
-    return v4DictLookupIds(view, ids, n);
+    uint32_t stored;
+    int tier = v4DictLookupSpellingIds(view, ids, n, &stored);
+    return supplied == stored ? tier : 0;
 }

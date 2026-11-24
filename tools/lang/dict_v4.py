@@ -24,6 +24,9 @@ VERSION = 1
 MIN_LEN, MAX_LEN = 3, 20
 HEADER = 20
 MAX_BYTES = 8 * 1024 * 1024
+UK_APOSTROPHE = 1
+APOSTROPHES = "'’ʼ"
+APOSTROPHE_VOWELS = "ЯЮЄЇ"
 ALPHABETS = {
     "ru": "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ",
     "uk": "АБВГҐДЕЄЖЗИІЇЙКЛМНОПРСТУФХЦЧШЩЬЮЯ",
@@ -75,6 +78,31 @@ def clean(word, index):
     return s
 
 
+def project_uk(word):
+    """Preserve a real spelling and separately derive its 33-tile path.
+
+    Accept only internal canonical apostrophes before Ukrainian iotated
+    vowels. A path is not the spelling: callers must retain the mask.
+    """
+    word = unicodedata.normalize("NFC", word.strip()).upper()
+    canonical = word.replace("'", "ʼ").replace("’", "ʼ")
+    letters, mask = [], 0
+    for i, ch in enumerate(canonical):
+        if ch == "ʼ":
+            if (not letters or i + 1 == len(canonical) or
+                    canonical[i + 1] not in APOSTROPHE_VOWELS):
+                raise ValueError(f"bad Ukrainian apostrophe placement: {word!r}")
+            mask |= 1 << len(letters)
+        elif ch in ALPHABETS["uk"]:
+            letters.append(ch)
+        else:
+            raise ValueError(f"not a Ukrainian spelling: {word!r}")
+    projected = "".join(letters)
+    if not MIN_LEN <= len(projected) <= MAX_LEN:
+        raise ValueError(f"Ukrainian tile length outside range: {word!r}")
+    return projected, mask, canonical
+
+
 def pack(ids, bits, tier=0):
     n = len(ids)
     size = rec_width(n, bits)
@@ -89,13 +117,22 @@ def pack(ids, bits, tier=0):
     return bytes(rec)
 
 
-def build(code, words, common):
+def build(code, words, common, spellings=None):
     a = alphabet(code)
     index = {cp: i for i, cp in enumerate(a)}
     wset = {clean(w, index) for w in words}
     cset = {clean(w, index) for w in common}
     if not wset or not cset <= wset:
         raise ValueError("nonempty dictionary required; common words must be a subset")
+    spellings = {} if spellings is None else dict(spellings)
+    if spellings and code != "uk":
+        raise ValueError("apostrophe metadata is Ukrainian-only")
+    masks = {}
+    for path, spelling in spellings.items():
+        projected, mask, _ = project_uk(spelling)
+        if path != projected or path not in wset or not mask:
+            raise ValueError("apostrophe spelling must match a retained tile path")
+        masks[path] = mask
     bits = bits_for(len(a))
     groups = {n: [] for n in range(MIN_LEN, MAX_LEN + 1)}
     for word in wset:
@@ -109,10 +146,17 @@ def build(code, words, common):
     for n in range(MIN_LEN, MAX_LEN + 1):
         for ids, _, tier in sorted(groups[n]):
             payload.extend(pack(ids, bits, tier))
+    flags = UK_APOSTROPHE if masks else 0
+    if flags:
+        # Keep the existing packed letter records/prefix ordering untouched.
+        # A 3-byte mask aligned by record ordinal preserves actual spelling.
+        for n in range(MIN_LEN, MAX_LEN + 1):
+            for _, word, _ in sorted(groups[n]):
+                payload.extend(masks.get(word, 0).to_bytes(3, "little"))
     total = HEADER + len(payload)
     if total > MAX_BYTES:
         raise ValueError(f"dictionary {total} bytes exceeds {MAX_BYTES} bound")
-    hdr = struct.pack("<4sBBBBBBHII", MAGIC, VERSION, 0, len(a),
+    hdr = struct.pack("<4sBBBBBBHII", MAGIC, VERSION, flags, len(a),
                       bits, MIN_LEN, MAX_LEN, 0, total, fnv32(payload))
     assert len(hdr) == HEADER
     return hdr + payload
@@ -123,7 +167,7 @@ def verify(data):
         raise ValueError("invalid file length")
     magic, ver, flags, n, bits, mini, maxi, reserved, size, checksum = struct.unpack_from(
         "<4sBBBBBBHII", data)
-    if (magic != MAGIC or ver != VERSION or flags or reserved or
+    if (magic != MAGIC or ver != VERSION or flags & ~UK_APOSTROPHE or reserved or
             not 2 <= n <= 64 or bits != bits_for(n) or
             mini != MIN_LEN or maxi != MAX_LEN or size != len(data) or
             fnv32(data[HEADER:]) != checksum):
@@ -132,12 +176,16 @@ def verify(data):
     a = list(struct.unpack_from(f"<{n}I", data, off))
     if a != sorted(set(a)) or any(cp <= 0x20 or cp > 0x10FFFF or 0xD800 <= cp <= 0xDFFF for cp in a):
         raise ValueError("invalid alphabet")
+    if flags and a != alphabet("uk"):
+        raise ValueError("apostrophe metadata requires the Ukrainian alphabet")
     off += 4 * n
     counts = struct.unpack_from("<18I", data, off)
     off += 18 * 4
     words = 0
+    group_offsets = {}
     for length, count in enumerate(counts, MIN_LEN):
         width = rec_width(length, bits)
+        group_offsets[length] = off
         for _ in range(count):
             if off + width > len(data):
                 raise ValueError("truncated record")
@@ -155,9 +203,33 @@ def verify(data):
             previous = ids
             off += width
             words += 1
+    apostrophe_words = 0
+    if flags:
+        for length, count in enumerate(counts, MIN_LEN):
+            width = rec_width(length, bits)
+            if count > (len(data) - off) // 3:
+                raise ValueError("truncated orthography trailer")
+            for i in range(count):
+                mask = int.from_bytes(data[off:off+3], "little")
+                off += 3
+                if mask & ~(((1 << length) - 1) & ~1):
+                    raise ValueError("apostrophe outside internal letter boundary")
+                if not mask:
+                    continue
+                apostrophe_words += 1
+                record = group_offsets[length] + i * width
+                value = int.from_bytes(data[record:record+width], "big")
+                for j in range(1, length):
+                    if mask & (1 << j):
+                        sym = (value >> (width * 8 - (j + 1) * bits)) & ((1 << bits) - 1)
+                        if chr(a[sym]) not in APOSTROPHE_VOWELS:
+                            raise ValueError("apostrophe not before a Ukrainian iotated vowel")
+        if not apostrophe_words:
+            raise ValueError("empty orthography extension")
     if off != len(data) or not words:
         raise ValueError("trailing data or empty dictionary")
-    return {"symbols": n, "words": words, "counts": counts, "bytes": len(data)}
+    return {"symbols": n, "words": words, "counts": counts, "bytes": len(data),
+            "apostrophe_words": apostrophe_words}
 
 
 def read_words(file):
