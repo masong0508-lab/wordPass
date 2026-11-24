@@ -42,7 +42,7 @@ def main(rom, elf, output):
     out.mkdir(parents=True, exist_ok=True)
     dldi = patch_dldi(rom, str(out / "wordPass-checkpoint.nds"))
     card = str(out / "checkpoint-card.img")
-    make_card(card, [("README.TXT", b"Independent RU/UK checkpoint test")])
+    make_card(card, [("wordPass.nds", Path(dldi).read_bytes())])
     e = FatEmu(dldi, elf, card, argv=False, dismiss=True)
     assert e.flags()["fatReady"] and e.cwd()[0] == "nitro"
     retail = read_cfg(card)

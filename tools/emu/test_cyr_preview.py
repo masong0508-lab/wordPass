@@ -84,6 +84,15 @@ def main(rom, output):
           "Russian shelf must start with one or two real playable word chains")
     e.shot(str(out / "ru-board.png"))
     check(get_int(e, "scriptPreviewScore") == 0, "initial score is zero")
+    # Ordinary DeSmuME has no writable FAT card. The explicit checkpoint
+    # chord must report that, rather than accidentally triggering START exit.
+    e.hold("L")
+    e.press("START", settle=12)
+    e.hold("L", False)
+    check(e.state()["state"] == 9 and
+          get_int(e, "scriptPreviewCheckpointStatus") == 3 and
+          get_int(e, "scriptPreviewTurns") == 0,
+          "no-card checkpoint attempt must preserve the active shelf")
     # The glyph cache is built when the first Russian frame is drawn and
     # must not rebuild merely because a 56-tile board is drawn each frame.
     glyph_builds_ru = get_int(e, "scriptGlyphCacheBuilds")

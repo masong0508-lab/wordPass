@@ -258,7 +258,7 @@ static void checkpointTest(void)
     uint32_t firstSeed = scriptPreviewSeed;
     CHECK(scriptPreviewCheckpoint(true, cfg) == SCRIPT_CHECKPOINT_SAVED,
           "save first banked shelf to a separate verified checkpoint");
-    ScriptCheckpoint record;
+    ScriptCheckpoint record = {0};
     CHECK(scriptCheckpointLoad(cfg, language, tag, &record) &&
           record.serial == 1 && record.shelf == 2 &&
           record.score == (unsigned)banked && record.seed == firstSeed,
@@ -268,8 +268,8 @@ static void checkpointTest(void)
           "different language/pack cannot read this checkpoint");
 
     // Strict, endian-independent codec validation: no raw structs written.
-    uint8_t image[SCRIPT_CHECKPOINT_BYTES];
-    ScriptCheckpoint decoded;
+    uint8_t image[SCRIPT_CHECKPOINT_BYTES] = {0};
+    ScriptCheckpoint decoded = {0};
     CHECK(scriptCheckpointEncode(&record, image) &&
           scriptCheckpointDecode(image, sizeof image, language, tag, &decoded) &&
           checkpointRecordEqual(&record, &decoded),
