@@ -346,14 +346,52 @@ def main(rom, output):
           "rescue must keep Russian word history and break the earned combo")
     check(get_int(e, "scriptPreviewLastScore") == 0,
           "rescue should clear the stale last-word score display")
+    # Upper rows are always secret-free. Choose a real blank different
+    # from the surveyed word endpoint so two published clues coexist.
+    hole_c, hole_r = (0, 0) if (tail_c, tail_r) != (0, 0) else (6, 0)
     e.hold("L")
-    e.tap(*e.center(1, 6), settle=8)
+    e.tap(*e.center(hole_c, hole_r), settle=8)
     e.hold("L", False)
     check(get_int(e, "scriptPreviewPeels") == 1 and
           get_int(e, "scriptPreviewRescueError") == 0,
           "touch-screen peel must register and dismiss old rescue feedback")
     check(get_int(e, "scriptPreviewTurns") == 3,
           "a successful peel after word+rescue must cost a third fire turn")
+    focus_c = clues_offset["clueC"]
+    focus_r = clues_offset["clueR"]
+    def focused():
+        return (int(e.mem.unsigned[board_ptr + focus_c]),
+                int(e.mem.unsigned[board_ptr + focus_r]))
+    check(focused() == (hole_c, hole_r),
+          "the actual blank peel must focus its published numeral")
+    # Both clues are now public. Revisit the OLD word badge (not its
+    # center letter) and the newly opened hole using ordinary taps.
+    snapshot = bytes(e.mem.unsigned[board_ptr:board_ptr + 336])
+    scored_before_inspection = get_int(e, "scriptPreviewScore")
+    hx, hy, hx1, hy1 = e.cell_rect(hole_c, hole_r)
+    with_focus = e.emu.screenshot().convert("RGB").crop((hx, hy, hx1, hy1))
+    bx, by, _, _ = e.cell_rect(tail_c, tail_r)
+    e.tap(bx + 18, by - 192 + 16, settle=10)
+    check(focused() == (tail_c, tail_r),
+          "tapping an earlier earned word numeral must revisit its clue")
+    without_focus = e.emu.screenshot().convert("RGB").crop((hx, hy, hx1, hy1))
+    check(ImageChops.difference(with_focus, without_focus).getbbox() is not None,
+          "changing clue focus must visibly redraw the old numbered hole")
+    expected = bytearray(snapshot)
+    expected[focus_c], expected[focus_r] = tail_c, tail_r
+    check(bytes(e.mem.unsigned[board_ptr:board_ptr + 336]) == bytes(expected),
+          "revisit may change only the two public focus coordinates")
+    e.shot(str(out / "ru-revisited-word-clue.png"))
+    e.tap(*e.center(hole_c, hole_r), settle=10)
+    check(focused() == (hole_c, hole_r) and
+          bytes(e.mem.unsigned[board_ptr:board_ptr + 336]) == snapshot and
+          get_int(e, "scriptPreviewTurns") == 3 and
+          get_int(e, "scriptPreviewPeels") == 1 and
+          get_int(e, "scriptPreviewHints") == 1 and
+          get_int(e, "scriptPreviewScore") == scored_before_inspection,
+          "returning to a numbered hole is free and preserves the board")
+    e.shot(str(out / "ru-revisited-hole-clue.png"))
+    check(e.fps() == 120, "inspected Cyrillic clue must preserve frame cadence")
     ledger_bytes = bytes(e.mem.unsigned[ledger:ledger + 194])
     check(ledger_bytes[184] == 1 and struct.unpack_from("<H", ledger_bytes, 186)[0] == 0,
           "peeling must break combo but keep Russian word history")

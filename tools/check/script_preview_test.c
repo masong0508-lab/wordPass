@@ -209,6 +209,58 @@ static void controllerOnly(void)
           "shelf replay clears controller focus without changing save format");
 }
 
+// Two genuine blank peels publish independent clues. Revisiting either
+// clue can change only its two public focus coordinates, not the game.
+static void revisitClues(void)
+{
+    CHECK(scriptPreviewNewPass(712), "start public clue inspection scenario");
+    ScriptBoard before = scriptPreviewBoard;
+    CHECK(!scriptPreviewFocusClue(0, 0) &&
+          !scriptPreviewFocusClue(-1, 0) &&
+          !scriptPreviewFocusClue(SCRIPT_COLS, SCRIPT_ROWS) &&
+          !memcmp(&before, &scriptPreviewBoard, sizeof before),
+          "unearned and out-of-bounds clues must never set focus");
+    CHECK(scriptPreviewPeel(0, 0) == 0 &&
+          scriptPreviewBoard.clueC == 0 && scriptPreviewBoard.clueR == 0,
+          "new blank peel focuses its public number");
+    CHECK(scriptPreviewPeel(6, 0) == 0 &&
+          scriptPreviewBoard.clueC == 6 && scriptPreviewBoard.clueR == 0,
+          "another blank peel focuses the new hole");
+    CHECK(scriptPreviewChain(2, 0) && scriptPreviewChain(2, 1),
+          "a selected word can be retained during clue inspection");
+    ScriptBoard expected = scriptPreviewBoard;
+    ScriptRules rules = scriptPreviewRules;
+    ScriptLedger ledger = scriptPreviewLedger;
+    int score = scriptPreviewScore, turns = scriptPreviewTurns;
+    int peels = scriptPreviewPeels, hints = scriptPreviewHints;
+    expected.clueC = 0;
+    expected.clueR = 0;
+    CHECK(scriptPreviewFocusClue(0, 0) &&
+          !memcmp(&expected, &scriptPreviewBoard, sizeof expected),
+          "revisit earlier hole with no mutation except public focus");
+    CHECK(!scriptPreviewFocusClue(1, 1) &&
+          !memcmp(&expected, &scriptPreviewBoard, sizeof expected),
+          "unearned neighbor cannot displace an earlier clue");
+    // Cursor movement over another published number is inspection-only.
+    // Move from a selected chain tail to the upper-right corner.
+    scriptPreviewCursorHide();
+    scriptPreviewCursorMove(0, 0);
+    for (int i = 0; i < SCRIPT_COLS; ++i)
+        scriptPreviewCursorMove(1, -1);
+    expected.clueC = 6;
+    CHECK(scriptPreviewCursorCol == 6 && scriptPreviewCursorRow == 0 &&
+          !memcmp(&expected, &scriptPreviewBoard, sizeof expected),
+          "controller can refocus another numbered hole");
+    CHECK(scriptPreviewScore == score && scriptPreviewTurns == turns &&
+          scriptPreviewPeels == peels && scriptPreviewHints == hints &&
+          !memcmp(&rules, &scriptPreviewRules, sizeof rules) &&
+          !memcmp(&ledger, &scriptPreviewLedger, sizeof ledger),
+          "inspection preserves score, turn, heat, combo, peels and hints");
+    CHECK(scriptPreviewNewPass(713) &&
+          !scriptPreviewFocusClue(6, 0) && !scriptPreviewFocusClue(0, 0),
+          "new attempt has no stale clue to inspect");
+}
+
 static void tailTapSubmission(void)
 {
     CHECK(scriptPreviewNewPass(666), "prepare a Cyrillic tail-tap scenario");
@@ -364,6 +416,7 @@ static void exercise(const char *dictPath, const char *tilesPath,
     scriptPreviewShelf = 1;
     passLengthProgression();
     controllerOnly();
+    revisitClues();
     tailTapSubmission();
 
     retryScores();
