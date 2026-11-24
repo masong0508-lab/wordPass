@@ -70,6 +70,12 @@ Daily scores are unchanged.
   least one playable chain. Press **R** for your one free path hint per shelf.
   The separate **L+R** recovery still plants exactly one word at its normal
   heat and turn cost, never two.
+- In the source-backed Ukrainian preview, ordinary apostrophe words use
+  their actual spelling automatically: select М, Я, С, О to see and submit
+  МʼЯСО. The apostrophe is not a separate gem or turn. Only attested,
+  unambiguous spellings are retained; themed passwords remain ordinary
+  letter-only words for now. The compact preview has no extended source
+  spelling pack.
 - Press A to submit, Y to clear the chain, **R for one free word hint per shelf**,
   X to switch the language
 - Hold L and tap a letter to peel it: hidden pass letters become permanent

@@ -29,21 +29,39 @@ https://mon.gov.ua/static-objects/mon/sites/1/zagalna%20serednya/Pravopys.2019/u
 The source spell-checking data can use U+0027 (`'`), U+2019 (`’`),
 or U+02BC (`ʼ`) for this internal separator.
 
-The Ukrainian-only Hunspell intake now **recognizes and audits** these source
-spellings. The `SOURCE-MANIFEST.json` reports
-`ukrainian_apostrophe_forms_unrepresented`, gives up to twelve canonical
-U+02BC examples, and records the exclusion policy. This is a deliberately
-truthful count of the forms missing from the experimental 33-tile WPD4 game:
-it does **not** delete apostrophes to make fake playable words, substitute
-Russian hard signs, or pretend a 34th independent apostrophe letter/tile
-already works. A future proper Ukrainian word engine must support the
-separator without making the apostrophe a meaningless standalone gem.
+The Ukrainian-only Hunspell importer now supports an opt-in
+`--apostrophe-chains` mode. The sourced 100,000-word experimental build
+enables it for Ukrainian only. Each **unambiguous, attested** spelling keeps
+its full orthography in a WPD4 trailer, using canonical U+02BC; the board
+chains its ordinary 33 alphabet letters. For example, the four gems
+М–Я–С–О display and score **МʼЯСО**, without an extra apostrophe gem.
+Exact textual lookup rejects the missing-apostrophe spelling unless a
+plain word is independently attested. If plain and punctuated words share
+a tile path, the plain word wins; multiple punctuated spellings sharing
+a path are excluded rather than guessed.
 
-The source audit runs only offline, never during play. It leaves the retail
-11-language ROM and even the current miniature Ukrainian preview unchanged.
-Its synthetic fixture checks straight, typographic and modifier-letter
-apostrophe variants and confirms they are excluded from playable data but
-visible in the attribution manifest.
+Flag 1 in the WPD4 header appends three bytes per dictionary record, in
+its existing length/record order. Each bit records an internal apostrophe
+before its indexed letter; only the exact Ukrainian alphabet and a
+separator before Я, Ю, Є or Ї are accepted. The original letter records,
+prefix-search strides, 100-tile bag, board dimensions and save format
+remain unchanged. The trailer costs 300,000 bytes for a 100,000-word pack
+and is subject to the existing 1.5 MiB dictionary budget. The HUD obtains
+the mask from its existing score quote, without an extra dictionary search.
+
+The source manifest separately records total apostrophe forms, retained
+forms, projection collisions and unrepresented forms. Counts are based on
+the source, not a claim of complete linguistic coverage. Sampling still
+retains 100,000 total unranked words, including attested ПʼЯТЬ, МʼЯСО and
+ЗВʼЯЗОК as regression words. Native tests check all three punctuation
+encodings, reject malformed masks and missing punctuation, and test real
+word-chain scoring; the sourced DS emulator exercises visible spelling.
+
+**Scope:** this enables Ukrainian ordinary word chains, not apostrophe
+passwords. Legacy WPP2 pools reject a separator-bearing path, and compact
+demo packs and the regular 11-language ROM remain unchanged. Independent
+native review, full password/guide/save parity and rights review remain
+necessary.
 
 ## Candidate upstream sources
 
@@ -104,9 +122,10 @@ categories by the original English theme key (never by translating the key):
 The uppercase English placeholders are illustrative, **not playable words**.
 Replace them with actual NFC-uppercase Russian or Ukrainian spelling (4–9
 alphabet letters) that is **already present in your licensed Hunspell
-dictionary**, and choose the appropriate target language explicitly. An
-apostrophe-dependent Ukrainian spelling is still not supported by the
-33-tile game, and is **not** silently stripped or substituted.
+dictionary**, and choose the appropriate target language explicitly.
+Use `--apostrophe-chains` with the unranked Ukrainian intake to include
+unambiguous source-attested separator spellings in ordinary words. Without
+that opt-in, those forms are audited and excluded as before.
 
 Supply `--extra-themes /path/to/ru-extras.json` or
 `--extra-themes /path/to/uk-extras.json` to the corresponding importer.
@@ -236,7 +255,7 @@ This checks the original four starter passwords per theme against **all**
 source-backed additions, detects wrong alphabet/Unicode, duplicate words,
 missing/extra theme IDs, and revalidates the exact WPD4/WPP2 file and
 candidate-manifest SHA-256 against both language packs. It records the
-dictionary and theme-pool sizes, Ukrainian excluded apostrophe count,
+dictionary and theme-pool sizes, Ukrainian retained/excluded apostrophe counts,
 password lengths and underpopulated themes. The reproducible Markdown
 and JSON artifacts enumerate the candidate words by localized title so
 native-speaker editors can check semantic fit, everyday frequency,
