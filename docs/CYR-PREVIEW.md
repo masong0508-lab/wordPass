@@ -266,6 +266,34 @@ a new framebuffer or texture, and appears only in the experimental ROM.
 The emulator tests both native-language pages, redraw, preserved turn
 count and safe dismissal.
 
+## Independent free-play checkpoints (experimental)
+
+Finish a shelf, press **A** to advance and bank its score, then hold
+**L + START** at the start of the new shelf to save its checkpoint.
+The game stays open and reports whether the write succeeded. You can
+also save at the beginning of shelf one. Saving is refused once a
+shelf has consumed a turn; it does not claim to save a partially played
+board, selected chain or unbanked score. Press ordinary START to exit.
+
+Re-enter the same language mode and hold **L + B** to load its saved
+shelf, seed and completed-shelf score. Loading replaces the current
+attempt, so save or finish it first if needed. The board regenerates
+deterministically at the start of the saved shelf. Each language and
+resource-pack identity owns two separate 32-byte checkpoint files on
+the FAT card (e.g. `R9ABCDEF.C80` and `R9ABCDEF.C81`). Alternating slots,
+length/range checks, a checksum, readback verification and generation
+tags preserve the older valid checkpoint if a newer write is torn.
+These are corruption-detection checks, not authentication or guaranteed
+physical-media power-loss protection.
+
+No retail `wordPass.cfg` fields or paths are overwritten. Russian and
+Ukrainian checkpoints, and compact versus source-backed lexicons, stay
+independent; changing the underlying pack or generation revision makes a
+new checkpoint namespace. Without a writable FAT card, the game
+reports an error and continues normally. This is shelf-boundary
+persistence, not complete saved-game parity or ranked Daily records.
+Daily Practice explicitly refuses both checkpoint commands.
+
 ## Daily Practice (unranked, experimental)
 
 In the Russian or Ukrainian demo press **L+SELECT** to switch between

@@ -16,6 +16,9 @@ on:
       - 'tools/check/script_pass_test.c'
       - 'source/script_preview.c'
       - 'source/script_preview.h'
+      - 'source/script_checkpoint.c'
+      - 'source/script_checkpoint.h'
+      - 'tools/emu/test_cyr_checkpoint.py'
       - '.github/workflows/sourced-cyr-preview.yml'
   workflow_dispatch:
 

@@ -1,5 +1,6 @@
 // Optional on-hardware Cyrillic engineering preview. NOT a selectable
-// language: tiny test-only lexicon and themes, no saves, no production UI.
+// language: separate preview lexicons/themes and independent checkpoints,
+// not the production language UI, statistics or save format.
 // Only a separate build with WP_CYR_PREVIEW includes this feature.
 #ifndef WORDPASS_SCRIPT_PREVIEW_H
 #define WORDPASS_SCRIPT_PREVIEW_H
