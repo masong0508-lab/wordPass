@@ -383,12 +383,13 @@ bool scriptPreviewRescue(void)
 }
 // Words live as compact alphabet IDs, never as variable-length UTF-8 bytes.
 // This read-only quote is used only to show the score of a selected chain.
-int scriptPreviewQuote(int *tier)
+int scriptPreviewQuoteSpelling(int *tier, uint32_t *mask)
 {
     if (tier) *tier = 0;
+    if (mask) *mask = 0;
     int wordTier = 0;
-    int raw = scriptBoardPreview(&scriptPreviewBoard, &scriptPreviewDict,
-                                 &scriptPreviewTiles, &wordTier);
+    int raw = scriptBoardPreviewSpelling(&scriptPreviewBoard, &scriptPreviewDict,
+                                 &scriptPreviewTiles, &wordTier, mask);
     int length = scriptPreviewBoard.chainLen;
     if (raw <= 0 || length < WPD4_MIN_WORD || length > SCRIPT_MAX_CHAIN)
         return 0;
@@ -401,6 +402,10 @@ int scriptPreviewQuote(int *tier)
     int points = scriptLedgerQuote(&scriptPreviewLedger, ids, length, raw);
     if (points > 0 && tier) *tier = wordTier;
     return points;
+}
+int scriptPreviewQuote(int *tier)
+{
+    return scriptPreviewQuoteSpelling(tier, NULL);
 }
 
 int scriptPreviewSubmit(void)

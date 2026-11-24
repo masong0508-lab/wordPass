@@ -37,10 +37,10 @@ from hunspell import expand
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_BUDGET = 1536 * 1024  # practical per-language dictionary RAM budget
 
-# Both ordinary keyboard and typographic Ukrainian apostrophes are the same
-# orthographic separator for auditing. Do not simply discard them or silently
-# strip them out of passwords: WPD4's current DS tile alphabet lacks a
-# non-tile apostrophe representation, so these forms remain unsupported.
+# Keyboard, typographic and modifier-letter apostrophes denote the
+# same Ukrainian separator. The optional spelling extension preserves the
+# actual form in dictionary metadata, not as a 34th gem. Password pools
+# and the default importer remain plain-letter only.
 UK_APOSTROPHES = "'’ʼ"
 
 
@@ -48,6 +48,29 @@ def canonical_uk_apostrophe(form):
     word = unicodedata.normalize("NFC", form.strip()).upper()
     return word.replace("'", "ʼ").replace("’", "ʼ")
 
+
+
+def apostrophe_paths(apostrophized, plain_words):
+    """Map unambiguous 33-letter paths to attested canonical spellings.
+
+    If a plain word shares a path it keeps its original spelling. If two
+    distinct apostrophe spellings share a path, exclude both rather than
+    guessing which source form the player meant. These collisions are
+    counted separately in the source manifest.
+    """
+    candidates = {}
+    for spelling in sorted(apostrophized):
+        try:
+            path, mask, canonical = d4.project_uk(spelling)
+        except ValueError:
+            continue
+        if mask:
+            candidates.setdefault(path, set()).add(canonical)
+    unique = {path: next(iter(forms)) for path, forms in candidates.items()
+              if path not in plain_words and len(forms) == 1}
+    ambiguous = sum(len(forms) for path, forms in candidates.items()
+                    if path in plain_words or len(forms) != 1)
+    return unique, ambiguous
 
 
 def normalize(token, index):
@@ -154,9 +177,11 @@ def sample_sourced_forms(code, words, required, limit):
 
 def build(code, dic, aff, notice, origin, out,
           rank=None, max_words=0, max_dict_bytes=DEFAULT_BUDGET,
-          extra_themes=None, sample_words=0):
+          extra_themes=None, sample_words=0, apostrophe_chains=False):
     if code not in ("ru", "uk"):
         raise ValueError("supported Cyrillic source codes: ru, uk")
+    if apostrophe_chains and (code != "uk" or rank or max_words):
+        raise ValueError("apostrophe chains are Ukrainian-only and require unranked intake/sampling")
     if not origin or not origin.startswith(("https://", "http://")):
         raise ValueError("a nonblank origin URL is mandatory for attribution")
     notice_bytes = Path(notice).read_bytes()
@@ -194,6 +219,13 @@ def build(code, dic, aff, notice, origin, out,
                          + " (edit/review catalog, do not inject unsupported words)")
     extras = expand_themes_from_source(code, extra_themes, themes, seeds, words)
     required = seeds | extras
+    # Never accept a projected separator word as a plain password. Theme
+    # validation above runs exclusively against unpunctuated source words.
+    spellings, collisions = {}, 0
+    if apostrophe_chains:
+        spellings, collisions = apostrophe_paths(apostrophized, words)
+        words.update(spellings)
+    eligible_count = len(words)
     if max_words and max_words < len(required):
         raise ValueError(f"--max-words={max_words} would discard mandatory "
                          f"themed passwords ({len(required)})")
@@ -209,6 +241,15 @@ def build(code, dic, aff, notice, origin, out,
         if not smoke_words <= words:
             raise ValueError(f"{code}: source does not attest required board "
                              f"playthrough words {sorted(smoke_words - words)}")
+        if apostrophe_chains:
+            # Keep real everyday orthographic regression words in the
+            # sampled source pack, but only when the pinned source attests
+            # their exact, unambiguous spelling. Do not invent missing forms.
+            expected = {"МЯСО": "МʼЯСО", "ПЯТЬ": "ПʼЯТЬ", "ЗВЯЗОК": "ЗВʼЯЗОК"}
+            for path, spelling in expected.items():
+                if spellings.get(path) != spelling:
+                    raise ValueError(f"pinned Ukrainian source lacks unambiguous {spelling}")
+            smoke_words |= set(expected)
         words = sample_sourced_forms(code, words, required | smoke_words, sample_words)
     ranked = rank_words(rank, index)
     if max_words and len(words) > max_words:
@@ -232,7 +273,9 @@ def build(code, dic, aff, notice, origin, out,
         # Preview-only fallback. No assertion that these 160 seed words are
         # statistically common or native-editor-approved.
         common = seeds
-    dictionary = d4.build(code, words, common)
+    retained_spellings = {path: spelling for path, spelling in spellings.items()
+                          if path in words}
+    dictionary = d4.build(code, words, common, retained_spellings)
     if len(dictionary) > max_dict_bytes:
         raise ValueError(f"dictionary is {len(dictionary)} bytes > {max_dict_bytes} budget; "
                          "supply a reviewed frequency ranking and --max-words")
@@ -265,10 +308,16 @@ def build(code, dic, aff, notice, origin, out,
         "affix_source_sha256": sha(aff),
         "license_notice_sha256": hashlib.sha256(notice_bytes).hexdigest(),
         "source_valid_word_count": len(forms),
-        "source_tile_eligible_word_count": len({normalize(w, index) for w in forms} - {None}),
-        "ukrainian_apostrophe_forms_unrepresented": len(apostrophized),
+        "source_tile_eligible_word_count": eligible_count,
+        "ukrainian_apostrophe_source_forms": len(apostrophized),
+        "ukrainian_apostrophe_forms_retained": len(retained_spellings),
+        "ukrainian_apostrophe_projection_collisions": collisions,
+        "ukrainian_apostrophe_forms_unrepresented": len(apostrophized) - len(retained_spellings),
         "ukrainian_apostrophe_example_forms": sorted(apostrophized)[:12],
-        "apostrophe_policy": "Preserve source spelling; reject apostrophe forms until a non-tile separator is implemented",
+        "apostrophe_policy": (
+            "Unambiguous source spellings stored with non-tile apostrophe masks; "
+            "plain paths preferred, collisions excluded; passwords remain plain"
+            if apostrophe_chains else "Preserve source spelling; opt-in non-tile separator intake disabled"),
         "retained_word_count": len(words),
         "common_tier_count": len(common),
         "unranked_source_sampling_limit": sample_words if sample_words else None,
@@ -290,7 +339,9 @@ def build(code, dic, aff, notice, origin, out,
             "The starter 160 passwords and any unreviewed expansions are not release-ready",
             "Theme assignments and extra vocabulary require independent native-speaker review",
             "Verify source and derivative redistribution obligations for all components",
-            "Ukrainian apostrophe spellings are excluded, never silently stripped; add a true non-tile separator before locale release",
+            ("Ukrainian apostrophe words are supported as unambiguous source-backed chains; "
+             "password separators, excluded forms and native review still outstanding"
+             if apostrophe_chains else "Ukrainian apostrophe spellings excluded in this plain-letter build"),
         ],
     }
     (out / "SOURCE-MANIFEST.json").write_text(
@@ -298,7 +349,8 @@ def build(code, dic, aff, notice, origin, out,
     print(f"CYR INTAKE {code}: {len(words)} source words, {len(dictionary)} dictionary bytes, "
           f"40 themes, {report['words']} passwords ({len(extras)} additional), "
           f"{len(pools)} pool bytes; "
-          f"Ukrainian apostrophe forms excluded={len(apostrophized)}; status EXPERIMENTAL")
+          f"apostrophe forms retained={len(retained_spellings)}, "
+          f"excluded={len(apostrophized)-len(retained_spellings)}; status EXPERIMENTAL")
     return manifest
 
 
@@ -402,6 +454,26 @@ def selftest(folder):
             assert set(result["ukrainian_apostrophe_example_forms"]) == {
                 "ПʼЯТЬ", "МʼЯСО", "ЗВʼЯЗОК"
             }, "all Ukrainian apostrophe variants should normalize identically"
+            supported = root / "uk-spelling-enabled"
+            extended = build(code, dic, aff, notice, "https://example.invalid/synthetic",
+                             supported, extra_themes=extras, apostrophe_chains=True)
+            assert extended["ukrainian_apostrophe_forms_retained"] == 3
+            assert extended["ukrainian_apostrophe_forms_unrepresented"] == 0
+            assert extended["total_password_count"] == 161
+            extended_dict = (supported / "dict.bin").read_bytes()
+            assert d4.verify(extended_dict)["apostrophe_words"] == 3
+            assert p2.verify(extended_dict, (supported / "pools.bin").read_bytes())["words"] == 161
+            # A plain source spelling takes precedence over its conflicting
+            # projected path. A different separator position is ambiguous.
+            paths, conflicts = apostrophe_paths(
+                {"МʼЯСО", "ПʼЯТЬ", "ПЯʼЯТЬ", "ПʼЯЯТЬ"}, {"МЯСО"})
+            assert paths == {"ПЯТЬ": "ПʼЯТЬ"} and conflicts == 3
+            try:
+                p2.build("uk", extended_dict, {"ПЕРЕВІРКА": ["МЯСО"]})
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("apostrophe-only spelling entered plain WPP2 pool")
         else:
             assert result["ukrainian_apostrophe_forms_unrepresented"] == 0
         dictionary = (dest / "dict.bin").read_bytes()
@@ -429,6 +501,8 @@ def main():
     p.add_argument("--max-words", type=int, default=0)
     p.add_argument("--sample-words", type=int, default=0,
                    help="bounded, deterministic unranked source coverage, NOT frequency")
+    p.add_argument("--apostrophe-chains", action="store_true",
+                   help="opt-in Ukrainian non-tile spelling metadata (unranked only)")
     p.add_argument("--max-dict-bytes", type=int, default=DEFAULT_BUDGET)
     args = p.parse_args()
     if args.selftest:
@@ -439,7 +513,8 @@ def main():
         build(args.code, args.dic, args.aff, args.notice, args.origin, args.out,
               rank=args.rank, max_words=args.max_words,
               max_dict_bytes=args.max_dict_bytes,
-              extra_themes=args.extra_themes, sample_words=args.sample_words)
+              extra_themes=args.extra_themes, sample_words=args.sample_words,
+              apostrophe_chains=args.apostrophe_chains)
     else:
         p.error("provide --selftest or --code, --dic, --aff, --notice, --origin and --out")
 

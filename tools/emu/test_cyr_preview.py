@@ -472,6 +472,39 @@ def main(rom, output):
     check(get_int(e, "scriptPreviewTurns") == 0 and
           get_int(e, "scriptPreviewScore") == 0,
           "Ukrainian re-deal must reset both the attempt clock and its points")
+    if sourced:
+        # Arrange the attested word МʼЯСО using four existing letter gems.
+        # Real input must select, quote and display the canonical apostrophe
+        # spelling, submit the same points, and earn its ordinary clue.
+        dict_addr = symbol(e.rom_elf, "scriptPreviewDict")
+        alphabet = struct.unpack("<33I", bytes(e.mem.unsigned[dict_addr:dict_addr + 132]))
+        check(0x02bc not in alphabet, "Ukrainian apostrophe cannot be a gem")
+        for row, letter in enumerate("МЯСО"):
+            e.mem.write_byte(board_ptr + row, alphabet.index(ord(letter)))
+        e.chain([(0, row) for row in range(4)])
+        points = get_int(e, "chainScoreNow")
+        check(int(e.mem.unsigned[board_ptr + 152]) == 4 and points > 0 and
+              get_int(e, "scriptQuoteApostropheNow") == 2,
+              "four actual letter tiles must quote the attested МʼЯСО spelling")
+        e.run(12)
+        # Five 2x glyphs occupy 58 px, centered at x=128. The second
+        # glyph must be the tiny apostrophe bitmap, not another letter.
+        ink = e.emu.screenshot().convert("RGB").crop((111, 122, 121, 136))
+        lit = [(x, y) for y in range(14) for x in range(10)
+               if max(ink.getpixel((x, y))) >= 180]
+        check(lit and all(y < 6 for _, y in lit),
+              "on-screen Ukrainian word must draw the internal apostrophe glyph")
+        e.shot(str(out / "uk-apostrophe-word.png"))
+        e.tap(*e.center(0, 3), settle=20)
+        check(get_int(e, "scriptPreviewScore") == points and
+              get_int(e, "scriptPreviewTurns") == 1 and
+              int(e.mem.unsigned[board_ptr + 152]) == 0 and
+              int(e.mem.unsigned[board_ptr + clues_offset["surveyed"]]) & 8,
+              "apostrophe word submits once as four letters and earns its real clue")
+        e.press("SELECT", settle=8)
+        check(get_int(e, "scriptPreviewScore") == 0 and
+              get_int(e, "scriptPreviewTurns") == 0,
+              "apostrophe regression retry leaves a clean shelf")
     # Exercise a complete secret-finding shelf through REAL stylus taps,
     # reading hidden pass coordinates from the ARM9 game's independent
     # ScriptBoard memory. This is an emulator-only diagnostic: it does not

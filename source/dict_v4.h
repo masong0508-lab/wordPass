@@ -9,15 +9,24 @@
 #define WPD4_MAX_SYMBOLS 64
 #define WPD4_MAX_WORD 20
 #define WPD4_MIN_WORD 3
+#define WPD4_UK_APOSTROPHE 1u
 typedef struct {
     uint32_t alphabet[WPD4_MAX_SYMBOLS]; // sorted Unicode scalar values
     const uint8_t *base[WPD4_MAX_WORD + 1];
     uint32_t count[WPD4_MAX_WORD + 1];
     uint8_t symbols, bits;              // 2..64 symbols, minimal 1..6 bit width
     const uint8_t *image;               // valid only while owner keeps bytes alive
+    // Optional Ukrainian orthography trailer, one 24-bit mask per word
+    // in each sorted letter-length group. NULL in legacy packs.
+    const uint8_t *apostrophe[WPD4_MAX_WORD + 1];
 } V4Dict;
 bool v4DictOpen(V4Dict *view, const uint8_t *data, size_t bytes);
 int v4DictLookupIds(const V4Dict *view, const uint8_t *ids, int symbols);
+// A tile path has no apostrophe tile. Return the stored, unambiguous
+// spelling alongside the tier; bit i inserts U+02BC BEFORE letter i.
+// Exact UTF-8 lookup separately requires that punctuation be present.
+int v4DictLookupSpellingIds(const V4Dict *view, const uint8_t *ids,
+                           int symbols, uint32_t *apostropheMask);
 // Read-only, allocation-free prefix binary search across valid word lengths.
 // Used only on an explicit hint request, never during per-frame rendering.
 bool v4DictHasPrefixIds(const V4Dict *view, const uint8_t *ids, int symbols);

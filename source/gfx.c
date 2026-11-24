@@ -2300,6 +2300,7 @@ static void drawCues(const Game *g)
 
 #ifdef WP_CYR_PREVIEW
 static int scriptQuoteTierNow;
+static uint32_t scriptQuoteApostropheNow;
 // The Russian and Ukrainian board uses a fixed 33-symbol alphabet loaded
 // from a validated WPD4 dictionary. Resolving all 56 tile glyphs through
 // fontGlyphCodepoint() on EVERY rendered frame wastes CPU on repeated
@@ -2569,7 +2570,8 @@ static void drawScriptPreviewTop(void)
     drawTextCenter(128, 88, progress, ACCENT, 1);
     hline(26, 96, 204, DIM);
     char chain[88] = {0};
-    if (scriptBoardChainUtf8(b, &scriptPreviewDict, chain, sizeof chain)) {
+    if (scriptBoardChainSpellingUtf8(b, &scriptPreviewDict,
+                                    scriptQuoteApostropheNow, chain, sizeof chain)) {
         drawTextCenter(128, 106, scriptPreviewLanguage ? "ПОТОЧНЕ СЛОВО" : "ТЕКУЩЕЕ СЛОВО", DIM_TEXT, 1);
         drawTextCenter(128, 122, chain, WHITE, fontTextColumns(chain) > 16 ? 1 : 2);
         // The single quote was computed before vblank. All top-screen slices
@@ -3460,6 +3462,7 @@ static void topSigs(const Game *g, u32 sig[4])
             h1 = hmix(h1, b->found[i]);
         }
         h2 = hmix(h2, b->chainLen);
+        h2 = hmix(h2, scriptQuoteApostropheNow);
         for (int i = 0; i < b->chainLen; i++) {
             int c = b->chainC[i], r = b->chainR[i];
             if (c < SCRIPT_COLS && r < SCRIPT_ROWS)
@@ -3574,7 +3577,9 @@ void gfxFrame(const Game *g)
         // Dictionary work belongs to the visible-frame budget, never once
         // per clipped top-screen redraw during the short vblank interval.
         scriptQuoteTierNow = 0;
-        chainScoreNow = scriptPreviewHelp ? 0 : scriptPreviewQuote(&scriptQuoteTierNow);
+        scriptQuoteApostropheNow = 0;
+        chainScoreNow = scriptPreviewHelp ? 0 :
+            scriptPreviewQuoteSpelling(&scriptQuoteTierNow, &scriptQuoteApostropheNow);
     } else
 #endif
         chainScoreNow = g->chainLen >= 3 ? boardChainScore(g) : 0;
