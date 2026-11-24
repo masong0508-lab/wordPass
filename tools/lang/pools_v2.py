@@ -255,7 +255,28 @@ def selftest(folder):
         path.write_bytes(pools)
         print(f"WPP2 {code}: {result['themes']} synthetic themes / "
               f"{result['words']} pass words, {result['bytes']} bytes -> {path}")
-    print("WPP2 PYTHON OK: deterministic theme builder and strict verification")
+    # A flagged pool reuses the exact dictionary spelling mask and stores
+    # four letter IDs, not five characters or a punctuation tile.
+    words, common = v4.FIXTURES["uk"]
+    db = v4.build("uk", set(words) | {"МЯСО"}, common, {"МЯСО": "МʼЯСО"})
+    pool = build("uk", db, {"КУХНЯ": ["МʼЯСО"]}, allow_apostrophes=True)
+    assert verify(db, pool)["apostrophe_words"] == 1 and pool[5] == UK_APOSTROPHE
+    for spelling, allowed in (("МЯСО", True), ("МʼЯСО", False)):
+        try:
+            build("uk", db, {"КУХНЯ": [spelling]}, allow_apostrophes=allowed)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("missing punctuation or missing opt-in accepted")
+    broken = bytearray(pool)
+    broken[5] = 0
+    try:
+        verify(db, broken)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("legacy flag accepted apostrophe-only path")
+    print("WPP2 PYTHON OK: deterministic builder, exact Ukrainian spelling and strict verification")
 
 
 def main(args):

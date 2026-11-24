@@ -376,6 +376,51 @@ static void suite(const char *dictPath, const char *tilePath, const char *poolPa
               "revealed password diamond survives unrelated word submission");
     CHECK(scriptBoardPassComplete(&b), "pass completion survives word submission");
     if (uk && d.apostrophe[WPD4_MIN_WORD]) {
+        // Exercise every apostrophe password in the actual source-backed
+        // pool, including generation, masked display and completion with
+        // exactly one hidden gem per LETTER (never per punctuation mark).
+        unsigned punctuated = 0;
+        for (int theme=0; theme<p.themes; ++theme)
+            for (int len=WPP2_MIN_LEN; len<=WPP2_MAX_LEN; ++len)
+                for (int pick=0; pick<v4PoolsCount(&p,theme,len); ++pick) {
+                    uint8_t ids[WPP2_MAX_LEN];
+                    uint32_t mask=0;
+                    CHECK(v4PoolsWord(&p,theme,len,pick,ids),"read real pool entry");
+                    if (!v4DictLookupSpellingIds(&d,ids,len,&mask) || !mask) continue;
+                    ++punctuated;
+                    unsigned mid=((unsigned)theme+p.themes-
+                                  ((unsigned)pick*256u)%p.themes)%p.themes;
+                    uint32_t seed=((uint32_t)pick<<16)|(mid<<8)|23u;
+                    CHECK(scriptBoardStartPass(&b,&d,&t,&p,seed,len) &&
+                          b.passLen==len && b.passTheme==theme &&
+                          !memcmp(b.pass,ids,(size_t)len),
+                          "seed selects exact source-backed separator password");
+                    char full[80], masked[80], revealed[80];
+                    CHECK(scriptBoardPassUtf8(&b,&d,full,sizeof full) &&
+                          v4DictLookup(&d,full)>0 &&
+                          strstr(full,"ʼ") &&
+                          scriptBoardPassDisplayUtf8(&b,&d,mask,false,masked,sizeof masked),
+                          "password spelling is exact and punctuation is visible while masked");
+                    unsigned underscores=0;
+                    for (const char *s=masked; *s; ++s) underscores+=*s=='_';
+                    CHECK(underscores==(unsigned)len && strstr(masked,"ʼ"),
+                          "initial plaque has one blank per real letter");
+                    CHECK(!scriptBoardPassDisplayUtf8(&b,&d,mask,false,revealed,2) &&
+                          !revealed[0], "masked UTF-8 buffer fails safely");
+                    unsigned secrets=0;
+                    for (int c=0;c<SCRIPT_COLS;c++)
+                        for (int row=0;row<SCRIPT_ROWS;row++)
+                            if (b.back[c][row]) {
+                                CHECK(scriptBoardPeel(&b,c,row)>0,"peel real hidden letter");
+                                ++secrets;
+                            }
+                    CHECK(secrets==(unsigned)len && scriptBoardPassComplete(&b),
+                          "apostrophe needs no extra gem or turn");
+                    CHECK(scriptBoardPassDisplayUtf8(&b,&d,mask,false,revealed,sizeof revealed) &&
+                          !strchr(revealed,'_') && strstr(revealed,"ʼ"),
+                          "completed plaque retains apostrophe and every found letter");
+                }
+        CHECK(punctuated==17,"all 17 source-backed apostrophe passwords exercised");
         // Real source-backed pack: arrange four ordinary letter gems.
         // Correct spelling emerges from dictionary metadata, not a 34th
         // punctuation gem or a silently accepted bare-spelling dictionary.
