@@ -252,9 +252,16 @@ static int scriptReturnLanguage = -1;
 // "scriptPeekStroke" keeps a cancelled peel from turning into a word stroke.
 static bool scriptPeekStroke, scriptPeelArmed;
 static int scriptPeelCol, scriptPeelRow;
+// Ordinary Cyrillic word strokes must retain a previous TOUCH sample. Unlike
+// retail's full input loop they previously only saw the final cell of a fast
+// swipe, skipping one or more adjacent letters between frames. These scalars
+// are preview-only, require no heap and survive no mode transitions.
+static bool scriptWordStrokeActive, scriptWordStrokeSuppressed;
+static int scriptWordLastTx, scriptWordLastTy;
 static void scriptDropPeekStroke(void)
 {
     scriptPeekStroke = scriptPeelArmed = false;
+    scriptWordStrokeActive = scriptWordStrokeSuppressed = false;
 }
 
 static void leaveScriptPreview(void)
@@ -878,9 +885,15 @@ int main(void)
             case ST_SCRIPT_PREVIEW: {
                 // Non-stylus actions must cancel any pending peel before
                 // changing the board, language, help card or current word.
-                if (down & (KEY_A | KEY_B | KEY_X | KEY_Y | KEY_R |
-                            KEY_SELECT | KEY_START))
+                const bool scriptKeyAction =
+                    (down & (KEY_A | KEY_B | KEY_X | KEY_Y | KEY_R |
+                             KEY_SELECT | KEY_START)) != 0;
+                if (scriptKeyAction) {
                     scriptDropPeekStroke();
+                    // A submitted word or Y clearing it while the stylus
+                    // remains down must not start a second phantom chain.
+                    if (held & KEY_TOUCH) scriptWordStrokeSuppressed = true;
+                }
                 // L+Y opens localized rules without losing a selected chain.
                 // B closes the rules instead of unexpectedly quitting to title.
                 if ((down & KEY_Y) && (held & KEY_L)) {
@@ -955,6 +968,10 @@ int main(void)
                         // A real stylus stroke takes focus away from D-pad
                         // selection without modifying the game board.
                         scriptPreviewCursorHide();
+                        scriptWordStrokeActive = false;
+                        // A physical touch that arrives together with a
+                        // non-touch command cannot chain letters twice.
+                        scriptWordStrokeSuppressed = scriptKeyAction;
                         // L at the beginning of the stroke determines the
                         // gesture: it must never turn into letter chaining
                         // after a cancelled peek or a released shoulder.
@@ -975,9 +992,45 @@ int main(void)
                              !gfxCellAt(t.px, t.py, &col, &row) ||
                              col != scriptPeelCol || row != scriptPeelRow))
                             scriptPeelArmed = false;
-                    } else if (!(held & KEY_L) &&
-                               gfxCellAt(t.px, t.py, &col, &row)) {
-                        (void)scriptPreviewChain(col, row);
+                    } else if (held & KEY_L) {
+                        // Grabbing peek partway through a word stroke
+                        // suppresses the REST of that stroke. Releasing L
+                        // must not start an accidental second word gesture.
+                        scriptWordStrokeActive = false;
+                        scriptWordStrokeSuppressed = true;
+                    } else if (!scriptWordStrokeSuppressed) {
+                        int valid = gfxCellAt(t.px, t.py, &col, &row);
+                        // Up to 32 bounded 4px samples bridge real adjacent
+                        // tiles crossed between video frames. Both endpoints
+                        // must be inside the public board: returning from a
+                        // panel button must never trace a phantom word.
+                        if (valid && scriptWordStrokeActive &&
+                            scriptPreviewBoard.chainLen) {
+                            int fromC, fromR;
+                            if (gfxCellAt(scriptWordLastTx, scriptWordLastTy,
+                                          &fromC, &fromR)) {
+                                int dx = t.px - scriptWordLastTx;
+                                int dy = t.py - scriptWordLastTy;
+                                int adx = dx < 0 ? -dx : dx;
+                                int ady = dy < 0 ? -dy : dy;
+                                int span = adx > ady ? adx : ady;
+                                if (span > 10) {
+                                    int steps = span / 4;
+                                    if (steps > 32) steps = 32;
+                                    for (int i = 1; i < steps; i++) {
+                                        int sx = scriptWordLastTx + dx * i / steps;
+                                        int sy = scriptWordLastTy + dy * i / steps;
+                                        int cc, rr;
+                                        if (gfxCellAt(sx, sy, &cc, &rr))
+                                            (void)scriptPreviewChain(cc, rr);
+                                    }
+                                }
+                            }
+                        }
+                        if (valid) (void)scriptPreviewChain(col, row);
+                        scriptWordStrokeActive = true;
+                        scriptWordLastTx = t.px;
+                        scriptWordLastTy = t.py;
                     }
                 } else if (keysUp() & KEY_TOUCH) {
                     // A real peel is a single irreversible turn; canceling a

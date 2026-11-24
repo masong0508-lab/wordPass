@@ -157,6 +157,14 @@ static void controllerOnly(void)
           scriptPreviewCursorBacktrack() && !scriptPreviewBoard.chainLen &&
           !scriptPreviewCursorBacktrack() && !scriptPreviewTurns,
           "A selects a letter and B undoes it without leaving the shelf");
+    // B is a word-undo command for either input method. A chain started
+    // with the stylus no longer turns B into an unexpected quit-to-title.
+    scriptPreviewCursorHide();
+    CHECK(scriptPreviewChain(0, 0) && !scriptPreviewCursorActive &&
+          scriptPreviewBoard.chainLen == 1 &&
+          scriptPreviewCursorBacktrack() && !scriptPreviewBoard.chainLen &&
+          !scriptPreviewCursorBacktrack() && scriptPreviewTurns == 0,
+          "B backtracks stylus-created words without needing D-pad focus");
     CHECK(scriptPreviewNewPass(552) && !scriptPreviewCursorActive &&
           scriptPreviewHint() && !scriptPreviewCursorActive,
           "a real hint selects a word without activating a stale D-pad cursor");

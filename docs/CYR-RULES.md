@@ -40,6 +40,27 @@ schema changes, and never runs a dictionary search per frame. The DeSmuME
 scenario checks no score, heat, turn, board or word-chain mutation on a
 cancelled gesture and retains the existing valid-peel-on-release checks.
 
+## Fast stylus tracing and input safety
+
+The experimental Russian/Ukrainian ROM now bridges a rapid straight stylus
+drag with a bounded set of real hex-board hit tests between consecutive
+touch samples. Previously it only attempted the final sampled gem; a
+fast vertical sweep could jump over several actual letters and leave a
+one-symbol chain. The bridge checks at most 32 intermediate points in a
+frame and uses the same dictionary-backed chain/adjacency functions as
+ordinary touch. Nothing is added to the board state and no heap work or
+per-frame overhead is introduced while the stylus is lifted.
+
+The interpolation runs only when both ends are valid board cells, never
+across a touch that began in the side panel. If the player presses L
+partway through word tracing, that gesture is suppressed until the next
+stylus touch, avoiding accidental word additions or peels on release.
+Peel gestures retain their one-cell release-to-commit and drag-to-cancel
+rules. B now removes one selected letter regardless of controller/stylus
+origin rather than unexpectedly leaving a partly selected word.
+The DS emulator scenario covers a three-row jump, B undo, and mid-stroke
+shoulder switching, preserving score, heat, RNG and back-layer secrets.
+
 ## Deterministic themed password lengths
 
 The experimental Russian and Ukrainian preview used to ask the WPP2

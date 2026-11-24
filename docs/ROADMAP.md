@@ -130,6 +130,11 @@ as available in the in-game language picker.
       survey row masks preserve fixed back-layer clues through gravity;
       safe/forced-neighbor deduction uses only earned evidence, native rules
       tests, and an actual DS anti-spoiler screenshot comparison.
+- [x] Bring the RU/UK experimental word-trace controls closer to retail:
+      bridge fast stylus movements across intermediate real hexes with a
+      bounded per-touch sampler, preserve release-to-peel and cancel gestures,
+      and make B undo a selected word regardless of controller/stylus origin.
+      Emulator and native regression tests protect turns and secret positions.
 - [x] Add a bounded one-use recovery move for sparse Cyrillic shelves:
       L+R after a turn can plant one valid word around burns/holes, costs
       heat and time, breaks combos, never awards points, and avoids hidden

@@ -36,9 +36,9 @@ bounded 7×8 cursor over the actual gems and numbered holes. Press **A** to
 select a front letter at that cursor. Continue moving to adjacent letters;
 press **A again on the last selected letter** once the chain has at least
 three symbols to submit the accepted dictionary word. **B** removes the
-last selected letter without spending a turn. With no controller-selected
-chain to undo, **B** retains its existing back-to-title action. **Y** clears
-the whole chain; **R** selects one free word hint and allows a plain **A**
+last selected letter without spending a turn, whether it came from the
+D-pad or stylus. With no active chain to undo, **B** returns to the title.
+**Y** clears the whole chain; **R** selects one free word hint and allows a plain **A**
 to submit it immediately.
 
 Hold **L+A** to peel the selected gem at the cursor; the same fire, secret,
@@ -51,7 +51,14 @@ locations. It consumes no turn/heat when moved and adds just two outlines
 to the active cursor frame; normal game saves, 11 retail languages and
 Daily scores are unchanged.
 
-- Draw a word chain with the stylus. Each new shelf seeds **up to two
+- Draw a word chain with the stylus. Quick swipes interpolate across
+  neighboring hexes rather than silently skipping letters between touch
+  samples. Only strokes starting and ending on the board are bridged;
+  switching to L mid-drag cancels that word gesture until a new touch.
+  At most 32 touch samples are checked per moved frame, without new
+  allocations or secret-location reads. Peels remain deliberate
+  **L + touch, then lift on the same gem**.
+  Each new shelf seeds **up to two
   different, dictionary-validated 4–6-letter words** on independent columns,
   from its theme whenever possible (or a nearby theme for a sparse pool).
   Both chains are genuine board words, not repeated fixed greetings. Clearing

@@ -79,10 +79,13 @@ int scriptPreviewCursorPeel(void)
 }
 bool scriptPreviewCursorBacktrack(void)
 {
-    if (!scriptPreviewCursorActive || !scriptPreviewBoard.chainLen ||
+    if (!scriptPreviewBoard.chainLen ||
         scriptPreviewRules.status != SCRIPT_RUNNING) return false;
+    // B undoes a front-letter chain regardless of whether the last cell was
+    // chosen by a cursor or by the stylus. Switching input methods should
+    // never make B unexpectedly quit an unfinished Russian/Ukrainian word.
     scriptPreviewBoard.chainLen--;
-    return true; // B on a selected chain cannot accidentally exit the demo
+    return true;
 }
 
 static unsigned char *images[3];
