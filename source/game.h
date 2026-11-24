@@ -427,6 +427,11 @@ void gfxInit(void);
 void gfxLateSample(void);   // main loop: wait until the frame's work just fits before vblank, then read the pad
 void gfxFrame(const Game *g);        // draws both screens and flips
 int  gfxCellAt(int px, int py, int *c, int *r);
+#ifdef WP_CYR_PREVIEW
+// A normal tap on a numbered hole, or specifically on a word's number
+// badge, inspects that published clue instead of starting a word.
+bool gfxScriptClueHit(int px, int py, int c, int r);
+#endif
 bool gfxInSubmit(int px, int py);
 bool gfxInClear(int px, int py);
 bool gfxInPeekButton(int px, int py);

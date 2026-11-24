@@ -2322,6 +2322,22 @@ static void scriptRefreshGlyphs(void)
     scriptGlyphEpochSeen = scriptPreviewGlyphEpoch;
     scriptGlyphCacheBuilds++;
 }
+// Keep the inspection hitbox consistent with the rendered 8x9 numeral
+// badge. Center taps on surveyed front gems still select/submit letters.
+// Called only on fresh non-peek touch-down, with a validated hex hit.
+bool gfxScriptClueHit(int px, int py, int c, int r)
+{
+    if (c < 0 || c >= SCRIPT_COLS || r < 0 || r >= SCRIPT_ROWS)
+        return false;
+    const ScriptBoard *b = &scriptPreviewBoard;
+    if (b->state[c][r] == SCRIPT_HOLE) return true;
+    if (!(b->surveyed[c] & (1u << r))) return false;
+    int x, y;
+    cellOrigin(c, r, &x, &y);
+    return px >= x + 15 && px < x + 23 &&
+           py >= y + 12 && py < y + 21;
+}
+
 // Developer-only Cyrillic board uses the ACTUAL two-screen VRAM renderer and
 // stylus coordinate geometry, not a mock picture or a separate framebuffer.
 // Each tile draws a gem plus an on-demand Unicode glyph. No 64-gem atlas.
@@ -2375,14 +2391,19 @@ static void drawScriptPreviewBoard(void)
                 }
         }
     }
-    // The latest word's surveyed *location* is fixed when front gems fall.
-    // Show which six neighbors its numeral describes, using only that
-    // already-public evidence. Never advertise a burning tile as safe.
+    // Revisit any published word clue or permanent numbered hole. The
+    // focus is anchored to board coordinates, not the falling front tile.
+    // Keep the exact same six-neighbor bound; no search or allocation.
     if (b->clueC < SCRIPT_COLS && b->clueR < SCRIPT_ROWS &&
-        (b->surveyed[b->clueC] & (1u << b->clueR))) {
-        int left, covered;
+        (b->state[b->clueC][b->clueR] == SCRIPT_HOLE ||
+         (b->surveyed[b->clueC] & (1u << b->clueR)))) {
         int certainty = scriptBoardClueInference(b, b->clueC, b->clueR,
-                                                 &left, &covered);
+                                                 NULL, NULL);
+        int fx, fy;
+        cellOrigin(b->clueC, b->clueR, &fx, &fy);
+        bool centerRisk = b->state[b->clueC][b->clueR] == SCRIPT_BURN ||
+            (b->clueR > 0 && b->state[b->clueC][b->clueR - 1] == SCRIPT_BURN);
+        rectOutline(fx, fy, TILE_W, TILE_H, centerRisk ? FIRE1 : WHITE);
         int nc[6], nr[6], n = boardNeighbors(b->clueC, b->clueR, nc, nr);
         for (int i = 0; i < n; i++) {
             int c = nc[i], r = nr[i];
@@ -2477,8 +2498,8 @@ static void drawScriptPreviewHelp(void)
                               "R: ОДНА ПОДСКАЗКА НА ПОЛКУ", INK, 1);
     // Numbered clues: safe and certain neighboring tiles are marked with
     // '-' and '+'; they are logic hints, never automatic reveals.
-    drawTextCenter(128, 87, uk ? "ЧИСЛО: ЛІТЕРИ НАВКОЛО" :
-                               "ЧИСЛО: БУКВЫ РЯДОМ", WHITE, 1);
+    drawTextCenter(128, 87, uk ? "ТОРКНІТЬСЯ ЧИСЛА: СУСІДИ" :
+                               "НАЖМИТЕ ЧИСЛО: СОСЕДИ", WHITE, 1);
     drawTextCenter(128, 100, scriptPreviewDaily ? "SELECT: ПОВТОР ДНЯ" :
                    (uk ? "SELECT: НОВА СПРОБА" : "SELECT: НОВАЯ ПОПЫТКА"), INK, 1);
     drawTextCenter(128, 113, uk ? "L+SELECT: ДЕНЬ БЕЗ РЕКОРДУ" :

@@ -984,14 +984,18 @@ int main(void)
                             scriptPeelRow = row;
                         } else if (!scriptPeekStroke &&
                                    !scriptWordStrokeSuppressed &&
-                                   gfxCellAt(t.px, t.py, &col, &row) &&
-                                   scriptPreviewTrySubmitTail(col, row)) {
-                            // Only a FRESH contact on the already-selected
-                            // end of a valid word submits it. Continuing a
-                            // held drag across the same gem never submits.
-                            // Suppress the rest of this touch so the newly
-                            // cleared word cannot start another chain.
-                            scriptWordStrokeSuppressed = true;
+                                   gfxCellAt(t.px, t.py, &col, &row)) {
+                            // Inspect a previously earned number without
+                            // selecting or submitting letters. Center taps
+                            // on a word tail still retain normal submission.
+                            if (gfxScriptClueHit(t.px, t.py, col, row) &&
+                                scriptPreviewFocusClue(col, row)) {
+                                scriptWordStrokeSuppressed = true;
+                            } else if (scriptPreviewTrySubmitTail(col, row)) {
+                                // Only fresh contact on a valid word tail
+                                // submits. Never retrace the cleared word.
+                                scriptWordStrokeSuppressed = true;
+                            }
                         }
                     }
                     if (scriptPeekStroke) {
