@@ -2538,27 +2538,16 @@ static void drawScriptPreviewTop(void)
     const ScriptBoard *b = &scriptPreviewBoard;
     const char *theme = v4PoolsName(&scriptPreviewPools, b->passTheme);
     drawTextCenter(128, 47, theme, ACCENT, 2);
-    char word[80] = {0};
-    if (scriptBoardPassUtf8(b, &scriptPreviewDict, word, sizeof word)) {
-        // Live shelves show only peeled letters. Once a shelf is actually
-        // lost, reveal its answer (not the hidden board coordinates) just
-        // like the retail game. Do not change found flags or award points.
-        bool lost = scriptPreviewRules.status == SCRIPT_FAILED;
-        char masked[80] = {0};
-        const char *p = word;
-        int at = 0;
-        for (int i = 0; i < b->passLen && at < (int)sizeof masked - 5; i++) {
-            const char *before = p;
-            (void)fontGlyphNext(&p);
-            if (b->found[i] || lost) {
-                while (before < p) masked[at++] = *before++;
-            } else masked[at++] = '_';
-            if (i != b->passLen - 1) masked[at++] = ' ';
-        }
-        masked[at] = 0;
+    // The separator is public punctuation, not a tile or found letter.
+    // Cached metadata keeps the vblank renderer free of dictionary lookup.
+    // A terminal loss reveals the actual spelling without changing found.
+    char masked[80];
+    bool lost = scriptPreviewRules.status == SCRIPT_FAILED;
+    if (scriptBoardPassDisplayUtf8(b, &scriptPreviewDict,
+                                  scriptPreviewPassApostrophe, lost,
+                                  masked, sizeof masked))
         drawTextCenter(128, 70, masked,
                        lost ? FIRE2 : scriptBoardPassComplete(b) ? GOLD_LT : WHITE, 2);
-    }
     // Clarify the objective: front gems make words, while peels uncover
     // hidden password symbols. This is the same FOUND x/y information shown
     // in retail, now localized for both independent Cyrillic demo languages.
@@ -3498,6 +3487,7 @@ static void topSigs(const Game *g, u32 sig[4])
         h2 = hmix(h2, scriptPreviewDaily); // the manual's SELECT description
         h1 = hmix(h1, b->passLen);
         h1 = hmix(h1, b->passTheme);
+        h1 = hmix(h1, scriptPreviewPassApostrophe);
         // A terminal loss changes the answer even if no letter was peeled.
         h1 = hmix(h1, scriptPreviewRules.status == SCRIPT_FAILED);
         for (int i = 0; i < b->passLen; i++) {

@@ -35,6 +35,8 @@ extern int scriptPreviewLastTier;
 extern int scriptPreviewLastScore;
 extern int scriptPreviewCheckpointStatus;
 extern uint32_t scriptPreviewSeed;
+// Public non-tile spelling metadata cached once on successful shelf start.
+extern uint32_t scriptPreviewPassApostrophe;
 // 1..2 guaranteed legal opening words for the current demo shelf.
 extern int scriptPreviewOpeningWords;
 // Incremented ONLY when a full Russian/Ukrainian dictionary image is loaded.

@@ -435,7 +435,44 @@ bool scriptBoardPassUtf8(const ScriptBoard *b, const V4Dict *dict,
     if (!out || !capacity) return false;
     out[0] = 0;
     if (!b || !b->passLen || b->passLen > WPP2_MAX_LEN) return false;
-    return idsToUtf8(b->pass, b->passLen, dict, 0, out, capacity);
+    uint32_t mask = 0;
+    if (dict && dict->apostrophe[b->passLen] &&
+        !v4DictLookupSpellingIds(dict, b->pass, b->passLen, &mask)) return false;
+    return idsToUtf8(b->pass, b->passLen, dict, mask, out, capacity);
+}
+bool scriptBoardPassDisplayUtf8(const ScriptBoard *b, const V4Dict *dict,
+                                 uint32_t mask, bool revealAll,
+                                 char *out, size_t capacity)
+{
+    if (!out || !capacity) return false;
+    out[0] = 0;
+    if (!b || !dict || !dict->image || !b->passLen ||
+        b->passLen > WPP2_MAX_LEN ||
+        (mask & ~(((1u << b->passLen) - 1u) & ~1u))) return false;
+    // At most 2*n-1 glyphs, exactly the legacy spaced-letter width.
+    // U+02BC replaces a space; it does not consume a password slot.
+    size_t at = 0;
+    for (unsigned i = 0; i < b->passLen; ++i) {
+        if (b->pass[i] >= dict->symbols) goto fail;
+        if (i) {
+            char separator[4];
+            unsigned n = encode(mask & (1u << i) ? 0x02bcu : ' ', separator);
+            if (at + n >= capacity) goto fail;
+            memcpy(out + at, separator, n);
+            at += n;
+        }
+        char glyph[4];
+        unsigned n = encode(revealAll || b->found[i] ?
+                            dict->alphabet[b->pass[i]] : '_', glyph);
+        if (at + n >= capacity) goto fail;
+        memcpy(out + at, glyph, n);
+        at += n;
+    }
+    out[at] = 0;
+    return true;
+fail:
+    out[0] = 0;
+    return false;
 }
 
 

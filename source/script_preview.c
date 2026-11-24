@@ -23,6 +23,7 @@ int scriptPreviewHelp;
 int scriptPreviewLastTier, scriptPreviewLastScore;
 int scriptPreviewCheckpointStatus;
 uint32_t scriptPreviewSeed;
+uint32_t scriptPreviewPassApostrophe;
 int scriptPreviewOpeningWords;
 uint32_t scriptPreviewGlyphEpoch;
 int scriptPreviewOpenError;
@@ -153,6 +154,7 @@ void scriptPreviewClose(void)
     scriptPreviewHelp = 0;
     scriptPreviewLastTier = scriptPreviewLastScore = 0;
     scriptPreviewOpeningWords = 0;
+    scriptPreviewPassApostrophe = 0;
     scriptPreviewCheckpointStatus = SCRIPT_CHECKPOINT_NONE;
     scriptPreviewCursorActive = scriptPreviewCursorCol = scriptPreviewCursorRow = 0;
 }
@@ -176,6 +178,9 @@ static bool startPass(unsigned shelf, uint32_t seed, int bankedScore)
     if (!scriptBoardStartPass(&nextBoard, &scriptPreviewDict,
                               &scriptPreviewTiles, &scriptPreviewPools,
                               seed, target)) return false;
+    uint32_t passMask;
+    if (!v4DictLookupSpellingIds(&scriptPreviewDict, nextBoard.pass,
+                                nextBoard.passLen, &passMask)) return false;
     // Generate up to two distinct legal opening words; explicit L+R rescue
     // still plants only one word after charging its normal turn and heat.
     int openingWords = scriptBoardPlantOpeningWords(
@@ -185,6 +190,7 @@ static bool startPass(unsigned shelf, uint32_t seed, int bankedScore)
     // Generate both the hidden password and a playable word before replacing
     // a live shelf. A refused generation must not erase its score or state.
     scriptPreviewBoard = nextBoard;
+    scriptPreviewPassApostrophe = passMask;
     scriptPreviewOpeningWords = openingWords;
     scriptPreviewRules = nextRules;
     scriptPreviewShelf = nextRules.shelf;
