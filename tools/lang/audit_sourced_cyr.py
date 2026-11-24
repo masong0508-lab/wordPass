@@ -95,6 +95,7 @@ def verify_pack(root, code, rows, extras, words, min_source_words):
             "dictionary_bytes": len(dictionary),
             "theme_pool_bytes": len(pools),
             "source_forms": manifest.get("source_valid_word_count"),
+            "apostrophe_retained": details["apostrophe_words"],
             "apostrophe_excluded": manifest.get("ukrainian_apostrophe_forms_unrepresented", 0),
             "theme_source_sha256": hashlib.sha256(raw).hexdigest(),
             "origin": manifest.get("origin"),
@@ -140,8 +141,8 @@ def report(entries, output):
               "Review each line for semantic theme fit, natural spelling,",
               "singular/plural/inflection suitability, register, regional",
               "usage and offensive/unwanted forms. Do not auto-approve based",
-              "on Hunspell membership. Words with apostrophes remain excluded",
-              "from the Ukrainian 33-letter gameplay model.",
+              "on Hunspell membership. Ukrainian orthographic word-chain support",
+              "uses stored non-tile separators; themed passwords remain plain.",
               ""]
     for code, info in entries.items():
         lines += [f"## {code.upper()} — 40 editorial categories", "",
@@ -160,7 +161,8 @@ def report(entries, output):
             lines += [f"**Attested dictionary:** {pack['dictionary_count']} words; "
                       f"{pack['dictionary_bytes']} bytes; "
                       f"pool {pack['theme_pool_bytes']} bytes.",
-                      f"**Excluded apostrophe spellings:** {pack['apostrophe_excluded']}.",
+                      f"**Apostrophe spellings retained:** {pack['apostrophe_retained']}; "
+                      f"**excluded:** {pack['apostrophe_excluded']}.",
                       f"**Upstream:** {pack['origin']}",
                       "**Frequency:** not certified; technical common/rare tiers "
                       "must not be described as statistical popularity.",
