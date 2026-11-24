@@ -258,7 +258,36 @@ def selftest(dest):
         out.write_bytes(data)
         print(f"WPD4 {code}: {result['words']} synthetic words, "
               f"{result['symbols']} symbols, {len(data)} bytes -> {out}")
-    print("WPD4 PYTHON OK: deterministic, checksum, alphabet and record validation")
+    # Separate opt-in Ukrainian spelling fixture; keep the original
+    # 33-letter fixtures byte-for-byte unchanged.
+    words, common = FIXTURES["uk"]
+    spellings = {"ПЯТЬ": "ПʼЯТЬ", "МЯСО": "М’ЯСО", "ЗВЯЗОК": "ЗВ'ЯЗОК"}
+    extended = build("uk", set(words) | set(spellings), common, spellings)
+    info = verify(extended)
+    assert info["words"] == len(words) + 3 and info["apostrophe_words"] == 3
+    assert extended[5] == UK_APOSTROPHE
+    assert project_uk("п'ять") == project_uk("п’ять") == project_uk("пʼять")
+    assert project_uk("п'ять")[:2] == ("ПЯТЬ", 2)
+    for invalid in ("ʼЯТЬ", "ПЯТЬʼ", "ПʼʼЯТЬ", "ПʼАТЬ", "PʼЯТЬ"):
+        try:
+            project_uk(invalid)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"accepted malformed separator {invalid!r}")
+    # Checksum-valid invalid first-position bit must still fail structurally.
+    broken = bytearray(extended)
+    trailer = len(extended) - 3 * info["words"]
+    broken[trailer] |= 1
+    struct.pack_into("<I", broken, 16, fnv32(broken[HEADER:]))
+    try:
+        verify(broken)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("accepted leading apostrophe with recomputed checksum")
+    (path / "wpd4_uk_apostrophe.bin").write_bytes(extended)
+    print("WPD4 PYTHON OK: legacy packing, Ukrainian spelling masks and strict validation")
 
 
 def main(argv):
