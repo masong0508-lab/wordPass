@@ -1,7 +1,7 @@
 // WPP2 themed Cyrillic password format. No heap, no CJK atlas, no effect on
 // original WPP1 pools. All pointers are into the caller-owned checked file.
 //
-// Header [0..19]: WPP2, version=1, flags=0, theme count u8 (1..48),
+// Header [0..19]: WPP2, version=1, flags=0 or 1 (Ukrainian apostrophes), theme count u8 (1..48),
 // reserved=0, alphabet symbols u8 (2..64), minimum=4, maximum=9,
 // reserved=0, byte size LE32, payload FNV1a32 LE32.
 // Payload: alphabet symbols x u32 LE codepoint, theme records (24-byte
@@ -62,7 +62,8 @@ bool v4PoolsOpen(V4Pools *pools, const uint8_t *data, size_t size,
     memset(pools, 0, sizeof(*pools));
     if (!dict || !dict->image || !data ||
         size < WPP2_HEADER || size > WPP2_MAX_BYTES ||
-        memcmp(data, "WPP2", 4) || data[4] != 1 || data[5] ||
+        memcmp(data, "WPP2", 4) || data[4] != 1 ||
+        (data[5] & ~WPP2_UK_APOSTROPHE) ||
         data[6] == 0 || data[6] > WPP2_MAX_THEMES || data[7] ||
         data[8] != dict->symbols ||
         data[9] != WPP2_MIN_LEN || data[10] != WPP2_MAX_LEN ||
@@ -95,6 +96,7 @@ bool v4PoolsOpen(V4Pools *pools, const uint8_t *data, size_t size,
         }
         if (countTotal == 0) return false;  // no unplayable empty theme
     }
+    bool hasApostrophe = false;
     for (unsigned t = 0; t < themes; t++) {
         for (unsigned k = 0; k < WPP2_LENGTHS; k++) {
             unsigned len = WPP2_MIN_LEN + k;
@@ -108,18 +110,20 @@ bool v4PoolsOpen(V4Pools *pools, const uint8_t *data, size_t size,
                 for (unsigned j = 0; j < len; j++)
                     if (word[j] >= symbols) return false;
                 if (previous && memcmp(previous, word, len) >= 0) return false;
-                // Hidden passwords still have one slot per plain letter.
-                // A non-tile spelling needs its own reviewed reveal UI and
-                // must not enter these legacy WPP2 pools yet.
+                // The dictionary owns the unique spelling for this path.
+                // Legacy pools refuse non-tile punctuation; flag 1 opts
+                // in explicitly without changing any word record widths.
                 uint32_t apostrophe;
                 if (!v4DictLookupSpellingIds(dict, word, (int)len, &apostrophe) ||
-                    apostrophe) return false;
+                    (apostrophe && !(data[5] & WPP2_UK_APOSTROPHE))) return false;
+                hasApostrophe |= apostrophe != 0;
                 previous = word;
             }
             offset += (size_t)count * len;
         }
     }
-    if (offset != size) return false;
+    if (offset != size ||
+        hasApostrophe != ((data[5] & WPP2_UK_APOSTROPHE) != 0)) return false;
     pools->image = data;
     pools->themes = (uint8_t)themes;
     pools->symbols = (uint8_t)symbols;
