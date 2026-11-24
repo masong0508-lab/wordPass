@@ -53,7 +53,10 @@ Daily scores are unchanged.
 
 - Draw a word chain with the stylus. Quick swipes interpolate across
   neighboring hexes rather than silently skipping letters between touch
-  samples. Only strokes starting and ending on the board are bridged;
+  samples. **After lifting the stylus, tap the final selected gem again**
+  to submit a valid word without pressing A; tapping a short, invalid or
+  different chain never scores. The A button still submits normally.
+  Only strokes starting and ending on the board are bridged;
   switching to L mid-drag cancels that word gesture until a new touch.
   At most 32 touch samples are checked per moved frame, without new
   allocations or secret-location reads. Peels remain deliberate

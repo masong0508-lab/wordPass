@@ -64,12 +64,11 @@ bool scriptPreviewCursorSelect(void)
 {
     if (!scriptPreviewCursorActive || !scriptPreviewDict.image ||
         scriptPreviewRules.status != SCRIPT_RUNNING) return false;
-    const ScriptBoard *board = &scriptPreviewBoard;
-    int tail = board->chainLen - 1;
-    if (tail >= WPD4_MIN_WORD - 1 &&
-        board->chainC[tail] == scriptPreviewCursorCol &&
-        board->chainR[tail] == scriptPreviewCursorRow)
-        return scriptPreviewSubmit() > 0; // A twice on a valid tail submits
+    // Both cursor A and a second fresh stylus tap use the exact same
+    // dictionary-validated submit operation, so one input cannot score a
+    // rejected word or spend turns that the other input would refuse.
+    if (scriptPreviewTrySubmitTail(scriptPreviewCursorCol,
+                                   scriptPreviewCursorRow)) return true;
     return scriptPreviewChain(scriptPreviewCursorCol, scriptPreviewCursorRow);
 }
 int scriptPreviewCursorPeel(void)
@@ -288,6 +287,18 @@ bool scriptPreviewChain(int c, int r)
     bool added = scriptBoardAdd(&scriptPreviewBoard, c, r);
     if (added) scriptPreviewRescueError = 0;
     return added;
+}
+bool scriptPreviewTrySubmitTail(int c, int r)
+{
+    const ScriptBoard *b = &scriptPreviewBoard;
+    if (!scriptPreviewDict.image || scriptPreviewRules.status != SCRIPT_RUNNING ||
+        b->chainLen < WPD4_MIN_WORD || b->chainLen > SCRIPT_MAX_CHAIN)
+        return false;
+    int tail = b->chainLen - 1;
+    if (b->chainC[tail] != c || b->chainR[tail] != r) return false;
+    // Only accepted words count. Invalid/short/non-tail taps never consume a
+    // turn, heat, clue or score, and keep the chain for correction.
+    return scriptPreviewSubmit() > 0;
 }
 bool scriptPreviewHint(void)
 {
