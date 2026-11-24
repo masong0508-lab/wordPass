@@ -2485,10 +2485,10 @@ static void drawScriptPreviewHelp(void)
                                "L+SELECT: ДЕНЬ БЕЗ РЕКОРДА", INK, 1);
     drawTextCenter(128, 126, uk ? "СЛОВО ДАЄ ЧИСЛО: +/- ПІДКАЗКА" :
                                "СЛОВО ДАЁТ ЧИСЛО: +/- ПОДСКАЗКА", DIM_TEXT, 1);
-    drawTextCenter(128, 139, uk ? "L+R: НОВЕ СЛОВО (1 РАЗ)" :
-                               "L+R: НОВОЕ СЛОВО (1 РАЗ)", ACCENT, 1);
-    drawTextCenter(128, 152, uk ? "1 ХІД / СПЕКА +2 АБО БІЛЬШЕ" :
-                               "1 ХОД / ЖАР +2 ИЛИ БОЛЬШЕ", DIM_TEXT, 1);
+    drawTextCenter(128, 139, uk ? "L+R: 1 СЛОВО / 1 ХІД / СПЕКА +2" :
+                               "L+R: 1 СЛОВО / 1 ХОД / ЖАР +2", ACCENT, 1);
+    drawTextCenter(128, 152, uk ? "L+START: ЗБЕРЕГТИ / L+B: ВІДНОВИТИ" :
+                               "L+START: СОХР / L+B: ЗАГРУЗИТЬ", DIM_TEXT, 1);
     hline(25, 164, 206, GOLD_DK);
     drawTextCenter(128, 170, uk ? "B: НАЗАД / START: ВИХІД" :
                                "B: НАЗАД / START: ВЫХОД", GOLD_LT, 1);
@@ -2575,7 +2575,37 @@ static void drawScriptPreviewTop(void)
                  (unsigned)scriptPreviewLedger.combo);
         drawTextCenter(128, 158, combo, ACCENT, 1);
     }
-    if (scriptPreviewRules.status == SCRIPT_PASSED) {
+    if (scriptPreviewCheckpointStatus != SCRIPT_CHECKPOINT_NONE) {
+        const bool uk = scriptPreviewLanguage != 0;
+        const char *msg;
+        u16 color = FIRE2;
+        switch (scriptPreviewCheckpointStatus) {
+            case SCRIPT_CHECKPOINT_SAVED:
+                msg = uk ? "ПОЧАТОК ПОЛИЦІ ЗБЕРЕЖЕНО" : "НАЧАЛО ПОЛКИ СОХРАНЕНО";
+                color = GOLD_LT;
+                break;
+            case SCRIPT_CHECKPOINT_LOADED:
+                msg = uk ? "ПОЛИЦЮ ВІДНОВЛЕНО" : "ПОЛКА ВОССТАНОВЛЕНА";
+                color = GOLD_LT;
+                break;
+            case SCRIPT_CHECKPOINT_NO_CARD:
+                msg = uk ? "НЕМАЄ КАРТКИ" : "НЕТ КАРТЫ";
+                break;
+            case SCRIPT_CHECKPOINT_NO_RECORD:
+                msg = uk ? "НЕМАЄ ЗАПИСУ" : "НЕТ СОХРАНЕНИЯ";
+                break;
+            case SCRIPT_CHECKPOINT_DAILY:
+                msg = uk ? "ДЕНЬ БЕЗ ЗБЕРЕЖЕННЯ" : "ДЕНЬ БЕЗ СОХРАНЕНИЯ";
+                break;
+            case SCRIPT_CHECKPOINT_NOT_START:
+                msg = uk ? "ЗБЕРІГАЙТЕ НА ПОЧАТКУ ПОЛИЦІ" : "СОХРАНЯЙТЕ В НАЧАЛЕ ПОЛКИ";
+                break;
+            default:
+                msg = uk ? "ПОМИЛКА ЗАПИСУ АБО ЧИТАННЯ" : "ОШИБКА ЗАПИСИ ИЛИ ЧТЕНИЯ";
+                break;
+        }
+        drawTextCenter(128, 169, msg, color, 1);
+    } else if (scriptPreviewRules.status == SCRIPT_PASSED) {
         char msg[96];
         if (scriptPreviewDaily)
             sniprintf(msg, sizeof msg, scriptPreviewLanguage ?
@@ -3455,6 +3485,7 @@ static void topSigs(const Game *g, u32 sig[4])
         h3 = hmix(h3, scriptPreviewLedger.lastRepeat);
         h3 = hmix(h3, scriptPreviewRescues);
         h3 = hmix(h3, scriptPreviewRescueError);
+        h3 = hmix(h3, scriptPreviewCheckpointStatus);
         topSigNow[0] = sig[0] = h0;
         topSigNow[1] = sig[1] = h1;
         topSigNow[2] = sig[2] = h2;

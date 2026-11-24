@@ -24,7 +24,7 @@ MIN_RESERVE = 64 * 1024
 ITCM_BASE, ITCM_LIMIT = 0x01000000, 0x01008000
 DTCM_BASE, DTCM_LIMIT = 0x02ff0000, 0x02ff4000
 FLOAT_HELPERS = ('_dtoa_r', '_svfprintf_r', '_vfprintf_r', 'vfprintf')
-SCRIPT_PREFIXES = ('scriptPreview', 'v4Dict', 'scriptBoard')
+SCRIPT_PREFIXES = ('scriptPreview', 'v4Dict', 'scriptBoard', 'scriptCheckpoint')
 WPD3_WIDTHS = (4, 4, 4, 4, 5, 6, 7, 7, 8, 8, 9, 9, 10, 11, 11, 12, 13, 13)
 
 

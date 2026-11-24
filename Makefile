@@ -70,7 +70,7 @@ CFILES   := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
 # Native make check names its test sources explicitly, independently of this
 # ROM object list. The opt-in DS preview retains all eight modules.
 CYR_ONLY_CFILES := dict_v4.c pools_v2.c tiles_v2.c script_board.c \
-                   script_rules.c script_preview.c script_ledger.c script_daily.c
+                   script_rules.c script_preview.c script_ledger.c script_daily.c script_checkpoint.c
 ifneq ($(WP_CYR_PREVIEW),1)
 CFILES := $(filter-out $(CYR_ONLY_CFILES),$(CFILES))
 endif
@@ -168,7 +168,7 @@ check:
 	$(BUILD)/script_pass_check $(BUILD)/cyr-source-intake/ru/dict.bin $(BUILD)/cyr-source-intake/uk/dict.bin $(BUILD)/cyr-source-intake/ru/tiles.bin $(BUILD)/cyr-source-intake/uk/tiles.bin $(BUILD)/cyr-source-intake/ru/pools.bin $(BUILD)/cyr-source-intake/uk/pools.bin
 	gcc -std=gnu11 -O2 -Wall -Wextra -Wshadow -I source tools/check/script_fire_test.c source/script_rules.c source/script_board.c source/pools_v2.c source/tiles_v2.c source/dict_v4.c -o $(BUILD)/script_fire_check
 	$(BUILD)/script_fire_check $(BUILD)/wpd4_ru.bin $(BUILD)/wpd4_uk.bin $(BUILD)/wpl2_ru.bin $(BUILD)/wpl2_uk.bin $(BUILD)/wpp2_ru.bin $(BUILD)/wpp2_uk.bin
-	gcc -std=gnu11 -O2 -Wall -Wextra -Wshadow -DWP_CYR_PREVIEW -I source tools/check/script_preview_test.c source/script_preview.c source/script_rules.c source/script_board.c source/script_ledger.c source/script_daily.c source/pools_v2.c source/tiles_v2.c source/dict_v4.c -o $(BUILD)/script_preview_check
+	gcc -std=gnu11 -O2 -Wall -Wextra -Wshadow -DWP_CYR_PREVIEW -I source tools/check/script_preview_test.c source/script_preview.c source/script_rules.c source/script_board.c source/script_ledger.c source/script_daily.c source/script_checkpoint.c source/pools_v2.c source/tiles_v2.c source/dict_v4.c -o $(BUILD)/script_preview_check
 	$(BUILD)/script_preview_check $(BUILD)/cyrpreview/ru/dict.bin $(BUILD)/cyrpreview/uk/dict.bin $(BUILD)/cyrpreview/ru/tiles.bin $(BUILD)/cyrpreview/uk/tiles.bin $(BUILD)/cyrpreview/ru/pools.bin $(BUILD)/cyrpreview/uk/pools.bin
 	gcc -std=gnu11 -O2 -Wall -Wextra -Wshadow -I source tools/check/script_ledger_test.c source/script_ledger.c -o $(BUILD)/script_ledger_check
 	$(BUILD)/script_ledger_check

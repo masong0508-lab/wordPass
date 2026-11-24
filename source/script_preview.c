@@ -21,6 +21,7 @@ ScriptLedger scriptPreviewLedger;
 int scriptPreviewDaily, scriptPreviewDailyDate, scriptPreviewDailyClockError;
 int scriptPreviewHelp;
 int scriptPreviewLastTier, scriptPreviewLastScore;
+int scriptPreviewCheckpointStatus;
 uint32_t scriptPreviewSeed;
 int scriptPreviewOpeningWords;
 uint32_t scriptPreviewGlyphEpoch;
@@ -140,6 +141,7 @@ void scriptPreviewClose(void)
     scriptPreviewHelp = 0;
     scriptPreviewLastTier = scriptPreviewLastScore = 0;
     scriptPreviewOpeningWords = 0;
+    scriptPreviewCheckpointStatus = SCRIPT_CHECKPOINT_NONE;
     scriptPreviewCursorActive = scriptPreviewCursorCol = scriptPreviewCursorRow = 0;
 }
 static bool startPass(unsigned shelf, uint32_t seed, int bankedScore)
@@ -179,6 +181,7 @@ static bool startPass(unsigned shelf, uint32_t seed, int bankedScore)
     scriptPreviewTurns = scriptPreviewPeels = scriptPreviewHints = 0;
     scriptPreviewRescues = scriptPreviewRescueError = 0;
     scriptPreviewLastTier = scriptPreviewLastScore = 0;
+    scriptPreviewCheckpointStatus = SCRIPT_CHECKPOINT_NONE;
     scriptLedgerReset(&scriptPreviewLedger);
     scriptPreviewCursorActive = scriptPreviewCursorCol = scriptPreviewCursorRow = 0;
     // Each generated shelf now guarantees a valid dictionary word from its
@@ -190,6 +193,49 @@ bool scriptPreviewNewPass(uint32_t seed)
 {
     return startPass((unsigned)scriptPreviewShelf, seed, shelfStartScore);
 }
+int scriptPreviewCheckpoint(bool save, const char *settingsPath)
+{
+    int result;
+    if (scriptPreviewDaily)
+        result = SCRIPT_CHECKPOINT_DAILY;
+    else if (!settingsPath)
+        result = SCRIPT_CHECKPOINT_NO_CARD;
+    else if (!scriptPreviewDict.image || !scriptPreviewPools.image ||
+             !scriptPreviewTiles.valid || scriptPreviewShelf < 1)
+        result = SCRIPT_CHECKPOINT_IO_ERROR;
+    else {
+        uint32_t tag = scriptCheckpointTag(&scriptPreviewDict,
+                                           &scriptPreviewTiles, &scriptPreviewPools);
+        if (save) {
+            // No partially played shelf or unbanked pass bonus is saved.
+            // Finish a shelf, press A to advance, and then checkpoint.
+            if (scriptPreviewRules.status != SCRIPT_RUNNING ||
+                scriptPreviewTurns || scriptPreviewScore != shelfStartScore)
+                result = SCRIPT_CHECKPOINT_NOT_START;
+            else {
+                ScriptCheckpoint record = {
+                    .language = (unsigned)scriptPreviewLanguage, .pack = tag,
+                    .shelf = (unsigned)scriptPreviewShelf, .seed = scriptPreviewSeed,
+                    .score = (unsigned)shelfStartScore
+                };
+                result = scriptCheckpointStore(settingsPath, &record) ?
+                    SCRIPT_CHECKPOINT_SAVED : SCRIPT_CHECKPOINT_IO_ERROR;
+            }
+        } else {
+            ScriptCheckpoint record;
+            if (!scriptCheckpointLoad(settingsPath, (unsigned)scriptPreviewLanguage,
+                                      tag, &record))
+                result = SCRIPT_CHECKPOINT_NO_RECORD;
+            else {
+                result = startPass(record.shelf, record.seed, (int)record.score) ?
+                    SCRIPT_CHECKPOINT_LOADED : SCRIPT_CHECKPOINT_IO_ERROR;
+            }
+        }
+    }
+    scriptPreviewCheckpointStatus = result;
+    return result;
+}
+
 bool scriptPreviewOpen(int language, uint32_t seed)
 {
     scriptPreviewClose();

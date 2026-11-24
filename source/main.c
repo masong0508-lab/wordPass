@@ -888,6 +888,8 @@ int main(void)
                 const bool scriptKeyAction =
                     (down & (KEY_A | KEY_B | KEY_X | KEY_Y | KEY_R |
                              KEY_SELECT | KEY_START)) != 0;
+                if (scriptKeyAction || (down & KEY_TOUCH))
+                    scriptPreviewCheckpointStatus = SCRIPT_CHECKPOINT_NONE;
                 if (scriptKeyAction) {
                     scriptDropPeekStroke();
                     // A submitted word or Y clearing it while the stylus
@@ -906,6 +908,15 @@ int main(void)
                         break; // dismissal must not also submit or touch a tile
                     }
                     if (!(down & KEY_START)) break;
+                }
+                // Deliberate preview-only shelf checkpoint commands. The
+                // retail settings path supplies the FAT device/directory,
+                // never the actual retail filename to write.
+                if (!scriptPreviewHelp && (held & KEY_L) &&
+                    (down & (KEY_START | KEY_B))) {
+                    (void)scriptPreviewCheckpoint((down & KEY_START) != 0,
+                        settingsPersistent() ? settingsCfgPath() : NULL);
+                    break;
                 }
                 // B erases one controller-selected letter first. With no
                 // active chain it preserves the existing exit shortcut.
