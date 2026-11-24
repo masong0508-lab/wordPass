@@ -26,6 +26,10 @@ int main(void)
     checkText("ПРИВІТ", 6, 0);
     checkText("УКРАЇНСЬКА", 10, 0);
     checkText("Ґ Є І Ї", 7, 0);
+    checkText("ПʼЯТЬ М’ЯСО", 11, 0);
+    CHECK(fontGlyphCodepoint(0x02bc) == font5x7[46] &&
+          fontGlyphCodepoint(0x2019) == font5x7[46],
+          "canonical and typographic apostrophes have the correct bitmap");
     // The opt-in Russian/Ukrainian goal HUD and help must fit the 206px
     // top-LCD plaque and use only supported 5x7 glyphs. UTF-8 bytes are
     // deliberately NOT equated with visible characters in these checks.

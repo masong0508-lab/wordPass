@@ -62,6 +62,8 @@ def _inspect(source, code, synthetic=False):
         if manifest.get(key) != len(assets[filename]):
             raise ValueError(f"{code}: {filename} byte count differs from manifest")
     d = dictionary.verify(assets["dict.bin"])
+    if manifest.get("ukrainian_apostrophe_forms_retained", 0) != d["apostrophe_words"]:
+        raise ValueError(f"{code}: apostrophe spelling count differs from dictionary")
     t = tiles.verify(assets["tiles.bin"], assets["dict.bin"])
     p = pools.verify(assets["dict.bin"], assets["pools.bin"])
     # Require the actual language's alphabet; both have 33 symbols but NOT

@@ -71,6 +71,12 @@ def dictionary_has(data, ids, alphabet_size, counts, offsets):
         found = bytes(data[off:off + rec])
         key = found[:-1] + bytes([found[-1] & 0xfe])
         if key == target:
+            if data[5] & v4.UK_APOSTROPHE:
+                # WPP2 still encodes only ordinary letter passwords. An
+                # apostrophe-only dictionary path cannot masquerade as one.
+                before = sum(counts[:length - v4.MIN_LEN])
+                at = len(data) - 3 * sum(counts) + 3 * (before + mid)
+                return int.from_bytes(data[at:at+3], "little") == 0
             return True
         if key < target:
             lo = mid + 1

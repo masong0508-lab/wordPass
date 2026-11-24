@@ -2300,6 +2300,7 @@ static void drawCues(const Game *g)
 
 #ifdef WP_CYR_PREVIEW
 static int scriptQuoteTierNow;
+static uint32_t scriptQuoteApostropheNow;
 // The Russian and Ukrainian board uses a fixed 33-symbol alphabet loaded
 // from a validated WPD4 dictionary. Resolving all 56 tile glyphs through
 // fontGlyphCodepoint() on EVERY rendered frame wastes CPU on repeated
@@ -2322,6 +2323,22 @@ static void scriptRefreshGlyphs(void)
     scriptGlyphEpochSeen = scriptPreviewGlyphEpoch;
     scriptGlyphCacheBuilds++;
 }
+// Keep the inspection hitbox consistent with the rendered 8x9 numeral
+// badge. Center taps on surveyed front gems still select/submit letters.
+// Called only on fresh non-peek touch-down, with a validated hex hit.
+bool gfxScriptClueHit(int px, int py, int c, int r)
+{
+    if (c < 0 || c >= SCRIPT_COLS || r < 0 || r >= SCRIPT_ROWS)
+        return false;
+    const ScriptBoard *b = &scriptPreviewBoard;
+    if (b->state[c][r] == SCRIPT_HOLE) return true;
+    if (!(b->surveyed[c] & (1u << r))) return false;
+    int x, y;
+    cellOrigin(c, r, &x, &y);
+    return px >= x + 15 && px < x + 23 &&
+           py >= y + 12 && py < y + 21;
+}
+
 // Developer-only Cyrillic board uses the ACTUAL two-screen VRAM renderer and
 // stylus coordinate geometry, not a mock picture or a separate framebuffer.
 // Each tile draws a gem plus an on-demand Unicode glyph. No 64-gem atlas.
@@ -2375,14 +2392,19 @@ static void drawScriptPreviewBoard(void)
                 }
         }
     }
-    // The latest word's surveyed *location* is fixed when front gems fall.
-    // Show which six neighbors its numeral describes, using only that
-    // already-public evidence. Never advertise a burning tile as safe.
+    // Revisit any published word clue or permanent numbered hole. The
+    // focus is anchored to board coordinates, not the falling front tile.
+    // Keep the exact same six-neighbor bound; no search or allocation.
     if (b->clueC < SCRIPT_COLS && b->clueR < SCRIPT_ROWS &&
-        (b->surveyed[b->clueC] & (1u << b->clueR))) {
-        int left, covered;
+        (b->state[b->clueC][b->clueR] == SCRIPT_HOLE ||
+         (b->surveyed[b->clueC] & (1u << b->clueR)))) {
         int certainty = scriptBoardClueInference(b, b->clueC, b->clueR,
-                                                 &left, &covered);
+                                                 NULL, NULL);
+        int fx, fy;
+        cellOrigin(b->clueC, b->clueR, &fx, &fy);
+        bool centerRisk = b->state[b->clueC][b->clueR] == SCRIPT_BURN ||
+            (b->clueR > 0 && b->state[b->clueC][b->clueR - 1] == SCRIPT_BURN);
+        rectOutline(fx, fy, TILE_W, TILE_H, centerRisk ? FIRE1 : WHITE);
         int nc[6], nr[6], n = boardNeighbors(b->clueC, b->clueR, nc, nr);
         for (int i = 0; i < n; i++) {
             int c = nc[i], r = nr[i];
@@ -2477,8 +2499,8 @@ static void drawScriptPreviewHelp(void)
                               "R: ОДНА ПОДСКАЗКА НА ПОЛКУ", INK, 1);
     // Numbered clues: safe and certain neighboring tiles are marked with
     // '-' and '+'; they are logic hints, never automatic reveals.
-    drawTextCenter(128, 87, uk ? "ЧИСЛО: ЛІТЕРИ НАВКОЛО" :
-                               "ЧИСЛО: БУКВЫ РЯДОМ", WHITE, 1);
+    drawTextCenter(128, 87, uk ? "ТОРКНІТЬСЯ ЧИСЛА: СУСІДИ" :
+                               "НАЖМИТЕ ЧИСЛО: СОСЕДИ", WHITE, 1);
     drawTextCenter(128, 100, scriptPreviewDaily ? "SELECT: ПОВТОР ДНЯ" :
                    (uk ? "SELECT: НОВА СПРОБА" : "SELECT: НОВАЯ ПОПЫТКА"), INK, 1);
     drawTextCenter(128, 113, uk ? "L+SELECT: ДЕНЬ БЕЗ РЕКОРДУ" :
@@ -2518,21 +2540,24 @@ static void drawScriptPreviewTop(void)
     drawTextCenter(128, 47, theme, ACCENT, 2);
     char word[80] = {0};
     if (scriptBoardPassUtf8(b, &scriptPreviewDict, word, sizeof word)) {
-        // Hidden symbols are still readable as placeholders until peeled.
-        // This is NOT displayed as a spoiler; build a separate masked string.
+        // Live shelves show only peeled letters. Once a shelf is actually
+        // lost, reveal its answer (not the hidden board coordinates) just
+        // like the retail game. Do not change found flags or award points.
+        bool lost = scriptPreviewRules.status == SCRIPT_FAILED;
         char masked[80] = {0};
         const char *p = word;
         int at = 0;
         for (int i = 0; i < b->passLen && at < (int)sizeof masked - 5; i++) {
             const char *before = p;
             (void)fontGlyphNext(&p);
-            if (b->found[i]) {
+            if (b->found[i] || lost) {
                 while (before < p) masked[at++] = *before++;
             } else masked[at++] = '_';
             if (i != b->passLen - 1) masked[at++] = ' ';
         }
         masked[at] = 0;
-        drawTextCenter(128, 70, masked, scriptBoardPassComplete(b) ? GOLD_LT : WHITE, 2);
+        drawTextCenter(128, 70, masked,
+                       lost ? FIRE2 : scriptBoardPassComplete(b) ? GOLD_LT : WHITE, 2);
     }
     // Clarify the objective: front gems make words, while peels uncover
     // hidden password symbols. This is the same FOUND x/y information shown
@@ -2548,7 +2573,8 @@ static void drawScriptPreviewTop(void)
     drawTextCenter(128, 88, progress, ACCENT, 1);
     hline(26, 96, 204, DIM);
     char chain[88] = {0};
-    if (scriptBoardChainUtf8(b, &scriptPreviewDict, chain, sizeof chain)) {
+    if (scriptBoardChainSpellingUtf8(b, &scriptPreviewDict,
+                                    scriptQuoteApostropheNow, chain, sizeof chain)) {
         drawTextCenter(128, 106, scriptPreviewLanguage ? "ПОТОЧНЕ СЛОВО" : "ТЕКУЩЕЕ СЛОВО", DIM_TEXT, 1);
         drawTextCenter(128, 122, chain, WHITE, fontTextColumns(chain) > 16 ? 1 : 2);
         // The single quote was computed before vblank. All top-screen slices
@@ -2614,10 +2640,18 @@ static void drawScriptPreviewTop(void)
                       "ПОЛИЦЮ ВРЯТОВАНО +%d - A: ДАЛІ" :
                       "ПОЛКА СПАСЕНА +%d - A: ДАЛЬШЕ", scriptPreviewRules.lastBonus);
         drawTextCenter(128, 169, msg, GOLD_LT, 1);
-    } else if (scriptPreviewRules.status == SCRIPT_FAILED)
-        drawTextCenter(128, 169, scriptPreviewLanguage ?
-                       "ВОГОНЬ - A: ЗНОВУ" : "ПОЖАР - A: СНОВА", FIRE2, 1);
-    else if (scriptPreviewDailyClockError)
+    } else if (scriptPreviewRules.status == SCRIPT_FAILED) {
+        const char *msg;
+        if (scriptPreviewRules.failReason == SCRIPT_LOSS_SCORCH)
+            msg = scriptPreviewLanguage ?
+                  "ПАРОЛЬ ЗГОРІВ - A: ЗНОВУ" : "ПАРОЛЬ СГОРЕЛ - A: СНОВА";
+        else if (scriptPreviewRules.failReason == SCRIPT_LOSS_FIRE)
+            msg = scriptPreviewLanguage ?
+                  "ВОГОНЬ УНИЗУ - A: ЗНОВУ" : "ОГОНЬ ВНИЗУ - A: СНОВА";
+        else msg = scriptPreviewLanguage ?
+                   "ПОРАЗКА - A: ЗНОВУ" : "ПОРАЖЕНИЕ - A: СНОВА";
+        drawTextCenter(128, 169, msg, FIRE2, 1);
+    } else if (scriptPreviewDailyClockError)
         drawTextCenter(128, 169, scriptPreviewLanguage ?
                        "ВСТАНОВІТЬ ДАТУ НА DS" : "УСТАНОВИТЕ ДАТУ НА DS", FIRE2, 1);
     else if (scriptPreviewRescueError)
@@ -3464,11 +3498,14 @@ static void topSigs(const Game *g, u32 sig[4])
         h2 = hmix(h2, scriptPreviewDaily); // the manual's SELECT description
         h1 = hmix(h1, b->passLen);
         h1 = hmix(h1, b->passTheme);
+        // A terminal loss changes the answer even if no letter was peeled.
+        h1 = hmix(h1, scriptPreviewRules.status == SCRIPT_FAILED);
         for (int i = 0; i < b->passLen; i++) {
             h1 = hmix(h1, b->pass[i]);
             h1 = hmix(h1, b->found[i]);
         }
         h2 = hmix(h2, b->chainLen);
+        h2 = hmix(h2, scriptQuoteApostropheNow);
         for (int i = 0; i < b->chainLen; i++) {
             int c = b->chainC[i], r = b->chainR[i];
             if (c < SCRIPT_COLS && r < SCRIPT_ROWS)
@@ -3478,6 +3515,7 @@ static void topSigs(const Game *g, u32 sig[4])
         h3 = hmix(h3, scriptQuoteTierNow);
         h3 = hmix(h3, b->chainLen >= WPD4_MIN_WORD); // invalid-word message visibility
         h3 = hmix(h3, scriptPreviewRules.status);
+        h3 = hmix(h3, scriptPreviewRules.failReason);
         h3 = hmix(h3, scriptPreviewRules.lastBonus);
         h3 = hmix(h3, scriptPreviewDaily);
         h3 = hmix(h3, scriptPreviewDailyClockError);
@@ -3584,7 +3622,9 @@ void gfxFrame(const Game *g)
         // Dictionary work belongs to the visible-frame budget, never once
         // per clipped top-screen redraw during the short vblank interval.
         scriptQuoteTierNow = 0;
-        chainScoreNow = scriptPreviewHelp ? 0 : scriptPreviewQuote(&scriptQuoteTierNow);
+        scriptQuoteApostropheNow = 0;
+        chainScoreNow = scriptPreviewHelp ? 0 :
+            scriptPreviewQuoteSpelling(&scriptQuoteTierNow, &scriptQuoteApostropheNow);
     } else
 #endif
         chainScoreNow = g->chainLen >= 3 ? boardChainScore(g) : 0;

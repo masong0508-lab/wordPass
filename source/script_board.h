@@ -30,7 +30,7 @@ typedef struct {
     // no heap; the published number itself is derived from back + diamonds.
     // Added at the end to preserve the debug mirror's legacy field offsets.
     uint8_t surveyed[SCRIPT_COLS];  // one bit per row; reset each shelf
-    uint8_t clueC, clueR;          // last earned clue for a compact HUD focus
+    uint8_t clueC, clueR;          // active public clue focus (word or opened hole)
 } ScriptBoard;
 bool scriptBoardStart(ScriptBoard *board, const V4Tiles *tiles, uint32_t seed);
 // Build a deterministic test-only password shelf from validated WPP2 pools.
@@ -92,8 +92,14 @@ int scriptBoardHint(const ScriptBoard *board, const V4Dict *dict,
                     uint8_t outR[SCRIPT_HINT_MAX]);
 int scriptBoardPreview(const ScriptBoard *board, const V4Dict *dict,
                        const V4Tiles *tiles, int *tier);
+// Return the orthographic separator mask from the SAME scoring lookup.
+int scriptBoardPreviewSpelling(const ScriptBoard *board, const V4Dict *dict,
+                               const V4Tiles *tiles, int *tier, uint32_t *mask);
 int scriptBoardSubmit(ScriptBoard *board, const V4Dict *dict,
                       const V4Tiles *tiles, int *tier);
 bool scriptBoardChainUtf8(const ScriptBoard *board, const V4Dict *dict,
                           char *out, size_t capacity);
+// Renderer already has the spelling mask from its single frame quote.
+bool scriptBoardChainSpellingUtf8(const ScriptBoard *board, const V4Dict *dict,
+                                  uint32_t mask, char *out, size_t capacity);
 #endif

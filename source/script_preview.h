@@ -72,6 +72,9 @@ bool scriptPreviewToggleDaily(int date, uint32_t freeSeed);
 bool scriptPreviewAdvance(uint32_t seed);
 int scriptPreviewPeel(int c, int r);
 bool scriptPreviewChain(int c, int r);
+// Revisit ONLY a previously published clue (numbered hole or surveyed
+// endpoint). Changes the public focus coordinate, never scores or peels.
+bool scriptPreviewFocusClue(int c, int r);
 // A fresh touch on the current selected word's last gem submits only if
 // the word is dictionary-valid. A/normal controller submit still works.
 bool scriptPreviewTrySubmitTail(int c, int r);
@@ -83,6 +86,7 @@ bool scriptPreviewRescue(void);
 // Score the current valid word with repeat penalty and combo before submit.
 // Optionally return its dictionary tier from the same single lookup.
 int scriptPreviewQuote(int *tier);
+int scriptPreviewQuoteSpelling(int *tier, uint32_t *mask);
 int scriptPreviewSubmit(void);
 #endif
 #endif

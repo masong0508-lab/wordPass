@@ -13,6 +13,11 @@ on:
       - 'tools/emu/cyr_lifecycle.py'
       - 'source/script_board.c'
       - 'source/tiles_v2.c'
+      - 'source/dict_v4.c'
+      - 'source/dict_v4.h'
+      - 'source/pools_v2.c'
+      - 'tools/lang/dict_v4.py'
+      - 'tools/lang/pools_v2.py'
       - 'tools/check/script_pass_test.c'
       - 'source/script_preview.c'
       - 'source/script_preview.h'
@@ -59,7 +64,7 @@ jobs:
             --notice source-cache/uk_UA/README_uk_UA.txt \
             --origin "https://github.com/LibreOffice/dictionaries/tree/c0865a85eb67dc377f2cf8e8fe2c4fa9e53f0dcb/uk_UA" \
             --extra-themes data/cyrlex/uk_source_candidates.json \
-            --sample-words 100000 --out sourced-preview/uk
+            --apostrophe-chains --sample-words 100000 --out sourced-preview/uk
       - name: Validate WPD4 WPP2 40 themes and both source manifests
         run: |
           python3 tools/lang/dict_v4.py --verify sourced-preview/ru/dict.bin
@@ -77,6 +82,10 @@ jobs:
               assert m["extra_password_count"] == count, m
               assert m["total_password_count"] == 160 + count, m
               assert m["dictionary_bytes"] <= 1536*1024, m
+              if code == "uk":
+                  assert m["ukrainian_apostrophe_forms_retained"] > 0, m
+              else:
+                  assert m["ukrainian_apostrophe_forms_retained"] == 0, m
           print("SOURCED RU/UK OK: 100k words each, 347/333 attested password candidates")
           PY
       - name: Audit sourced Russian and Ukrainian themed-word review queue

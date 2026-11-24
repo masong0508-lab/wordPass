@@ -302,12 +302,60 @@ static void exercise(const char *file, bool uk)
     CHECK(!v4DictOpen(NULL, p, bytes), "NULL destination view");
     free(p);
 }
+static void testApostrophe(const char *file)
+{
+    size_t bytes = 0;
+    uint8_t *p = readFile(file, &bytes);
+    CHECK(p != NULL, "read Ukrainian orthographic fixture");
+    if (!p) return;
+    V4Dict d;
+    bool opened = v4DictOpen(&d, p, bytes);
+    CHECK(opened && d.symbols == 33 && d.apostrophe[WPD4_MIN_WORD],
+          "flagged Ukrainian pack opens without a punctuation tile");
+    if (!opened) { free(p); return; }
+    CHECK(v4DictSymbol(&d, 0x02bc) == -1 &&
+          v4DictLookup(&d, "п'ять") == 2 &&
+          v4DictLookup(&d, "п’ять") == 2 &&
+          v4DictLookup(&d, "пʼять") == 2,
+          "all three apostrophe forms resolve to the attested spelling");
+    CHECK(v4DictLookup(&d, "мʼясо") == 2 &&
+          v4DictLookup(&d, "зв’язок") == 2 &&
+          v4DictLookup(&d, "ПРИВІТ") == 1,
+          "extended dictionary retains normal letters, tiers and spelling");
+    CHECK(!v4DictLookup(&d, "ПЯТЬ") &&
+          !v4DictLookup(&d, "ПʼʼЯТЬ") &&
+          !v4DictLookup(&d, "ʼПЯТЬ") &&
+          !v4DictLookup(&d, "ПЯТЬʼ") &&
+          !v4DictLookup(&d, "ПЯʼТЬ"),
+          "strict UTF-8 lookup never accepts missing, repeated or misplaced apostrophes");
+    const uint32_t cps[] = {0x041f, 0x042f, 0x0422, 0x042c};
+    uint8_t ids[4];
+    for (int i = 0; i < 4; i++) ids[i] = (uint8_t)v4DictSymbol(&d, cps[i]);
+    uint32_t mask = 0;
+    CHECK(v4DictLookupSpellingIds(&d, ids, 4, &mask) == 2 && mask == 2 &&
+          v4DictLookupIds(&d, ids, 4) == 2 &&
+          v4DictHasPrefixLengthIds(&d, ids, 2, 4),
+          "four physical letters score the complete stored apostrophe spelling");
+    uint32_t first = 0, past = d.count[4];
+    for (int i = 0; i < 4; i++)
+        CHECK(v4DictNarrowPrefixLengthId(&d, 4, i, ids[i], &first, &past),
+              "hint prefix intervals still work with appended masks");
+    CHECK(past == first + 1u, "extended prefix identifies exactly one spelling");
+    size_t trailer = (size_t)(d.apostrophe[WPD4_MIN_WORD] - p);
+    p[trailer] |= 1;
+    fixChecksum(p, bytes);
+    V4Dict bad;
+    CHECK(!v4DictOpen(&bad, p, bytes) && !bad.image,
+          "checksum-valid leading apostrophe in metadata rejected");
+    free(p);
+}
 int main(int argc, char **argv)
 {
-    if (argc != 3) { fprintf(stderr, "usage: %s build/wpd4_ru.bin build/wpd4_uk.bin\n", argv[0]); return 2; }
+    if (argc != 4) { fprintf(stderr, "usage: %s ru.bin uk.bin uk_apostrophe.bin\n", argv[0]); return 2; }
     testPackedWidths();
     exercise(argv[1], false);
     exercise(argv[2], true);
+    testApostrophe(argv[3]);
     printf(fails ? "WPD4 NATIVE FAILED: %d failures\n" : "WPD4 NATIVE OK: 1..6-bit packing, bounded prefixes, Cyrillic words and strict records\n", fails);
     return fails ? 1 : 0;
 }

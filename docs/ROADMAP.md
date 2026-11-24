@@ -136,6 +136,15 @@ as available in the in-game language picker.
       allow a second fresh tail tap to submit only validated words, and make
       B undo a selection regardless of controller/stylus origin. Emulator
       and native regressions protect turns, score, clues and secret positions.
+- [x] Make Russian/Ukrainian public deduction clues revisitable: focus a
+      new numbered hole immediately, tap earlier word-number badges or
+      holes, or move the D-pad cursor over an earned clue. Inspecting
+      changes only the public focus coordinates, costs no turns or
+      hints, and preserves the six-neighbor rendering bound.
+- [x] Explain terminal Russian/Ukrainian shelf failures: separate
+      scorched-password and bottom-fire reasons, reveal the correct word
+      only on a lost shelf, retain actual progress and score, and mask
+      the password again on retry.
 - [x] Add a bounded one-use recovery move for sparse Cyrillic shelves:
       L+R after a turn can plant one valid word around burns/holes, costs
       heat and time, breaks combos, never awards points, and avoids hidden
@@ -196,8 +205,16 @@ and test unranked Daily Practice.
 - [x] Audit source-only Ukrainian spellings with U+0027, U+2019 and U+02BC
       apostrophes; count excluded forms in the licensed source manifest rather
       than silently converting them to incorrect Cyrillic-only words.
-- [ ] Implement a true non-tile Ukrainian apostrophe separator throughout
-      dictionary indexing, on-screen words, theme pools and hint scoring.
+- [x] Implement a non-tile Ukrainian apostrophe separator for ordinary
+      word chains in the opt-in source-backed ROM. WPD4 stores exact
+      spelling masks, validates punctuation and preserves the 33-gem
+      alphabet, prefix indexes and single-lookup score rendering. The
+      source intake retains only unambiguous attested paths and audits
+      omitted/colliding forms. Native and DS regression scenarios cover
+      МʼЯСО, ПʼЯТЬ and ЗВʼЯЗОК.
+- [ ] Extend themed password pools and secret reveal UI to include
+      correctly positioned non-tile Ukrainian apostrophes; complete
+      native editorial review and broader corpus coverage.
 - [ ] Native Ukrainian dictionary and distinct frequency/balance model.
 - [ ] Explicit Ґ, Є, І, Ї, Й and apostrophe handling, not Russian reuse.
 - [ ] Complete translated UI, themes and guide with full parity tests.

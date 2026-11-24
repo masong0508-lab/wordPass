@@ -205,9 +205,10 @@ void scriptBoardClearChain(ScriptBoard *b)
     if (b) b->chainLen = 0;
 }
 static int preview(const ScriptBoard *b, const V4Dict *dict,
-                   const V4Tiles *tiles, int *tier)
+                   const V4Tiles *tiles, int *tier, uint32_t *mask)
 {
     if (tier) *tier = 0;
+    if (mask) *mask = 0;
     if (!b || !sameAlphabet(dict, tiles) ||
         b->chainLen < WPD4_MIN_WORD || b->chainLen > WPD4_MAX_WORD)
         return 0;
@@ -229,7 +230,7 @@ static int preview(const ScriptBoard *b, const V4Dict *dict,
         fire += state == SCRIPT_BURN;
         diamonds += state == SCRIPT_DIAMOND;
     }
-    int t = v4DictLookupIds(dict, ids, b->chainLen);
+    int t = v4DictLookupSpellingIds(dict, ids, b->chainLen, mask);
     if (!t) return 0;
     if (tier) *tier = t;
     int n = b->chainLen;
@@ -242,7 +243,12 @@ static int preview(const ScriptBoard *b, const V4Dict *dict,
 int scriptBoardPreview(const ScriptBoard *b, const V4Dict *dict,
                        const V4Tiles *tiles, int *tier)
 {
-    return preview(b, dict, tiles, tier);
+    return preview(b, dict, tiles, tier, NULL);
+}
+int scriptBoardPreviewSpelling(const ScriptBoard *b, const V4Dict *dict,
+                               const V4Tiles *tiles, int *tier, uint32_t *mask)
+{
+    return preview(b, dict, tiles, tier, mask);
 }
 // Compact plain tiles separately between permanent holes, diamonds and
 // flames. SCRIPT_EMPTY is a *temporary* vacancy, unlike a peeled hole.
@@ -276,7 +282,7 @@ static bool compact(ScriptBoard *b, const V4Tiles *tiles)
 int scriptBoardSubmit(ScriptBoard *b, const V4Dict *dict,
                       const V4Tiles *tiles, int *tier)
 {
-    int pts = preview(b, dict, tiles, tier);
+    int pts = preview(b, dict, tiles, tier, NULL);
     if (!pts) return 0;
     // A successful word earns one fixed location's numbered survey, even if
     // gravity replaces the gem at its tail. Invalid words publish nothing.
@@ -373,7 +379,8 @@ static unsigned encode(uint32_t cp, char *out)
     return 4;
 }
 static bool idsToUtf8(const uint8_t *ids, unsigned length,
-                      const V4Dict *dict, char *out, size_t capacity)
+                      const V4Dict *dict, uint32_t mask,
+                      char *out, size_t capacity)
 {
     if (!out || !capacity) return false;
     out[0] = 0;
@@ -381,6 +388,12 @@ static bool idsToUtf8(const uint8_t *ids, unsigned length,
     size_t written = 0;
     for (unsigned i = 0; i < length; i++) {
         if (ids[i] >= dict->symbols) { out[0] = 0; return false; }
+        if (mask & (1u << i)) {
+            // Canonical modifier-letter apostrophe, displayed as the
+            // existing apostrophe glyph. It occupies no board cell.
+            if (written + 2 >= capacity) { out[0] = 0; return false; }
+            written += encode(0x02bc, out + written);
+        }
         char glyph[4];
         unsigned bytes = encode(dict->alphabet[ids[i]], glyph);
         if (written + bytes >= capacity) { out[0] = 0; return false; }
@@ -390,19 +403,31 @@ static bool idsToUtf8(const uint8_t *ids, unsigned length,
     out[written] = 0;
     return true;
 }
-bool scriptBoardChainUtf8(const ScriptBoard *b, const V4Dict *dict,
-                          char *out, size_t capacity)
+static bool chainUtf8(const ScriptBoard *b, const V4Dict *dict, uint32_t mask,
+                      bool resolve, char *out, size_t capacity)
 {
     if (!out || !capacity) return false;
     out[0] = 0;
-    if (!b || b->chainLen > SCRIPT_MAX_CHAIN) return false;
+    if (!b || !dict || !dict->image || b->chainLen > SCRIPT_MAX_CHAIN) return false;
     uint8_t ids[SCRIPT_MAX_CHAIN];
     for (unsigned i = 0; i < b->chainLen; i++) {
         int c = b->chainC[i], r = b->chainR[i];
         if (!inside(c, r)) return false;
         ids[i] = b->tile[c][r];
     }
-    return idsToUtf8(ids, b->chainLen, dict, out, capacity);
+    if (resolve && dict->apostrophe[b->chainLen])
+        (void)v4DictLookupSpellingIds(dict, ids, b->chainLen, &mask);
+    return idsToUtf8(ids, b->chainLen, dict, mask, out, capacity);
+}
+bool scriptBoardChainUtf8(const ScriptBoard *b, const V4Dict *dict,
+                          char *out, size_t capacity)
+{
+    return chainUtf8(b, dict, 0, true, out, capacity);
+}
+bool scriptBoardChainSpellingUtf8(const ScriptBoard *b, const V4Dict *dict,
+                                  uint32_t mask, char *out, size_t capacity)
+{
+    return chainUtf8(b, dict, mask, false, out, capacity);
 }
 bool scriptBoardPassUtf8(const ScriptBoard *b, const V4Dict *dict,
                          char *out, size_t capacity)
@@ -410,7 +435,7 @@ bool scriptBoardPassUtf8(const ScriptBoard *b, const V4Dict *dict,
     if (!out || !capacity) return false;
     out[0] = 0;
     if (!b || !b->passLen || b->passLen > WPP2_MAX_LEN) return false;
-    return idsToUtf8(b->pass, b->passLen, dict, out, capacity);
+    return idsToUtf8(b->pass, b->passLen, dict, 0, out, capacity);
 }
 
 

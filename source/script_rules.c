@@ -58,7 +58,11 @@ static int rulesTurnCore(ScriptRules *rules, ScriptBoard *board,
     rules->peels += peel ? 1u : 0u;
     rules->words += (peel || rescue) ? 0u : 1u;
     rules->lastBonus = 0;
-    if (fatal) { rules->status = SCRIPT_FAILED; return 0; }
+    if (fatal) {
+        rules->failReason = SCRIPT_LOSS_SCORCH;
+        rules->status = SCRIPT_FAILED;
+        return 0;
+    }
     // The final password letter completes the shelf before another fire
     // step can destroy an already-recovered secret.
     if (scriptBoardPassComplete(board)) {
@@ -83,6 +87,7 @@ static int rulesTurnCore(ScriptRules *rules, ScriptBoard *board,
     if (++rules->burnTick >= rules->burnEvery) {
         rules->burnTick = 0;
         if (scriptBoardFireStep(board, tiles)) {
+            rules->failReason = SCRIPT_LOSS_FIRE;
             rules->status = SCRIPT_FAILED;
             return 0;
         }

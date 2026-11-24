@@ -19,6 +19,78 @@ def check(condition, label):
     if not condition:
         raise AssertionError(label)
 
+def exercise_loss(e, out, scorch):
+    """Cause a real loss via a single ordinary peel after arranging fire.
+    The emulator-only setup does not alter the game action's rules or status.
+    """
+    board = symbol(e.rom_elf, "scriptPreviewBoard")
+    rules = symbol(e.rom_elf, "scriptPreviewRules")
+    off = member_offsets(e.rom_elf, "scriptPreviewRules",
+                         ("status", "failReason", "burnEvery", "burnTick"))
+    pass_len = int(e.mem.unsigned[board + 227])
+    check(4 <= pass_len <= 9, "loss fixture needs a real hidden password")
+    def reason():
+        return int(e.mem.unsigned[rules + off["failReason"]])
+    def status():
+        return int(e.mem.unsigned[rules + off["status"]])
+    check(status() == 0 and reason() == 0 and
+          get_int(e, "scriptPreviewTurns") == 0,
+          "loss fixture must begin on a fresh running shelf")
+    before = e.emu.screenshot().convert("RGB").crop((26, 70, 230, 84))
+    if scorch:
+        # Make one genuine hidden secret dangerous, then use actual stylus
+        # input to trigger the existing fatal scorch check.
+        index = next(i for i in range(56)
+                     if int(e.mem.unsigned[board + 153 + i]))
+        c, r = divmod(index, 8)
+        e.mem.write_byte(board + 56 + index, 2)  # SCRIPT_BURN
+    else:
+        # A due fire step encountering a bottom-row flame loses the shelf.
+        # The top-left ordinary peel spends one real turn to trigger it.
+        e.mem.write_byte(board + 56 + 6 * 8 + 7, 2)
+        e.mem.write_byte(rules + off["burnTick"],
+                         int(e.mem.unsigned[rules + off["burnEvery"]]) - 1)
+        c, r = 0, 0
+    original_found = bytes(e.mem.unsigned[board + 218:board + 218 + pass_len])
+    old_score = get_int(e, "scriptPreviewScore")
+    e.hold("L")
+    e.tap(*e.center(c, r), settle=14)
+    e.hold("L", False)
+    check(status() == 2 and reason() == (1 if scorch else 2) and
+          get_int(e, "scriptPreviewTurns") == 1 and
+          get_int(e, "scriptPreviewScore") == old_score,
+          "actual peel must preserve score and distinguish the two loss reasons")
+    check(bytes(e.mem.unsigned[board + 218:board + 218 + pass_len]) == original_found,
+          "displaying a lost password may not mark any letter found")
+    e.run(12)
+    after = e.emu.screenshot().convert("RGB").crop((26, 70, 230, 84))
+    check(ImageChops.difference(before, after).getbbox() is not None,
+          "terminal loss must redraw the password plaque")
+    # A fully revealed lost-password plaque is independent of found flags.
+    # Temporarily set flags only in this diagnostic, compare its rendered
+    # glyph region, then restore the original real game state before retry.
+    try:
+        for i in range(pass_len):
+            e.mem.write_byte(board + 218 + i, 1)
+        e.run(12)
+        full = e.emu.screenshot().convert("RGB").crop((26, 70, 230, 84))
+        check(ImageChops.difference(after, full).getbbox() is None,
+              "lost answer must already display every character")
+    finally:
+        for i, value in enumerate(original_found):
+            e.mem.write_byte(board + 218 + i, value)
+        e.run(12)
+    tag = "ru-scorched-password" if scorch else "uk-bottom-fire"
+    e.shot(str(out / (tag + ".png")))
+    e.press("A", settle=12)
+    check(status() == 0 and reason() == 0 and
+          get_int(e, "scriptPreviewTurns") == 0,
+          "real retry must clear the terminal reason and start a fresh shelf")
+    fresh = e.emu.screenshot().convert("RGB").crop((26, 70, 230, 84))
+    check(ImageChops.difference(after, fresh).getbbox() is not None,
+          "retry must restore the live masked password")
+
+
 def main(rom, output):
     out = Path(output)
     out.mkdir(parents=True, exist_ok=True)
@@ -355,14 +427,56 @@ def main(rom, output):
           "rescue must keep Russian word history and break the earned combo")
     check(get_int(e, "scriptPreviewLastScore") == 0,
           "rescue should clear the stale last-word score display")
+    # Upper rows are always secret-free. Choose a real blank different
+    # from the surveyed word endpoint so two published clues coexist.
+    hole_c, hole_r = (0, 0) if (tail_c, tail_r) != (0, 0) else (6, 0)
     e.hold("L")
-    e.tap(*e.center(1, 6), settle=8)
+    e.tap(*e.center(hole_c, hole_r), settle=8)
     e.hold("L", False)
     check(get_int(e, "scriptPreviewPeels") == 1 and
           get_int(e, "scriptPreviewRescueError") == 0,
           "touch-screen peel must register and dismiss old rescue feedback")
     check(get_int(e, "scriptPreviewTurns") == 3,
           "a successful peel after word+rescue must cost a third fire turn")
+    focus_c = clues_offset["clueC"]
+    focus_r = clues_offset["clueR"]
+    def focused():
+        return (int(e.mem.unsigned[board_ptr + focus_c]),
+                int(e.mem.unsigned[board_ptr + focus_r]))
+    check(focused() == (hole_c, hole_r),
+          "the actual blank peel must focus its published numeral")
+    # Both clues are now public. Revisit the OLD word badge (not its
+    # center letter) and the newly opened hole using ordinary taps.
+    # The focus fields are appended after the legacy board mirror.
+    # Derive the snapshot extent from the actual ELF offsets rather than
+    # relying on the old 336-byte prefix used by earlier smoke assertions.
+    snapshot_end = board_ptr + max(focus_c, focus_r) + 1
+    snapshot = bytes(e.mem.unsigned[board_ptr:snapshot_end])
+    scored_before_inspection = get_int(e, "scriptPreviewScore")
+    hx, hy, hx1, hy1 = e.cell_rect(hole_c, hole_r)
+    with_focus = e.emu.screenshot().convert("RGB").crop((hx, hy, hx1, hy1))
+    bx, by, _, _ = e.cell_rect(tail_c, tail_r)
+    e.tap(bx + 18, by - 192 + 16, settle=10)
+    check(focused() == (tail_c, tail_r),
+          "tapping an earlier earned word numeral must revisit its clue")
+    without_focus = e.emu.screenshot().convert("RGB").crop((hx, hy, hx1, hy1))
+    check(ImageChops.difference(with_focus, without_focus).getbbox() is not None,
+          "changing clue focus must visibly redraw the old numbered hole")
+    expected = bytearray(snapshot)
+    expected[focus_c], expected[focus_r] = tail_c, tail_r
+    check(bytes(e.mem.unsigned[board_ptr:snapshot_end]) == bytes(expected),
+          "revisit may change only the two public focus coordinates")
+    e.shot(str(out / "ru-revisited-word-clue.png"))
+    e.tap(*e.center(hole_c, hole_r), settle=10)
+    check(focused() == (hole_c, hole_r) and
+          bytes(e.mem.unsigned[board_ptr:snapshot_end]) == snapshot and
+          get_int(e, "scriptPreviewTurns") == 3 and
+          get_int(e, "scriptPreviewPeels") == 1 and
+          get_int(e, "scriptPreviewHints") == 1 and
+          get_int(e, "scriptPreviewScore") == scored_before_inspection,
+          "returning to a numbered hole is free and preserves the board")
+    e.shot(str(out / "ru-revisited-hole-clue.png"))
+    check(e.fps() == 120, "inspected Cyrillic clue must preserve frame cadence")
     ledger_bytes = bytes(e.mem.unsigned[ledger:ledger + 194])
     check(ledger_bytes[184] == 1 and struct.unpack_from("<H", ledger_bytes, 186)[0] == 0,
           "peeling must break combo but keep Russian word history")
@@ -371,6 +485,7 @@ def main(rom, output):
           get_int(e, "scriptPreviewTurns") == 0 and
           get_int(e, "scriptPreviewShelf") == 1,
           "Russian first-shelf replay must discard its attempt score")
+    exercise_loss(e, out, scorch=True)
     e.press("X", settle=20)
     await_preview(1)
     check(e.state()["state"] == 9 and get_int(e, "scriptPreviewLanguage") == 1,
@@ -439,6 +554,39 @@ def main(rom, output):
     check(get_int(e, "scriptPreviewTurns") == 0 and
           get_int(e, "scriptPreviewScore") == 0,
           "Ukrainian re-deal must reset both the attempt clock and its points")
+    if sourced:
+        # Arrange the attested word МʼЯСО using four existing letter gems.
+        # Real input must select, quote and display the canonical apostrophe
+        # spelling, submit the same points, and earn its ordinary clue.
+        dict_addr = symbol(e.rom_elf, "scriptPreviewDict")
+        alphabet = struct.unpack("<33I", bytes(e.mem.unsigned[dict_addr:dict_addr + 132]))
+        check(0x02bc not in alphabet, "Ukrainian apostrophe cannot be a gem")
+        for row, letter in enumerate("МЯСО"):
+            e.mem.write_byte(board_ptr + row, alphabet.index(ord(letter)))
+        e.chain([(0, row) for row in range(4)])
+        points = get_int(e, "chainScoreNow")
+        check(int(e.mem.unsigned[board_ptr + 152]) == 4 and points > 0 and
+              get_int(e, "scriptQuoteApostropheNow") == 2,
+              "four actual letter tiles must quote the attested МʼЯСО spelling")
+        e.run(12)
+        # Five 2x glyphs occupy 58 px, centered at x=128. The second
+        # glyph must be the tiny apostrophe bitmap, not another letter.
+        ink = e.emu.screenshot().convert("RGB").crop((111, 122, 121, 136))
+        lit = [(x, y) for y in range(14) for x in range(10)
+               if max(ink.getpixel((x, y))) >= 180]
+        check(lit and all(y < 6 for _, y in lit),
+              "on-screen Ukrainian word must draw the internal apostrophe glyph")
+        e.shot(str(out / "uk-apostrophe-word.png"))
+        e.tap(*e.center(0, 3), settle=20)
+        check(get_int(e, "scriptPreviewScore") == points and
+              get_int(e, "scriptPreviewTurns") == 1 and
+              int(e.mem.unsigned[board_ptr + 152]) == 0 and
+              int(e.mem.unsigned[board_ptr + clues_offset["surveyed"]]) & 8,
+              "apostrophe word submits once as four letters and earns its real clue")
+        e.press("SELECT", settle=8)
+        check(get_int(e, "scriptPreviewScore") == 0 and
+              get_int(e, "scriptPreviewTurns") == 0,
+              "apostrophe regression retry leaves a clean shelf")
     # Exercise a complete secret-finding shelf through REAL stylus taps,
     # reading hidden pass coordinates from the ARM9 game's independent
     # ScriptBoard memory. This is an emulator-only diagnostic: it does not
@@ -523,6 +671,7 @@ def main(rom, output):
     await_preview(1)
     check(e.state()["state"] == 9 and get_int(e, "scriptPreviewLanguage") == 1,
           "D-pad UP wrapping / A should choose Українська DEMO")
+    exercise_loss(e, out, scorch=False)
     e.press("START", settle=16)
     await_title()
     check(e.state()["state"] == 0, "controller-selected Ukrainian DEMO must exit safely")

@@ -375,6 +375,35 @@ static void suite(const char *dictPath, const char *tilePath, const char *poolPa
         CHECK(b.state[secretC[i]][secretR[i]]==SCRIPT_DIAMOND,
               "revealed password diamond survives unrelated word submission");
     CHECK(scriptBoardPassComplete(&b), "pass completion survives word submission");
+    if (uk && d.apostrophe[WPD4_MIN_WORD]) {
+        // Real source-backed pack: arrange four ordinary letter gems.
+        // Correct spelling emerges from dictionary metadata, not a 34th
+        // punctuation gem or a silently accepted bare-spelling dictionary.
+        CHECK(scriptBoardStartPass(&b,&d,&t,&p,0x87aa1234u,5),
+              "start apostrophe word fixture");
+        const uint32_t letters[] = {0x041c,0x042f,0x0421,0x041e}; // МʼЯСО
+        for (int row=0; row<4; row++) {
+            int id=v4DictSymbol(&d,letters[row]);
+            CHECK(id>=0,"Ukrainian apostrophe word uses existing gem letters");
+            b.tile[0][row]=(uint8_t)(id<0?0:id);
+            b.state[0][row]=SCRIPT_TILE;
+            CHECK(scriptBoardAdd(&b,0,row),"ordinary four-gem apostrophe chain");
+        }
+        uint32_t mask=0;
+        int quote=scriptBoardPreviewSpelling(&b,&d,&t,&tier,&mask);
+        char spelling[88];
+        CHECK(quote>0 && mask==2 &&
+              scriptBoardChainUtf8(&b,&d,spelling,sizeof spelling) &&
+              strcmp(spelling,"МʼЯСО")==0 &&
+              scriptBoardChainSpellingUtf8(&b,&d,mask,spelling,sizeof spelling) &&
+              strcmp(spelling,"МʼЯСО")==0 &&
+              v4DictLookup(&d,spelling)==tier &&
+              !v4DictLookup(&d,"МЯСО"),
+              "stored apostrophe appears in the visible validated spelling, never bare lookup");
+        CHECK(scriptBoardSubmit(&b,&d,&t,&tier)==quote && !b.chainLen &&
+              (b.surveyed[0] & (1u<<3)),
+              "apostrophe word scores, refills and earns its endpoint clue as four real gems");
+    }
     free(db);free(tb);free(pb);
 }
 int main(int argc,char **argv)

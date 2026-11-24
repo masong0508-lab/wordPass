@@ -147,7 +147,7 @@ check:
 	$(BUILD)/font_utf8_check
 	python3 tools/lang/dict_v4.py --selftest $(BUILD)
 	gcc -std=gnu11 -O2 -Wall -Wextra -Wshadow -I source tools/check/dict_v4_test.c source/dict_v4.c -o $(BUILD)/dict_v4_check
-	$(BUILD)/dict_v4_check $(BUILD)/wpd4_ru.bin $(BUILD)/wpd4_uk.bin
+	$(BUILD)/dict_v4_check $(BUILD)/wpd4_ru.bin $(BUILD)/wpd4_uk.bin $(BUILD)/wpd4_uk_apostrophe.bin
 	python3 tools/lang/tiles_v2.py --selftest $(BUILD)
 	gcc -std=gnu11 -O2 -Wall -Wextra -Wshadow -I source tools/check/tiles_v2_test.c source/tiles_v2.c source/dict_v4.c -o $(BUILD)/tiles_v2_check
 	$(BUILD)/tiles_v2_check $(BUILD)/wpd4_ru.bin $(BUILD)/wpd4_uk.bin $(BUILD)/wpl2_ru.bin $(BUILD)/wpl2_uk.bin
