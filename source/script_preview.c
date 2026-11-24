@@ -27,6 +27,17 @@ uint32_t scriptPreviewGlyphEpoch;
 int scriptPreviewOpenError;
 int scriptPreviewCursorActive, scriptPreviewCursorCol, scriptPreviewCursorRow;
 
+bool scriptPreviewFocusClue(int c, int r)
+{
+    // The gate checks the visible state/survey before reading a count.
+    // A covered, unsurveyed gem cannot become a deduction focus.
+    if (!scriptPreviewDict.image || scriptPreviewRules.status != SCRIPT_RUNNING ||
+        scriptBoardVisibleClue(&scriptPreviewBoard, c, r) < 0) return false;
+    scriptPreviewBoard.clueC = (uint8_t)c;
+    scriptPreviewBoard.clueR = (uint8_t)r;
+    return true;
+}
+
 void scriptPreviewCursorHide(void)
 {
     scriptPreviewCursorActive = 0;
@@ -38,7 +49,7 @@ void scriptPreviewCursorMove(int dc, int dr)
     if (!scriptPreviewCursorActive) {
         // The first controller input focuses the end of an existing hint
         // or chain, otherwise the central board tile. No hidden back data
-        // influences navigation and the board itself is never modified.
+        // influences navigation. Only a published clue can change focus.
         if (scriptPreviewBoard.chainLen) {
             int tail = scriptPreviewBoard.chainLen - 1;
             scriptPreviewCursorCol = scriptPreviewBoard.chainC[tail];
@@ -59,6 +70,7 @@ void scriptPreviewCursorMove(int dc, int dr)
     if (r >= SCRIPT_ROWS) r = SCRIPT_ROWS - 1;
     scriptPreviewCursorCol = c;
     scriptPreviewCursorRow = r;
+    (void)scriptPreviewFocusClue(c, r);
 }
 bool scriptPreviewCursorSelect(void)
 {
@@ -270,6 +282,9 @@ int scriptPreviewPeel(int c, int r)
     int result = scriptBoardPeel(&scriptPreviewBoard, c, r);
     if (result >= 0 || result == -2) {
         scriptPreviewRescueError = 0; // dismiss stale recovery warnings
+        // A nonfatal blank peel creates a real numbered hole. Show its
+        // neighbor evidence immediately, without waiting for another word.
+        if (result == 0) (void)scriptPreviewFocusClue(c, r);
         scriptPreviewPeels++;
         scriptLedgerPeel(&scriptPreviewLedger); // a peel breaks the retail combo
         scriptPreviewLastTier = scriptPreviewLastScore = 0;

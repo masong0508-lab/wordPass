@@ -136,6 +136,11 @@ as available in the in-game language picker.
       allow a second fresh tail tap to submit only validated words, and make
       B undo a selection regardless of controller/stylus origin. Emulator
       and native regressions protect turns, score, clues and secret positions.
+- [x] Make Russian/Ukrainian public deduction clues revisitable: focus a
+      new numbered hole immediately, tap earlier word-number badges or
+      holes, or move the D-pad cursor over an earned clue. Inspecting
+      changes only the public focus coordinates, costs no turns or
+      hints, and preserves the six-neighbor rendering bound.
 - [x] Add a bounded one-use recovery move for sparse Cyrillic shelves:
       L+R after a turn can plant one valid word around burns/holes, costs
       heat and time, breaks combos, never awards points, and avoids hidden

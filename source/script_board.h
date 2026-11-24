@@ -30,7 +30,7 @@ typedef struct {
     // no heap; the published number itself is derived from back + diamonds.
     // Added at the end to preserve the debug mirror's legacy field offsets.
     uint8_t surveyed[SCRIPT_COLS];  // one bit per row; reset each shelf
-    uint8_t clueC, clueR;          // last earned clue for a compact HUD focus
+    uint8_t clueC, clueR;          // active public clue focus (word or opened hole)
 } ScriptBoard;
 bool scriptBoardStart(ScriptBoard *board, const V4Tiles *tiles, uint32_t seed);
 // Build a deterministic test-only password shelf from validated WPP2 pools.

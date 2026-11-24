@@ -77,10 +77,16 @@ Daily scores are unchanged.
   nearby hex cells hold pass letters, including already revealed diamonds
 - Every accepted word also earns a **numbered clue on its final hex cell**.
   The number stays at that board position even after front gems fall or refill.
-  Its six neighboring cells are outlined; when a clue logically proves all
-  still-covered neighbors must hide letters they receive a gold +, or a teal
-  - when all remaining neighbors are empty. Burning tiles stay red: a
-  logically empty neighbor can still cost a dangerous peel under fire
+  Its six neighboring cells are outlined; a new numbered hole is focused
+  immediately too. **Tap any numbered hole or the small number badge on
+  an already-surveyed gem** to revisit its evidence without scoring,
+  selecting a letter, spending a hint, or advancing fire. Moving the
+  D-pad cursor over a published number also focuses it. Tap the CENTER
+  of a front gem to select/submit letters as usual. When a clue logically
+  proves all still-covered neighbors must hide letters they receive a
+  gold +, or a teal - when all remaining neighbors are empty. Burning
+  tiles stay red: a logically empty neighbor can still cost a dangerous
+  peel under fire.
 - Press Select for a fresh attempt on the current shelf, Start or B to leave the preview
 
 Password lengths now vary with shelf progression rather than requesting
