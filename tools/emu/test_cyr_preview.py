@@ -366,7 +366,11 @@ def main(rom, output):
           "the actual blank peel must focus its published numeral")
     # Both clues are now public. Revisit the OLD word badge (not its
     # center letter) and the newly opened hole using ordinary taps.
-    snapshot = bytes(e.mem.unsigned[board_ptr:board_ptr + 336])
+    # The focus fields are appended after the legacy board mirror.
+    # Derive the snapshot extent from the actual ELF offsets rather than
+    # relying on the old 336-byte prefix used by earlier smoke assertions.
+    snapshot_end = board_ptr + max(focus_c, focus_r) + 1
+    snapshot = bytes(e.mem.unsigned[board_ptr:snapshot_end])
     scored_before_inspection = get_int(e, "scriptPreviewScore")
     hx, hy, hx1, hy1 = e.cell_rect(hole_c, hole_r)
     with_focus = e.emu.screenshot().convert("RGB").crop((hx, hy, hx1, hy1))
@@ -379,12 +383,12 @@ def main(rom, output):
           "changing clue focus must visibly redraw the old numbered hole")
     expected = bytearray(snapshot)
     expected[focus_c], expected[focus_r] = tail_c, tail_r
-    check(bytes(e.mem.unsigned[board_ptr:board_ptr + 336]) == bytes(expected),
+    check(bytes(e.mem.unsigned[board_ptr:snapshot_end]) == bytes(expected),
           "revisit may change only the two public focus coordinates")
     e.shot(str(out / "ru-revisited-word-clue.png"))
     e.tap(*e.center(hole_c, hole_r), settle=10)
     check(focused() == (hole_c, hole_r) and
-          bytes(e.mem.unsigned[board_ptr:board_ptr + 336]) == snapshot and
+          bytes(e.mem.unsigned[board_ptr:snapshot_end]) == snapshot and
           get_int(e, "scriptPreviewTurns") == 3 and
           get_int(e, "scriptPreviewPeels") == 1 and
           get_int(e, "scriptPreviewHints") == 1 and
