@@ -182,9 +182,11 @@ static void exercise(const char *dbFile,const char *tbFile,const char *pbFile, b
     b.state[0][SCRIPT_ROWS-1]=SCRIPT_BURN;
     rules.burnTick=(uint8_t)(rules.burnEvery-1);
     (void)scriptRulesTurn(&rules,&b,&tiles,1,false,false);
-    CHECK(rules.status==SCRIPT_FAILED,"fire escaping at bottom loses the shelf");
+    CHECK(rules.status==SCRIPT_FAILED && rules.failReason==SCRIPT_LOSS_FIRE,
+          "fire escaping at bottom loses the shelf with the correct reason");
     CHECK(!scriptRulesTurn(&rules,&b,&tiles,1,false,false) &&
-          rules.turns==1,"lost shelves cannot accumulate new turns");
+          rules.turns==1 && rules.failReason==SCRIPT_LOSS_FIRE,
+          "lost shelves preserve their loss reason and cannot accumulate turns");
 
     // A recovery word can be placed around holes/flames without touching
     // passwords. Spending it is a real heat/fire turn but not a word or peel.
@@ -237,7 +239,7 @@ static void exercise(const char *dbFile,const char *tbFile,const char *pbFile, b
     for(int i=0;i<b.passLen;i++) b.found[i]=1;
     int bonus=scriptRulesTurn(&rules,&b,&tiles,1,true,false);
     CHECK(rules.status==SCRIPT_PASSED && bonus>0 && bonus==rules.lastBonus &&
-          rules.turns==1 && rules.peels==1,
+          rules.turns==1 && rules.peels==1 && rules.failReason==SCRIPT_LOSS_NONE,
           "final Cyrillic letter awards exactly one shelf bonus");
     CHECK(!scriptRulesTurn(&rules,&b,&tiles,2,false,false) &&
           rules.turns==1 && rules.lastBonus==bonus,
@@ -247,7 +249,14 @@ static void exercise(const char *dbFile,const char *tbFile,const char *pbFile, b
     scriptBoardStart(&b,&tiles,10);
     (void)scriptRulesTurn(&rules,&b,&tiles,1,true,true);
     CHECK(rules.status==SCRIPT_FAILED && rules.peels==1 &&
-          !rules.ignitions,"fatal scorched password immediately loses");
+          rules.failReason==SCRIPT_LOSS_SCORCH && !rules.ignitions,
+          "fatal scorched password immediately loses with distinct reason");
+    CHECK(!scriptRulesTurn(&rules,&b,&tiles,1,false,false) &&
+          rules.failReason==SCRIPT_LOSS_SCORCH,
+          "further actions cannot overwrite terminal scorch reason");
+    scriptRulesStart(&rules,3,11);
+    CHECK(rules.status==SCRIPT_RUNNING && rules.failReason==SCRIPT_LOSS_NONE,
+          "a fresh shelf clears the previous loss reason");
     free(db); free(tb); free(pb);
     (void)uk;
 }

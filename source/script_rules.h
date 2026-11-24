@@ -6,12 +6,16 @@
 #include "script_board.h"
 
 enum { SCRIPT_RUNNING = 0, SCRIPT_PASSED = 1, SCRIPT_FAILED = 2 };
+enum { SCRIPT_LOSS_NONE = 0, SCRIPT_LOSS_SCORCH = 1, SCRIPT_LOSS_FIRE = 2 };
 typedef struct {
     uint16_t shelf, turns, peels, words;
     uint16_t heat, ignitions;
     uint8_t heatThreshold, burnEvery, burnTick, status;
     int lastBonus;
     uint32_t seed;
+    // Runtime-only explanation of a terminal loss. Keep earlier fields and
+    // their offsets stable; no settings, ROM data or save-format change.
+    uint8_t failReason;
 } ScriptRules;
 
 // A new shelf resets the heat and turn clock; score is kept separately.
