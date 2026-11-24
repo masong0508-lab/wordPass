@@ -136,6 +136,10 @@ as available in the in-game language picker.
       allow a second fresh tail tap to submit only validated words, and make
       B undo a selection regardless of controller/stylus origin. Emulator
       and native regressions protect turns, score, clues and secret positions.
+- [x] Explain terminal Russian/Ukrainian shelf failures: separate
+      scorched-password and bottom-fire reasons, reveal the correct word
+      only on a lost shelf, retain actual progress and score, and mask
+      the password again on retry.
 - [x] Add a bounded one-use recovery move for sparse Cyrillic shelves:
       L+R after a turn can plant one valid word around burns/holes, costs
       heat and time, breaks combos, never awards points, and avoids hidden
