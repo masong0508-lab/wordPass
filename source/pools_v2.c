@@ -108,7 +108,12 @@ bool v4PoolsOpen(V4Pools *pools, const uint8_t *data, size_t size,
                 for (unsigned j = 0; j < len; j++)
                     if (word[j] >= symbols) return false;
                 if (previous && memcmp(previous, word, len) >= 0) return false;
-                if (!v4DictLookupIds(dict, word, (int)len)) return false;
+                // Hidden passwords still have one slot per plain letter.
+                // A non-tile spelling needs its own reviewed reveal UI and
+                // must not enter these legacy WPP2 pools yet.
+                uint32_t apostrophe;
+                if (!v4DictLookupSpellingIds(dict, word, (int)len, &apostrophe) ||
+                    apostrophe) return false;
                 previous = word;
             }
             offset += (size_t)count * len;

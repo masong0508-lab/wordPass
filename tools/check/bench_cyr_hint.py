@@ -19,16 +19,24 @@ import dict_v4 as d4
 import tiles_v2 as t2
 
 BASELINE = "18d5ab0fea67079475e02c9c9a1ddf75b2f6ec0e"
-SOURCES = ("source/dict_v4.c", "source/script_board.c")
-SHARED = ("source/tiles_v2.c", "source/pools_v2.c")
+SOURCES = ("source/dict_v4.c", "source/script_board.c",
+           "source/tiles_v2.c", "source/pools_v2.c")
+HEADERS = tuple(path.replace(".c", ".h") for path in SOURCES)
 LOG_RE = re.compile(
     r"language=(ru|uk) total=(\d+) found=(\d+) "
     r"fingerprint=([0-9a-f]{8}) elapsed_ms=([0-9.]+)")
 
 
 def run(cmd, **kwargs):
-    return subprocess.run(cmd, check=True, text=True,
-                          capture_output=True, **kwargs).stdout.strip()
+    try:
+        return subprocess.run(cmd, check=True, text=True,
+                              capture_output=True, **kwargs).stdout.strip()
+    except subprocess.CalledProcessError as exc:
+        # Keep the actual compiler/linker diagnostics in CI, not just the
+        # command's exit code.
+        print(exc.stdout or "", file=sys.stderr)
+        print(exc.stderr or "", file=sys.stderr)
+        raise
 
 
 def synth(code, count, dest):
@@ -52,22 +60,22 @@ def synth(code, count, dest):
 
 
 def compile_program(label, dest, baseline):
-    sources = []
+    # A historical dictionary ABI must not be linked against a modern
+    # pool reader or modern struct layout. Build all four engine modules
+    # and their headers from the SAME commit, sharing only the harness,
+    # synthetic files, seeds and compiler options.
+    include = ROOT / "source"
     if baseline:
-        checkout = dest / "legacy"
-        checkout.mkdir(exist_ok=True)
-        for path in SOURCES:
+        include = dest / "legacy"
+        include.mkdir(exist_ok=True)
+        for path in SOURCES + HEADERS:
             text = run(["git", "show", f"{baseline}:{path}"], cwd=ROOT)
-            target = checkout / Path(path).name
-            target.write_text(text + "\n", encoding="utf-8")
-            sources.append(str(target))
-    else:
-        sources.extend(str(ROOT / path) for path in SOURCES)
+            (include / Path(path).name).write_text(text + "\n", encoding="utf-8")
+    sources = [str(include / Path(path).name) for path in SOURCES]
     output = dest / f"bench-{label}"
     run(["gcc", "-std=gnu11", "-O2", "-Wall", "-Wextra", "-Wshadow",
-         "-I", str(ROOT / "source"), str(ROOT / "tools/check/hint_span_bench.c"),
-         *sources, *(str(ROOT / f) for f in SHARED),
-         "-o", str(output)])
+         "-I", str(include), str(ROOT / "tools/check/hint_span_bench.c"),
+         *sources, "-o", str(output)])
     return output
 
 

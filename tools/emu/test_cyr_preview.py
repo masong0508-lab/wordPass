@@ -418,14 +418,56 @@ def main(rom, output):
           "rescue must keep Russian word history and break the earned combo")
     check(get_int(e, "scriptPreviewLastScore") == 0,
           "rescue should clear the stale last-word score display")
+    # Upper rows are always secret-free. Choose a real blank different
+    # from the surveyed word endpoint so two published clues coexist.
+    hole_c, hole_r = (0, 0) if (tail_c, tail_r) != (0, 0) else (6, 0)
     e.hold("L")
-    e.tap(*e.center(1, 6), settle=8)
+    e.tap(*e.center(hole_c, hole_r), settle=8)
     e.hold("L", False)
     check(get_int(e, "scriptPreviewPeels") == 1 and
           get_int(e, "scriptPreviewRescueError") == 0,
           "touch-screen peel must register and dismiss old rescue feedback")
     check(get_int(e, "scriptPreviewTurns") == 3,
           "a successful peel after word+rescue must cost a third fire turn")
+    focus_c = clues_offset["clueC"]
+    focus_r = clues_offset["clueR"]
+    def focused():
+        return (int(e.mem.unsigned[board_ptr + focus_c]),
+                int(e.mem.unsigned[board_ptr + focus_r]))
+    check(focused() == (hole_c, hole_r),
+          "the actual blank peel must focus its published numeral")
+    # Both clues are now public. Revisit the OLD word badge (not its
+    # center letter) and the newly opened hole using ordinary taps.
+    # The focus fields are appended after the legacy board mirror.
+    # Derive the snapshot extent from the actual ELF offsets rather than
+    # relying on the old 336-byte prefix used by earlier smoke assertions.
+    snapshot_end = board_ptr + max(focus_c, focus_r) + 1
+    snapshot = bytes(e.mem.unsigned[board_ptr:snapshot_end])
+    scored_before_inspection = get_int(e, "scriptPreviewScore")
+    hx, hy, hx1, hy1 = e.cell_rect(hole_c, hole_r)
+    with_focus = e.emu.screenshot().convert("RGB").crop((hx, hy, hx1, hy1))
+    bx, by, _, _ = e.cell_rect(tail_c, tail_r)
+    e.tap(bx + 18, by - 192 + 16, settle=10)
+    check(focused() == (tail_c, tail_r),
+          "tapping an earlier earned word numeral must revisit its clue")
+    without_focus = e.emu.screenshot().convert("RGB").crop((hx, hy, hx1, hy1))
+    check(ImageChops.difference(with_focus, without_focus).getbbox() is not None,
+          "changing clue focus must visibly redraw the old numbered hole")
+    expected = bytearray(snapshot)
+    expected[focus_c], expected[focus_r] = tail_c, tail_r
+    check(bytes(e.mem.unsigned[board_ptr:snapshot_end]) == bytes(expected),
+          "revisit may change only the two public focus coordinates")
+    e.shot(str(out / "ru-revisited-word-clue.png"))
+    e.tap(*e.center(hole_c, hole_r), settle=10)
+    check(focused() == (hole_c, hole_r) and
+          bytes(e.mem.unsigned[board_ptr:snapshot_end]) == snapshot and
+          get_int(e, "scriptPreviewTurns") == 3 and
+          get_int(e, "scriptPreviewPeels") == 1 and
+          get_int(e, "scriptPreviewHints") == 1 and
+          get_int(e, "scriptPreviewScore") == scored_before_inspection,
+          "returning to a numbered hole is free and preserves the board")
+    e.shot(str(out / "ru-revisited-hole-clue.png"))
+    check(e.fps() == 120, "inspected Cyrillic clue must preserve frame cadence")
     ledger_bytes = bytes(e.mem.unsigned[ledger:ledger + 194])
     check(ledger_bytes[184] == 1 and struct.unpack_from("<H", ledger_bytes, 186)[0] == 0,
           "peeling must break combo but keep Russian word history")
@@ -503,6 +545,39 @@ def main(rom, output):
     check(get_int(e, "scriptPreviewTurns") == 0 and
           get_int(e, "scriptPreviewScore") == 0,
           "Ukrainian re-deal must reset both the attempt clock and its points")
+    if sourced:
+        # Arrange the attested word МʼЯСО using four existing letter gems.
+        # Real input must select, quote and display the canonical apostrophe
+        # spelling, submit the same points, and earn its ordinary clue.
+        dict_addr = symbol(e.rom_elf, "scriptPreviewDict")
+        alphabet = struct.unpack("<33I", bytes(e.mem.unsigned[dict_addr:dict_addr + 132]))
+        check(0x02bc not in alphabet, "Ukrainian apostrophe cannot be a gem")
+        for row, letter in enumerate("МЯСО"):
+            e.mem.write_byte(board_ptr + row, alphabet.index(ord(letter)))
+        e.chain([(0, row) for row in range(4)])
+        points = get_int(e, "chainScoreNow")
+        check(int(e.mem.unsigned[board_ptr + 152]) == 4 and points > 0 and
+              get_int(e, "scriptQuoteApostropheNow") == 2,
+              "four actual letter tiles must quote the attested МʼЯСО spelling")
+        e.run(12)
+        # Five 2x glyphs occupy 58 px, centered at x=128. The second
+        # glyph must be the tiny apostrophe bitmap, not another letter.
+        ink = e.emu.screenshot().convert("RGB").crop((111, 122, 121, 136))
+        lit = [(x, y) for y in range(14) for x in range(10)
+               if max(ink.getpixel((x, y))) >= 180]
+        check(lit and all(y < 6 for _, y in lit),
+              "on-screen Ukrainian word must draw the internal apostrophe glyph")
+        e.shot(str(out / "uk-apostrophe-word.png"))
+        e.tap(*e.center(0, 3), settle=20)
+        check(get_int(e, "scriptPreviewScore") == points and
+              get_int(e, "scriptPreviewTurns") == 1 and
+              int(e.mem.unsigned[board_ptr + 152]) == 0 and
+              int(e.mem.unsigned[board_ptr + clues_offset["surveyed"]]) & 8,
+              "apostrophe word submits once as four letters and earns its real clue")
+        e.press("SELECT", settle=8)
+        check(get_int(e, "scriptPreviewScore") == 0 and
+              get_int(e, "scriptPreviewTurns") == 0,
+              "apostrophe regression retry leaves a clean shelf")
     # Exercise a complete secret-finding shelf through REAL stylus taps,
     # reading hidden pass coordinates from the ARM9 game's independent
     # ScriptBoard memory. This is an emulator-only diagnostic: it does not
