@@ -71,6 +71,8 @@ def _inspect(source, code, synthetic=False):
     cps = struct.unpack_from("<33I", assets["dict.bin"], 20)
     if tuple(dictionary.alphabet(code)) != cps or t["symbols"] != 33:
         raise ValueError(f"{code}: dictionary/tiles do not use the expected Cyrillic alphabet")
+    if manifest.get("apostrophe_password_count", 0) != p["apostrophe_words"]:
+        raise ValueError(f"{code}: apostrophe password count differs from pools")
     if p["themes"] != 40 or p["words"] < 160 or d["words"] < p["words"]:
         raise ValueError(f"{code}: incomplete dictionary or draft 40-theme pools")
     if (manifest.get("starter_theme_count") != 40 or

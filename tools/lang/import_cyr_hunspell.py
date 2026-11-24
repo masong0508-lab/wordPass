@@ -39,8 +39,8 @@ DEFAULT_BUDGET = 1536 * 1024  # practical per-language dictionary RAM budget
 
 # Keyboard, typographic and modifier-letter apostrophes denote the
 # same Ukrainian separator. The optional spelling extension preserves the
-# actual form in dictionary metadata, not as a 34th gem. Password pools
-# and the default importer remain plain-letter only.
+# actual form in dictionary metadata, not as a 34th gem. The default
+# importer remains plain-letter only; flagged pools can use exact spellings.
 UK_APOSTROPHES = "'’ʼ"
 
 
@@ -89,7 +89,7 @@ def read_catalog(code):
     return themes, {word for row in rows for word in row["words"]}
 
 
-def expand_themes_from_source(code, path, themes, starters, source_words):
+def expand_themes_from_source(code, path, themes, starters, source_words, spellings=None):
     """Accept explicit language-specific, unreviewed, source-backed additions.
 
     English theme keys are identifiers, NEVER English/Russian/Ukrainian words
@@ -110,22 +110,28 @@ def expand_themes_from_source(code, path, themes, starters, source_words):
     if len(titles) != 40 or any(key not in titles for key in raw["themes"]):
         raise ValueError(f"{code}: unknown or missing canonical theme identity")
     index = {cp: i for i, cp in enumerate(d4.alphabet(code))}
+    spellings = spellings or {}
     added = set()
     for english, entries in raw["themes"].items():
         if not isinstance(entries, list) or not 1 <= len(entries) <= 64:
             raise ValueError(f"{code}/{english}: provide 1..64 editorial candidates")
         for word in entries:
             if (not isinstance(word, str) or
-                not 4 <= len(word) <= 9 or
-                word != unicodedata.normalize("NFC", word) or
-                not word.isupper() or
-                any(ord(ch) not in index for ch in word)):
-                raise ValueError(f"{code}/{english}: invalid spelling or alphabet: {word!r}")
-            if word in starters or word in added:
-                raise ValueError(f"{code}/{english}: duplicate password {word}")
-            if word not in source_words:
-                raise ValueError(f"{code}/{english}: {word} absent from licensed source dictionary")
-            added.add(word)
+                word != unicodedata.normalize("NFC", word) or not word.isupper()):
+                raise ValueError(f"{code}/{english}: invalid spelling: {word!r}")
+            if code == "uk" and any(ch in word for ch in UK_APOSTROPHES):
+                projected, mask, canonical = d4.project_uk(word)
+                if not mask or canonical != word or spellings.get(projected) != word:
+                    raise ValueError(f"{code}/{english}: unattested or ambiguous apostrophe {word}")
+            else:
+                projected = word
+                if any(ord(ch) not in index for ch in word) or word not in source_words:
+                    raise ValueError(f"{code}/{english}: {word} absent from licensed source dictionary")
+            if not 4 <= len(projected) <= 9:
+                raise ValueError(f"{code}/{english}: invalid physical letter count: {word!r}")
+            if projected in starters or projected in added:
+                raise ValueError(f"{code}/{english}: duplicate password path {word}")
+            added.add(projected)
             themes[titles[english]].append(word)
     return added
 
@@ -217,14 +223,14 @@ def build(code, dic, aff, notice, origin, out,
         raise ValueError(f"{len(missing)} candidate passwords absent from source dictionary: "
                          + ", ".join(sorted(missing)[:18])
                          + " (edit/review catalog, do not inject unsupported words)")
-    extras = expand_themes_from_source(code, extra_themes, themes, seeds, words)
-    required = seeds | extras
-    # Never accept a projected separator word as a plain password. Theme
-    # validation above runs exclusively against unpunctuated source words.
+    # Check plain candidates against the original unpunctuated source set,
+    # and punctuated candidates against the exact unambiguous spelling map.
     spellings, collisions = {}, 0
     if apostrophe_chains:
         spellings, collisions = apostrophe_paths(apostrophized, words)
-        words.update(spellings)
+    extras = expand_themes_from_source(code, extra_themes, themes, seeds, words, spellings)
+    required = seeds | extras
+    words.update(spellings)
     eligible_count = len(words)
     if max_words and max_words < len(required):
         raise ValueError(f"--max-words={max_words} would discard mandatory "
@@ -280,7 +286,8 @@ def build(code, dic, aff, notice, origin, out,
         raise ValueError(f"dictionary is {len(dictionary)} bytes > {max_dict_bytes} budget; "
                          "supply a reviewed frequency ranking and --max-words")
     tiles = t2.build(code, words)
-    pools = p2.build(code, dictionary, themes, preserve_order=True)
+    pools = p2.build(code, dictionary, themes, preserve_order=True,
+                     allow_apostrophes=apostrophe_chains)
     d4.verify(dictionary)
     t2.verify(tiles, dictionary)
     report = p2.verify(dictionary, pools)
@@ -316,7 +323,7 @@ def build(code, dic, aff, notice, origin, out,
         "ukrainian_apostrophe_example_forms": sorted(apostrophized)[:12],
         "apostrophe_policy": (
             "Unambiguous source spellings stored with non-tile apostrophe masks; "
-            "plain paths preferred, collisions excluded; passwords remain plain"
+            "plain paths preferred, collisions excluded; exact themed spellings supported"
             if apostrophe_chains else "Preserve source spelling; opt-in non-tile separator intake disabled"),
         "retained_word_count": len(words),
         "common_tier_count": len(common),
@@ -328,6 +335,7 @@ def build(code, dic, aff, notice, origin, out,
         "starter_theme_count": 40, "starter_password_count": 160,
         "extra_password_count": len(extras),
         "total_password_count": report["words"],
+        "apostrophe_password_count": report["apostrophe_words"],
         "theme_expansion_status": ("unreviewed-candidates" if extra_themes
                                    else "none"),
         "theme_expansion_sha256": (sha(extra_themes) if extra_themes else None),
@@ -340,7 +348,7 @@ def build(code, dic, aff, notice, origin, out,
             "Theme assignments and extra vocabulary require independent native-speaker review",
             "Verify source and derivative redistribution obligations for all components",
             ("Ukrainian apostrophe words are supported as unambiguous source-backed chains; "
-             "password separators, excluded forms and native review still outstanding"
+             "and exact themed passwords; excluded forms and native review remain outstanding"
              if apostrophe_chains else "Ukrainian apostrophe spellings excluded in this plain-letter build"),
         ],
     }
@@ -474,6 +482,25 @@ def selftest(folder):
                 pass
             else:
                 raise AssertionError("apostrophe-only spelling entered plain WPP2 pool")
+            punctuated_extras = root / "uk-apostrophe-extra-themes.json"
+            punctuated_extras.write_text(json.dumps({
+                "language": "uk", "review_status": "unreviewed-candidates",
+                "themes": {"BINDERY": [synthetic], "COOKERY": ["МʼЯСО"]}
+            }, ensure_ascii=False), encoding="utf-8")
+            punctuated = root / "uk-password-spelling-enabled"
+            result2 = build(code, dic, aff, notice, "https://example.invalid/synthetic",
+                            punctuated, extra_themes=punctuated_extras, apostrophe_chains=True)
+            assert result2["total_password_count"] == 162
+            assert result2["apostrophe_password_count"] == 1
+            assert p2.verify((punctuated / "dict.bin").read_bytes(),
+                             (punctuated / "pools.bin").read_bytes())["apostrophe_words"] == 1
+            try:
+                build(code, dic, aff, notice, "https://example.invalid/synthetic",
+                      root / "uk-no-orthography", extra_themes=punctuated_extras)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("punctuated password accepted without opt-in")
         else:
             assert result["ukrainian_apostrophe_forms_unrepresented"] == 0
         dictionary = (dest / "dict.bin").read_bytes()
