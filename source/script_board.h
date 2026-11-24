@@ -92,8 +92,14 @@ int scriptBoardHint(const ScriptBoard *board, const V4Dict *dict,
                     uint8_t outR[SCRIPT_HINT_MAX]);
 int scriptBoardPreview(const ScriptBoard *board, const V4Dict *dict,
                        const V4Tiles *tiles, int *tier);
+// Return the orthographic separator mask from the SAME scoring lookup.
+int scriptBoardPreviewSpelling(const ScriptBoard *board, const V4Dict *dict,
+                               const V4Tiles *tiles, int *tier, uint32_t *mask);
 int scriptBoardSubmit(ScriptBoard *board, const V4Dict *dict,
                       const V4Tiles *tiles, int *tier);
 bool scriptBoardChainUtf8(const ScriptBoard *board, const V4Dict *dict,
                           char *out, size_t capacity);
+// Renderer already has the spelling mask from its single frame quote.
+bool scriptBoardChainSpellingUtf8(const ScriptBoard *board, const V4Dict *dict,
+                                  uint32_t mask, char *out, size_t capacity);
 #endif

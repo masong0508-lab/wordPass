@@ -76,6 +76,7 @@ bool scriptPreviewRescue(void);
 // Score the current valid word with repeat penalty and combo before submit.
 // Optionally return its dictionary tier from the same single lookup.
 int scriptPreviewQuote(int *tier);
+int scriptPreviewQuoteSpelling(int *tier, uint32_t *mask);
 int scriptPreviewSubmit(void);
 #endif
 #endif

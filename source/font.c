@@ -162,6 +162,7 @@ static const u8 *fontUnicodeGlyph(unsigned cp)
         case 0x0404: case 0x0454: return cyr5x7[CY_YE_UA];
         case 0x0406: case 0x0456: return font5x7[8]; // І/і
         case 0x0407: case 0x0457: return cyr5x7[CY_YI_UA];
+        case 0x02BC: case 0x2019: return font5x7[46]; // Ukrainian apostrophe
         default: return font5x7[39];  // unsupported script: '?' not blank
     }
 }
