@@ -52,8 +52,11 @@ It is a replayable practice shelf, not a scored Classic or Daily run.
    A gold + means every covered neighbor of the inspected clue is a
    password letter. SELECT (R in Russian/Ukrainian preview) focuses another
    forced clue for free, not a hidden answer. Explore any covered gem;
-   blank peels reveal more clues. You do not type the password. A starts
-   a fresh Classic run; B returns to the title.
+   blank peels reveal more clues. Tap an already opened number to inspect
+   it without peeling or spending a turn. You do not type the password.
+   The retail completion card has separate Classic and title buttons
+   (A and B also work). Accepting the completed lesson remembers that
+   onboarding is done, but never saves practice points or statistics.
 
 Practice uses the selected language's real dictionary and scoring rules.
 The stationary practice flame cannot spread or damage the shelf; no new
