@@ -2690,9 +2690,13 @@ static void drawScriptPreviewTop(void)
         }
         if (scriptPreviewTrainingNotice || scriptPreviewCheckpointStatus == SCRIPT_CHECKPOINT_TRAINING) {
             fillRect(13, 172, 230, 8, BLACK);
-            const char *notice = scriptPreviewTrainingNotice == 2 ?
-                (uk ? "ДОТРИМУЙТЕСЬ МІТОК УРОКУ" : "СЛЕДУЙТЕ МЕТКАМ УРОКА") :
-                (uk ? "УРОК БЕЗ ЗБЕРЕЖЕННЯ ТА ДНЯ" : "УРОК БЕЗ СОХРАНЕНИЯ И ДНЯ");
+            const char *notice;
+            if (scriptPreviewTrainingNotice == SCRIPT_TRAIN_NOTICE_WORD_FIRST)
+                notice = uk ? "СПОЧАТКУ СКЛАДІТЬ СЛОВО" : "СНАЧАЛА СОСТАВЬТЕ СЛОВО";
+            else if (scriptPreviewTrainingNotice == SCRIPT_TRAIN_NOTICE_TARGET)
+                notice = uk ? "ТОРКНІТЬСЯ ПОЗНАЧЕНОЇ КЛІТИНКИ" : "КОСНИТЕСЬ ОТМЕЧЕННОЙ КЛЕТКИ";
+            else
+                notice = uk ? "УРОК БЕЗ ЗБЕРЕЖЕННЯ ТА ДНЯ" : "УРОК БЕЗ СОХРАНЕНИЯ И ДНЯ";
             drawTextCenter(128, 172, notice, FIRE2, 1);
         }
         return;
