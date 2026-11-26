@@ -50,8 +50,9 @@ It is a replayable practice shelf, not a scored Classic or Daily run.
    the password tracker fills automatically.
 4. Solve the remaining letters yourself from the open numbered clues.
    A gold + means every covered neighbor of the inspected clue is a
-   password letter. SELECT (R in Russian/Ukrainian preview) focuses another
-   forced clue for free, not a hidden answer. Explore any covered gem;
+   password letter. Tap HINT (or press SELECT; R in Russian/Ukrainian
+   preview) to focus another forced clue for free, not a hidden answer.
+   In the preview, dedicated touch buttons also submit or clear a word. Explore any covered gem;
    blank peels reveal more clues. Tap an already opened number to inspect
    it without peeling or spending a turn. You do not type the password.
    The retail completion card has separate Classic and title buttons

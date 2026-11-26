@@ -615,6 +615,21 @@ static bool focusTrainingClue(void)
     return true;
 }
 
+static void requestTrainingHint(u32 held)
+{
+    if (boardTrainingStage(&G)==4) {
+        if (focusTrainingClue()) {
+            G.peekLatch=(held & (KEY_L | KEY_R))==0;
+            G.peekHeld=1; musicPeek(true);
+            musicSfx(SFX_MENU,0);
+        }
+    } else if (boardTrainingStage(&G)==1) {
+        if (held & (KEY_L | KEY_R)) setMsg(ui(UI_MS_PEEKRELEASE),120);
+        else useHint();
+    }
+    dropStroke(); ignoreStroke=true;
+}
+
 // An open numbered hole is a clue, never another peel. In normal
 // gameplay this applies in PEEK; final practice also allows plain taps.
 static bool inspectOpenHole(int c, int r)
@@ -642,15 +657,14 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
     if (!peekNow) G.armed = 0;
 
     if (down & KEY_START) { enterPause(); return; }
+    if (G.training && (down & KEY_TOUCH) && gfxInTrainingHint(t->px,t->py) &&
+        (boardTrainingStage(&G)==1 || boardTrainingStage(&G)==4)) {
+        requestTrainingHint(held);
+        return;
+    }
     if ((down & KEY_SELECT) && !(held & KEY_TOUCH)) {
         if (G.training && boardTrainingStage(&G)==4) {
-            if (focusTrainingClue()) {
-                // With no shoulder held, latch PEEK for the next peel.
-                // With a shoulder held, keep the ordinary momentary mode.
-                G.peekLatch=(held & (KEY_L | KEY_R))==0;
-                G.peekHeld=1; musicPeek(true);
-                musicSfx(SFX_MENU,0);
-            }
+            requestTrainingHint(held);
             return;
         }
         // A physical shoulder still means PEEK. Instead of charging for a
@@ -1006,6 +1020,22 @@ int main(void)
                     scriptWordStrokeSuppressed = true;
                     (void)scriptPreviewToggleTraining(seedCounter);
                     break;
+                }
+                if (scriptPreviewTraining && (down & KEY_TOUCH)) {
+                    int action=gfxScriptPracticeAction(t.px,t.py);
+                    if (action) {
+                        int step=scriptPreviewTrainingStage();
+                        scriptDropPeekStroke();
+                        scriptWordStrokeSuppressed=true;
+                        if (action==1) {
+                            if (step==5) (void)scriptPreviewAdvance(seedCounter);
+                            else if (scriptPreviewBoard.chainLen) (void)scriptPreviewSubmit();
+                        } else if (action==2) {
+                            if (step==5) (void)scriptPreviewNewPass(seedCounter);
+                            else scriptBoardClearChain(&scriptPreviewBoard);
+                        } else if (step==1 || step==4) (void)scriptPreviewHint();
+                        break;
+                    }
                 }
                 // Deliberate preview-only shelf checkpoint commands. The
                 // retail settings path supplies the FAT device/directory,

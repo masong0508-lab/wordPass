@@ -439,7 +439,9 @@ int  gfxCellAt(int px, int py, int *c, int *r);
 // badge, inspects that published clue instead of starting a word.
 bool gfxScriptClueHit(int px, int py, int c, int r);
 bool gfxScriptTrainingHit(int px, int py);
+int gfxScriptPracticeAction(int px,int py);
 #endif
+bool gfxInTrainingHint(int px,int py);
 bool gfxInSubmit(int px, int py);
 bool gfxInClear(int px, int py);
 bool gfxInPeekButton(int px, int py);

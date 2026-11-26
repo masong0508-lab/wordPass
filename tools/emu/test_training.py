@@ -88,12 +88,16 @@ def main(rom, output):
         n = s["hintLen"]
         path = [(int(e.mem.unsigned[game + off["hintC"] + i]),
                  int(e.mem.unsigned[game + off["hintR"] + i])) for i in range(n)]
-        # SELECT must retain the numbered teaching word and cost nothing.
-        for _ in range(2):
-            e.press("SELECT", settle=12)
+        # Touch help and SELECT must share the same free teaching path.
+        panel=4 if left else 176
+        e.chain(path[:2])
+        assert e.state()["chainLen"]==2, code
+        for touch in (True,False):
+            if touch: e.tap(panel+38,29,settle=12)
+            else: e.press("SELECT", settle=12)
             hinted = e.state()
             assert hinted["hintLen"] == n and hinted["hints"] == s["hints"], code
-            assert hinted["turn"] == 0 and hinted["score"] == 0, code
+            assert hinted["turn"] == 0 and hinted["score"] == 0 and not hinted["chainLen"], code
             assert [(int(e.mem.unsigned[game + off["hintC"] + i]),
                      int(e.mem.unsigned[game + off["hintR"] + i]))
                     for i in range(n)] == path, code
@@ -145,9 +149,10 @@ def main(rom, output):
                 before["turn"],before["score"],before["peels"],before["hints"]), code
             assert int(e.mem.unsigned[game + off["wordClueC"]])==c, code
             assert int(e.mem.unsigned[game + off["wordClueR"]])==r, code
-        for _ in range(length-1):
+        for k in range(length-1):
             before = e.state()
-            e.press("SELECT", settle=12)
+            if k%2==0: e.tap(panel+38,29,settle=12)
+            else: e.press("SELECT", settle=12)
             s = e.state()
             assert s["turn"] == before["turn"] and s["score"] == before["score"], code
             assert s["hints"] == before["hints"], code
@@ -157,7 +162,10 @@ def main(rom, output):
             covered = [(cc, rr) for cc, rr in e.neighbors(c,r) if s["cell"][cc][rr][1] == TILE]
             assert covered, code
             cc, rr = covered[-1]
-            e.peel(cc, rr)
+            if k%2==0:
+                assert s["peek"], code
+                e.tap(*e.center(cc,rr),settle=20) # hint latches PEEK
+            else: e.peel(cc, rr)
             assert e.state()["cell"][cc][rr][1] == SECRET, code
         s = e.state()
         assert s["state"] == ST_PASSED and all(s["found"]) and not s["fail"], code

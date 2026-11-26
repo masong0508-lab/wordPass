@@ -77,8 +77,9 @@ def main(rom, output):
             px = e.pixels()
             return tuple(px[x, y] for y in range(160, 167) for x in range(12, 244))
         before = prompt_row()
-        for _ in range(2):
-            e.press("R", settle=12)
+        for touch in (True,False):
+            if touch: e.tap(215,166,settle=12)
+            else: e.press("R", settle=12)
             assert integer("scriptPreviewTurns") == 0 and integer("scriptPreviewHints") == 0
             assert int(e.mem.unsigned[board+offsets["chainLen"]]) == n
             assert [(int(e.mem.unsigned[board+offsets["chainC"]+i]),
@@ -86,11 +87,12 @@ def main(rom, output):
                     for i in range(n)] == path
         assert prompt_row() != before, (code, "missing ready-to-submit prompt")
         e.shot(str(out / f"{code}-01-ready.png"))
-        e.press("Y", settle=8)
+        e.tap(215,143,settle=8)
+        assert int(e.mem.unsigned[board+offsets["chainLen"]])==0, code
         e.chain(path)
         points = integer("chainScoreNow")
         assert points > 0
-        e.press("A", settle=16)
+        e.tap(215,120,settle=16)
         assert integer("scriptPreviewTurns") == 1 and integer("scriptPreviewScore") == points
         assert flames() == 0, code
         assert integer("scriptPreviewTrainingNotice") == 0
@@ -136,10 +138,11 @@ def main(rom, output):
                               integer("scriptPreviewPeels"),integer("scriptPreviewHints")), code
             assert int(e.mem.unsigned[board + clue_off["clueC"]])==c, code
             assert int(e.mem.unsigned[board + clue_off["clueR"]])==r, code
-        for _ in range(length-1):
+        for k in range(length-1):
             before = (integer("scriptPreviewTurns"), integer("scriptPreviewScore"),
                       integer("scriptPreviewHints"))
-            e.press("R", settle=12)
+            if k%2==0: e.tap(215,166,settle=12)
+            else: e.press("R", settle=12)
             assert before == (integer("scriptPreviewTurns"), integer("scriptPreviewScore"),
                               integer("scriptPreviewHints"))
             c = int(e.mem.unsigned[board + clue_off["clueC"]])
@@ -159,7 +162,7 @@ def main(rom, output):
         assert integer("scriptPreviewPeels") == length+2
         assert int.from_bytes(bytes(e.mem.unsigned[rules+status["ignitions"]:rules+status["ignitions"]+2]), "little") == 0
         e.shot(str(out / f"{code}-05-complete.png"))
-        e.press("A", settle=20)
+        e.tap(215,120,settle=20)
         assert not integer("scriptPreviewTraining") and integer("scriptPreviewScore") == 0
         assert integer("scriptPreviewShelf") == 1 and integer("scriptPreviewTurns") == 0
         e.press("R", settle=12)
