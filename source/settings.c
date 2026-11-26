@@ -75,7 +75,7 @@ static void settingsValid(void)
     if (S.library >= LIB_COUNT) S.library = LIB_FULL;
     if (S.spelling >= SPELL_COUNT) S.spelling = SPELL_BOTH;
     if (S.tutorDone > 1) S.tutorDone = 1;
-    if (S.language >= LANG_COUNT) S.language = LANG_EN;     // availability (the files on the ROM) is checked at startup, not here
+    if (S.language >= LANG_PICK_COUNT) S.language = LANG_EN; // old ROMs safely fall back; no save format change
     if (S.languageChosen > 1) S.languageChosen = 1;
     S.reserved = 0;
     S.bestClassic = clampInt(S.bestClassic, 0, 999999999);

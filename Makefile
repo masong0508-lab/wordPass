@@ -42,6 +42,15 @@ CFLAGS   := -g -Wall -Wextra -Wshadow -O2 -ffunction-sections -fdata-sections\
 # An opt-in engineering build packages only small experimental Russian/
 # Ukrainian resource fixtures and exposes separate DEMO menu choices.
 # The regular ROM keeps its 11-language picker and settings format.
+# The integrated development candidate must use the real, validated source
+# packs. Never silently promote the small engineering fixture vocabulary.
+ifeq ($(WP_CYR_MAIN),1)
+ifeq ($(strip $(CYR_EXTERNAL_DIR)),)
+$(error WP_CYR_MAIN requires CYR_EXTERNAL_DIR containing sourced RU/UK packs)
+endif
+override WP_CYR_PREVIEW := 1
+CFLAGS += -DWP_CYR_MAIN
+endif
 ifeq ($(WP_CYR_PREVIEW),1)
 CFLAGS += -DWP_CYR_PREVIEW
 endif

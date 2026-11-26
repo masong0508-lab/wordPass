@@ -27,6 +27,13 @@ on:
       - 'tools/emu/test_cyr_training.py'
       - 'source/script_rules.c'
       - 'source/script_rules.h'
+      - 'source/main.c'
+      - 'source/gfx.c'
+      - 'source/game.h'
+      - 'source/settings.c'
+      - 'source/build_info.h'
+      - 'Makefile'
+      - 'tools/emu/test_integrated_languages.py'
       - '.github/workflows/sourced-cyr-preview.yml'
   workflow_dispatch:
 
@@ -197,5 +204,73 @@ jobs:
         with:
           name: wordPass-ru-uk-sourced-screenshots
           path: sourced-preview-out/**/*.png
+          if-no-files-found: ignore
+          retention-days: 7
+
+  integrated-rom:
+    needs: source-packs
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitarm:20240511
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          name: wordPass-ru-uk-sourced-lexicons
+          path: .
+      - name: Build main-game 13-language candidate with real RU and UK packs
+        run: |
+          make clean
+          make WP_CYR_MAIN=1 CYR_EXTERNAL_DIR=sourced-preview
+          test -s nitrofiles/cyrpreview/ru/dict.bin
+          test -s nitrofiles/cyrpreview/uk/dict.bin
+          test "$(find nitrofiles/lang -name '*.bin' | wc -l)" -eq 30
+          python3 tools/check/rom_budget.py \
+            --rom wordPass.nds --elf wordPass.elf \
+            --mode preview --preview-root nitrofiles/cyrpreview \
+            --nm "$DEVKITARM/bin/arm-none-eabi-nm" \
+            --forbid-float-printf --output build/rom-budget-integrated.json
+          sha256sum wordPass.nds > wordPass.nds.sha256
+      - name: Upload integrated main-game development candidate and notices
+        uses: actions/upload-artifact@v7
+        with:
+          name: wordPass-13-language-main-candidate
+          path: |
+            wordPass.nds
+            wordPass.elf
+            wordPass.nds.sha256
+            build/rom-budget-integrated.json
+            sourced-preview/ru/LICENSE-SOURCE.txt
+            sourced-preview/uk/LICENSE-SOURCE.txt
+            sourced-preview/ru/SOURCE-MANIFEST.json
+            sourced-preview/uk/SOURCE-MANIFEST.json
+            source-cache/SOURCE-LOCK.json
+          retention-days: 21
+
+  integrated-emulator:
+    needs: integrated-rom
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SDL_VIDEODRIVER: dummy
+      SDL_AUDIODRIVER: dummy
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          name: wordPass-13-language-main-candidate
+          path: .
+      - name: Install emulator
+        run: python3 -m pip install py-desmume pillow numpy
+      - name: Test main menu, real languages, FAT persistence and shared game launches
+        run: |
+          sha256sum -c wordPass.nds.sha256
+          python3 tools/emu/test_integrated_languages.py wordPass.nds wordPass.elf integrated-out
+      - name: Upload integration screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: wordPass-13-language-integration-screenshots
+          path: integrated-out/*.png
           if-no-files-found: ignore
           retention-days: 7
