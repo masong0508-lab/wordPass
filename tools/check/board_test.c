@@ -946,10 +946,36 @@ static void trainingTests(void)
               !boardTrainingTarget(&g, &c, &r) &&
               !boardPeel(&g,6,0) && g.turn == 0 &&
               g.cell[5][0].state == CELL_HOLE && !g.peels);
+        CHECK("stationary practice flame is visible before the first turn",
+              boardLowestFireRow(&g)>=0 && !g.ignitions);
+        // Move the fixture's flame outside the known legal path in the
+        // comparison copy. The same real word must then be refused.
+        for (int i=0; i<copy.hintLen; ++i) {
+            Cell *cl = &copy.cell[copy.hintC[i]][copy.hintR[i]];
+            if (cl->state == CELL_BURN) cl->state = CELL_TILE;
+            boardTryAddToChain(&copy,copy.hintC[i],copy.hintR[i]);
+        }
+        bool planted = false;
+        for (int cc=0; cc<COLS && !planted; ++cc)
+            for (int rr=0; rr<ROWS && !planted; ++rr) {
+                bool inPath = false;
+                for (int k=0; k<copy.hintLen; ++k)
+                    if (copy.hintC[k]==cc && copy.hintR[k]==rr) inPath=true;
+                if (!inPath && copy.cell[cc][rr].state==CELL_TILE) {
+                    copy.cell[cc][rr].state=CELL_BURN;
+                    planted=true;
+                }
+            }
+        char w[WORD_BUF]; boardChainWord(&copy,w);
+        CHECK("valid word not touching fire cannot skip the fire lesson",
+              planted && boardWordOk(w,(int)strlen(w)) &&
+              !boardChainScore(&copy) && !boardSubmit(&copy) &&
+              !copy.turn && !copy.score && boardTrainingStage(&copy)==1);
         for (int i=0; i<g.hintLen; ++i)
             boardTryAddToChain(&g,g.hintC[i],g.hintR[i]);
-        CHECK("numbered tutorial route is a real accepted dictionary word",
+        CHECK("numbered tutorial word puts out the actual flame",
               boardChainScore(&g)>0 && boardSubmit(&g)>0 &&
+              g.lastWordBurn && boardLowestFireRow(&g)<0 &&
               boardTrainingStage(&g)==2 && g.turn==1);
         CHECK("first marked blank has one real neighboring secret",
               boardTrainingTarget(&g,&c,&r) && c==6 && r==0 &&
