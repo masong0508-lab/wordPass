@@ -412,9 +412,17 @@ static void buildHeatTables(void)
 // backdrop since no dot column coincides with a gem edge column in either hand layout.
 #define COMP_ROWS 20
 typedef struct { u32 w[TILE_W / 2]; } GemRow;
-// A shelf contains at most POOL_MAX_LEN distinct password letters. Cache
-// those diamond composites instead of all 27 possible letter shapes.
-static ALIGN(4) GemRow gemLetter[26][COMP_ROWS], diamondLetter[POOL_MAX_LEN][COMP_ROWS];
+// A shelf contains at most POOL_MAX_LEN distinct password letters.
+// The retail ROM retains its full cache. The dual-engine preview has less
+// main-RAM headroom: cache six distinct diamond letters and use the existing
+// gem + glyph path for the rest. The common 56-cell plain-tile path stays
+// unchanged, and no dictionary or password content is removed.
+#ifdef WP_CYR_PREVIEW
+#define DIAMOND_CACHE_SLOTS 6
+#else
+#define DIAMOND_CACHE_SLOTS POOL_MAX_LEN
+#endif
+static ALIGN(4) GemRow gemLetter[26][COMP_ROWS], diamondLetter[DIAMOND_CACHE_SLOTS][COMP_ROWS];
 static u8 diamondSlot[27];
 static u32 diamondCacheMask;
 
@@ -500,7 +508,7 @@ static void refreshDiamondCache(const Game *g)
     int c0 = clipY0, c1 = clipY1;
     cur = vramBack; clipY0 = 0; clipY1 = SCREEN_H;
     int slot = 0;
-    for (int l = 0; l <= DIAMOND_Q && slot < POOL_MAX_LEN; l++) {
+    for (int l = 0; l <= DIAMOND_Q && slot < DIAMOND_CACHE_SLOTS; l++) {
         if (!(wanted & (1u << l))) continue;
         diamondSlot[l] = slot;
         buildComposite(diamondLetter[slot++], &GEM_DIAMOND, l, C(4,6,10), C(20,22,26));
@@ -1119,7 +1127,7 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
                 case CELL_SECRET: {
                     int dl = cl->letter == 'q' - 'a' ? DIAMOND_Q : cl->letter;
                     int slot = dl <= DIAMOND_Q ? diamondSlot[dl] : 255;
-                    if (slot < POOL_MAX_LEN && !sq && !lit && !cl->flash && yd + 1 >= clipY0 && yd + 1 + COMP_ROWS <= clipY1) {
+                    if (slot < DIAMOND_CACHE_SLOTS && !sq && !lit && !cl->flash && yd + 1 >= clipY0 && yd + 1 + COMP_ROWS <= clipY1) {
                         blitComposite(diamondLetter[slot], x, yd + 1);   // gem and letter in one move
                     } else {
                         if (sq) drawGemSized(x, yd + sq, TILE_W, TILE_H - sq, &GEM_DIAMOND, lit);
