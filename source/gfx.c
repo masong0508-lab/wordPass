@@ -412,7 +412,11 @@ static void buildHeatTables(void)
 // backdrop since no dot column coincides with a gem edge column in either hand layout.
 #define COMP_ROWS 20
 typedef struct { u32 w[TILE_W / 2]; } GemRow;
-static ALIGN(4) GemRow gemLetter[26][COMP_ROWS], diamondLetter[27][COMP_ROWS];   // diamondLetter[26]: the plain Q of a found pass letter
+// A shelf contains at most POOL_MAX_LEN distinct password letters. Cache
+// those diamond composites instead of all 27 possible letter shapes.
+static ALIGN(4) GemRow gemLetter[26][COMP_ROWS], diamondLetter[POOL_MAX_LEN][COMP_ROWS];
+static u8 diamondSlot[27];
+static u32 diamondCacheMask;
 
 static void setupTheme(void)
 {
@@ -471,11 +475,37 @@ static void buildGemCache(void)
     for (int l = 0; l < 26; l++) {
         const GemPal *p = GEM_PALS[palOf[l]];
         buildComposite(gemLetter[l], p, l, C(31,31,29), p->dark);
-        buildComposite(diamondLetter[l], &GEM_DIAMOND, l, C(4,6,10), C(20,22,26));
     }
-    buildComposite(diamondLetter[26], &GEM_DIAMOND, DIAMOND_Q, C(4,6,10), C(20,22,26));
+    diamondCacheMask = 0;
+    memset(diamondSlot, 255, sizeof diamondSlot);
     cur = saved; clipY0 = c0; clipY1 = c1;
     gemCacheReady = true;
+}
+
+// Rebuild only when the shelf's letter set changes, before drawing into
+// the hidden bank. Uncached (e.g. debug-injected) diamonds use the
+// existing gem + glyph path; the normal shelf keeps its fast blits.
+static void refreshDiamondCache(const Game *g)
+{
+    u32 wanted = 0;
+    for (int i = 0; i < g->passLen && i < POOL_MAX_LEN; i++) {
+        int l = g->pass[i] - 'a';
+        if (l >= 0 && l < 26)
+            wanted |= 1u << (l == 'q' - 'a' ? DIAMOND_Q : l);
+    }
+    if (wanted == diamondCacheMask) return;
+    diamondCacheMask = wanted;
+    memset(diamondSlot, 255, sizeof diamondSlot);
+    u16 *saved = cur;
+    int c0 = clipY0, c1 = clipY1;
+    cur = vramBack; clipY0 = 0; clipY1 = SCREEN_H;
+    int slot = 0;
+    for (int l = 0; l <= DIAMOND_Q && slot < POOL_MAX_LEN; l++) {
+        if (!(wanted & (1u << l))) continue;
+        diamondSlot[l] = slot;
+        buildComposite(diamondLetter[slot++], &GEM_DIAMOND, l, C(4,6,10), C(20,22,26));
+    }
+    cur = saved; clipY0 = c0; clipY1 = c1;
 }
 
 // copy a 20-row composite to (x, y): x is even in both layouts, so every row is one
@@ -1073,8 +1103,10 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
                     drawHoleCell(x, y, boardBackNumber(g, c, r), g->scorched[c][r], chimney);
                     break;
                 case CELL_SECRET: {
-                    if (!sq && !lit && !cl->flash && yd + 1 >= clipY0 && yd + 1 + COMP_ROWS <= clipY1) {
-                        blitComposite(diamondLetter[cl->letter == 'q' - 'a' ? DIAMOND_Q : cl->letter], x, yd + 1);   // gem and letter in one move
+                    int dl = cl->letter == 'q' - 'a' ? DIAMOND_Q : cl->letter;
+                    int slot = dl <= DIAMOND_Q ? diamondSlot[dl] : 255;
+                    if (slot < POOL_MAX_LEN && !sq && !lit && !cl->flash && yd + 1 >= clipY0 && yd + 1 + COMP_ROWS <= clipY1) {
+                        blitComposite(diamondLetter[slot], x, yd + 1);   // gem and letter in one move
                     } else {
                         if (sq) drawGemSized(x, yd + sq, TILE_W, TILE_H - sq, &GEM_DIAMOND, lit);
                         else { blitGem(x, yd, 5); if (lit) { rectOutline(x, yd, TILE_W, TILE_H, WHITE); rectOutline(x + 1, yd + 1, TILE_W - 2, TILE_H - 2, WHITE); } }
@@ -3737,6 +3769,8 @@ void gfxFrame(const Game *g)
         frameMid = accent; frameDk = lerp15(accent, BLACK, 9); frameLt = lerp15(accent, WHITE, 8);
         buildHeatTables();
     }
+    if (g->state == ST_PLAY || g->state == ST_PAUSE || g->state == ST_PASSED || g->state == ST_FAIL)
+        refreshDiamondCache(g);
     boardChainWord(g, chainWordNow);
     fireLow = boardLowestFireRow(g);
     dangerSetup(g);
