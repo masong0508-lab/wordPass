@@ -103,6 +103,16 @@ def main(rom, output):
         e.tap(*e.center(0,7), settle=8)
         e.hold("L", False)
         assert tile_state(0,7) == 0 and integer("scriptPreviewTurns") == 4
+        before = (integer("scriptPreviewTurns"),integer("scriptPreviewScore"),
+                  integer("scriptPreviewPeels"),integer("scriptPreviewHints"))
+        for c,r,peek in ((3,5,False),(4,6,True)):
+            if peek: e.hold("L")
+            e.tap(*e.center(c,r), settle=12)
+            if peek: e.hold("L",False)
+            assert before == (integer("scriptPreviewTurns"),integer("scriptPreviewScore"),
+                              integer("scriptPreviewPeels"),integer("scriptPreviewHints")), code
+            assert int(e.mem.unsigned[board + clue_off["clueC"]])==c, code
+            assert int(e.mem.unsigned[board + clue_off["clueR"]])==r, code
         for _ in range(length-1):
             before = (integer("scriptPreviewTurns"), integer("scriptPreviewScore"),
                       integer("scriptPreviewHints"))

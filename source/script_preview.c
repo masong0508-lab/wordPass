@@ -426,6 +426,12 @@ int scriptPreviewPeel(int c, int r)
     if (!scriptPreviewDict.image || scriptPreviewRules.status != SCRIPT_RUNNING)
         return -1;
     int stage = scriptPreviewTrainingStage();
+    if (stage==4 && c>=0 && c<SCRIPT_COLS && r>=0 && r<SCRIPT_ROWS &&
+        scriptPreviewBoard.state[c][r]==SCRIPT_HOLE) {
+        (void)scriptPreviewFocusClue(c,r);
+        scriptPreviewTrainingNotice=SCRIPT_TRAIN_NOTICE_NONE;
+        return -1; // inspection, not a scored or charged peel
+    }
     if (scriptPreviewTraining && stage != 4) {
         int cc, rr;
         if (!scriptPreviewTrainingTarget(&cc, &rr) || c != cc || r != rr) {

@@ -53,6 +53,7 @@ def main(rom, output):
         e.press("B", settle=16)
         e.set_hand(left)
         assert bool(e.state()["settings"]["hand"]) == left
+        e.set_tutor(0)
         records = e.records()
         start = e.state()
         e.tap(e.bx + 86, 116, settle=24)
@@ -110,6 +111,17 @@ def main(rom, output):
         length = s["passLen"]
         e.peel(0, 7)
         assert e.state()["turn"] == 4 and e.state()["cell"][0][7][1] == HOLE, code
+        before = e.state()
+        for c,r,peek in ((3,5,False),(4,6,True)):
+            if peek:
+                e.peel(c,r)
+            else:
+                e.tap(*e.center(c,r), settle=12)
+            s=e.state()
+            assert (s["turn"],s["score"],s["peels"],s["hints"]) == (
+                before["turn"],before["score"],before["peels"],before["hints"]), code
+            assert int(e.mem.unsigned[game + off["wordClueC"]])==c, code
+            assert int(e.mem.unsigned[game + off["wordClueR"]])==r, code
         for _ in range(length-1):
             before = e.state()
             e.press("SELECT", settle=12)
@@ -130,13 +142,21 @@ def main(rom, output):
         assert e.records() == records and s["statWords"] == start["statWords"] and s["statGames"] == start["statGames"], code
         e.run(60)
         e.shot(str(out / f"{code}-05-complete.png"))
+        assert e.state()["tutorDone"] == 0, code
+        e.tap(e.bx+86, 22+70, settle=12)
+        assert e.state()["state"] == ST_PASSED and training(), code
         if lang == len(LANG_CODES)-1:
-            e.press("A", settle=30)
+            e.tap(e.bx+86, 22+111, settle=30)
             assert e.state()["state"] == ST_PLAY and not training() and not e.state()["practice"], "completion must enter real Classic"
             assert e.state()["score"] == 0 and e.state()["turn"] == 0
+            assert e.state()["tutorDone"] == 1 and e.state()["tutorStep"] == 4, code
         else:
-            e.press("B", settle=16)
+            if lang & 1:
+                e.tap(e.bx+86, 22+133, settle=16)
+            else:
+                e.press("B", settle=16)
             assert e.state()["state"] == ST_TITLE and not training(), code
+            assert e.state()["tutorDone"] == 1, code
             assert e.records() == records, code
     print("TRAINING DS OK: 11 languages, both hands, real word/clue/peel lesson, record isolation and Classic transition")
 

@@ -466,6 +466,7 @@ void gfxInvalidWord(void);
 bool gfxInTitleDaily(int px, int py);
 bool gfxInTitleClassic(int px, int py);
 bool gfxInTitleTraining(int px, int py);
+int gfxTrainingResultHit(const Game *g, int px, int py); // 0 inert, 1 Classic, 2 title
 
 // ---- languages (item 21): lang.c holds the active language's letter tables, langload.c reads a language from the
 // ROM filesystem (NitroFS: nitro:/lang/<code>/{dict,pools,letters}.bin; English is compiled in).
