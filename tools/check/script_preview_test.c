@@ -545,20 +545,24 @@ static void guidedTraining(void)
           !scriptPreviewToggleDaily(20261126, 303) &&
           !scriptPreviewRescue(),
           "training cannot overwrite real checkpoints, start Daily or spend rescue");
-    CHECK(scriptPreviewPeel(1,2) == -1 && scriptPreviewTurns == 0,
-          "peeling before the word lesson is harmless");
+    CHECK(scriptPreviewPeel(1,2) == -1 && scriptPreviewTurns == 0 &&
+          scriptPreviewTrainingNotice == SCRIPT_TRAIN_NOTICE_WORD_FIRST,
+          "early peel explains that a word must be spelled first");
     for (int i=0; i<scriptPreviewTrainingLen; ++i)
         CHECK(scriptPreviewChain(scriptPreviewTrainingC[i],scriptPreviewTrainingR[i]),
               "numbered tutorial route follows actual adjacent gems");
     CHECK(scriptPreviewQuote(NULL) > 0 && scriptPreviewSubmit() > 0 &&
-          scriptPreviewTrainingStage() == 2 && scriptPreviewTurns == 1,
-          "first real word advances to the peel lesson");
-    CHECK(scriptPreviewPeel(6,0) == -1 && scriptPreviewTurns == 1,
-          "wrong marked target costs no turn");
+          scriptPreviewTrainingStage() == 2 && scriptPreviewTurns == 1 &&
+          scriptPreviewTrainingNotice == SCRIPT_TRAIN_NOTICE_NONE,
+          "first real word advances and dismisses the correction");
+    CHECK(scriptPreviewPeel(6,0) == -1 && scriptPreviewTurns == 1 &&
+          scriptPreviewTrainingNotice == SCRIPT_TRAIN_NOTICE_TARGET,
+          "wrong marked target explains the error without a turn");
     CHECK(scriptPreviewPeel(1,2) == 0 &&
           scriptBoardVisibleClue(&scriptPreviewBoard,1,2) == 1 &&
-          scriptPreviewTrainingStage() == 3,
-          "blank peel gives one genuine adjacent password clue");
+          scriptPreviewTrainingStage() == 3 &&
+          scriptPreviewTrainingNotice == SCRIPT_TRAIN_NOTICE_NONE,
+          "correct peel gives a clue and dismisses the correction");
     CHECK(scriptPreviewPeel(1,3) == 1 &&
           scriptPreviewTrainingStage() == 4,
           "find the indicated actual neighboring letter");
