@@ -172,6 +172,7 @@ typedef struct {
     // belongs to the fixed back layer, so refilling the front never moves it.
     u8   wordClue[COLS][ROWS];
     u8   wordClueC, wordClueR;   // latest word endpoint: PEEK explains its neighbors before any touch
+    bool training;             // explicit, unranked, replayable practice lesson (never a save field)
 } Game;
 enum { CUE_NONE = 0, CUE_GHOST, CUE_TAIL, CUE_PEEKBTN, CUE_ARMED };   // ghost drag, tail gem of a valid chain, the PEEK button, the armed cell
 #define GHOST_IDLE_FRAMES 180   // idle this long before the ghost drag traces a word
@@ -352,6 +353,10 @@ extern Game G;
 
 // board.c
 void boardNewShelf(Game *g);
+// Explicit tutorial only: 1 word, 2 open a clue, 3 reveal its neighbor,
+// 4 finish the password, 5 complete. Zero outside the training board.
+int boardTrainingStage(const Game *g);
+bool boardTrainingTarget(const Game *g, int *c, int *r);
 u32  boardRand(void);                // xorshift32 for every board decision (never for cosmetics)
 void boardSeed(u32 seed);
 int  boardDailyMod(int seed);                // DAILYMOD_* for a date
@@ -457,6 +462,7 @@ void gfxShake(int frames);
 void gfxInvalidWord(void);
 bool gfxInTitleDaily(int px, int py);
 bool gfxInTitleClassic(int px, int py);
+bool gfxInTitleTraining(int px, int py);
 
 // ---- languages (item 21): lang.c holds the active language's letter tables, langload.c reads a language from the
 // ROM filesystem (NitroFS: nitro:/lang/<code>/{dict,pools,letters}.bin; English is compiled in).

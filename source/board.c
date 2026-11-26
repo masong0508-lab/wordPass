@@ -417,9 +417,69 @@ static void spillInk(Game *g)
     }
 }
 
+// The lesson has a known blank with exactly one neighboring password
+// letter, then a short sequence of actual hidden letters. Only the explicit
+// practice board may publish these teaching targets; Classic/Daily never do.
+int boardTrainingStage(const Game *g)
+{
+    if (!g->training) return 0;
+    if (boardPassComplete(g)) return 5;
+    if (!g->wordsThisShelf) return 1;
+    if (g->cell[1][2].state != CELL_HOLE) return 2;
+    if (!g->found[0]) return 3;
+    return 4;
+}
+bool boardTrainingTarget(const Game *g, int *c, int *r)
+{
+    int stage = boardTrainingStage(g);
+    if (!c || !r) return false;
+    if (stage == 2) { *c = 1; *r = 2; return true; }
+    if (stage != 3 && stage != 4) return false;
+    for (int index = 1; index <= g->passLen; ++index) {
+        if (g->found[index - 1]) continue;
+        for (int col = 0; col < COLS; ++col)
+            for (int row = 0; row < ROWS; ++row)
+                if (g->back[col][row] == index) {
+                    *c = col; *r = row; return true;
+                }
+    }
+    return false;
+}
+static void prepareTraining(Game *g)
+{
+    static const u8 cols[9] = {1,3,4,5,6,3,4,6,5};
+    static const u8 rows[9] = {3,4,5,6,7,6,7,4,4};
+    memset(g->back, 0, sizeof g->back);
+    for (int i = 0; i < g->passLen && i < 9; ++i)
+        g->back[cols[i]][rows[i]] = (u8)(i + 1);
+
+    // The guide's real dictionary-verified three-letter example is a
+    // predictable first task in each active locale, not a made-up word.
+    // If the player's library/spelling filter excludes it, use a genuine
+    // board hint instead. Both paths use normal scoring and adjacency.
+    const char *example = ui(UI_EX_WORD);
+    char word[4] = {0};
+    if (strlen(example) == 3)
+        for (int i = 0; i < 3; ++i) word[i] = example[i] + ('a' - 'A');
+    if (word[0] && boardWordOk(word, 3) &&
+        word[0] != 'q' && word[1] != 'q' && word[2] != 'q') {
+        for (int i = 0; i < 3; ++i) {
+            g->cell[0][i].letter = (u8)(word[i] - 'a');
+            g->hintC[i] = 0; g->hintR[i] = (u8)i;
+        }
+        g->hintLen = 3;
+    } else g->hintLen = boardHintChain(g, g->hintC, g->hintR, MAX_CHAIN);
+    g->practice = true; // all board-level lifetime statistics are disabled
+}
+
 void boardNewShelf(Game *g)
 {
-    boardSeed(g->mode == MODE_DAILY ? (u32)g->dailySeed : (u32)rand());
+    if (g->training) {
+        memset(g->recentPass, 0, sizeof g->recentPass);
+        g->recentHead = 0;
+    }
+    boardSeed(g->training ? 0x7475746fu :
+              g->mode == MODE_DAILY ? (u32)g->dailySeed : (u32)rand());
     if (g->mode == MODE_DAILY) g->dailyMod = boardDailyMod(g->dailySeed);   // before any boardRand() draw
     // twists: Classic shelves 4, 7, 10 ... get one of three, never the same one twice running
     g->twist = TWIST_NONE;
@@ -498,6 +558,7 @@ void boardNewShelf(Game *g)
         g->heatThreshold -= TWIST_DAMP_METER;
         if (g->heatThreshold < 3) g->heatThreshold = 3;
     }
+    if (g->training) prepareTraining(g);
 }
 
 static int chainIndexOf(const Game *g, int c, int r)
@@ -823,6 +884,17 @@ static void reshuffle(Game *g)
 // starts to creep.
 static void endTurn(Game *g, int heatAdd)
 {
+    if (g->training) {
+        // Teach that real actions generate heat, but hold the meter below
+        // ignition and allow unlimited time to read a clue. Real gravity
+        // and refill still happen; normal modes keep their full fire rules.
+        ++g->turn;
+        g->heat += heatAdd;
+        if (g->heat >= g->heatThreshold) g->heat = g->heatThreshold - 1;
+        int spawned = applyGravity(g);
+        if (spawned >= 4) musicCascade(spawned);
+        return;
+    }
     int add = boardTurnHeat(g, heatAdd);
     g->turn++;
     g->heat += add;
@@ -1015,6 +1087,11 @@ int boardSubmit(Game *g)
 
 int boardPeel(Game *g, int c, int r)
 {
+    if (g->training) {
+        int targetC, targetR;
+        if (!boardTrainingTarget(g, &targetC, &targetR) ||
+            c != targetC || r != targetR) return 0;
+    }
     Cell *cl = &g->cell[c][r];
     if (cl->state != CELL_TILE && cl->state != CELL_BURN) return 0;
     bool scorch = (cl->state == CELL_BURN) || (r > 0 && g->cell[c][r - 1].state == CELL_BURN);
