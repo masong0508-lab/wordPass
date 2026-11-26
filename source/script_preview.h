@@ -32,6 +32,13 @@ extern int scriptPreviewDailyDate; // YYYYMMDD, independent of retail Daily reco
 extern int scriptPreviewDailyClockError; // unset RTC feedback, no save writes
 extern int scriptPreviewHelp; // localized instructions overlay (top LCD only)
 extern int scriptPreviewTraining, scriptPreviewTrainingNotice;
+enum {
+    SCRIPT_TRAIN_NOTICE_NONE = 0,
+    SCRIPT_TRAIN_NOTICE_ENTRY = 1,
+    SCRIPT_TRAIN_NOTICE_TARGET = 2,
+    SCRIPT_TRAIN_NOTICE_DAILY = 3,
+    SCRIPT_TRAIN_NOTICE_WORD_FIRST = 4
+};
 extern int scriptPreviewTrainingLen;
 extern uint8_t scriptPreviewTrainingC[6], scriptPreviewTrainingR[6];
 // Same four teaching stages as retail; zero outside the separate lesson.
