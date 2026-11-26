@@ -20,6 +20,8 @@ ScriptRules scriptPreviewRules;
 ScriptLedger scriptPreviewLedger;
 int scriptPreviewDaily, scriptPreviewDailyDate, scriptPreviewDailyClockError;
 int scriptPreviewHelp;
+int scriptPreviewTraining, scriptPreviewTrainingNotice, scriptPreviewTrainingLen;
+uint8_t scriptPreviewTrainingC[6], scriptPreviewTrainingR[6];
 int scriptPreviewLastTier, scriptPreviewLastScore;
 int scriptPreviewCheckpointStatus;
 uint32_t scriptPreviewSeed;
@@ -152,6 +154,7 @@ void scriptPreviewClose(void)
     scriptLedgerReset(&scriptPreviewLedger);
     scriptPreviewDaily = scriptPreviewDailyDate = scriptPreviewDailyClockError = 0;
     scriptPreviewHelp = 0;
+    scriptPreviewTraining = scriptPreviewTrainingNotice = scriptPreviewTrainingLen = 0;
     scriptPreviewLastTier = scriptPreviewLastScore = 0;
     scriptPreviewOpeningWords = 0;
     scriptPreviewPassApostrophe = 0;
@@ -165,6 +168,10 @@ static bool startPass(unsigned shelf, uint32_t seed, int bankedScore)
     if (scriptPreviewDaily) {
         seed = scriptDailySeed(scriptPreviewDailyDate, scriptPreviewLanguage);
         if (!seed) return false;
+        bankedScore = 0;
+    }
+    if (scriptPreviewTraining) {
+        seed = 0x7475746fu ^ (unsigned)scriptPreviewLanguage;
         bankedScore = 0;
     }
     seed = seed ? seed : 0x87654321u;
@@ -183,10 +190,21 @@ static bool startPass(unsigned shelf, uint32_t seed, int bankedScore)
                                 nextBoard.passLen, &passMask)) return false;
     // Generate up to two distinct legal opening words; explicit L+R rescue
     // still plants only one word after charging its normal turn and heat.
+    uint8_t pathsC[2][6], pathsR[2][6], lengths[2];
     int openingWords = scriptBoardPlantOpeningWords(
         &nextBoard, &scriptPreviewDict, &scriptPreviewTiles,
-        &scriptPreviewPools, seed, NULL, NULL, NULL);
+        &scriptPreviewPools, seed, pathsC, pathsR, lengths);
     if (!openingWords) return false;
+    if (scriptPreviewTraining) {
+        static const uint8_t cols[9] = {1,3,4,5,6,3,4,6,5};
+        static const uint8_t rows[9] = {3,4,5,6,7,6,7,4,4};
+        memset(nextBoard.back, 0, sizeof nextBoard.back);
+        for (unsigned i = 0; i < nextBoard.passLen; ++i)
+            nextBoard.back[cols[i]][rows[i]] = (uint8_t)(i + 1);
+        memcpy(scriptPreviewTrainingC, pathsC[0], lengths[0]);
+        memcpy(scriptPreviewTrainingR, pathsR[0], lengths[0]);
+        scriptPreviewTrainingLen = lengths[0];
+    } else scriptPreviewTrainingLen = 0;
     // Generate both the hidden password and a playable word before replacing
     // a live shelf. A refused generation must not erase its score or state.
     scriptPreviewBoard = nextBoard;
@@ -200,6 +218,7 @@ static bool startPass(unsigned shelf, uint32_t seed, int bankedScore)
     scriptPreviewRescues = scriptPreviewRescueError = 0;
     scriptPreviewLastTier = scriptPreviewLastScore = 0;
     scriptPreviewCheckpointStatus = SCRIPT_CHECKPOINT_NONE;
+    scriptPreviewTrainingNotice = 0;
     scriptLedgerReset(&scriptPreviewLedger);
     scriptPreviewCursorActive = scriptPreviewCursorCol = scriptPreviewCursorRow = 0;
     // Each generated shelf now guarantees a valid dictionary word from its
@@ -207,14 +226,66 @@ static bool startPass(unsigned shelf, uint32_t seed, int bankedScore)
     // This includes Daily Practice: identical date + language => same word.
     return true;
 }
+int scriptPreviewTrainingStage(void)
+{
+    const ScriptBoard *b = &scriptPreviewBoard;
+    if (!scriptPreviewTraining) return 0;
+    if (scriptBoardPassComplete(b)) return 5;
+    if (!scriptPreviewRules.words) return 1;
+    if (b->state[1][2] != SCRIPT_HOLE) return 2;
+    if (!b->found[0]) return 3;
+    return 4;
+}
+bool scriptPreviewTrainingTarget(int *c, int *r)
+{
+    int stage = scriptPreviewTrainingStage();
+    if (!c || !r) return false;
+    if (stage == 2) { *c = 1; *r = 2; return true; }
+    if (stage != 3 && stage != 4) return false;
+    const ScriptBoard *b = &scriptPreviewBoard;
+    for (unsigned i = 0; i < b->passLen; ++i)
+        if (!b->found[i])
+            for (int cc = 0; cc < SCRIPT_COLS; ++cc)
+                for (int rr = 0; rr < SCRIPT_ROWS; ++rr)
+                    if (b->back[cc][rr] == i + 1u) {
+                        *c = cc; *r = rr; return true;
+                    }
+    return false;
+}
+bool scriptPreviewToggleTraining(uint32_t seed)
+{
+    if (!scriptPreviewDict.image || scriptPreviewDaily ||
+        (!scriptPreviewTraining &&
+         (scriptPreviewShelf != 1 || scriptPreviewTurns || scriptPreviewScore))) {
+        scriptPreviewTrainingNotice = 1;
+        return false;
+    }
+    int old = scriptPreviewTraining;
+    scriptPreviewTraining = !old;
+    if (!startPass(1, seed, 0)) {
+        scriptPreviewTraining = old;
+        return false;
+    }
+    return true;
+}
 bool scriptPreviewNewPass(uint32_t seed)
 {
     return startPass((unsigned)scriptPreviewShelf, seed, shelfStartScore);
 }
+static int takeTurn(int heat, bool peel, bool fatal)
+{
+    if (scriptPreviewTraining && !fatal)
+        return scriptRulesTrainingTurn(&scriptPreviewRules, &scriptPreviewBoard,
+                                       &scriptPreviewTiles, heat, peel);
+    return scriptRulesTurn(&scriptPreviewRules, &scriptPreviewBoard,
+                           &scriptPreviewTiles, heat, peel, fatal);
+}
 int scriptPreviewCheckpoint(bool save, const char *settingsPath)
 {
     int result;
-    if (scriptPreviewDaily)
+    if (scriptPreviewTraining)
+        result = SCRIPT_CHECKPOINT_TRAINING;
+    else if (scriptPreviewDaily)
         result = SCRIPT_CHECKPOINT_DAILY;
     else if (!settingsPath)
         result = SCRIPT_CHECKPOINT_NO_CARD;
@@ -298,6 +369,7 @@ bool scriptPreviewOpen(int language, uint32_t seed)
 }
 bool scriptPreviewToggleDaily(int date, uint32_t freeSeed)
 {
+    if (scriptPreviewTraining) { scriptPreviewTrainingNotice = 3; return false; }
     if (!scriptPreviewDict.image) return false;
     int next = !scriptPreviewDaily;
     if (next && !scriptDailyValidDate(date)) {
@@ -320,6 +392,7 @@ bool scriptPreviewAdvance(uint32_t seed)
     if (scriptPreviewDaily) return false; // one unranked repeatable daily shelf
     if (!scriptPreviewDict.image || scriptPreviewRules.status != SCRIPT_PASSED)
         return false;
+    if (scriptPreviewTraining) return scriptPreviewToggleTraining(seed);
     if (scriptPreviewShelf >= 999) return false;
     // Bank this completed shelf only when its successor is ready. Replays
     // discard the current attempt's words/bonus, keeping earlier shelves.
@@ -331,6 +404,13 @@ int scriptPreviewPeel(int c, int r)
 {
     if (!scriptPreviewDict.image || scriptPreviewRules.status != SCRIPT_RUNNING)
         return -1;
+    if (scriptPreviewTraining) {
+        int cc, rr;
+        if (!scriptPreviewTrainingTarget(&cc, &rr) || c != cc || r != rr) {
+            scriptPreviewTrainingNotice = 2;
+            return -1;
+        }
+    }
     int result = scriptBoardPeel(&scriptPreviewBoard, c, r);
     if (result >= 0 || result == -2) {
         scriptPreviewRescueError = 0; // dismiss stale recovery warnings
@@ -340,8 +420,7 @@ int scriptPreviewPeel(int c, int r)
         scriptPreviewPeels++;
         scriptLedgerPeel(&scriptPreviewLedger); // a peel breaks the retail combo
         scriptPreviewLastTier = scriptPreviewLastScore = 0;
-        int bonus = scriptRulesTurn(&scriptPreviewRules, &scriptPreviewBoard,
-                                    &scriptPreviewTiles, 1, true, result == -2);
+        int bonus = takeTurn(1, true, result == -2);
         scriptPreviewTurns = scriptPreviewRules.turns;
         scriptPreviewScore += bonus;
     }
@@ -370,7 +449,7 @@ bool scriptPreviewTrySubmitTail(int c, int r)
 bool scriptPreviewHint(void)
 {
     if (!scriptPreviewDict.image || scriptPreviewRules.status != SCRIPT_RUNNING ||
-        scriptPreviewHints) return false;
+        (scriptPreviewHints && !scriptPreviewTraining)) return false;
     uint8_t c[SCRIPT_HINT_MAX], r[SCRIPT_HINT_MAX];
     int n = scriptBoardHint(&scriptPreviewBoard, &scriptPreviewDict,
                              &scriptPreviewTiles, c, r);
@@ -382,12 +461,13 @@ bool scriptPreviewHint(void)
     // controller focus left over from a previous attempted chain.
     scriptPreviewCursorHide();
     scriptPreviewRescueError = 0;
-    scriptPreviewHints++;
+    if (!scriptPreviewTraining) scriptPreviewHints++;
     return true;
 }
 bool scriptPreviewRescue(void)
 {
-    if (!scriptPreviewDict.image || scriptPreviewRules.status != SCRIPT_RUNNING ||
+    if (!scriptPreviewDict.image || scriptPreviewTraining ||
+        scriptPreviewRules.status != SCRIPT_RUNNING ||
         scriptBoardPassComplete(&scriptPreviewBoard))
         return false;
     if (!scriptPreviewRules.turns) {
@@ -482,9 +562,7 @@ int scriptPreviewSubmit(void)
         scriptPreviewRescueError = 0;
         points = scriptLedgerCommit(&scriptPreviewLedger, ids, length, points);
         scriptPreviewScore += points;
-        scriptPreviewScore += scriptRulesTurn(&scriptPreviewRules,
-                                &scriptPreviewBoard, &scriptPreviewTiles,
-                                scriptRulesWordHeat(length), false, false);
+        scriptPreviewScore += takeTurn(scriptRulesWordHeat(length), false, false);
         scriptPreviewTurns = scriptPreviewRules.turns;
     }
     scriptPreviewLastScore = points;

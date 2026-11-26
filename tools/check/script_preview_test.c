@@ -528,6 +528,64 @@ static void failedGeneration(void)
     scriptPreviewPools.themes = (uint16_t)themes;
 }
 
+static void guidedTraining(void)
+{
+    scriptPreviewShelf = 1;
+    CHECK(scriptPreviewNewPass(301) &&
+          scriptPreviewToggleTraining(302) &&
+          scriptPreviewTrainingStage() == 1 &&
+          scriptPreviewTrainingLen >= 4 && scriptPreviewTrainingLen <= 6,
+          "real Cyrillic training starts with a numbered accepted word");
+    ScriptBoard initial = scriptPreviewBoard;
+    CHECK(scriptPreviewNewPass(303) &&
+          !memcmp(&initial, &scriptPreviewBoard, sizeof initial),
+          "replay generates the exact same language-specific tutorial");
+    CHECK(scriptPreviewCheckpoint(true, "/tmp/wordPass.cfg") == SCRIPT_CHECKPOINT_TRAINING &&
+          scriptPreviewCheckpoint(false, "/tmp/wordPass.cfg") == SCRIPT_CHECKPOINT_TRAINING &&
+          !scriptPreviewToggleDaily(20261126, 303) &&
+          !scriptPreviewRescue(),
+          "training cannot overwrite real checkpoints, start Daily or spend rescue");
+    CHECK(scriptPreviewPeel(1,2) == -1 && scriptPreviewTurns == 0,
+          "peeling before the word lesson is harmless");
+    for (int i=0; i<scriptPreviewTrainingLen; ++i)
+        CHECK(scriptPreviewChain(scriptPreviewTrainingC[i],scriptPreviewTrainingR[i]),
+              "numbered tutorial route follows actual adjacent gems");
+    CHECK(scriptPreviewQuote(NULL) > 0 && scriptPreviewSubmit() > 0 &&
+          scriptPreviewTrainingStage() == 2 && scriptPreviewTurns == 1,
+          "first real word advances to the peel lesson");
+    CHECK(scriptPreviewPeel(6,0) == -1 && scriptPreviewTurns == 1,
+          "wrong marked target costs no turn");
+    CHECK(scriptPreviewPeel(1,2) == 0 &&
+          scriptBoardVisibleClue(&scriptPreviewBoard,1,2) == 1 &&
+          scriptPreviewTrainingStage() == 3,
+          "blank peel gives one genuine adjacent password clue");
+    CHECK(scriptPreviewPeel(1,3) == 1 &&
+          scriptPreviewTrainingStage() == 4,
+          "find the indicated actual neighboring letter");
+    int len = scriptPreviewBoard.passLen;
+    for (int i=1; i<len; ++i) {
+        int c, r;
+        CHECK(scriptPreviewTrainingTarget(&c,&r) &&
+              scriptPreviewPeel(c,r) > 0,
+              "complete the remaining real password letters");
+    }
+    CHECK(scriptPreviewTrainingStage() == 5 &&
+          scriptPreviewRules.status == SCRIPT_PASSED &&
+          scriptPreviewTurns == len + 2 && !scriptPreviewRules.ignitions,
+          "complete actual Cyrillic tutorial without fire");
+    CHECK(scriptPreviewAdvance(304) && !scriptPreviewTraining &&
+          scriptPreviewShelf == 1 && !scriptPreviewScore && !scriptPreviewTurns &&
+          scriptPreviewTrainingStage() == 0,
+          "lesson completion starts a fresh real game, not an inflated score");
+    CHECK(scriptPreviewHint() && scriptPreviewSubmit() > 0,
+          "play a real normal word");
+    int score = scriptPreviewScore, turns = scriptPreviewTurns;
+    CHECK(!scriptPreviewToggleTraining(305) && !scriptPreviewTraining &&
+          scriptPreviewScore == score && scriptPreviewTurns == turns,
+          "opening a tutorial cannot discard an active run");
+    CHECK(scriptPreviewNewPass(306), "reset test to untouched free-play shelf");
+}
+
 static void exercise(const char *dictPath, const char *tilesPath,
                      const char *poolsPath, int language)
 {
@@ -543,6 +601,7 @@ static void exercise(const char *dictPath, const char *tilesPath,
     if (!valid) { free(dict); free(tiles); free(pools); return; }
     scriptPreviewLanguage = language;
     scriptPreviewShelf = 1;
+    guidedTraining();
     passLengthProgression();
     controllerOnly();
     revisitClues();

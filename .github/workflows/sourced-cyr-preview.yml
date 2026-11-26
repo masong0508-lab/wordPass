@@ -24,6 +24,9 @@ on:
       - 'source/script_checkpoint.c'
       - 'source/script_checkpoint.h'
       - 'tools/emu/test_cyr_checkpoint.py'
+      - 'tools/emu/test_cyr_training.py'
+      - 'source/script_rules.c'
+      - 'source/script_rules.h'
       - '.github/workflows/sourced-cyr-preview.yml'
   workflow_dispatch:
 
@@ -175,6 +178,8 @@ jobs:
         run: |
           python3 tools/emu/test_cyr_preview.py \
             wordPass-ru-uk-sourced-preview.nds sourced-preview-out
+      - name: Complete source-backed Russian and Ukrainian tutorial lessons
+        run: python3 tools/emu/test_cyr_training.py wordPass-ru-uk-sourced-preview.nds sourced-preview-out/training
       - name: Sourced Russian and Ukrainian checkpoints survive FAT reboot
         timeout-minutes: 10
         run: |

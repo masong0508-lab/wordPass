@@ -2382,6 +2382,10 @@ static void scriptRefreshGlyphs(void)
 // Keep the inspection hitbox consistent with the rendered 8x9 numeral
 // badge. Center taps on surveyed front gems still select/submit letters.
 // Called only on fresh non-peek touch-down, with a validated hex hit.
+bool gfxScriptTrainingHit(int px, int py)
+{
+    return px >= panelX + 4 && px < panelX + 74 && py >= 5 && py < 19;
+}
 bool gfxScriptClueHit(int px, int py, int c, int r)
 {
     if (c < 0 || c >= SCRIPT_COLS || r < 0 || r >= SCRIPT_ROWS)
@@ -2493,11 +2497,33 @@ static void drawScriptPreviewBoard(void)
         rectOutline(x, y, TILE_W, TILE_H, WHITE);
         rectOutline(x + 2, y + 2, TILE_W - 4, TILE_H - 4, ACCENT);
     }
+    if (scriptPreviewTraining) {
+        if (scriptPreviewTrainingStage() == 1) {
+            for (int i = 0; i < scriptPreviewTrainingLen; ++i) {
+                int x, y;
+                cellOrigin(scriptPreviewTrainingC[i], scriptPreviewTrainingR[i], &x, &y);
+                rectOutline(x, y, TILE_W, TILE_H, ACCENT);
+                fillRect(x + 1, y + 1, 8, 9, BLACK);
+                drawChar(x + 2, y + 2, '1' + i, GOLD_LT, 1);
+            }
+        } else {
+            int c, r;
+            if (scriptPreviewTrainingTarget(&c, &r)) {
+                int x, y; cellOrigin(c, r, &x, &y);
+                rectOutline(x, y, TILE_W, TILE_H, GOLD_LT);
+                rectOutline(x + 1, y + 1, TILE_W - 2, TILE_H - 2, WHITE);
+                gPointer(x + TILE_W - 7, y + TILE_H - 3, false);
+            }
+        }
+    }
     const int px0 = panelX + 2;
     rectOutline(panelX, 2, 78, 188, GOLD_DK);
-    // Show the active LANGUAGE, never an invented "Cyrillic" locale.
-    drawText(px0 + 6, 10, scriptPreviewLanguage ? "УКР ДЕМО" : "РУС ДЕМО",
-             GOLD_LT, 1);
+    // A visible, explicit teaching entry, rather than another hidden chord.
+    fillRect(panelX + 4, 5, 70, 14, DIM);
+    rectOutline(panelX + 4, 5, 70, 14, GOLD_LT);
+    drawTextCenter(panelX + 39, 8,
+        scriptPreviewTraining ? (scriptPreviewLanguage ? "ВИХІД" : "ВЫХОД") :
+        (scriptPreviewLanguage ? "НАВЧАННЯ" : "ОБУЧЕНИЕ"), WHITE, 1);
     char label[20];
     if (scriptPreviewDaily) strcpy(label, "ДЕНЬ");
     else sniprintf(label, sizeof label, scriptPreviewLanguage ? "ПОЛИЦЯ %d" : "ПОЛКА %d", scriptPreviewShelf);
@@ -2582,7 +2608,9 @@ static void drawScriptPreviewTop(void)
                    GOLD_LT, 1);
     // The first Russian/Ukrainian shelves both say "КНИГИ". Show the
     // active language explicitly so switching remains unambiguous and testable.
-    if (scriptPreviewDaily) {
+    if (scriptPreviewTraining) drawTextCenter(128, 31,
+        scriptPreviewLanguage ? "НАВЧАННЯ БЕЗ ВОГНЮ" : "ОБУЧЕНИЕ БЕЗ ОГНЯ", GOLD_LT, 1);
+    else if (scriptPreviewDaily) {
         char dateLabel[48];
         int ymd = scriptPreviewDailyDate;
         sniprintf(dateLabel, sizeof dateLabel, scriptPreviewLanguage ?
@@ -2631,10 +2659,43 @@ static void drawScriptPreviewTop(void)
             sniprintf(pts, sizeof pts, "+%d %s", points,
                      scriptPreviewLanguage ? (tier == 1 ? "ЗВИЧАЙНЕ" : "РІДКІСНЕ")
                                            : (tier == 1 ? "ЧАСТОЕ" : "РЕДКОЕ"));
-            drawTextCenter(128, 147, pts, GOLD_LT, 1);
+            drawTextCenter(128, scriptPreviewTraining ? 137 : 147, pts, GOLD_LT, 1);
         } else if (b->chainLen >= 3)
-            drawTextCenter(128, 147, scriptPreviewLanguage ?
+            drawTextCenter(128, scriptPreviewTraining ? 137 : 147, scriptPreviewLanguage ?
                            "НЕМАЄ В СЛОВНИКУ" : "НЕТ В СЛОВАРЕ", FIRE2, 1);
+    }
+    if (scriptPreviewTraining) {
+        const bool uk = scriptPreviewLanguage != 0;
+        int step = scriptPreviewTrainingStage();
+        if (step == 5) {
+            drawTextCenter(128, 148, uk ? "УРОК ЗАВЕРШЕНО" : "УРОК ЗАВЕРШЁН", GOLD_LT, 1);
+            drawTextCenter(128, 160, uk ? "A: ПОЧАТИ ГРУ" : "A: НАЧАТЬ ИГРУ", WHITE, 1);
+            drawTextCenter(128, 172, uk ? "SELECT: ПОВТОРИТИ" : "SELECT: ПОВТОРИТЬ", ACCENT, 1);
+        } else if (step == 1) {
+            drawTextCenter(128, 148, uk ? "1/4 СЛОВА ДАЮТЬ ПІДКАЗКИ" :
+                           "1/4 СЛОВА ДАЮТ ПОДСКАЗКИ", GOLD_LT, 1);
+            drawTextCenter(128, 160, uk ? "ЗʼЄДНАЙТЕ ЦИФРИ ЗА ПОРЯДКОМ" :
+                           "СОЕДИНИТЕ ЦИФРЫ ПО ПОРЯДКУ", WHITE, 1);
+            drawTextCenter(128, 172, uk ? "A: ПРИЙНЯТИ СЛОВО" :
+                           "A: ПРИНЯТЬ СЛОВО", ACCENT, 1);
+        } else {
+            const char *label = step == 2 ? (uk ? "2/4 ВІДКРИЙТЕ ЧИСЛО" : "2/4 ОТКРОЙТЕ ЧИСЛО") :
+                step == 3 ? (uk ? "3/4 ЧИСЛО 1: ОДНА ЛІТЕРА ПОРУЧ" : "3/4 ЧИСЛО 1: ОДНА БУКВА РЯДОМ") :
+                            (uk ? "4/4 ВІДКРИЙТЕ ВЕСЬ ПАРОЛЬ" : "4/4 ОТКРОЙТЕ ВЕСЬ ПАРОЛЬ");
+            drawTextCenter(128, 148, label, GOLD_LT, 1);
+            drawTextCenter(128, 160, uk ? "L: ТОРКНІТЬСЯ МІТКИ Й ВІДПУСТІТЬ" :
+                           "L: КОСНИТЕСЬ МЕТКИ И ОТПУСТИТЕ", WHITE, 1);
+            drawTextCenter(128, 172, uk ? "L+A: З КУРСОРОМ / БЕЗ ВОГНЮ" :
+                           "L+A: С КУРСОРОМ / БЕЗ ОГНЯ", ACCENT, 1);
+        }
+        if (scriptPreviewTrainingNotice || scriptPreviewCheckpointStatus == SCRIPT_CHECKPOINT_TRAINING) {
+            fillRect(13, 172, 230, 8, BLACK);
+            const char *notice = scriptPreviewTrainingNotice == 2 ?
+                (uk ? "ДОТРИМУЙТЕСЬ МІТОК УРОКУ" : "СЛЕДУЙТЕ МЕТКАМ УРОКА") :
+                (uk ? "УРОК БЕЗ ЗБЕРЕЖЕННЯ ТА ДНЯ" : "УРОК БЕЗ СОХРАНЕНИЯ И ДНЯ");
+            drawTextCenter(128, 172, notice, FIRE2, 1);
+        }
+        return;
     }
     // Word-history HUD is purely diagnostic in this engineering ROM.
     // All character IDs and combo state remain fixed-size, not heap strings.
@@ -2646,7 +2707,10 @@ static void drawScriptPreviewTop(void)
                  (unsigned)scriptPreviewLedger.combo);
         drawTextCenter(128, 158, combo, ACCENT, 1);
     }
-    if (scriptPreviewCheckpointStatus != SCRIPT_CHECKPOINT_NONE) {
+    if (scriptPreviewTrainingNotice) {
+        drawTextCenter(128, 169, scriptPreviewLanguage ?
+                       "УРОК ЛИШЕ НА ПОЧАТКУ ГРИ" : "УРОК ТОЛЬКО В НАЧАЛЕ ИГРЫ", FIRE2, 1);
+    } else if (scriptPreviewCheckpointStatus != SCRIPT_CHECKPOINT_NONE) {
         const bool uk = scriptPreviewLanguage != 0;
         const char *msg;
         u16 color = FIRE2;
@@ -2667,6 +2731,9 @@ static void drawScriptPreviewTop(void)
                 break;
             case SCRIPT_CHECKPOINT_DAILY:
                 msg = uk ? "ДЕНЬ БЕЗ ЗБЕРЕЖЕННЯ" : "ДЕНЬ БЕЗ СОХРАНЕНИЯ";
+                break;
+            case SCRIPT_CHECKPOINT_TRAINING:
+                msg = uk ? "УРОК БЕЗ ЗБЕРЕЖЕННЯ" : "УРОК БЕЗ СОХРАНЕНИЯ";
                 break;
             case SCRIPT_CHECKPOINT_NOT_START:
                 msg = uk ? "ЗБЕРІГАЙТЕ НА ПОЧАТКУ ПОЛИЦІ" : "СОХРАНЯЙТЕ В НАЧАЛЕ ПОЛКИ";
@@ -3564,6 +3631,7 @@ static void topSigs(const Game *g, u32 sig[4])
         const ScriptBoard *b = &scriptPreviewBoard;
         h0 = hmix(h0, g->state);
         h0 = hmix(h0, scriptPreviewShelf);
+        h0 = hmix(h0, scriptPreviewTraining);
         h0 = hmix(h0, scriptPreviewLanguage);
         h0 = hmix(h0, scriptPreviewDaily);
         h0 = hmix(h0, scriptPreviewDailyDate);
@@ -3607,6 +3675,13 @@ static void topSigs(const Game *g, u32 sig[4])
         h3 = hmix(h3, scriptPreviewLedger.lastRepeat);
         h3 = hmix(h3, scriptPreviewRescues);
         h3 = hmix(h3, scriptPreviewRescueError);
+        h2 = hmix(h2, scriptPreviewTraining);
+        if (scriptPreviewTraining) {
+            h2 = hmix(h2, chainScoreNow);
+            h2 = hmix(h2, scriptQuoteTierNow);
+        }
+        h3 = hmix(h3, scriptPreviewTrainingStage());
+        h3 = hmix(h3, scriptPreviewTrainingNotice);
         h3 = hmix(h3, scriptPreviewCheckpointStatus);
         topSigNow[0] = sig[0] = h0;
         topSigNow[1] = sig[1] = h1;
