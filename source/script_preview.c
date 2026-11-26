@@ -453,9 +453,20 @@ bool scriptPreviewHint(void)
     if (!scriptPreviewDict.image || scriptPreviewRules.status != SCRIPT_RUNNING ||
         (scriptPreviewHints && !scriptPreviewTraining)) return false;
     uint8_t c[SCRIPT_HINT_MAX], r[SCRIPT_HINT_MAX];
-    int n = scriptBoardHint(&scriptPreviewBoard, &scriptPreviewDict,
-                             &scriptPreviewTiles, c, r);
-    if (n < WPD4_MIN_WORD) return false;
+    int n;
+    if (scriptPreviewTrainingStage() == 1) {
+        // The board cannot change before the first accepted tutorial word:
+        // peels and rescue are blocked. R must select the same route the
+        // numbered lesson is teaching, not an unrelated solver result.
+        n = scriptPreviewTrainingLen;
+        if (n < WPD4_MIN_WORD || n > SCRIPT_HINT_MAX) return false;
+        memcpy(c, scriptPreviewTrainingC, (size_t)n);
+        memcpy(r, scriptPreviewTrainingR, (size_t)n);
+    } else {
+        n = scriptBoardHint(&scriptPreviewBoard, &scriptPreviewDict,
+                            &scriptPreviewTiles, c, r);
+    }
+    if (n < WPD4_MIN_WORD || n > SCRIPT_HINT_MAX) return false;
     memcpy(scriptPreviewBoard.chainC, c, (size_t)n);
     memcpy(scriptPreviewBoard.chainR, r, (size_t)n);
     scriptPreviewBoard.chainLen = (uint8_t)n;
