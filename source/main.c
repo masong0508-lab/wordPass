@@ -436,15 +436,21 @@ static void useHint(void)
     if (G.hints <= 0 && !G.training) { setMsg(ui(UI_MS_NOHINT), 60); return; }
     boardClearChain(&G);
     dropStroke();                      // a stylus still down must not restart a chain and cancel the ghost
-    G.hintLen = boardHintChain(&G, G.hintC, G.hintR, MAX_CHAIN);
+    // In the first practice stage, keep the lesson's numbered route.
+    // A hint must not replace the word the player is learning.
+    if (!(G.training && boardTrainingStage(&G) == 1 && G.hintLen > 0))
+        G.hintLen = boardHintChain(&G, G.hintC, G.hintR, MAX_CHAIN);
     if (!G.hintLen) { setMsg(ui(UI_MS_NOHINTWORD), 60); return; }
     if (!G.training) G.hints--;
     // Following a word hint must chain gems. A one-shot PEEK latch otherwise
     // turns that first touch into a destructive peel instead of the shown word.
     G.peekLatch = 0; G.peekHeld = 0; G.armed = 0; musicPeek(false);
     G.hintReq = 1; G.hintIdle = 0; G.cueAge = 0;
-    char m[MSG_LEN]; uiFmt(m, sizeof m, UI_MS_HINT, G.hints);
-    setMsg(m, 90);
+    if (G.training) setMsg(ui(UI_TR_TRACE), 90);
+    else {
+        char m[MSG_LEN]; uiFmt(m, sizeof m, UI_MS_HINT, G.hints);
+        setMsg(m, 90);
+    }
     musicSfx(SFX_MENU, 0);
 }
 
