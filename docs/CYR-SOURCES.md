@@ -57,11 +57,17 @@ retains 100,000 total unranked words, including attested ПʼЯТЬ, МʼЯСО 
 encodings, reject malformed masks and missing punctuation, and test real
 word-chain scoring; the sourced DS emulator exercises visible spelling.
 
-**Scope:** this enables Ukrainian ordinary word chains, not apostrophe
-passwords. Legacy WPP2 pools reject a separator-bearing path, and compact
-demo packs and the regular 11-language ROM remain unchanged. Independent
-native review, full password/guide/save parity and rights review remain
-necessary.
+**Password support:** flagged WPP2 pools now use the matching exact WPD4
+spelling masks for Ukrainian passwords too. The plaque shows the apostrophe
+at its public inter-letter boundary (replacing a space), but only actual
+letters need to be uncovered; success, fire, score and the found counter
+still use the physical letter count. The mask is cached at shelf generation,
+including checkpoint restore, and requires no per-frame dictionary search.
+Legacy WPP2 pools still reject separator-bearing paths. The 17 new themed
+candidates were checked against the previous verified source-backed pack;
+the importer rechecks exact unambiguous spelling before retaining them.
+Compact packs and the regular 11-language ROM remain unchanged. Independent
+native review, complete Classic/Daily parity and rights review remain necessary.
 
 ## Candidate upstream sources
 
@@ -124,7 +130,7 @@ Replace them with actual NFC-uppercase Russian or Ukrainian spelling (4–9
 alphabet letters) that is **already present in your licensed Hunspell
 dictionary**, and choose the appropriate target language explicitly.
 Use `--apostrophe-chains` with the unranked Ukrainian intake to include
-unambiguous source-attested separator spellings in ordinary words. Without
+unambiguous source-attested separator spellings in words and flagged passwords. Without
 that opt-in, those forms are audited and excluded as before.
 
 Supply `--extra-themes /path/to/ru-extras.json` or
@@ -190,13 +196,14 @@ substitute for native speaker approval or hardware playtesting.
 
 The project now has two committed, individually edited **unreviewed candidate**
 theme maps: `data/cyrlex/ru_source_candidates.json` has **187** distinct
-Russian headwords and `data/cyrlex/uk_source_candidates.json` has **173**
-distinct Ukrainian headwords, each assigned to a specific one of the existing
+Russian candidates and `data/cyrlex/uk_source_candidates.json` has **190**
+distinct Ukrainian candidates (173 earlier headwords and 17 attested
+apostrophe spellings), each assigned to a specific one of the existing
 40 themes. All these additions were verified against lowercase headword
 entries in the upstream LibreOffice spelling dictionaries at commit
 `c0865a85eb67dc377f2cf8e8fe2c4fa9e53f0dcb`; no Russian dictionary is used
 as a substitute for Ukrainian. With the 160 original starters, that yields
-**347 Russian** and **333 Ukrainian** experimental password candidates.
+**347 Russian** and **350 Ukrainian** experimental password candidates.
 
 The file `tools/lang/fetch_cyr_upstream.py` fetches the pinned RU/UK
 `.dic`, `.aff` and original README notice files, and **verifies their exact
@@ -214,7 +221,7 @@ ROM or silently rewritten. Its offline integrity selftest runs with
 
 A dedicated GitHub Actions workflow, `sourced-cyr-preview.yml`, fetches
 these sources and makes two **100,000-word, source-derived** candidate
-dictionaries, retaining all 347/333 thematic passwords. Its opt-in
+dictionaries, retaining all 347/350 thematic passwords. Its opt-in
 `--sample-words` option favors shorter spellable chains by length band
 (65% from lengths 3–6, 30% from 7–9, 5% from 10–20) with deterministic,
 non-frequency sampling and mandatory theme preservation. **It is NOT a

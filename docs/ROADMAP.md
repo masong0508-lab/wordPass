@@ -212,9 +212,12 @@ and test unranked Daily Practice.
       source intake retains only unambiguous attested paths and audits
       omitted/colliding forms. Native and DS regression scenarios cover
       МʼЯСО, ПʼЯТЬ and ЗВʼЯЗОК.
-- [ ] Extend themed password pools and secret reveal UI to include
-      correctly positioned non-tile Ukrainian apostrophes; complete
-      native editorial review and broader corpus coverage.
+- [x] Extend flagged themed password pools and the secret-reveal UI to
+      correctly positioned non-tile Ukrainian apostrophes. Seventeen
+      source-attested candidates preserve spelling and physical letter
+      count, with deterministic regeneration and checkpoint restore.
+- [ ] Complete independent native editorial review and broader corpus
+      coverage, including currently excluded/ambiguous apostrophe forms.
 - [ ] Native Ukrainian dictionary and distinct frequency/balance model.
 - [ ] Explicit Ґ, Є, І, Ї, Й and apostrophe handling, not Russian reuse.
 - [ ] Complete translated UI, themes and guide with full parity tests.

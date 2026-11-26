@@ -20,6 +20,7 @@ import sys
 import dict_v4 as v4
 
 MAGIC = b"WPP2"
+UK_APOSTROPHE = 1
 MIN_LEN, MAX_LEN = 4, 9
 MAX_THEMES = 48
 MAX_BYTES = 2 * 1024 * 1024
@@ -58,10 +59,11 @@ def dictionary_info(data, code):
     return symbols, counts, offsets
 
 
-def dictionary_has(data, ids, alphabet_size, counts, offsets):
+def dictionary_spelling(data, ids, alphabet_size, counts, offsets):
+    """Return exact dictionary mask, or None for an unattested path."""
     length = len(ids)
     if not v4.MIN_LEN <= length <= v4.MAX_LEN:
-        return False
+        return None
     rec = v4.rec_width(length, v4.bits_for(alphabet_size))
     target = v4.pack(ids, v4.bits_for(alphabet_size))
     lo, hi = 0, counts[length - v4.MIN_LEN] - 1
@@ -72,17 +74,19 @@ def dictionary_has(data, ids, alphabet_size, counts, offsets):
         key = found[:-1] + bytes([found[-1] & 0xfe])
         if key == target:
             if data[5] & v4.UK_APOSTROPHE:
-                # WPP2 still encodes only ordinary letter passwords. An
-                # apostrophe-only dictionary path cannot masquerade as one.
                 before = sum(counts[:length - v4.MIN_LEN])
                 at = len(data) - 3 * sum(counts) + 3 * (before + mid)
-                return int.from_bytes(data[at:at+3], "little") == 0
-            return True
+                return int.from_bytes(data[at:at+3], "little")
+            return 0
         if key < target:
             lo = mid + 1
         else:
             hi = mid - 1
-    return False
+    return None
+
+
+def dictionary_has(data, ids, alphabet_size, counts, offsets, mask=0):
+    return dictionary_spelling(data, ids, alphabet_size, counts, offsets) == mask
 
 
 def canonical_name(name):
@@ -94,13 +98,14 @@ def canonical_name(name):
     return encoded
 
 
-def build(code, dictionary, themes, preserve_order=False):
+def build(code, dictionary, themes, preserve_order=False, allow_apostrophes=False):
     symbols, counts, offsets = dictionary_info(dictionary, code)
     if not isinstance(themes, dict) or not 1 <= len(themes) <= MAX_THEMES:
         raise ValueError("WPP2 requires 1..48 named themes")
     idx = {cp: i for i, cp in enumerate(symbols)}
     theme_headers, word_payload = bytearray(), bytearray()
     seen_words, seen_names = set(), set()
+    has_apostrophe = False
     names = list(themes) if preserve_order else sorted(themes, key=lambda s: str(s).encode("utf-8"))
     for name in names:
         raw_name = canonical_name(name)
@@ -112,14 +117,19 @@ def build(code, dictionary, themes, preserve_order=False):
             raise ValueError(f"{name}: theme has no words")
         words = set()
         for word in original:
-            w = v4.clean(str(word), idx)
+            mask = 0
+            if allow_apostrophes and code == "uk" and any(c in v4.APOSTROPHES for c in str(word)):
+                w, mask, _ = v4.project_uk(str(word))
+            else:
+                w = v4.clean(str(word), idx)
             if not MIN_LEN <= len(w) <= MAX_LEN:
                 raise ValueError(f"{name}: pass must be 4..9 symbols: {word!r}")
             if w in seen_words or w in words:
                 raise ValueError(f"word {w} duplicated across/in themes")
             ids = tuple(idx[ord(ch)] for ch in w)
-            if not dictionary_has(dictionary, ids, len(symbols), counts, offsets):
-                raise ValueError(f"{name}: {w} not in matching WPD4 dictionary")
+            if not dictionary_has(dictionary, ids, len(symbols), counts, offsets, mask):
+                raise ValueError(f"{name}: {word} not in matching WPD4 dictionary spelling")
+            has_apostrophe |= bool(mask)
             words.add(w)
         seen_words |= words
         groups = {length: [] for length in range(MIN_LEN, MAX_LEN + 1)}
@@ -140,7 +150,7 @@ def build(code, dictionary, themes, preserve_order=False):
     total = HEADER + len(payload)
     if total > MAX_BYTES:
         raise ValueError("pool file exceeds 2MiB")
-    hdr = struct.pack("<4sBBBBBBBBII", MAGIC, 1, 0, len(themes), 0,
+    hdr = struct.pack("<4sBBBBBBBBII", MAGIC, 1, UK_APOSTROPHE if has_apostrophe else 0, len(themes), 0,
                       len(symbols), MIN_LEN, MAX_LEN, 0,
                       total, v4.fnv32(payload))
     assert len(hdr) == HEADER
@@ -153,7 +163,7 @@ def verify(dictionary, data):
         raise ValueError("WPP2 size outside bounds")
     magic, version, flags, nt, zero, ns, low, high, extra, size, checksum = struct.unpack_from(
         "<4sBBBBBBBBII", data)
-    if (magic != MAGIC or version != 1 or flags or zero or extra or
+    if (magic != MAGIC or version != 1 or flags & ~UK_APOSTROPHE or zero or extra or
             not 1 <= nt <= MAX_THEMES or not 2 <= ns <= 64 or
             low != MIN_LEN or high != MAX_LEN or size != len(data) or
             checksum != v4.fnv32(data[HEADER:])):
@@ -195,6 +205,7 @@ def verify(dictionary, data):
             raise ValueError("empty theme")
         themes.append((name, nums))
     seen_words = set()
+    apostrophe_words = 0
     for name, nums in themes:
         for length, num in enumerate(nums, MIN_LEN):
             if num > (len(data) - offset) // length:
@@ -208,14 +219,17 @@ def verify(dictionary, data):
                     raise ValueError("unsorted/duplicated pass-word group")
                 if ids in seen_words:
                     raise ValueError("word reused between themes")
-                if not dictionary_has(dictionary, ids, ns, counts, db_offsets):
-                    raise ValueError("pass is absent from WPD4 dictionary")
+                mask = dictionary_spelling(dictionary, ids, ns, counts, db_offsets)
+                if mask is None or (mask and not flags & UK_APOSTROPHE):
+                    raise ValueError("pass spelling is absent or not enabled")
+                apostrophe_words += bool(mask)
                 seen_words.add(ids)
                 last = ids
                 offset += length
-    if offset != len(data):
-        raise ValueError("unparsed bytes at end of pool file")
-    return {"themes": len(themes), "words": len(seen_words), "bytes": len(data)}
+    if offset != len(data) or bool(apostrophe_words) != bool(flags & UK_APOSTROPHE):
+        raise ValueError("unparsed bytes or inconsistent orthography flag")
+    return {"themes": len(themes), "words": len(seen_words), "bytes": len(data),
+            "apostrophe_words": apostrophe_words}
 
 
 def selftest(folder):
@@ -241,7 +255,28 @@ def selftest(folder):
         path.write_bytes(pools)
         print(f"WPP2 {code}: {result['themes']} synthetic themes / "
               f"{result['words']} pass words, {result['bytes']} bytes -> {path}")
-    print("WPP2 PYTHON OK: deterministic theme builder and strict verification")
+    # A flagged pool reuses the exact dictionary spelling mask and stores
+    # four letter IDs, not five characters or a punctuation tile.
+    words, common = v4.FIXTURES["uk"]
+    db = v4.build("uk", set(words) | {"МЯСО"}, common, {"МЯСО": "МʼЯСО"})
+    pool = build("uk", db, {"КУХНЯ": ["МʼЯСО"]}, allow_apostrophes=True)
+    assert verify(db, pool)["apostrophe_words"] == 1 and pool[5] == UK_APOSTROPHE
+    for spelling, allowed in (("МЯСО", True), ("МʼЯСО", False)):
+        try:
+            build("uk", db, {"КУХНЯ": [spelling]}, allow_apostrophes=allowed)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("missing punctuation or missing opt-in accepted")
+    broken = bytearray(pool)
+    broken[5] = 0
+    try:
+        verify(db, broken)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("legacy flag accepted apostrophe-only path")
+    print("WPP2 PYTHON OK: deterministic builder, exact Ukrainian spelling and strict verification")
 
 
 def main(args):

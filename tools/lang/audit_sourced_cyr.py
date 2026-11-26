@@ -46,12 +46,17 @@ def read_catalog(code):
         if len(originals) != 4 or not 1 <= len(candidates) <= 64:
             raise ValueError(f"{code}/{key}: unsafe starter or candidate count")
         for word in originals + candidates:
-            if (not isinstance(word, str) or not 4 <= len(word) <= 9 or
-                    word != unicodedata.normalize("NFC", word) or
-                    not word.isupper() or any(ord(c) not in idx for c in word) or
-                    word in all_words):
+            if (not isinstance(word, str) or word != unicodedata.normalize("NFC", word)
+                    or not word.isupper()):
+                raise ValueError(f"{code}/{key}: invalid {word!r}")
+            path = word
+            if code == "uk" and any(ch in d4.APOSTROPHES for ch in word):
+                path, mask, canonical = d4.project_uk(word)
+                if not mask or canonical != word or word in originals:
+                    raise ValueError(f"{code}/{key}: invalid separator candidate {word!r}")
+            if not 4 <= len(path) <= 9 or any(ord(c) not in idx for c in path) or path in all_words:
                 raise ValueError(f"{code}/{key}: invalid or repeated {word!r}")
-            all_words.add(word)
+            all_words.add(path)
         rows.append({"key": key, "title": title,
                      "starter": originals, "candidate": candidates,
                      "total": len(originals) + len(candidates)})
@@ -70,10 +75,13 @@ def verify_pack(root, code, rows, extras, words, min_source_words):
     p = p2.verify(dictionary, pools)
     expected_extra = sum(len(r["candidate"]) for r in rows)
     expected_total = len(words)
+    expected_apostrophe = sum("ʼ" in word for row in rows for word in row["candidate"])
     raw = (DEFAULTS / f"{code}_source_candidates.json").read_bytes()
     if (details["words"] < min_source_words or
             details["symbols"] != 33 or p["themes"] != 40 or
             p["words"] != expected_total or
+            p["apostrophe_words"] != expected_apostrophe or
+            manifest.get("apostrophe_password_count", 0) != expected_apostrophe or
             manifest.get("language") != code or
             manifest.get("retained_word_count") != details["words"] or
             manifest.get("starter_password_count") != 160 or
@@ -96,6 +104,7 @@ def verify_pack(root, code, rows, extras, words, min_source_words):
             "theme_pool_bytes": len(pools),
             "source_forms": manifest.get("source_valid_word_count"),
             "apostrophe_retained": details["apostrophe_words"],
+            "apostrophe_passwords": p["apostrophe_words"],
             "apostrophe_excluded": manifest.get("ukrainian_apostrophe_forms_unrepresented", 0),
             "theme_source_sha256": hashlib.sha256(raw).hexdigest(),
             "origin": manifest.get("origin"),
@@ -106,7 +115,7 @@ def analyze(rows, code):
     length_bins = {str(n): 0 for n in range(4, 10)}
     for row in rows:
         for word in row["starter"] + row["candidate"]:
-            length_bins[str(len(word))] += 1
+            length_bins[str(len(word.replace("ʼ", "")))] += 1
     counts = [row["total"] for row in rows]
     return {"language": code, "themes": len(rows),
             "starters": sum(len(r["starter"]) for r in rows),
@@ -142,7 +151,7 @@ def report(entries, output):
               "singular/plural/inflection suitability, register, regional",
               "usage and offensive/unwanted forms. Do not auto-approve based",
               "on Hunspell membership. Ukrainian orthographic word-chain support",
-              "uses stored non-tile separators; themed passwords remain plain.",
+              "uses stored non-tile separators for words and explicitly tagged passwords.",
               ""]
     for code, info in entries.items():
         lines += [f"## {code.upper()} — 40 editorial categories", "",
@@ -163,6 +172,7 @@ def report(entries, output):
                       f"pool {pack['theme_pool_bytes']} bytes.",
                       f"**Apostrophe spellings retained:** {pack['apostrophe_retained']}; "
                       f"**excluded:** {pack['apostrophe_excluded']}.",
+                      f"**Apostrophe passwords:** {pack['apostrophe_passwords']}.",
                       f"**Upstream:** {pack['origin']}",
                       "**Frequency:** not certified; technical common/rare tiers "
                       "must not be described as statistical popularity.",

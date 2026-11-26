@@ -4,8 +4,9 @@ Uses the no-argv NitroFS path so the card must be addressed explicitly.
 """
 from pathlib import Path
 import re
+import struct
 import sys
-from fatrig import FatEmu, patch_dldi, make_card, card_files, read_cfg
+from fatrig import FatEmu, patch_dldi, make_card, card_files, read_cfg, Fat16
 from wp import symbol
 from elf_abi import member_offsets
 
@@ -107,6 +108,58 @@ def main(rom, elf, output):
     assert integer(e, "scriptPreviewShelf") == 1
     assert integer(e, "scriptPreviewScore") == 0
     assert read_cfg(card) == retail
+    if "sourced" in Path(rom).name:
+        # Use a valid FAT checkpoint fixture to request a reproducible real
+        # first shelf: family theme (28), length 4, sole password СІМʼЯ.
+        # The game, not the debugger, generates the board, seed, mask and
+        # public plaque. This edits only the emulator fixture's save record.
+        uk_record = next(n for n in records if n.upper().startswith("U"))
+        record = bytearray(read_cfg(card, uk_record))
+        struct.pack_into("<I", record, 20, 0x1c01)
+        crc = 2166136261
+        for byte in record[:28]:
+            crc = ((crc ^ byte) * 16777619) & 0xffffffff
+        struct.pack_into("<I", record, 28, crc)
+        at = Fat16(card).file_offset(uk_record)
+        assert at is not None and len(record) == 32
+        with open(card, "r+b") as stream:
+            stream.seek(at)
+            stream.write(record)
+        e.power_cycle()
+        enter(e, 1)
+        chord(e, "B")
+        assert integer(e, "scriptPreviewCheckpointStatus") == 2
+        assert integer(e, "scriptPreviewSeed") == 0x1c01
+        assert integer(e, "scriptPreviewPassApostrophe") == 8
+        assert int(e.mem.unsigned[board + 227]) == 4
+        assert int(e.mem.unsigned[board + 228]) == 28
+        # The 4-letter password has 7 two-times glyphs (82px), the fifth
+        # inter-letter boundary is the apostrophe glyph, not an underscore.
+        e.run(12)
+        ink = e.emu.screenshot().convert("RGB").crop((147, 70, 157, 84))
+        lit = [(x, y) for y in range(14) for x in range(10)
+               if max(ink.getpixel((x, y))) >= 180]
+        assert lit and all(y < 6 for _, y in lit), "masked apostrophe must be visibly drawn"
+        e.shot(str(out / "uk-apostrophe-password-masked.png"))
+        secrets = {}
+        for i in range(56):
+            index = int(e.mem.unsigned[board + 153 + i])
+            if index:
+                secrets[index] = divmod(i, 8)
+        assert sorted(secrets) == [1, 2, 3, 4]
+        e.hold("L")
+        for index in range(1, 5):
+            e.tap(*e.center(*secrets[index]), settle=8)
+        e.hold("L", False)
+        rules = symbol(e.rom_elf, "scriptPreviewRules")
+        status = member_offsets(e.rom_elf, "scriptPreviewRules", ("status",))["status"]
+        assert int(e.mem.unsigned[rules + status]) == 1
+        assert integer(e, "scriptPreviewTurns") == 4
+        assert integer(e, "scriptPreviewPeels") == 4
+        assert integer(e, "scriptPreviewScore") > 0
+        assert bytes(e.mem.unsigned[board + 218:board + 222]) == b"\x01" * 4
+        e.shot(str(out / "uk-apostrophe-password-won.png"))
+        assert read_cfg(card) == retail
     print("CYR CHECKPOINT FAT OK: separate RU/UK, no-argv, reboot, exact restored shelf and retail isolation")
 
 

@@ -4,6 +4,7 @@
 #define WORDPASS_POOLS_V2_H
 #include "dict_v4.h"
 
+#define WPP2_UK_APOSTROPHE 1u
 #define WPP2_MAX_THEMES 48
 #define WPP2_NAME_BYTES 24
 #define WPP2_MIN_LEN 4

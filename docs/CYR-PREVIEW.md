@@ -6,7 +6,7 @@ This project builds a **separate, experimental DS ROM** alongside the
 ordinary 11-language wordPass.nds. The **compact demo** has small draft
 lexicons (about 170 words per language) and four starter passwords in each
 of 40 themes. A **different, source-backed optional demo** tests 100,000
-words per language and 347 Russian / 333 Ukrainian unreviewed themed
+words per language and 347 Russian / 350 Ukrainian unreviewed themed
 password candidates. Both remain engineering experiments: neither provides
 complete reviewed translations, full Classic/Daily parity or languages
 selectable in the regular 11-language production ROM.
@@ -73,9 +73,11 @@ Daily scores are unchanged.
 - In the source-backed Ukrainian preview, ordinary apostrophe words use
   their actual spelling automatically: select М, Я, С, О to see and submit
   МʼЯСО. The apostrophe is not a separate gem or turn. Only attested,
-  unambiguous spellings are retained; themed passwords remain ordinary
-  letter-only words for now. The compact preview has no extended source
-  spelling pack.
+  unambiguous spellings are retained. Seventeen such themed passwords are
+  now included: for example, СІМʼЯ needs four hidden letter gems. Its
+  apostrophe appears between the masked letters from the start as public
+  punctuation, not a fifth letter. Checkpoint restore regenerates the exact
+  spelling and plaque. The compact preview has no extended source spelling pack.
 - Press A to submit, Y to clear the chain, **R for one free word hint per shelf**,
   X to switch the language
 - Hold L and tap a letter to peel it: hidden pass letters become permanent
@@ -353,12 +355,12 @@ checks that the mode is safely refused.
 
 This milestone is real DS technical integration, not linguistic completion.
 
-Ukrainian dictionary imports now report apostrophe-containing words separately
-rather than silently changing their spelling. Those forms are **not playable
-in the 33-letter demo yet**: the engine still needs a proper word-internal
-apostrophe separator instead of a bogus tile. Russian and Ukrainian remain
-independent language modes. See [CYR-SOURCES.md](CYR-SOURCES.md) for the
-exact manifest fields and source-review limitations.
+Ukrainian dictionary imports report retained and excluded apostrophe forms
+separately rather than silently changing spelling. The source-backed demo
+supports unambiguous attested apostrophe words and flagged passwords
+without adding a punctuation gem. Russian and Ukrainian remain independent
+language modes. See [CYR-SOURCES.md](CYR-SOURCES.md) for the exact manifest
+fields and source-review limitations.
 
 An optional source-verified thematic expansion pipeline now allows
 independent, editorially selected Russian and Ukrainian candidates beyond
@@ -428,7 +430,7 @@ content and should not be presented as a full translated release.
 
 A dedicated `sourced-cyr-preview.yml` GitHub Actions job now assembles an
 **additional** opt-in Nintendo DS ROM with 100,000 licensed-source-derived
-candidate words in **each** language, plus 347/333 source-headword-verified,
+candidate words in **each** language, plus 347/350 source-attested,
 unreviewed thematic password candidates across all 40 themes. This is not
 the ordinary mini demonstration ROM and is not enabled in the retail
 11-language game.
@@ -445,7 +447,7 @@ The builder validates source integrity and keeps the DS dictionary under
 the 1.5 MiB/language cap, rather than making unavailable or inaccurate words
 appear. Larger dictionaries are sampled by word length without a genuine
 frequency ranking; the supplied themed words have not received professional
-semantic review. Hardware save compatibility, physical DS FPS, Ukrainian
-apostrophe gameplay, complete Classic/Daily modes and the full UI translation
+semantic review. Hardware save compatibility, physical DS FPS, broader
+Ukrainian vocabulary, complete Classic/Daily modes and full UI translation
 remain unfinished. Do not present this build as a certified Russian/Ukrainian
 release.

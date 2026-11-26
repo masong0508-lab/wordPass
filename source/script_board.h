@@ -77,6 +77,11 @@ int scriptBoardClueInference(const ScriptBoard *board, int col, int row,
 bool scriptBoardPassComplete(const ScriptBoard *board);
 bool scriptBoardPassUtf8(const ScriptBoard *board, const V4Dict *dictionary,
                          char *out, size_t capacity);
+// Public orthography only: separators replace ordinary inter-letter
+// spacing, so the plaque stays the same width and needs no secret tile.
+bool scriptBoardPassDisplayUtf8(const ScriptBoard *board, const V4Dict *dict,
+                                 uint32_t mask, bool revealAll,
+                                 char *out, size_t capacity);
 bool scriptBoardAdd(ScriptBoard *board, int col, int row); // append, undo, or truncate
 void scriptBoardClearChain(ScriptBoard *board);
 bool scriptBoardIgnite(ScriptBoard *board, uint32_t turnSeed);
