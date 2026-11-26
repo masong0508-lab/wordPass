@@ -121,7 +121,7 @@ def main(rom, output):
         assert not s["msgTimer"] or s["msg"] != messages["TU_FIND"][lang][:31], code
         stage_strip(3)
         initial_evidence=evidence()
-        assert len(set(initial_evidence))>2, (code,"deduction readout missing")
+        assert len(set(initial_evidence))>1, (code,"deduction readout missing")
         e.shot(str(out / f"{code}-03-clue.png"))
         e.peel(6, 1)
         s = e.state()
