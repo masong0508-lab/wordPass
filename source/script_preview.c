@@ -257,7 +257,7 @@ bool scriptPreviewToggleTraining(uint32_t seed)
     if (!scriptPreviewDict.image || scriptPreviewDaily ||
         (!scriptPreviewTraining &&
          (scriptPreviewShelf != 1 || scriptPreviewTurns || scriptPreviewScore))) {
-        scriptPreviewTrainingNotice = 1;
+        scriptPreviewTrainingNotice = SCRIPT_TRAIN_NOTICE_ENTRY;
         return false;
     }
     int old = scriptPreviewTraining;
@@ -369,7 +369,7 @@ bool scriptPreviewOpen(int language, uint32_t seed)
 }
 bool scriptPreviewToggleDaily(int date, uint32_t freeSeed)
 {
-    if (scriptPreviewTraining) { scriptPreviewTrainingNotice = 3; return false; }
+    if (scriptPreviewTraining) { scriptPreviewTrainingNotice = SCRIPT_TRAIN_NOTICE_DAILY; return false; }
     if (!scriptPreviewDict.image) return false;
     int next = !scriptPreviewDaily;
     if (next && !scriptDailyValidDate(date)) {
@@ -407,12 +407,14 @@ int scriptPreviewPeel(int c, int r)
     if (scriptPreviewTraining) {
         int cc, rr;
         if (!scriptPreviewTrainingTarget(&cc, &rr) || c != cc || r != rr) {
-            scriptPreviewTrainingNotice = 2;
+            scriptPreviewTrainingNotice = scriptPreviewTrainingStage() == 1 ?
+                SCRIPT_TRAIN_NOTICE_WORD_FIRST : SCRIPT_TRAIN_NOTICE_TARGET;
             return -1;
         }
     }
     int result = scriptBoardPeel(&scriptPreviewBoard, c, r);
     if (result >= 0 || result == -2) {
+        if (scriptPreviewTraining) scriptPreviewTrainingNotice = SCRIPT_TRAIN_NOTICE_NONE;
         scriptPreviewRescueError = 0; // dismiss stale recovery warnings
         // A nonfatal blank peel creates a real numbered hole. Show its
         // neighbor evidence immediately, without waiting for another word.
@@ -559,6 +561,7 @@ int scriptPreviewSubmit(void)
                                    &scriptPreviewTiles, &tier);
     scriptPreviewLastTier = tier;
     if (points > 0) {
+        if (scriptPreviewTraining) scriptPreviewTrainingNotice = SCRIPT_TRAIN_NOTICE_NONE;
         scriptPreviewRescueError = 0;
         points = scriptLedgerCommit(&scriptPreviewLedger, ids, length, points);
         scriptPreviewScore += points;
