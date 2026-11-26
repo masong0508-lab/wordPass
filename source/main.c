@@ -666,6 +666,12 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
             if (!res && G.training) {
                 gfxNope(c, r);
                 musicSfx(SFX_INVALID, 0);
+                // A blocked peel is a teaching opportunity, not just a flash.
+                setMsg(ui(boardTrainingStage(&G) == 1 ? UI_TU_DRAG : UI_TU_FIND), 120);
+            } else if (res == 1 && G.training && !strcmp(G.msg, ui(UI_TU_FIND))) {
+                // The marked hole was opened; don't carry a correction into
+                // the next lesson step.
+                setMsg("", 0);
             }
             if (res == 2) {
                 gfxBurst(c, r, BURST_REVEAL, letter);
