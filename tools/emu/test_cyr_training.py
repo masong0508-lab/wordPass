@@ -17,6 +17,14 @@ def main(rom, output):
     def integer(name):
         a = symbol(e.rom_elf, name)
         return int.from_bytes(bytes(e.mem.unsigned[a:a+4]), "little")
+    def coaching(code, tag, notice):
+        assert integer("scriptPreviewTrainingNotice") == notice, (code, tag)
+        px = e.pixels()
+        amber = sum(1 for y in range(172, 179) for x in range(13, 243)
+                    if px[x, y][0] >= 240 and 170 <= px[x, y][1] <= 220 and px[x, y][2] <= 65)
+        assert amber > 20, (code, tag, "missing visible coaching", amber)
+        e.shot(str(out / f"{code}-{tag}.png"))
+
     def expect(language):
         for _ in range(40):
             if e.state()["state"] == 9 and integer("scriptPreviewLanguage") == language:
@@ -40,20 +48,24 @@ def main(rom, output):
         e.tap(*e.center(1, 2), settle=8)
         e.hold("L", False)
         assert integer("scriptPreviewTurns") == 0
+        coaching(code, "01-early-peel", 4)
         e.chain([(int(e.mem.unsigned[nc+i]), int(e.mem.unsigned[nr+i])) for i in range(n)])
         points = integer("chainScoreNow")
         assert points > 0
         e.press("A", settle=16)
         assert integer("scriptPreviewTurns") == 1 and integer("scriptPreviewScore") == points
+        assert integer("scriptPreviewTrainingNotice") == 0
         e.shot(str(out / f"{code}-02-peel.png"))
         e.hold("L")
         e.tap(*e.center(6, 0), settle=8)
         e.hold("L", False)
         assert integer("scriptPreviewTurns") == 1
+        coaching(code, "02-wrong-target", 2)
         e.hold("L")
         e.tap(*e.center(1, 2), settle=8)
         e.hold("L", False)
         assert integer("scriptPreviewTurns") == 2
+        assert integer("scriptPreviewTrainingNotice") == 0
         assert int(e.mem.unsigned[board + 56 + 1*8 + 2]) == 0
         e.shot(str(out / f"{code}-03-clue.png"))
         e.hold("L")
