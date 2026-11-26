@@ -434,16 +434,30 @@ bool boardTrainingTarget(const Game *g, int *c, int *r)
     int stage = boardTrainingStage(g);
     if (!c || !r) return false;
     if (stage == 2) { *c = 6; *r = 0; return true; }
-    if (stage != 3 && stage != 4) return false;
-    for (int index = 1; index <= g->passLen; ++index) {
-        if (g->found[index - 1]) continue;
-        for (int col = 0; col < COLS; ++col)
-            for (int row = 0; row < ROWS; ++row)
-                if (g->back[col][row] == index) {
-                    *c = col; *r = row; return true;
-                }
+    if (stage == 3) { *c = 6; *r = 1; return true; }
+    return false; // the final stage has no hidden target or required order
+}
+// Optional final-stage coaching selects a PUBLIC numbered clue, not a
+// hidden answer. The four pre-opened centers cover the entire puzzle island.
+bool boardTrainingClue(const Game *g, int afterC, int afterR, int *c, int *r)
+{
+    if (boardTrainingStage(g) != 4 || !c || !r) return false;
+    static const u8 cc[4] = {3,4,6,6}, rr[4] = {5,6,5,6};
+    int start = -1;
+    for (int i=0; i<4; ++i)
+        if (cc[i]==afterC && rr[i]==afterR) start=i;
+    for (int i=1; i<=4; ++i) {
+        int k=(start+i)%4;
+        if (boardClueInference(g,cc[k],rr[k],NULL,NULL)==CLUE_PASS) {
+            *c=cc[k]; *r=rr[k]; return true;
+        }
     }
     return false;
+}
+static void trainingHole(Game *g, int c, int r)
+{
+    Cell *cl=&g->cell[c][r];
+    cl->state=CELL_HOLE; cl->yoff=0; cl->yv=0;
 }
 static void prepareTraining(Game *g)
 {
@@ -452,10 +466,13 @@ static void prepareTraining(Game *g)
     memset(g->back, 0, sizeof g->back);
     for (int i = 0; i < g->passLen && i < 9; ++i)
         g->back[cols[i]][rows[i]] = (u8)(i + 1);
-    // The practice shelf starts with one visible blank, not a charged peel.
-    g->cell[5][0].state = CELL_HOLE;
-    g->cell[5][0].yoff = 0;
-    g->cell[5][0].yv = 0;
+    // Four ordinary open clues in the lower-right island have no
+    // covered blank neighbors. Shorter passwords open unused slots too.
+    // This guarantees a solution using public inference for lengths 4..9.
+    static const u8 hc[7] = {3,4,6,6,5,2,2}, hr[7] = {5,6,5,6,5,5,6};
+    trainingHole(g,5,0);
+    for (int i=0; i<7; ++i) trainingHole(g,hc[i],hr[i]);
+    for (int i=g->passLen; i<9; ++i) trainingHole(g,cols[i],rows[i]);
 
     // The guide's real dictionary-verified three-letter example is a
     // predictable first task in each active locale, not a made-up word.
@@ -1103,7 +1120,7 @@ int boardSubmit(Game *g)
 
 int boardPeel(Game *g, int c, int r)
 {
-    if (g->training) {
+    if (g->training && boardTrainingStage(g) != 4) {
         int targetC, targetR;
         if (!boardTrainingTarget(g, &targetC, &targetR) ||
             c != targetC || r != targetR) return 0;
