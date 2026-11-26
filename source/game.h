@@ -473,6 +473,13 @@ int gfxTrainingResultHit(const Game *g, int px, int py); // 0 inert, 1 Classic, 
 // ---- languages (item 21): lang.c holds the active language's letter tables, langload.c reads a language from the
 // ROM filesystem (NitroFS: nitro:/lang/<code>/{dict,pools,letters}.bin; English is compiled in).
 enum { LANG_EN = 0, LANG_ES, LANG_FR, LANG_DE, LANG_IT, LANG_PT, LANG_NL, LANG_SV, LANG_PL, LANG_DA, LANG_FI, LANG_COUNT };
+// Keep the legacy 26-letter resource tables and UI arrays at LANG_COUNT.
+// The integrated title stores these extra, stable selection IDs separately.
+#ifdef WP_CYR_MAIN
+enum { LANG_RU = LANG_COUNT, LANG_UK, LANG_PICK_COUNT };
+#else
+#define LANG_PICK_COUNT LANG_COUNT
+#endif
 #define LANG_LETTERS_BYTES 68
 typedef struct {
     u8 weight[26];        // tiles of the letter in a bag (0 = the language has no such tile)
