@@ -78,20 +78,26 @@ jobs:
           python3 - <<'PY'
           import json
           from pathlib import Path
-          for code, count in (("ru", 187), ("uk", 190)):
+          for code, count in (("ru", 229), ("uk", 222)):
               m = json.loads((Path("sourced-preview")/code/"SOURCE-MANIFEST.json").read_text())
               assert m["retained_word_count"] == 100000, m
               assert m["starter_password_count"] == 160, m
               assert m["extra_password_count"] == count, m
               assert m["total_password_count"] == 160 + count, m
               assert m["dictionary_bytes"] <= 1536*1024, m
+              base = json.loads(Path(f"data/cyrlex/{code}_themes.json").read_text())
+              extras = json.loads(Path(f"data/cyrlex/{code}_source_candidates.json").read_text())["themes"]
+              assert len(base) == 40
+              for theme in base:
+                  words = theme["words"] + extras[theme["english"]]
+                  assert any(8 <= len(word.replace("ʼ", "")) <= 9 for word in words), (code, theme)
               if code == "uk":
                   assert m["ukrainian_apostrophe_forms_retained"] > 0, m
                   assert m["apostrophe_password_count"] == 17, m
               else:
                   assert m["ukrainian_apostrophe_forms_retained"] == 0, m
                   assert m["apostrophe_password_count"] == 0, m
-          print("SOURCED RU/UK OK: 100k words each, 347/350 attested password candidates; 17 Ukrainian apostrophe passwords")
+          print("SOURCED RU/UK OK: 100k words each, 389/382 attested password candidates; 17 Ukrainian apostrophe passwords")
           PY
       - name: Audit sourced Russian and Ukrainian themed-word review queue
         run: |
