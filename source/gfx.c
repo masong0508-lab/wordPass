@@ -2944,15 +2944,17 @@ static void drawTop(const Game *g)
         int label = step == 1 ? UI_TR_WORD : step == 2 ? UI_TR_HOLE :
                     step == 3 ? UI_TR_CLUE : UI_TR_FINISH;
         drawTextCenter(128, 148, ui(label), GOLD_LT, 1);
+        const char *reminder = ui(step == 1 ? UI_TU_DRAG : UI_TU_FIND);
+        bool correcting = g->msgTimer > 0 && !strcmp(g->msg, reminder);
         if (step == 1) {
             drawTextCenter(128, 160, ui(UI_TR_TRACE), WHITE, 1);
-            drawTextCenter(128, 172, ui(UI_TU_DRAG), ACCENT, 1);
+            drawTextCenter(128, 172, reminder, correcting ? FIRE2 : ACCENT, 1);
         } else {
             char action[MSG_LEN];
             uiFmt(action, sizeof action, UI_TR_PEEL, S.hand == HAND_LEFT ? "R" : "L");
             drawTextCenter(128, 160, action, WHITE, 1);
-            drawTextCenter(128, 172, ui(step == 3 ? UI_TU_N1 :
-                          step == 2 ? UI_TR_HEAT : UI_TR_SAFE), ACCENT, 1);
+            drawTextCenter(128, 172, correcting ? reminder : ui(step == 3 ? UI_TU_N1 :
+                          step == 2 ? UI_TR_HEAT : UI_TR_SAFE), correcting ? FIRE2 : ACCENT, 1);
         }
         return;
     }
