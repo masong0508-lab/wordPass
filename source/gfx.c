@@ -1065,7 +1065,15 @@ static int inspectedClue(const Game *g, int *c, int *r)
         *c = 6; *r = 0;
         return boardBackNumber(g, *c, *r);
     }
-    if (!g->peekHeld && !(g->training && boardTrainingStage(g)==4)) return -1;
+    if (g->training && boardTrainingStage(g)==4) {
+        // Keep the public clue visible while a neighboring peel is armed.
+        // The next fresh hole tap changes focus, not the pressed gem.
+        *c=g->wordClueC; *r=g->wordClueR;
+        if (*c>=COLS || *r>=ROWS) return -1;
+        if (g->cell[*c][*r].state==CELL_HOLE) return boardBackNumber(g,*c,*r);
+        return g->wordClue[*c][*r] ? g->wordClue[*c][*r]-1 : -1;
+    }
+    if (!g->peekHeld) return -1;
     if (g->armed) { *c = g->armC; *r = g->armR; }
     else if (g->curOn) { *c = g->curC; *r = g->curR; }
     else { *c = g->wordClueC; *r = g->wordClueR; }
@@ -1195,6 +1203,11 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
     if (inspectedClue(g, &clueC, &clueR) >= 0) {
         int remaining, covered;
         int inference = boardClueInference(g, clueC, clueR, &remaining, &covered);
+        if (g->training && boardTrainingStage(g)>=3) {
+            int fx,fy; cellOrigin(clueC,clueR,&fx,&fy);
+            rectOutline(fx,fy,TILE_W,TILE_H,WHITE);
+            rectOutline(fx+1,fy+1,TILE_W-2,TILE_H-2,ACCENT);
+        }
         int nc[6], nr[6], n = boardNeighbors(clueC, clueR, nc, nr);
         for (int i = 0; i < n; i++) {
             int x, y; cellOrigin(nc[i], nr[i], &x, &y);
@@ -2283,12 +2296,17 @@ static void drawCues(const Game *g)
         // the action is completed. Their numbers are order, not clues.
         int stage = boardTrainingStage(g);
         if (stage == 1 && !g->peekHeld) {
+            int prefix=0;
+            while (prefix<g->hintLen && prefix<g->chainLen &&
+                   g->hintC[prefix]==g->chainC[prefix] &&
+                   g->hintR[prefix]==g->chainR[prefix]) ++prefix;
             for (int i = 0; i < g->hintLen; ++i) {
                 int x, y; cellOrigin(g->hintC[i], g->hintR[i], &x, &y);
-                rectOutline(x, y, TILE_W, TILE_H, ACCENT);
+                rectOutline(x, y, TILE_W, TILE_H, i==prefix ? WHITE : ACCENT);
+                if (i==prefix) rectOutline(x+1,y+1,TILE_W-2,TILE_H-2,GOLD_LT);
                 char n[3]; fmtInt(n, i + 1);
                 fillRect(x + 1, y + 1, textWidth(n, 1) + 2, 9, BLACK);
-                drawText(x + 2, y + 2, n, GOLD_LT, 1);
+                drawText(x + 2, y + 2, n, i<prefix ? ACCENT : GOLD_LT, 1);
             }
         } else if (stage == 2) {
             // Stages three and four use public clues, never secret arrows.
@@ -2297,7 +2315,7 @@ static void drawCues(const Game *g)
                 int x, y; cellOrigin(c, r, &x, &y);
                 rectOutline(x, y, TILE_W, TILE_H, GOLD_LT);
                 rectOutline(x + 1, y + 1, TILE_W - 2, TILE_H - 2, WHITE);
-                if (!g->armed) gPointer(x + TILE_W - 7, y + TILE_H - 3, false);
+                if (!g->armed) gPointer(x+TILE_W-7,y+TILE_H-3+tri16(frame,36)/5,false);
             }
         }
         return;
@@ -2508,12 +2526,17 @@ static void drawScriptPreviewBoard(void)
     }
     if (scriptPreviewTraining) {
         if (scriptPreviewTrainingStage() == 1) {
+            int prefix=0;
+            while (prefix<scriptPreviewTrainingLen && prefix<b->chainLen &&
+                   scriptPreviewTrainingC[prefix]==b->chainC[prefix] &&
+                   scriptPreviewTrainingR[prefix]==b->chainR[prefix]) ++prefix;
             for (int i = 0; i < scriptPreviewTrainingLen; ++i) {
                 int x, y;
                 cellOrigin(scriptPreviewTrainingC[i], scriptPreviewTrainingR[i], &x, &y);
-                rectOutline(x, y, TILE_W, TILE_H, ACCENT);
-                fillRect(x + 1, y + 1, 8, 9, BLACK);
-                drawChar(x + 2, y + 2, '1' + i, GOLD_LT, 1);
+                rectOutline(x,y,TILE_W,TILE_H,i==prefix ? WHITE : ACCENT);
+                if (i==prefix) rectOutline(x+1,y+1,TILE_W-2,TILE_H-2,GOLD_LT);
+                fillRect(x+1,y+1,8,9,BLACK);
+                drawChar(x+2,y+2,'1'+i,i<prefix ? ACCENT : GOLD_LT,1);
             }
         } else if (scriptPreviewTrainingStage()==2) {
             int c, r;
@@ -2521,7 +2544,7 @@ static void drawScriptPreviewBoard(void)
                 int x, y; cellOrigin(c, r, &x, &y);
                 rectOutline(x, y, TILE_W, TILE_H, GOLD_LT);
                 rectOutline(x + 1, y + 1, TILE_W - 2, TILE_H - 2, WHITE);
-                gPointer(x + TILE_W - 7, y + TILE_H - 3, false);
+                gPointer(x+TILE_W-7,y+TILE_H-3+tri16(frame,36)/5,false);
             }
         }
     }
@@ -3300,6 +3323,17 @@ static int cardTop(const Game *g)
     return 22 + (t < 11 ? spring[t] : 0);
 }
 
+// Touch hitboxes match the rendered practice buttons, including handedness
+// and the card's settling animation. The stat rows are deliberately inert.
+int gfxTrainingResultHit(const Game *g, int x, int y)
+{
+    int top=cardTop(g);
+    if (x<BX(CARD_ROW_L) || x>=BX(CARD_ROW_R)) return 0;
+    if (y>=top+104 && y<top+124) return 1;
+    if (y>=top+126 && y<top+146) return 2;
+    return 0;
+}
+
 // One row of a card: a label at the left edge, its value right-aligned to the right edge.
 static void drawStatRow(int lx, int rx, int y, const char *label, u16 lcol, const char *value, u16 vcol)
 {
@@ -3358,7 +3392,11 @@ static void drawResultsCard(const Game *g)
         drawStatRow(lx, rx, cy + 70, ui(UI_PEELS), INK, s, GOLD_LT);
         drawTextCenter(BX(cx), cy + 85, ui(UI_R_NOTSCORED), DIM_TEXT, 1);
         hline(BX(lx), cy + 100, cw - 20, DIM);
+        roundRect(BX(lx),cy+104,rx-lx,20,DIM);
+        rectOutline(BX(lx),cy+104,rx-lx,20,GOLD_LT);
         drawTextCenter(BX(cx), cy + 111, ui(UI_TR_PLAY), GOLD_LT, 1);
+        roundRect(BX(lx),cy+126,rx-lx,20,DIM);
+        rectOutline(BX(lx),cy+126,rx-lx,20,ACCENT);
         drawTextCenter(BX(cx), cy + 133, ui(UI_TR_BACK), WHITE, 1);
         return;
     }
