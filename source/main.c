@@ -615,6 +615,20 @@ static bool focusTrainingClue(void)
     return true;
 }
 
+// Opening a covered gem and inspecting an already opened clue are
+// different gestures. During independent practice either input mode may
+// revisit a numbered hole without losing a turn or arming another peel.
+static bool inspectTrainingHole(int c, int r)
+{
+    if (boardTrainingStage(&G)!=4 || c<0 || c>=COLS || r<0 || r>=ROWS ||
+        G.cell[c][r].state!=CELL_HOLE) return false;
+    G.wordClueC=(u8)c; G.wordClueR=(u8)r;
+    G.armed=0; G.curOn=0;
+    if (!strcmp(G.msg,ui(UI_TU_FIND))) setMsg("",0);
+    musicSfx(SFX_MENU,0);
+    return true;
+}
+
 static void handlePlay(u32 down, u32 held, touchPosition *t)
 {
     if (down & KEY_X) { G.peekLatch = !G.peekLatch; gfxPress(PRESS_PEEK); }
@@ -683,6 +697,15 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
     bool touching = (held & KEY_TOUCH) != 0;
     if (touching && t->px == 0 && t->py == 0) touching = false;
 
+    if (G.training && boardTrainingStage(&G)==4) {
+        if ((down & KEY_TOUCH) && gfxCellAt(t->px,t->py,&c,&r) &&
+            inspectTrainingHole(c,r)) {
+            dropStroke(); ignoreStroke=true; // no second gesture before lift
+            return;
+        }
+        if ((down & KEY_A) && G.curOn && inspectTrainingHole(G.curC,G.curR))
+            return;
+    }
     if (G.peekHeld) {
         dropStroke();                          // a stylus used for peeling is not a chain stroke when the peek ends
         // peel on release: a touch arms the gem under it, sliding off (or onto another gem) disarms,
@@ -816,6 +839,7 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
 // a tap after CARD_QUEUE_FROM is remembered and applied when the gate opens.
 #define CARD_QUEUE_FROM 10
 static bool cardTapQueued;
+static int trainingCardQueued;
 
 int main(void)
 {
@@ -1144,17 +1168,24 @@ int main(void)
                 break;
             case ST_PASSED:
                 G.stateTimer++;
-                if (G.stateTimer == 1) cardTapQueued = false;
+                if (G.stateTimer == 1) { cardTapQueued=false; trainingCardQueued=0; }
                 if (G.training) {
-                    if (G.stateTimer > CARD_QUEUE_FROM &&
-                        G.stateTimer <= CARD_GATE_PASSED &&
-                        (down & (KEY_TOUCH | KEY_A | KEY_START))) cardTapQueued = true;
+                    // Only the two displayed buttons accept touch input.
+                    // Remember the intended choice during the card animation.
+                    int action=(down & KEY_B) ? 2 :
+                        (down & (KEY_A | KEY_START)) ? 1 :
+                        (down & KEY_TOUCH) ? gfxTrainingResultHit(&G,t.px,t.py) : 0;
+                    if (G.stateTimer > CARD_QUEUE_FROM && G.stateTimer <= CARD_GATE_PASSED && action)
+                        trainingCardQueued=action;
                     if (G.stateTimer > CARD_GATE_PASSED) {
-                        if (down & KEY_B) quitToTitle();
-                        else if ((down & (KEY_TOUCH | KEY_A | KEY_START)) || cardTapQueued) {
-                            cardTapQueued = false;
-                            srand(seedCounter);
-                            newGame(MODE_CLASSIC);
+                        if (!action) action=trainingCardQueued;
+                        if (action) {
+                            trainingCardQueued=0;
+                            // Remember successful onboarding, not practice scores.
+                            // Abandoning or restarting a lesson never sets this.
+                            if (!S.tutorDone) { S.tutorDone=1; settingsSave(); }
+                            if (action==2) quitToTitle();
+                            else { srand(seedCounter); newGame(MODE_CLASSIC); }
                         }
                     }
                     break;
