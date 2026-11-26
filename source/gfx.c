@@ -439,11 +439,11 @@ static void buildHeatTables(void)
 typedef struct { u32 w[TILE_W / 2]; } GemRow;
 // A shelf contains at most POOL_MAX_LEN distinct password letters.
 // The retail ROM retains its full cache. The dual-engine preview has less
-// main-RAM headroom: cache five distinct diamond letters and use the existing
+// main-RAM headroom: cache four distinct diamond letters and use the existing
 // gem + glyph path for the rest. The common 56-cell plain-tile path stays
 // unchanged, and no dictionary or password content is removed.
 #ifdef WP_CYR_PREVIEW
-#define DIAMOND_CACHE_SLOTS 5
+#define DIAMOND_CACHE_SLOTS 4
 #else
 #define DIAMOND_CACHE_SLOTS POOL_MAX_LEN
 #endif
@@ -788,6 +788,9 @@ int gfxCellAt(int pxl, int pyl, int *c, int *r)
 #define PANEL_X panelX
 #define SUBMIT_Y 120
 #define CLEAR_Y 150
+bool gfxInTrainingHint(int x,int y) {
+    return x>=PANEL_X && x<PANEL_X+76 && y>=20 && y<38;
+}
 bool gfxInSubmit(int x, int y) { return x >= PANEL_X && x < PANEL_X + 76 && y >= SUBMIT_Y && y < SUBMIT_Y + 24; }
 bool gfxInClear(int x, int y)  { return x >= PANEL_X && x < PANEL_X + 76 && y >= CLEAR_Y && y < CLEAR_Y + 16; }
 bool gfxInPeekButton(int x, int y) { return x >= PANEL_X && x < PANEL_X + 76 && y >= 174 && y < 190; }
@@ -1391,7 +1394,14 @@ static ITCM_CODE __attribute__((noinline)) void drawPanel(const Game *g)
     fmtInt(s, shownScore);
     flyScoreX = PANEL_X + 24; flyScoreY = 28; flyPassX = PANEL_X + 3; flyPassY = 47;
     u16 scoreCol = scoreGlint ? lerp15(GOLD, WHITE, scoreGlint * 2) : GOLD;
-    if (textWidth(s, 2) <= 80) drawTextShadow(PANEL_X, 22, s, scoreCol, 2);   // 80 px of panel: six digits at 2x
+    int lesson=boardTrainingStage(g);
+    if (lesson==1 || lesson==4) {
+        // Practice score remains on the upper LCD. This gives the optional
+        // assistance its own full-width touch target on the lower LCD.
+        roundRect(PANEL_X,20,76,18,DIM);
+        rectOutline(PANEL_X,20,76,18,ACCENT);
+        drawTextCenter(PANEL_X+38,25,ui(UI_TR_HINT),WHITE,1);
+    } else if (textWidth(s, 2) <= 80) drawTextShadow(PANEL_X, 22, s, scoreCol, 2);   // 80 px of panel: six digits at 2x
     else drawTextShadow(PANEL_X, 26, s, scoreCol, 1);                           // a million and up drops to 1x
 
     // the pass: one 7 x 10 slot per letter (nine fit the 76 px panel), a diamond once found
@@ -2444,6 +2454,15 @@ bool gfxScriptTrainingHit(int px, int py)
 {
     return px >= panelX + 4 && px < panelX + 74 && py >= 5 && py < 19;
 }
+// All three practice buttons share this geometry with the renderer.
+int gfxScriptPracticeAction(int px,int py)
+{
+    if (px<panelX+4 || px>=panelX+74) return 0;
+    if (py>=110 && py<131) return 1;
+    if (py>=133 && py<154) return 2;
+    if (py>=156 && py<177) return 3;
+    return 0;
+}
 bool gfxScriptClueHit(int px, int py, int c, int r)
 {
     if (c < 0 || c >= SCRIPT_COLS || r < 0 || r >= SCRIPT_ROWS)
@@ -2607,6 +2626,25 @@ static void drawScriptPreviewBoard(void)
     sniprintf(n, sizeof n, scriptPreviewLanguage ? "ХІД %u" : "ХОД %u", scriptPreviewRules.turns);
     drawText(px0 + 4, 94, n, WHITE, 1);
     hline(px0 + 2, 107, 70, GOLD_DK);
+    if (scriptPreviewTraining) {
+        int step=scriptPreviewTrainingStage();
+        const bool uk=scriptPreviewLanguage!=0;
+        for (int i=0;i<3;++i) {
+            int y=110+23*i;
+            const char *label=i==0 ? (step==5 ? (uk?"ГРАТИ":"ИГРАТЬ") :
+                                      (uk?"ПРИЙНЯТИ":"ПРИНЯТЬ")) :
+                i==1 ? (step==5 ? (uk?"ПОВТОРИТИ":"ПОВТОРИТЬ") :
+                                      (uk?"ОЧИСТИТИ":"СБРОС")) :
+                       (uk?"ПІДКАЗКА":"ПОДСКАЗКА");
+            bool active=i==0 ? (step==5 || chainValidNow) :
+                        i==1 ? true : (step==1 || step==4);
+            roundRect(panelX+4,y,70,21,DIM);
+            rectOutline(panelX+4,y,70,21,active?ACCENT:DIM_TEXT);
+            drawTextCenter(panelX+39,y+7,label,active?WHITE:DIM_TEXT,1);
+        }
+        drawTextCenter(panelX+39,179,uk?"START ВИХІД":"START ВЫХОД",ACCENT,1);
+        return;
+    }
     // Give each action its own readable row instead of an English
     // controller-code cram. Full outcome text already lives on the top LCD.
     // Contextual control: the very same peel action is L+touch when the
@@ -2756,8 +2794,7 @@ static void drawScriptPreviewTop(void)
             } else {
                 drawTextCenter(128, 160, uk ? "ЗʼЄДНАЙТЕ ЦИФРИ ЗА ПОРЯДКОМ" :
                                "СОЕДИНИТЕ ЦИФРЫ ПО ПОРЯДКУ", WHITE, 1);
-                drawTextCenter(128, 172, uk ? "R: ПІДКАЗКА" :
-                               "R: ПОДСКАЗКА", ACCENT, 1);
+                drawTextCenter(128,172,uk?"ПІДКАЗКА: R АБО КНОПКА":"ПОДСКАЗКА: R ИЛИ КНОПКА",ACCENT,1);
             }
         } else {
             const char *label = step == 2 ? (uk ? "2/4 ВІДКРИЙТЕ ЧИСЛО" : "2/4 ОТКРОЙТЕ ЧИСЛО") :
@@ -2769,7 +2806,7 @@ static void drawScriptPreviewTop(void)
                            (uk ? "L: ТОРКНІТЬСЯ МІТКИ Й ВІДПУСТІТЬ" :
                                  "L: КОСНИТЕСЬ МЕТКИ И ОТПУСТИТЕ"), WHITE, 1);
             drawTextCenter(128, 172, step==4 ?
-                           (uk ? "R: НАСТУПНА ПІДКАЗКА" : "R: СЛЕДУЮЩАЯ ПОДСКАЗКА") : step == 3 ?
+                           (uk ? "ПІДКАЗКА: R АБО КНОПКА" : "ПОДСКАЗКА: R ИЛИ КНОПКА") : step == 3 ?
                            (uk ? "1 З 1: ЄДИНА ЗАКРИТА КЛІТИНКА" : "1 ИЗ 1: ЕДИНСТВЕННАЯ ЗАКРЫТАЯ") :
                            (uk ? "L+A: З КУРСОРОМ / БЕЗ ВОГНЮ" :
                                  "L+A: С КУРСОРОМ / БЕЗ ОГНЯ"), ACCENT, 1);
@@ -3068,7 +3105,7 @@ static void drawTop(const Game *g)
                      !strcmp(g->msg, ui(UI_C_F4)));
                 drawTextCenter(128, 160, ui(UI_TR_TRACE), WHITE, 1);
                 drawTextCenter(128, 172, wordError ? g->msg :
-                    correcting ? reminder : ui(UI_MS_HINTIDLE),
+                    correcting ? reminder : ui(UI_TR_HELP),
                     (correcting || wordError) ? FIRE2 : ACCENT, 1);
             }
         } else {
@@ -3077,7 +3114,7 @@ static void drawTop(const Game *g)
                   S.hand == HAND_LEFT ? "R" : "L");
             drawTextCenter(128, 160, action, WHITE, 1);
             drawTextCenter(128, 172, correcting ? reminder : ui(step == 3 ? UI_TU_N1 :
-                          step == 2 ? UI_G_FIRE1 : UI_MS_HINTIDLE), correcting ? FIRE2 : ACCENT, 1);
+                          step == 2 ? UI_G_FIRE1 : UI_TR_HELP), correcting ? FIRE2 : ACCENT, 1);
         }
         return;
     }
