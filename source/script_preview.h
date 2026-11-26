@@ -37,12 +37,15 @@ enum {
     SCRIPT_TRAIN_NOTICE_ENTRY = 1,
     SCRIPT_TRAIN_NOTICE_TARGET = 2,
     SCRIPT_TRAIN_NOTICE_DAILY = 3,
-    SCRIPT_TRAIN_NOTICE_WORD_FIRST = 4
+    SCRIPT_TRAIN_NOTICE_WORD_FIRST = 4,
+    SCRIPT_TRAIN_NOTICE_FIRE_WORD = 5
 };
 extern int scriptPreviewTrainingLen;
 extern uint8_t scriptPreviewTrainingC[6], scriptPreviewTrainingR[6];
 // Same four teaching stages as retail; zero outside the separate lesson.
 int scriptPreviewTrainingStage(void);
+// True outside stage one, or if the current chain includes the flame.
+bool scriptPreviewTrainingFireSelected(void);
 bool scriptPreviewTrainingTarget(int *c, int *r);
 // Enter only from an untouched free-play run; leaving the lesson deals
 // a new real shelf. Never destroy real progress to open an exercise.

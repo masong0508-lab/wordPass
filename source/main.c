@@ -502,6 +502,15 @@ static void submitChain(void)
         if (G.fail) enterFail();
     } else if (G.chainLen >= 3) {
         char w[WORD_BUF]; boardChainWord(&G, w);
+        if (G.training && boardTrainingStage(&G) == 1 &&
+            boardWordOk(w, (int)strlen(w))) {
+            // A dictionary-valid word missing the practice flame is a
+            // correct spelling but the wrong lesson action.
+            setMsg(ui(UI_C_F4), 120);
+            gfxInvalidWord();
+            musicSfx(SFX_INVALID, 0);
+            return;
+        }
         int dialect = boardWordSpelling(w, strlen(w));
         bool obscure = S.library == LIB_COMMON && boardWordTier(w, strlen(w)) == 2;
         setMsg(ui(dialect == 2 ? UI_MS_BRIT : dialect == 1 ? UI_MS_AMER : obscure ? UI_CO_OBSCURE : UI_MS_NOTLIB), 45);

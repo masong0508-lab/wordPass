@@ -565,6 +565,30 @@ static void guidedTraining(void)
               !scriptPreviewScore && !scriptPreviewPeels && !scriptPreviewHints,
               "repeatable free tutorial hint selects the exact accepted numbered word");
     }
+    CHECK(scriptPreviewTrainingFireSelected(),
+          "numbered word includes a real practice flame");
+    ScriptBoard fireFixture = scriptPreviewBoard;
+    bool planted = false;
+    for (int i=0; i<scriptPreviewTrainingLen; ++i) {
+        uint8_t *state = &scriptPreviewBoard.state[scriptPreviewTrainingC[i]][scriptPreviewTrainingR[i]];
+        if (*state == SCRIPT_BURN) *state = SCRIPT_TILE;
+    }
+    for (int c=0; c<SCRIPT_COLS && !planted; ++c)
+        for (int r=0; r<SCRIPT_ROWS && !planted; ++r) {
+            bool inPath = false;
+            for (int i=0; i<scriptPreviewTrainingLen; ++i)
+                if (scriptPreviewTrainingC[i]==c && scriptPreviewTrainingR[i]==r) inPath=true;
+            if (!inPath && scriptPreviewBoard.state[c][r]==SCRIPT_TILE) {
+                scriptPreviewBoard.state[c][r]=SCRIPT_BURN;
+                planted=true;
+            }
+        }
+    CHECK(planted && scriptBoardPreview(&scriptPreviewBoard,&scriptPreviewDict,
+          &scriptPreviewTiles,NULL)>0 && !scriptPreviewQuote(NULL) &&
+          !scriptPreviewSubmit() && !scriptPreviewTurns && !scriptPreviewScore &&
+          scriptPreviewTrainingNotice==SCRIPT_TRAIN_NOTICE_FIRE_WORD,
+          "valid non-flame word cannot skip the fire lesson");
+    scriptPreviewBoard=fireFixture;
     scriptBoardClearChain(&scriptPreviewBoard);
     for (int i=0; i<scriptPreviewTrainingLen; ++i)
         CHECK(scriptPreviewChain(scriptPreviewTrainingC[i],scriptPreviewTrainingR[i]),
@@ -573,6 +597,10 @@ static void guidedTraining(void)
           scriptPreviewTrainingStage() == 2 && scriptPreviewTurns == 1 &&
           scriptPreviewTrainingNotice == SCRIPT_TRAIN_NOTICE_NONE,
           "first real word advances and dismisses the correction");
+    for (int c=0; c<SCRIPT_COLS; ++c)
+        for (int r=0; r<SCRIPT_ROWS; ++r)
+            CHECK(scriptPreviewBoard.state[c][r]!=SCRIPT_BURN,
+                  "the practice word actually extinguishes the flame");
     CHECK(scriptPreviewPeel(0,7) == -1 && scriptPreviewTurns == 1 &&
           scriptPreviewTrainingNotice == SCRIPT_TRAIN_NOTICE_TARGET,
           "wrong marked target explains the error without a turn");

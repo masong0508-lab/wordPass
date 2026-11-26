@@ -43,6 +43,11 @@ def main(rom, output):
         nr = symbol(e.rom_elf, "scriptPreviewTrainingR")
         n = integer("scriptPreviewTrainingLen")
         assert 4 <= n <= 6
+        state_off = member_offsets(e.rom_elf, "scriptPreviewBoard", ("state",))["state"]
+        def flames():
+            return sum(int(e.mem.unsigned[board + state_off + c*8 + r]) == 2
+                       for c in range(7) for r in range(8))
+        assert flames() == 1, code
         e.shot(str(out / f"{code}-01-word.png"))
         e.hold("L")
         e.tap(*e.center(6, 0), settle=8)
@@ -70,6 +75,7 @@ def main(rom, output):
         assert points > 0
         e.press("A", settle=16)
         assert integer("scriptPreviewTurns") == 1 and integer("scriptPreviewScore") == points
+        assert flames() == 0, code
         assert integer("scriptPreviewTrainingNotice") == 0
         e.shot(str(out / f"{code}-02-peel.png"))
         e.hold("L")

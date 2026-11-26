@@ -210,6 +210,10 @@ static bool startPass(unsigned shelf, uint32_t seed, int bankedScore)
         memcpy(scriptPreviewTrainingC, pathsC[0], lengths[0]);
         memcpy(scriptPreviewTrainingR, pathsR[0], lengths[0]);
         scriptPreviewTrainingLen = lengths[0];
+        int first = 0;
+        for (int i = 1; i < lengths[0]; ++i)
+            if (pathsR[0][i] < pathsR[0][first]) first = i;
+        nextBoard.state[pathsC[0][first]][pathsR[0][first]] = SCRIPT_BURN;
     } else scriptPreviewTrainingLen = 0;
     // Generate both the hidden password and a playable word before replacing
     // a live shelf. A refused generation must not erase its score or state.
@@ -532,6 +536,20 @@ bool scriptPreviewRescue(void)
     scriptPreviewTurns = scriptPreviewRules.turns;
     return true;
 }
+// The initial lesson must extinguish the planted stationary flame.
+// Bounded to the current chain; ordinary preview play returns immediately.
+bool scriptPreviewTrainingFireSelected(void)
+{
+    if (scriptPreviewTrainingStage() != 1) return true;
+    const ScriptBoard *b = &scriptPreviewBoard;
+    if (b->chainLen > SCRIPT_MAX_CHAIN) return false;
+    for (unsigned i = 0; i < b->chainLen; ++i) {
+        int c = b->chainC[i], r = b->chainR[i];
+        if (c < SCRIPT_COLS && r < SCRIPT_ROWS && b->state[c][r] == SCRIPT_BURN)
+            return true;
+    }
+    return false;
+}
 // Words live as compact alphabet IDs, never as variable-length UTF-8 bytes.
 // This read-only quote is used only to show the score of a selected chain.
 int scriptPreviewQuoteSpelling(int *tier, uint32_t *mask)
@@ -542,7 +560,8 @@ int scriptPreviewQuoteSpelling(int *tier, uint32_t *mask)
     int raw = scriptBoardPreviewSpelling(&scriptPreviewBoard, &scriptPreviewDict,
                                  &scriptPreviewTiles, &wordTier, mask);
     int length = scriptPreviewBoard.chainLen;
-    if (raw <= 0 || length < WPD4_MIN_WORD || length > SCRIPT_MAX_CHAIN)
+    if (raw <= 0 || length < WPD4_MIN_WORD || length > SCRIPT_MAX_CHAIN ||
+        !scriptPreviewTrainingFireSelected())
         return 0;
     uint8_t ids[SCRIPT_MAX_CHAIN];
     for (int i = 0; i < length; i++) {
@@ -573,6 +592,10 @@ int scriptPreviewSubmit(void)
             if (col >= SCRIPT_COLS || row >= SCRIPT_ROWS) return 0;
             ids[i] = scriptPreviewBoard.tile[col][row];
         }
+    if (!scriptPreviewTrainingFireSelected()) {
+        scriptPreviewTrainingNotice = SCRIPT_TRAIN_NOTICE_FIRE_WORD;
+        return 0;
+    }
     int tier = 0;
     int points = scriptBoardSubmit(&scriptPreviewBoard, &scriptPreviewDict,
                                    &scriptPreviewTiles, &tier);

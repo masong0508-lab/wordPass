@@ -2669,7 +2669,7 @@ static void drawScriptPreviewTop(void)
                      scriptPreviewLanguage ? (tier == 1 ? "ЗВИЧАЙНЕ" : "РІДКІСНЕ")
                                            : (tier == 1 ? "ЧАСТОЕ" : "РЕДКОЕ"));
             drawTextCenter(128, scriptPreviewTraining ? 137 : 147, pts, GOLD_LT, 1);
-        } else if (b->chainLen >= 3)
+        } else if (b->chainLen >= 3 && scriptPreviewTrainingFireSelected())
             drawTextCenter(128, scriptPreviewTraining ? 137 : 147, scriptPreviewLanguage ?
                            "НЕМАЄ В СЛОВНИКУ" : "НЕТ В СЛОВАРЕ", FIRE2, 1);
     }
@@ -2681,13 +2681,13 @@ static void drawScriptPreviewTop(void)
             drawTextCenter(128, 160, uk ? "A: ПОЧАТИ ГРУ" : "A: НАЧАТЬ ИГРУ", WHITE, 1);
             drawTextCenter(128, 172, uk ? "SELECT: ПОВТОРИТИ" : "SELECT: ПОВТОРИТЬ", ACCENT, 1);
         } else if (step == 1) {
-            drawTextCenter(128, 148, uk ? "1/4 СЛОВА ДАЮТЬ ПІДКАЗКИ" :
-                           "1/4 СЛОВА ДАЮТ ПОДСКАЗКИ", GOLD_LT, 1);
+            drawTextCenter(128, 148, uk ? "1/4 ЗАГАСІТЬ ПОЛУМʼЯ СЛОВОМ" :
+                           "1/4 ПОТУШИТЕ ПЛАМЯ СЛОВОМ", GOLD_LT, 1);
             if (chainValidNow) {
                 drawTextCenter(128, 160, uk ? "A: ПРИЙНЯТИ СЛОВО" :
                                "A: ПРИНЯТЬ СЛОВО", GOLD_LT, 1);
-                drawTextCenter(128, 172, uk ? "УРОК БЕЗ ВОГНЮ" :
-                               "УРОК БЕЗ ОГНЯ", ACCENT, 1);
+                drawTextCenter(128, 172, uk ? "СЛОВО ДАЄ ПІДКАЗКУ" :
+                               "СЛОВО ДАЁТ ПОДСКАЗКУ", ACCENT, 1);
             } else {
                 drawTextCenter(128, 160, uk ? "ЗʼЄДНАЙТЕ ЦИФРИ ЗА ПОРЯДКОМ" :
                                "СОЕДИНИТЕ ЦИФРЫ ПО ПОРЯДКУ", WHITE, 1);
@@ -2713,6 +2713,8 @@ static void drawScriptPreviewTop(void)
                 notice = uk ? "СПОЧАТКУ СКЛАДІТЬ СЛОВО" : "СНАЧАЛА СОСТАВЬТЕ СЛОВО";
             else if (scriptPreviewTrainingNotice == SCRIPT_TRAIN_NOTICE_TARGET)
                 notice = uk ? "ТОРКНІТЬСЯ ПОЗНАЧЕНОЇ КЛІТИНКИ" : "КОСНИТЕСЬ ОТМЕЧЕННОЙ КЛЕТКИ";
+            else if (scriptPreviewTrainingNotice == SCRIPT_TRAIN_NOTICE_FIRE_WORD)
+                notice = uk ? "ДОДАЙТЕ ПАЛАЮЧУ КЛІТИНКУ" : "ДОБАВЬТЕ ГОРЯЩУЮ КЛЕТКУ";
             else
                 notice = uk ? "УРОК БЕЗ ЗБЕРЕЖЕННЯ ТА ДНЯ" : "УРОК БЕЗ СОХРАНЕНИЯ И ДНЯ";
             drawTextCenter(128, 172, notice, FIRE2, 1);
@@ -2976,13 +2978,14 @@ static void drawTop(const Game *g)
                 char action[MSG_LEN];
                 siprintf(action, "A / %s", ui(UI_P_SUBMIT));
                 drawTextCenter(128, 160, action, GOLD_LT, 1);
-                drawTextCenter(128, 172, ui(UI_TR_SAFE), ACCENT, 1);
+                drawTextCenter(128, 172, ui(UI_C_F4), ACCENT, 1);
             } else {
                 bool wordError = g->msgTimer > 0 &&
                     (!strcmp(g->msg, ui(UI_MS_NOTLIB)) ||
                      !strcmp(g->msg, ui(UI_MS_BRIT)) ||
                      !strcmp(g->msg, ui(UI_MS_AMER)) ||
-                     !strcmp(g->msg, ui(UI_CO_OBSCURE)));
+                     !strcmp(g->msg, ui(UI_CO_OBSCURE)) ||
+                     !strcmp(g->msg, ui(UI_C_F4)));
                 drawTextCenter(128, 160, ui(UI_TR_TRACE), WHITE, 1);
                 drawTextCenter(128, 172, wordError ? g->msg :
                     correcting ? reminder : ui(UI_MS_HINTIDLE),
@@ -2993,7 +2996,7 @@ static void drawTop(const Game *g)
             uiFmt(action, sizeof action, UI_TR_PEEL, S.hand == HAND_LEFT ? "R" : "L");
             drawTextCenter(128, 160, action, WHITE, 1);
             drawTextCenter(128, 172, correcting ? reminder : ui(step == 3 ? UI_TU_N1 :
-                          step == 2 ? UI_TR_HEAT : UI_TR_SAFE), correcting ? FIRE2 : ACCENT, 1);
+                          step == 2 ? UI_G_FIRE1 : UI_TR_SAFE), correcting ? FIRE2 : ACCENT, 1);
         }
         return;
     }
