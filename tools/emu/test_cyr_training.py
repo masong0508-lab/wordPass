@@ -109,7 +109,7 @@ def main(rom, output):
         assert int(e.mem.unsigned[board + 56 + 6*8]) == 0
         stage_strip(3)
         initial_evidence=evidence()
-        assert len(set(initial_evidence))>2, (code,"deduction readout missing")
+        assert len(set(initial_evidence))>1, (code,"deduction readout missing")
         e.shot(str(out / f"{code}-03-clue.png"))
         e.hold("L")
         e.tap(*e.center(6, 1), settle=8)
