@@ -545,7 +545,8 @@ static void guidedTraining(void)
           !scriptPreviewToggleDaily(20261126, 303) &&
           !scriptPreviewRescue(),
           "training cannot overwrite real checkpoints, start Daily or spend rescue");
-    CHECK(scriptPreviewPeel(1,2) == -1 && scriptPreviewTurns == 0 &&
+    CHECK(scriptPreviewBoard.state[5][0] == SCRIPT_HOLE && !scriptPreviewPeels &&
+          scriptPreviewPeel(6,0) == -1 && scriptPreviewTurns == 0 &&
           scriptPreviewTrainingNotice == SCRIPT_TRAIN_NOTICE_WORD_FIRST,
           "early peel explains that a word must be spelled first");
     // Hinting must reinforce the numbered path, even after a partial
@@ -572,15 +573,20 @@ static void guidedTraining(void)
           scriptPreviewTrainingStage() == 2 && scriptPreviewTurns == 1 &&
           scriptPreviewTrainingNotice == SCRIPT_TRAIN_NOTICE_NONE,
           "first real word advances and dismisses the correction");
-    CHECK(scriptPreviewPeel(6,0) == -1 && scriptPreviewTurns == 1 &&
+    CHECK(scriptPreviewPeel(0,7) == -1 && scriptPreviewTurns == 1 &&
           scriptPreviewTrainingNotice == SCRIPT_TRAIN_NOTICE_TARGET,
           "wrong marked target explains the error without a turn");
-    CHECK(scriptPreviewPeel(1,2) == 0 &&
-          scriptBoardVisibleClue(&scriptPreviewBoard,1,2) == 1 &&
+    CHECK(scriptPreviewPeel(6,0) == 0 &&
+          scriptBoardVisibleClue(&scriptPreviewBoard,6,0) == 1 &&
           scriptPreviewTrainingStage() == 3 &&
           scriptPreviewTrainingNotice == SCRIPT_TRAIN_NOTICE_NONE,
           "correct peel gives a clue and dismisses the correction");
-    CHECK(scriptPreviewPeel(1,3) == 1 &&
+    int left, covered;
+    CHECK(scriptBoardClueInference(&scriptPreviewBoard,6,0,&left,&covered) ==
+          SCRIPT_CLUE_PASS && left == 1 && covered == 1 &&
+          scriptPreviewPeel(0,7) == -1 && scriptPreviewTurns == 2,
+          "public corner clue proves its sole covered neighbor");
+    CHECK(scriptPreviewPeel(6,1) == 1 &&
           scriptPreviewTrainingStage() == 4,
           "find the indicated actual neighboring letter");
     int len = scriptPreviewBoard.passLen;
