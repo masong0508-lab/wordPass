@@ -3027,7 +3027,8 @@ static void drawTitle(const Game *g)
     fillRect(BX(16), 76, 140, 56, BLACK);
     rectOutline(BX(16), 76, 140, 56, GOLD);
     drawTextCenter(BX(86), 84, ui(UI_T_CRACK), ACCENT, 1);
-    drawTextCenter(BX(86), 96, ui(UI_T_DONTBURN), INK, 1);
+    char dh[40]; uiFmt(dh, sizeof dh, UI_T_DRAGHINT, S.hand == HAND_LEFT ? "R" : "L");
+    drawTextCenter(BX(86), 96, dh, DIM_TEXT, 1);
     // A real replayable lesson, not a static description of the rules.
     // Keep the established Classic, Daily and Options button coordinates.
     roundRect(BX(20), 104, 132, 26, S.tutorDone ? DIM : GOLD_DK);
