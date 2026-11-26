@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 static int failures;
 #define CHECK(expr, ...) do { if (!(expr)) { failures++; printf("FAIL "); \
@@ -261,6 +262,134 @@ static void revisitClues(void)
           "new attempt has no stale clue to inspect");
 }
 
+static bool checkpointRecordEqual(const ScriptCheckpoint *a,
+                                  const ScriptCheckpoint *b)
+{
+    return a->language == b->language && a->pack == b->pack &&
+           a->serial == b->serial && a->shelf == b->shelf &&
+           a->seed == b->seed && a->score == b->score;
+}
+
+static void checkpointTest(void)
+{
+    char dir[] = "/tmp/wordpass-checkpoint-XXXXXX";
+    if (!mkdtemp(dir)) {
+        CHECK(false, "create isolated native checkpoint directory");
+        return;
+    }
+    char cfg[SCRIPT_CHECKPOINT_PATH], slot0[SCRIPT_CHECKPOINT_PATH];
+    char slot1[SCRIPT_CHECKPOINT_PATH], other[SCRIPT_CHECKPOINT_PATH];
+    snprintf(cfg, sizeof cfg, "%s/wordPass.cfg", dir);
+    uint32_t tag = scriptCheckpointTag(&scriptPreviewDict,
+                                       &scriptPreviewTiles, &scriptPreviewPools);
+    unsigned language = (unsigned)scriptPreviewLanguage;
+    CHECK(scriptCheckpointPath(cfg, language, tag, 0, slot0) &&
+          scriptCheckpointPath(cfg, language, tag, 1, slot1) &&
+          scriptCheckpointPath(cfg, language ^ 1u, tag, 0, other) &&
+          strcmp(slot0, slot1) && strcmp(slot0, other) && strcmp(slot0, cfg),
+          "checkpoint filenames isolate both languages, slots and retail save");
+    CHECK(scriptCheckpointPath("fat:/wordPass.cfg", 0, 0x89abcdefu, 0, other) &&
+          !strcmp(other, "fat:/R9ABCDEF.C80"),
+          "checkpoint uses the explicit FAT device and complete 32-bit pack tag");
+
+    scriptPreviewShelf = 1;
+    CHECK(scriptPreviewNewPass(812), "start fresh checkpoint test shelf");
+    CHECK(scriptPreviewCheckpoint(true, NULL) == SCRIPT_CHECKPOINT_NO_CARD &&
+          scriptPreviewCheckpoint(false, cfg) == SCRIPT_CHECKPOINT_NO_RECORD,
+          "missing card/record is safe and explicit");
+    // Complete a real first shelf and bank the bonus on entering the next.
+    for (int c = 0; c < SCRIPT_COLS; ++c)
+        for (int rr = 0; rr < SCRIPT_ROWS; ++rr)
+            if (scriptPreviewBoard.back[c][rr])
+                CHECK(scriptPreviewPeel(c, rr) > 0, "complete password for checkpoint");
+    int banked = scriptPreviewScore;
+    CHECK(banked > 0 && scriptPreviewAdvance(813) &&
+          scriptPreviewShelf == 2 && scriptPreviewScore == banked,
+          "only completed shelves enter checkpoint score");
+    ScriptBoard first = scriptPreviewBoard;
+    uint32_t firstSeed = scriptPreviewSeed;
+    CHECK(scriptPreviewCheckpoint(true, cfg) == SCRIPT_CHECKPOINT_SAVED,
+          "save first banked shelf to a separate verified checkpoint");
+    ScriptCheckpoint record = {0};
+    CHECK(scriptCheckpointLoad(cfg, language, tag, &record) &&
+          record.serial == 1 && record.shelf == 2 &&
+          record.score == (unsigned)banked && record.seed == firstSeed,
+          "first slot contains exact banked state and deterministic seed");
+    CHECK(!scriptCheckpointLoad(cfg, language ^ 1u, tag, &record) &&
+          !scriptCheckpointLoad(cfg, language, tag ^ 1u, &record),
+          "different language/pack cannot read this checkpoint");
+
+    // Strict, endian-independent codec validation: no raw structs written.
+    uint8_t image[SCRIPT_CHECKPOINT_BYTES] = {0};
+    ScriptCheckpoint decoded = {0};
+    CHECK(scriptCheckpointEncode(&record, image) &&
+          scriptCheckpointDecode(image, sizeof image, language, tag, &decoded) &&
+          checkpointRecordEqual(&record, &decoded),
+          "checkpoint encoding is a bounded 32-byte record");
+    CHECK(!scriptCheckpointDecode(image, sizeof image - 1, language, tag, &decoded) &&
+          !scriptCheckpointDecode(image, sizeof image, language ^ 1u, tag, &decoded) &&
+          !scriptCheckpointDecode(image, sizeof image, language, tag ^ 1u, &decoded),
+          "truncated, cross-language or cross-pack records are refused");
+    image[20] ^= 1u;
+    CHECK(!scriptCheckpointDecode(image, sizeof image, language, tag, &decoded),
+          "checksum detects damaged seed");
+    ScriptCheckpoint invalid = record;
+    invalid.shelf = 1000;
+    CHECK(!scriptCheckpointEncode(&invalid, image), "invalid shelf cannot be stored");
+    invalid = record;
+    invalid.score = SCRIPT_CHECKPOINT_MAX_SCORE + 1u;
+    CHECK(!scriptCheckpointEncode(&invalid, image), "unbounded score cannot be stored");
+
+    // A real word earns unbanked points; do not serialize partial attempts.
+    CHECK(scriptPreviewHint() && scriptPreviewSubmit() > 0 &&
+          scriptPreviewCheckpoint(true, cfg) == SCRIPT_CHECKPOINT_NOT_START,
+          "partial shelf cannot overwrite its valid checkpoint");
+    CHECK(scriptPreviewCheckpoint(false, cfg) == SCRIPT_CHECKPOINT_LOADED &&
+          scriptPreviewShelf == 2 && scriptPreviewTurns == 0 &&
+          scriptPreviewScore == banked && scriptPreviewSeed == firstSeed &&
+          !memcmp(&first, &scriptPreviewBoard, sizeof first),
+          "load atomically regenerates exact shelf-start board and score");
+
+    // A second save writes the OTHER slot. Simulate an interrupted write to
+    // that newest record, then fall back to the still-complete older slot.
+    CHECK(scriptPreviewNewPass(814) &&
+          scriptPreviewCheckpoint(true, cfg) == SCRIPT_CHECKPOINT_SAVED &&
+          scriptCheckpointLoad(cfg, language, tag, &decoded) &&
+          decoded.serial == 2 && decoded.seed != firstSeed,
+          "second checkpoint alternates the active slot");
+    FILE *f = fopen(slot1, "wb");
+    CHECK(f != NULL, "simulate torn newest checkpoint");
+    if (f) {
+        CHECK(fwrite("WPC1", 1, 4, f) == 4, "write truncated record");
+        fclose(f);
+    }
+    CHECK(scriptPreviewCheckpoint(false, cfg) == SCRIPT_CHECKPOINT_LOADED &&
+          scriptPreviewSeed == firstSeed && scriptPreviewScore == banked &&
+          !memcmp(&first, &scriptPreviewBoard, sizeof first),
+          "torn newer record restores older verified slot");
+
+    CHECK(scriptPreviewToggleDaily(20261124, 815), "enter unranked daily practice");
+    ScriptBoard daily = scriptPreviewBoard;
+    CHECK(scriptPreviewCheckpoint(true, cfg) == SCRIPT_CHECKPOINT_DAILY &&
+          scriptPreviewCheckpoint(false, cfg) == SCRIPT_CHECKPOINT_DAILY &&
+          !memcmp(&daily, &scriptPreviewBoard, sizeof daily),
+          "daily practice cannot save or import free-play state");
+    CHECK(scriptPreviewToggleDaily(20261124, 816), "leave daily practice");
+    CHECK(scriptPreviewCheckpoint(false, cfg) == SCRIPT_CHECKPOINT_LOADED &&
+          scriptPreviewScore == banked && scriptPreviewShelf == 2,
+          "daily practice has not changed the previous free-play checkpoint");
+    CHECK(access(cfg, F_OK) != 0, "preview never writes the retail settings file");
+    unlink(slot0);
+    unlink(slot1);
+    rmdir(dir);
+    scriptPreviewShelf = 1;
+    // Reinitialize banked score as a new free-play run through the public mode
+    // bridge, rather than leaving a test's saved score in subsequent tests.
+    CHECK(scriptPreviewToggleDaily(20261124, 817) &&
+          scriptPreviewToggleDaily(20261124, 818),
+          "reset independent free-play run after checkpoint regression");
+}
+
 static void tailTapSubmission(void)
 {
     CHECK(scriptPreviewNewPass(666), "prepare a Cyrillic tail-tap scenario");
@@ -419,6 +548,7 @@ static void exercise(const char *dictPath, const char *tilesPath,
     revisitClues();
     tailTapSubmission();
 
+    checkpointTest();
     retryScores();
     failedGeneration();
 

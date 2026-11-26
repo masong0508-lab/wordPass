@@ -21,6 +21,9 @@ on:
       - 'tools/check/script_pass_test.c'
       - 'source/script_preview.c'
       - 'source/script_preview.h'
+      - 'source/script_checkpoint.c'
+      - 'source/script_checkpoint.h'
+      - 'tools/emu/test_cyr_checkpoint.py'
       - '.github/workflows/sourced-cyr-preview.yml'
   workflow_dispatch:
 
@@ -170,6 +173,11 @@ jobs:
         run: |
           python3 tools/emu/test_cyr_preview.py \
             wordPass-ru-uk-sourced-preview.nds sourced-preview-out
+      - name: Sourced Russian and Ukrainian checkpoints survive FAT reboot
+        timeout-minutes: 10
+        run: |
+          python3 tools/emu/test_cyr_checkpoint.py \
+            wordPass-ru-uk-sourced-preview.nds wordPass-ru-uk-sourced-preview.elf sourced-preview-out/checkpoints
       - name: Retain sourced-ROM emulator screenshots
         if: always()
         uses: actions/upload-artifact@v7

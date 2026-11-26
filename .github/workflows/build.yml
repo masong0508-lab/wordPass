@@ -135,6 +135,9 @@ jobs:
         run: python3 tools/emu/test_fat.py wordPass.nds wordPass.elf fat-out
       - name: Real DS Cyrillic preview touch, chain, peel, switch and exit
         run: python3 tools/emu/test_cyr_preview.py wordPass-cyr-preview.nds cyr-preview-out
+      - name: Russian and Ukrainian checkpoints survive FAT-card reboot
+        timeout-minutes: 12
+        run: python3 tools/emu/test_cyr_checkpoint.py wordPass-cyr-preview.nds wordPass-cyr-preview.elf cyr-preview-out/checkpoints
       - name: Word clues, goal progress and safe assistance
         timeout-minutes: 12
         run: python3 tools/emu/test_cohesion.py wordPass.nds cohesion-out

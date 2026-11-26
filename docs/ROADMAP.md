@@ -164,6 +164,11 @@ as available in the in-game language picker.
       vocabulary and balance word lengths/weighted tiles. The seeded helper
       and limited rescue offer bounded help when a safe path exists; they do
       not replace an abundant dictionary.
+- [x] Add separate Russian/Ukrainian free-play shelf-start checkpoints:
+      explicit L+START save and L+B resume on FAT, two alternating
+      checksummed 32-byte slots per language/pack identity, exact
+      deterministic shelf regeneration, and no retail settings migration.
+      Partial attempts and unranked Daily cannot save into these records.
 - [ ] Bring Cyrillic modes to full retail Classic/Daily parity: lockdown,
       twists, complete hints economy, scored Daily/streaks, full statistics,
       saves, remaining fail conditions and measured difficulty balance.

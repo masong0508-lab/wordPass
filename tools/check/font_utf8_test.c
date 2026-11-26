@@ -45,6 +45,12 @@ int main(void)
           "Russian help line fits inside the top screen plaque");
     CHECK(fontTextColumns("СЛОВО ДАЄ ЧИСЛО: +/- ПІДКАЗКА") * 6 <= 206,
           "Ukrainian help line fits inside the top screen plaque");
+    checkText("L+START: ЗБЕРЕГТИ / L+B: ВІДНОВИТИ", 34, 0);
+    checkText("L+START: СОХР / L+B: ЗАГРУЗИТЬ", 30, 0);
+    CHECK(fontTextColumns("L+START: ЗБЕРЕГТИ / L+B: ВІДНОВИТИ") * 6 <= 206,
+          "Ukrainian checkpoint controls fit the help screen");
+    checkText("ПОЧАТОК ПОЛИЦІ ЗБЕРЕЖЕНО", 24, 0);
+    checkText("НАЧАЛО ПОЛКИ СОХРАНЕНО", 22, 0);
     checkText("привет", 6, 0);
     checkText("日本語", 3, 1);    // CJK needs a full-size atlas, not this 5x7 font.
     checkText("한글", 2, 1);      // Hangul needs composition and a larger atlas.

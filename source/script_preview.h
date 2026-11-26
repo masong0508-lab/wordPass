@@ -1,5 +1,6 @@
 // Optional on-hardware Cyrillic engineering preview. NOT a selectable
-// language: tiny test-only lexicon and themes, no saves, no production UI.
+// language: separate preview lexicons/themes and independent checkpoints,
+// not the production language UI, statistics or save format.
 // Only a separate build with WP_CYR_PREVIEW includes this feature.
 #ifndef WORDPASS_SCRIPT_PREVIEW_H
 #define WORDPASS_SCRIPT_PREVIEW_H
@@ -8,6 +9,7 @@
 #include "script_rules.h"
 #include "script_ledger.h"
 #include "script_daily.h"
+#include "script_checkpoint.h"
 #include <stdint.h>
 #include <stdbool.h>
 extern ScriptBoard scriptPreviewBoard;
@@ -31,6 +33,7 @@ extern int scriptPreviewDailyClockError; // unset RTC feedback, no save writes
 extern int scriptPreviewHelp; // localized instructions overlay (top LCD only)
 extern int scriptPreviewLastTier;
 extern int scriptPreviewLastScore;
+extern int scriptPreviewCheckpointStatus;
 extern uint32_t scriptPreviewSeed;
 // 1..2 guaranteed legal opening words for the current demo shelf.
 extern int scriptPreviewOpeningWords;
@@ -58,6 +61,10 @@ void scriptPreviewClose(void);
 // Replay/re-deal the current shelf, discarding this attempt's points while
 // retaining completed earlier shelves. Failed generation leaves it intact.
 bool scriptPreviewNewPass(uint32_t seed);
+// Explicit free-play shelf-start checkpoints. Pass NULL when FAT is absent.
+// Saving is permitted only at the beginning of a fresh shelf; loading
+// atomically replaces the current attempt only after regeneration succeeds.
+int scriptPreviewCheckpoint(bool save, const char *settingsPath);
 // L+SELECT switches between free shelves and reproducible single-shelf
 // Daily practice; never touches the production score and save format.
 bool scriptPreviewToggleDaily(int date, uint32_t freeSeed);
