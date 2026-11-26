@@ -5,7 +5,7 @@ the guide; the test reads only their exposed path plus public progress.
 """
 from pathlib import Path
 import sys
-from wp import Emu, ST_TITLE, ST_PLAY, ST_PASSED, ST_OPTIONS, HOLE, LANG_CODES, REPO, symbol
+from wp import Emu, ST_TITLE, ST_PLAY, ST_PASSED, ST_OPTIONS, HOLE, BURN, LANG_CODES, REPO, symbol
 from elf_abi import member_offsets
 
 
@@ -60,6 +60,7 @@ def main(rom, output):
         s = e.state()
         assert s["state"] == ST_PLAY and training() and s["practice"], code
         assert s["turn"] == 0 and 3 <= s["hintLen"] <= 20, code
+        assert sum(s["cell"][c][r][1] == BURN for c in range(7) for r in range(8)) == 1, code
         e.shot(str(out / f"{code}-01-word.png"))
         # A premature peel is a harmless mistake, not a lost turn.
         assert s["cell"][5][0][1] == HOLE, code
@@ -90,6 +91,7 @@ def main(rom, output):
         e.press("A", settle=40)
         s = e.state()
         assert s["turn"] == 1 and s["score"] > 0, code
+        assert all(s["cell"][c][r][1] != BURN for c in range(7) for r in range(8)), code
         e.shot(str(out / f"{code}-02-peel.png"))
         e.peel(0, 7)
         assert e.state()["turn"] == 1 and e.state()["peels"] == 0, code
