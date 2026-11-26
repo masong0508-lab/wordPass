@@ -123,7 +123,9 @@ against the source and the data files by `tools/check_guide.py`, and every pictu
 - **Peek.** Hold **L** or **R** (or press **X**, or tap the **PEEK** button, to
   latch it for one peel), then touch a gem to arm it and lift the stylus to
   peel it off the board. Slide off the gem before lifting to change your mind.
-  Behind it is either a **pass letter** (a diamond you can still chain through)
+  Touch an already open numbered hole in PEEK to inspect it freely; the
+  clue stays selected after release and a latched PEEK remains available
+  for the next actual peel. Behind a covered gem is either a **pass letter** (a diamond you can still chain through)
   or an empty **hole** with the same neighbour count as a word clue. The hole
   stays for the shelf; the gems below it still refill. Peeling is always
   available, without earning a token first. Every peel takes a turn and adds
