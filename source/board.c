@@ -273,6 +273,11 @@ int boardTwinEighths(int shelf)
 {
     if (shelf < TWIN_FIRE_FROM_SHELF) return 0;
     int k = (shelf - (TWIN_FIRE_FROM_SHELF - TWIN_FIRE_STEP)) / TWIN_FIRE_STEP;
+    // Ease into LOCKDOWN IV without sending the shelf-15 cliff to shelf 16:
+    // 15-16: 2/8, 17-18: 3/8, 19-20: 4/8, 21: 5/8.
+    // Shelves 22 onward catch up with the normal monotone ladder.
+    if (shelf >= 15 && shelf <= 20) k = 2 + (shelf - 15) / 2;
+    else if (shelf == 21) k = 5;
     return k > 8 ? 8 : k;
 }
 
@@ -292,6 +297,10 @@ void boardShelfRules(int shelf, ShelfRules *out)
     out->burnEvery = (shelf <= 3) ? 2 : 1;
     out->pulseEvery = 6 - out->tier;
     if (out->pulseEvery < 3) out->pulseEvery = 3;
+    // One new pressure at a time: shelf 15 holds steady, shelf 16 has its
+    // existing twist, shelf 17 raises twin fire, shelf 18 tightens the pulse,
+    // then shelf 19 raises twin fire. Three-turn pulses still apply at 18+.
+    if (shelf >= 15 && shelf <= 17) out->pulseEvery = 4;
     // deeper shelves bury the pass lower in the board
     out->minRow = (shelf <= 2) ? 1 : (shelf <= 5) ? 3 : (shelf <= 11) ? 4 : 5;
     out->twinEighths = boardTwinEighths(shelf);

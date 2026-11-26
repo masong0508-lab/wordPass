@@ -1538,8 +1538,38 @@ int main(int argc, char **argv)
     g.shelf = 12; boardNewShelf(&g);
     bool s12 = g.heatThreshold == 4 && g.lockTier == 2 && g.pulseEvery == 4 && g.twinEighths == 1;
     g.shelf = 20; boardNewShelf(&g);
-    bool s20 = g.heatThreshold == 4 && g.lockTier == 3 && g.pulseEvery == 3 && g.twinEighths == 5;
-    CHECK("shelf thresholds 1/4/6/12/20", s1 && s4 && s6 && s12 && s20);
+    bool s20 = g.heatThreshold == 4 && g.lockTier == 3 && g.pulseEvery == 3 && g.twinEighths == 4;
+    CHECK("shelf thresholds 1/4/6/12/20 match staged tier IV", s1 && s4 && s6 && s12 && s20);
+    {
+        ShelfRules r14, r15, r16, r17, r18, r19, r20, r21, r22, r23;
+        boardShelfRules(14, &r14); boardShelfRules(15, &r15);
+        boardShelfRules(16, &r16); boardShelfRules(17, &r17);
+        boardShelfRules(18, &r18); boardShelfRules(19, &r19);
+        boardShelfRules(20, &r20); boardShelfRules(21, &r21);
+        boardShelfRules(22, &r22); boardShelfRules(23, &r23);
+        // One pressure at a time: shelf 16 already has a possible twist;
+        // shelf 17 adds twin-fire, shelf 18 tightens the pulse, shelf 19
+        // adds twin-fire. The existing rule is fully restored by shelf 22.
+        CHECK("Lockdown IV phases pulse and twin share without a shelf-16 hazard spike",
+              r14.tier == 2 && r15.tier == 3 && r16.tier == 3 &&
+              r14.pulseEvery == 4 && r14.twinEighths == 2 &&
+              r15.pulseEvery == 4 && r15.twinEighths == 2 &&
+              r16.pulseEvery == 4 && r16.twinEighths == 2 &&
+              r17.pulseEvery == 4 && r17.twinEighths == 3 &&
+              r18.pulseEvery == 3 && r18.twinEighths == 3 &&
+              r19.pulseEvery == 3 && r19.twinEighths == 4 &&
+              r20.pulseEvery == 3 && r20.twinEighths == 4 &&
+              r21.pulseEvery == 3 && r21.twinEighths == 5 &&
+              r22.pulseEvery == 3 && r22.twinEighths == 6 &&
+              r23.pulseEvery == 3 && r23.twinEighths == 7 &&
+              boardTwinEighths(15) == 2 && boardTwinEighths(17) == 3 &&
+              boardTwinEighths(21) == 5 && boardTwinEighths(25) == 8);
+        ShelfRules daily;
+        boardDailyRules(DAILYMOD_STANDARD, &daily);
+        CHECK("staging Classic Lockdown leaves Daily pressure unchanged",
+              !daily.lockdown && daily.pulseEvery == 6 &&
+              daily.twinEighths == 0 && daily.threshold == 6 && daily.burnEvery == 2);
+    }
     {
         static const int want[12] = { 10, 10, 9, 8, 7, 8, 6, 6, 5, 5, 5, 4 };   // shelf 6 holds one more than the ladder's 7 (the Lockdown ramp)
         bool meter = true, mono = true; int prevT = 99;

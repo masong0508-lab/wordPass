@@ -37,8 +37,10 @@ platform compatibility, balancing, broader tests and script expansion.
 - [x] Release CI: run the full rules/layout/guide scenario suite for every
       PR, main build, tag and manual run, alongside FAT-card scenarios and
       the separate Cyrillic preview. ABI checks use the actual built ELF.
-- [ ] Investigate and retest the Lockdown difficulty spike at shelves 14–15
-      with before/after balance bots; preserve intended challenge.
+- [ ] Retest the Lockdown 14–18 progression with the clue-aware balance bots
+      across multiple language/seed batches. A staged tier-IV pulse/twin-fire
+      candidate preserves Daily and later shelves, but needs CI, bot evidence
+      and real hardware/human playtesting before release.
 - [ ] Continue dictionary and theme-content editorial fixes, especially
       Finnish inflections and false-positive/false-negative word acceptance.
 - [x] CI creates a deterministic, SHA-256-verified ZIP containing the retail
