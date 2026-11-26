@@ -404,7 +404,7 @@ enum {
     UI_TR_TRACE,
     UI_TR_PEEL,
     UI_TR_SAFE,
-    UI_TR_HEAT,
+    UI_TR_RATIO,
     UI_TR_PLAY,
     UI_TR_BACK,
     UI_TR_DONE,
