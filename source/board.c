@@ -473,6 +473,14 @@ static void prepareTraining(Game *g)
         }
         g->hintLen = 3;
     } else g->hintLen = boardHintChain(g, g->hintC, g->hintR, MAX_CHAIN);
+    // A real, stationary practice flame on the accepted numbered word.
+    // Prefer a topmost route cell; do not add to random ignition stats.
+    if (g->hintLen > 0) {
+        int first = 0;
+        for (int i = 1; i < g->hintLen; ++i)
+            if (g->hintR[i] < g->hintR[first]) first = i;
+        g->cell[g->hintC[first]][g->hintR[first]].state = CELL_BURN;
+    }
     g->practice = true; // all board-level lifetime statistics are disabled
 }
 
@@ -1022,6 +1030,10 @@ static int chainScoreDetail(const Game *g, char *w, int *lenOut, int *tierOut, i
         if (cl->state == CELL_BURN) usedBurn = 1;
         if (cl->state == CELL_SECRET) diamonds++;
     }
+    // Stage one is a fire exercise, not merely any valid word. Keep
+    // the numbered route intact if a player tries an unrelated word.
+    if (g->training && !g->wordsThisShelf && g->hintLen > 0 && !usedBurn)
+        return 0;
     if (diamonds > DIAMOND_CAP) diamonds = DIAMOND_CAP;
     int repeat = ledgerHas(g, w) ? 1 : 0;
     int gained = boardWordPoints(base, len, usedBurn != 0, diamonds, repeat != 0);
