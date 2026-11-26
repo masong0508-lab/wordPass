@@ -442,7 +442,9 @@ typedef struct { u32 w[TILE_W / 2]; } GemRow;
 // main-RAM headroom: cache four distinct diamond letters and use the existing
 // gem + glyph path for the rest. The common 56-cell plain-tile path stays
 // unchanged, and no dictionary or password content is removed.
-#ifdef WP_CYR_PREVIEW
+#if defined(WP_CYR_MAIN)
+#define DIAMOND_CACHE_SLOTS 2
+#elif defined(WP_CYR_PREVIEW)
 #define DIAMOND_CACHE_SLOTS 4
 #else
 #define DIAMOND_CACHE_SLOTS POOL_MAX_LEN
@@ -1593,7 +1595,7 @@ static void drawOptionsHelp(void)
     char h[48];
     const char *t = ui(OPT_HELP[G.optRow]);
     if (G.optRow == 2 && S.accent) { uiFmt(h, sizeof h, UI_H_ACCENTNAME, ui(ACCENT_NAMES[S.accent])); t = h; }
-    if (G.optRow == 7 && langCur() != LANG_EN) t = ui(UI_H_SPELL_EN);
+    if (G.optRow == 7 && S.language != LANG_EN) t = ui(UI_H_SPELL_EN);
     drawTextCenter(128, 132, t, INK, 1);
     if (G.optRow == 8) drawTextCenter(128, 141, ui(UI_H_LANGNOTE), ACCENT, 1);
     if (G.optRow == 0 && S.theme == THEME_CLEAR) drawTextCenter(128, 141, ui(UI_H_CLEAR), ACCENT, 1);
@@ -2720,8 +2722,13 @@ static void drawScriptPreviewTop(void)
                  "УКРАЇНСЬКА %04d-%02d-%02d" : "РУССКИЙ %04d-%02d-%02d",
                  ymd / 10000, ymd / 100 % 100, ymd % 100);
         drawTextCenter(128, 31, dateLabel, DIM_TEXT, 1);
-    } else drawTextCenter(128, 31, scriptPreviewLanguage ?
-                         "УКРАЇНСЬКА - ДЕМО" : "РУССКИЙ - ДЕМО", DIM_TEXT, 1);
+    } else drawTextCenter(128,31,scriptPreviewLanguage ?
+#ifdef WP_CYR_MAIN
+                         "КЛАСИКА" : "КЛАССИКА",
+#else
+                         "УКРАЇНСЬКА - ДЕМО" : "РУССКИЙ - ДЕМО",
+#endif
+                         DIM_TEXT,1);
     const ScriptBoard *b = &scriptPreviewBoard;
     const char *theme = v4PoolsName(&scriptPreviewPools, b->passTheme);
     drawTextCenter(128, 47, theme, ACCENT, 2);
@@ -3143,6 +3150,35 @@ static void drawTop(const Game *g)
 
 // ---------------------------------------------------------------- overlays
 
+// Only the integrated candidate stores the two Unicode selection IDs.
+// The original UI strings remain indexed by the active Latin dictionary.
+static const char *menuLanguageName(void)
+{
+#ifdef WP_CYR_MAIN
+    if (S.language==LANG_RU) return "РУССКИЙ";
+    if (S.language==LANG_UK) return "УКРАЇНСЬКА";
+#endif
+    return langName(langCur());
+}
+static const char *menuLabel(int id)
+{
+#ifdef WP_CYR_MAIN
+    if (S.language==LANG_RU || S.language==LANG_UK) {
+        bool uk=S.language==LANG_UK;
+        switch (id) {
+            case UI_T_CLASSIC: return uk?"КЛАСИКА":"КЛАССИКА";
+            case UI_TR_START: return uk?"НАВЧАННЯ (L+A)":"ОБУЧЕНИЕ (L+A)";
+            case UI_T_CRACK: return uk?"ВІДКРИЙТЕ ПАРОЛЬ":"ОТКРОЙТЕ ПАРОЛЬ";
+            case UI_T_OPTIONS: return uk?"ОПЦІЇ":"ОПЦИИ";
+            case UI_T_DAILY: return "ДЕНЬ";
+            case UI_T_PRACTICE: return uk?"ПРАКТИКА":"ПРАКТИКА";
+            case UI_T_SETCLOCK: return uk?"ДАТА DS":"ДАТА DS";
+        }
+    }
+#endif
+    return ui(id);
+}
+
 static void drawTitle(const Game *g)
 {
     fillRect(0, 0, SCREEN_W, SCREEN_H, BLACK);
@@ -3180,31 +3216,43 @@ static void drawTitle(const Game *g)
         drawTextCenter(BX(GUIDE_BTN_X + GUIDE_BTN_W / 2), 12, ui(UI_T_GUIDE), cue ? lerp15(ACCENT, WHITE, pp / 2) : INK, 1);
     }
     {   // the language tag: tap to open the language chooser (the name in gold once it is not English)
-        bool en = langCur() == LANG_EN;
+        bool en = S.language == LANG_EN;
         fillRect(BX(LANG_BTN_X), 7, LANG_BTN_W, 17, BLACK);
         rectOutline(BX(LANG_BTN_X), 7, LANG_BTN_W, 17, en ? GOLD_DK : GOLD);
-        drawTextCenter(BX(LANG_BTN_X + (LANG_BTN_W - 10) / 2), 12, langName(langCur()), en ? INK : GOLD_LT, 1);
+        drawTextCenter(BX(LANG_BTN_X + (LANG_BTN_W - 10) / 2), 12, menuLanguageName(), en ? INK : GOLD_LT, 1);
         drawChar(BX(LANG_BTN_X + LANG_BTN_W - 11), 12, '>', ACCENT, 1);
     }
     fillRect(BX(16), 76, 140, 56, BLACK);
     rectOutline(BX(16), 76, 140, 56, GOLD);
-    drawTextCenter(BX(86), 84, ui(UI_T_CRACK), ACCENT, 1);
-    char dh[40]; uiFmt(dh, sizeof dh, UI_T_DRAGHINT, S.hand == HAND_LEFT ? "R" : "L");
-    drawTextCenter(BX(86), 96, dh, DIM_TEXT, 1);
+    drawTextCenter(BX(86),84,menuLabel(UI_T_CRACK),ACCENT,1);
+    char dh[40]; uiFmt(dh,sizeof dh,UI_T_DRAGHINT,S.hand==HAND_LEFT?"R":"L");
+#ifdef WP_CYR_MAIN
+    if (S.language>=LANG_COUNT)
+        drawTextCenter(BX(86),96,S.language==LANG_UK?"СЛОВА / ПАРОЛЬ":"СЛОВА / ПАРОЛЬ",DIM_TEXT,1);
+    else
+#endif
+        drawTextCenter(BX(86),96,dh,DIM_TEXT,1);
     // A real replayable lesson, not a static description of the rules.
     // Keep the established Classic, Daily and Options button coordinates.
     roundRect(BX(20), 104, 132, 26, S.tutorDone ? DIM : GOLD_DK);
     rectOutline(BX(20), 104, 132, 26, GOLD_LT);
-    drawTextCenter(BX(86), 113, ui(UI_TR_START), WHITE, 1);
+    drawTextCenter(BX(86),113,menuLabel(UI_TR_START),WHITE,1);
     // mode buttons
     bool blink = frame & 32;
     roundRect(BX(20), TB_Y, 64, 22, blink ? GOLD : GOLD_DK);
-    drawTextCenter(BX(52), TB_Y + 7, ui(UI_T_CLASSIC), BLACK, 1);
+    drawTextCenter(BX(52),TB_Y+7,menuLabel(UI_T_CLASSIC),BLACK,1);
     // DAILY: two 1x lines inside the 22 px button (nothing reaches y 157, where OPTIONS starts)
     bool played = g->clockOk && (g->dailySeed <= S.dailyPlayedDate || g->dailySeed <= S.dailyLastDate);
     roundRect(BX(88), TB_Y, 64, 22, g->clockOk ? DIM : BLACK);
     rectOutline(BX(88), TB_Y, 64, 22, g->clockOk ? GOLD_DK : DIM2);
     char d1[24], d2[24];
+#ifdef WP_CYR_MAIN
+    if (S.language>=LANG_COUNT) {
+        // Separate unranked Daily practice, never the Latin record.
+        drawTextCenter(BX(120),TB_Y+3,menuLabel(UI_T_DAILY),ACCENT,1);
+        drawTextCenter(BX(120),TB_Y+12,menuLabel(g->clockOk?UI_T_PRACTICE:UI_T_SETCLOCK),INK,1);
+    } else
+#endif
     if (!g->clockOk) {
         drawTextCenter(BX(120), TB_Y + 3, ui(UI_T_DAILY), DIM_TEXT, 1);
         drawTextCenter(BX(120), TB_Y + 12, ui(UI_T_SETCLOCK), DIM_TEXT, 1);
@@ -3221,7 +3269,7 @@ static void drawTitle(const Game *g)
     }
     fillRect(BX(54), TB_Y + 26, 64, 20, BLACK);
     rectOutline(BX(54), TB_Y + 26, 64, 20, DIM);
-    drawTextCenter(BX(86), TB_Y + 32, ui(UI_T_OPTIONS), INK, 1);
+    drawTextCenter(BX(86),TB_Y+32,menuLabel(UI_T_OPTIONS),INK,1);
     // the BEST line is also the way into THE LEDGER (tap it, or press X)
     // Scores of six digits and up read as thousands (123K) so the two ends of the line never meet.
     char s[32], n[16];
@@ -3245,8 +3293,8 @@ static const char *optValue(int row)
         case 4: return ui(FIRE_NAMES[S.fire]);
         case 5: return ui(S.music ? UI_V_ON : UI_V_OFF);
         case 6: return ui(LIB_NAMES[S.library]);
-        case 7: return ui(langCur() == LANG_EN ? SPELL_NAMES[S.spelling] : UI_V_ENONLY);
-        default: return langName(langCur());
+        case 7: return ui(S.language == LANG_EN ? SPELL_NAMES[S.spelling] : UI_V_ENONLY);
+        default: return menuLanguageName();
     }
 }
 
@@ -3270,7 +3318,7 @@ static void drawOptions(const Game *g)
         const char *val = optValue(i);
         u16 lc = on ? ((nudgeTimer > 0 && nudgeDir < 0) ? WHITE : ACCENT) : DIM_TEXT;
         u16 rc = on ? ((nudgeTimer > 0 && nudgeDir > 0) ? WHITE : ACCENT) : DIM_TEXT;
-        bool fixed = i == 7 && langCur() != LANG_EN;       // SPELLING in another language is a note, not a choice: no chevrons
+        bool fixed = i == 7 && S.language != LANG_EN;       // SPELLING in another language is a note, not a choice: no chevrons
         if (!fixed) { drawChar(76, y + 3, '<', lc, 1); drawChar(149, y + 3, '>', rc, 1); }
         drawText(112 - textWidth(val, 1) / 2 + 3, y + 3, val, fixed ? DIM_TEXT : on ? WHITE : INK, 1);     // centred between the chevrons
     }
@@ -3645,15 +3693,24 @@ static void drawLangPick(const Game *g)
             // misrepresent these starter packs as fully translated locales.
             const char *name = i == LANG_COUNT ? "РУССКИЙ" : "УКРАЇНСЬКА";
             drawText(21, y + 2, name, on ? WHITE : INK, 1);
+#ifdef WP_CYR_MAIN
+            drawText(122,y+2,"BETA",on?GOLD_LT:DIM_TEXT,1);
+            if (S.language==i) drawChar(14,y+2,'*',GOLD_LT,1);
+#else
             drawText(122, y + 2, "DEMO", on ? GOLD_LT : DIM_TEXT, 1);
+#endif
             continue;
         }
 #endif
         drawText(86 - textWidth(langName(i), 1) / 2, y + 3, langName(i), on ? WHITE : ok ? INK : DIM2, 1);
-        if (i == langCur()) drawChar(18, y + 3, '*', GOLD_LT, 1);
+        if (i == S.language) drawChar(18, y + 3, '*', GOLD_LT, 1);
     }
 #ifdef WP_CYR_PREVIEW
-    drawTextCenter(86, 181, "RU/UK: TEST WORDS", DIM_TEXT, 1);
+#ifdef WP_CYR_MAIN
+    drawTextCenter(86,181,g->msgTimer>0?g->msg:"RU/UK BETA",g->msgTimer>0?FIRE2:DIM_TEXT,1);
+#else
+    drawTextCenter(86,181,"RU/UK: TEST WORDS",DIM_TEXT,1);
+#endif
 #else
     if (langLoadFailed()) drawTextCenter(86, 172, ui(UI_OP_LANGFAIL), FIRE2, 1);
     else drawTextCenter(86, 172, ui(UI_LP_HINT), DIM_TEXT, 1);
