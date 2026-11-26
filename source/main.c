@@ -615,12 +615,11 @@ static bool focusTrainingClue(void)
     return true;
 }
 
-// Opening a covered gem and inspecting an already opened clue are
-// different gestures. During independent practice either input mode may
-// revisit a numbered hole without losing a turn or arming another peel.
-static bool inspectTrainingHole(int c, int r)
+// An open numbered hole is a clue, never another peel. In normal
+// gameplay this applies in PEEK; final practice also allows plain taps.
+static bool inspectOpenHole(int c, int r)
 {
-    if (boardTrainingStage(&G)!=4 || c<0 || c>=COLS || r<0 || r>=ROWS ||
+    if (c<0 || c>=COLS || r<0 || r>=ROWS ||
         G.cell[c][r].state!=CELL_HOLE) return false;
     G.wordClueC=(u8)c; G.wordClueR=(u8)r;
     G.armed=0; G.curOn=0;
@@ -697,13 +696,13 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
     bool touching = (held & KEY_TOUCH) != 0;
     if (touching && t->px == 0 && t->py == 0) touching = false;
 
-    if (G.training && boardTrainingStage(&G)==4) {
+    if (G.training ? boardTrainingStage(&G)==4 : G.peekHeld) {
         if ((down & KEY_TOUCH) && gfxCellAt(t->px,t->py,&c,&r) &&
-            inspectTrainingHole(c,r)) {
+            inspectOpenHole(c,r)) {
             dropStroke(); ignoreStroke=true; // no second gesture before lift
             return;
         }
-        if ((down & KEY_A) && G.curOn && inspectTrainingHole(G.curC,G.curR))
+        if ((down & KEY_A) && G.curOn && inspectOpenHole(G.curC,G.curR))
             return;
     }
     if (G.peekHeld) {
@@ -828,8 +827,12 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
         } else { gfxPress(PRESS_SUBMIT); submitChain(); }
     }
     chainSfx(chainBefore);
-    // first-shelf nudge: three words in and no peek yet (the guide says it better, so this is for players past it)
-    if (!G.training && G.shelf == 1 && G.mode == MODE_CLASSIC && S.tutorDone && !G.hintShown && G.peels == 0 && G.wordsThisShelf >= 3) {
+    // After the first accepted word, give returning/graduated players a
+    // single timely reminder, but never overwrite the new-clue callout or
+    // interrupt a word gesture. Keep the ordinary idle hint independent.
+    if (!G.training && G.shelf == 1 && G.mode == MODE_CLASSIC && S.tutorDone &&
+        !G.hintShown && !G.peels && G.wordsThisShelf && G.msgTimer==0 &&
+        !G.chainLen && !touching) {
         G.hintShown = 1;
         { char hm[MSG_LEN]; uiFmt(hm, sizeof hm, UI_TU_PEELHINT, handKey()); setMsg(hm, 300); }
     }
