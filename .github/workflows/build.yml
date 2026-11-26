@@ -138,6 +138,9 @@ jobs:
       - name: Russian and Ukrainian checkpoints survive FAT-card reboot
         timeout-minutes: 12
         run: python3 tools/emu/test_cyr_checkpoint.py wordPass-cyr-preview.nds wordPass-cyr-preview.elf cyr-preview-out/checkpoints
+      - name: Play the complete replayable tutorial on DS, every retail language
+        timeout-minutes: 12
+        run: python3 tools/emu/test_training.py wordPass.nds training-out
       - name: Word clues, goal progress and safe assistance
         timeout-minutes: 12
         run: python3 tools/emu/test_cohesion.py wordPass.nds cohesion-out
@@ -160,5 +163,6 @@ jobs:
             fat-out/**/*.png
             rules-out/**/*.png
             cohesion-out/**/*.png
+            training-out/**/*.png
           if-no-files-found: ignore
           retention-days: 7

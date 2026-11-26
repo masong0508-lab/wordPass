@@ -412,7 +412,11 @@ static void buildHeatTables(void)
 // backdrop since no dot column coincides with a gem edge column in either hand layout.
 #define COMP_ROWS 20
 typedef struct { u32 w[TILE_W / 2]; } GemRow;
-static ALIGN(4) GemRow gemLetter[26][COMP_ROWS], diamondLetter[27][COMP_ROWS];   // diamondLetter[26]: the plain Q of a found pass letter
+// A shelf contains at most POOL_MAX_LEN distinct password letters. Cache
+// those diamond composites instead of all 27 possible letter shapes.
+static ALIGN(4) GemRow gemLetter[26][COMP_ROWS], diamondLetter[POOL_MAX_LEN][COMP_ROWS];
+static u8 diamondSlot[27];
+static u32 diamondCacheMask;
 
 static void setupTheme(void)
 {
@@ -471,11 +475,37 @@ static void buildGemCache(void)
     for (int l = 0; l < 26; l++) {
         const GemPal *p = GEM_PALS[palOf[l]];
         buildComposite(gemLetter[l], p, l, C(31,31,29), p->dark);
-        buildComposite(diamondLetter[l], &GEM_DIAMOND, l, C(4,6,10), C(20,22,26));
     }
-    buildComposite(diamondLetter[26], &GEM_DIAMOND, DIAMOND_Q, C(4,6,10), C(20,22,26));
+    diamondCacheMask = 0;
+    memset(diamondSlot, 255, sizeof diamondSlot);
     cur = saved; clipY0 = c0; clipY1 = c1;
     gemCacheReady = true;
+}
+
+// Rebuild only when the shelf's letter set changes, before drawing into
+// the hidden bank. Uncached (e.g. debug-injected) diamonds use the
+// existing gem + glyph path; the normal shelf keeps its fast blits.
+static void refreshDiamondCache(const Game *g)
+{
+    u32 wanted = 0;
+    for (int i = 0; i < g->passLen && i < POOL_MAX_LEN; i++) {
+        int l = g->pass[i] - 'a';
+        if (l >= 0 && l < 26)
+            wanted |= 1u << (l == 'q' - 'a' ? DIAMOND_Q : l);
+    }
+    if (wanted == diamondCacheMask) return;
+    diamondCacheMask = wanted;
+    memset(diamondSlot, 255, sizeof diamondSlot);
+    u16 *saved = cur;
+    int c0 = clipY0, c1 = clipY1;
+    cur = vramBack; clipY0 = 0; clipY1 = SCREEN_H;
+    int slot = 0;
+    for (int l = 0; l <= DIAMOND_Q && slot < POOL_MAX_LEN; l++) {
+        if (!(wanted & (1u << l))) continue;
+        diamondSlot[l] = slot;
+        buildComposite(diamondLetter[slot++], &GEM_DIAMOND, l, C(4,6,10), C(20,22,26));
+    }
+    cur = saved; clipY0 = c0; clipY1 = c1;
 }
 
 // copy a 20-row composite to (x, y): x is even in both layouts, so every row is one
@@ -812,6 +842,7 @@ void gfxNope(int c, int r) { nopeC = c; nopeR = r; nopeTimer = 6; }
 // title buttons on the touch screen
 #define TB_Y 134
 bool gfxInTitleClassic(int x, int y) { return x >= BX(20) && x < BX(84) && y >= TB_Y && y < TB_Y + 22; }
+bool gfxInTitleTraining(int x, int y) { return x >= BX(20) && x < BX(152) && y >= 104 && y < 131; }
 bool gfxInTitleDaily(int x, int y)   { return x >= BX(88) && x < BX(152) && y >= TB_Y && y < TB_Y + 22; }
 bool gfxInTitleOptions(int x, int y) { return x >= BX(54) && x < BX(118) && y >= TB_Y + 26 && y < TB_Y + 46; }
 bool gfxInTitleLedger(int x, int y)  { return x >= BX(12) && x < BX(160) && y >= TB_Y + 46 && y < SCREEN_H - 1; }   // the BEST line, just under OPTIONS
@@ -1072,8 +1103,10 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
                     drawHoleCell(x, y, boardBackNumber(g, c, r), g->scorched[c][r], chimney);
                     break;
                 case CELL_SECRET: {
-                    if (!sq && !lit && !cl->flash && yd + 1 >= clipY0 && yd + 1 + COMP_ROWS <= clipY1) {
-                        blitComposite(diamondLetter[cl->letter == 'q' - 'a' ? DIAMOND_Q : cl->letter], x, yd + 1);   // gem and letter in one move
+                    int dl = cl->letter == 'q' - 'a' ? DIAMOND_Q : cl->letter;
+                    int slot = dl <= DIAMOND_Q ? diamondSlot[dl] : 255;
+                    if (slot < POOL_MAX_LEN && !sq && !lit && !cl->flash && yd + 1 >= clipY0 && yd + 1 + COMP_ROWS <= clipY1) {
+                        blitComposite(diamondLetter[slot], x, yd + 1);   // gem and letter in one move
                     } else {
                         if (sq) drawGemSized(x, yd + sq, TILE_W, TILE_H - sq, &GEM_DIAMOND, lit);
                         else { blitGem(x, yd, 5); if (lit) { rectOutline(x, yd, TILE_W, TILE_H, WHITE); rectOutline(x + 1, yd + 1, TILE_W - 2, TILE_H - 2, WHITE); } }
@@ -2239,6 +2272,29 @@ static void drawTopGuide(const Game *g)
 // they vanish the instant the player acts and never show while the stylus is down.
 static void drawCues(const Game *g)
 {
+    if (g->training && g->state == ST_PLAY) {
+        // Unlike ordinary idle hints, teaching targets stay visible until
+        // the action is completed. Their numbers are order, not clues.
+        int stage = boardTrainingStage(g);
+        if (stage == 1 && !g->peekHeld) {
+            for (int i = 0; i < g->hintLen; ++i) {
+                int x, y; cellOrigin(g->hintC[i], g->hintR[i], &x, &y);
+                rectOutline(x, y, TILE_W, TILE_H, ACCENT);
+                char n[3]; fmtInt(n, i + 1);
+                fillRect(x + 1, y + 1, textWidth(n, 1) + 2, 9, BLACK);
+                drawText(x + 2, y + 2, n, GOLD_LT, 1);
+            }
+        } else {
+            int c, r;
+            if (boardTrainingTarget(g, &c, &r)) {
+                int x, y; cellOrigin(c, r, &x, &y);
+                rectOutline(x, y, TILE_W, TILE_H, GOLD_LT);
+                rectOutline(x + 1, y + 1, TILE_W - 2, TILE_H - 2, WHITE);
+                if (!g->armed) gPointer(x + TILE_W - 7, y + TILE_H - 3, false);
+            }
+        }
+        return;
+    }
     if (!g->cue || g->state != ST_PLAY) return;
     int age = g->cueAge;
     int bob = tri16(age, 36) / 5;                          // 0..3 px, 36 frames a bob (under 2 Hz)
@@ -2695,7 +2751,8 @@ static void drawTop(const Game *g)
     char s[40];
     {   // the mode under the logo: CLASSIC, LOCKDOWN (tiers), DAILY <modifier> or PRACTICE <modifier>, then the twist for a moment
         const char *ml; u16 mc;
-        if (g->mode == MODE_DAILY) {
+        if (g->training) { ml = ui(UI_TR_TITLE); mc = GOLD_LT; }
+        else if (g->mode == MODE_DAILY) {
             uiFmt(s, sizeof s, g->practice ? UI_H_MODE_PRACTICE : UI_H_MODE_DAILY, boardDailyModName(g->dailyMod));
             ml = s; mc = g->practice ? DIM_TEXT : GOLD_LT;
         } else if (g->lockdown) { ml = boardLockdownName(g->lockTier); mc = FIRE1; }
@@ -2770,7 +2827,7 @@ static void drawTop(const Game *g)
     }
 
     // bookmarks: three small books, filled while you still hold them (Classic only)
-    if (g->mode == MODE_CLASSIC)
+    if (g->mode == MODE_CLASSIC && !g->training)
         for (int i = 0; i < 3; i++) {
             int bx = 214 + i * 8, by = 38;
             if (i < g->lives) {
@@ -2813,6 +2870,25 @@ static void drawTop(const Game *g)
         }
     }
 
+    // Explicit tutorial gets a stable, multi-line teaching prompt rather
+    // than racing transient score popups. The same board remains visible.
+    if (g->training && (g->state == ST_PLAY || g->state == ST_PAUSE)) {
+        int step = boardTrainingStage(g);
+        int label = step == 1 ? UI_TR_WORD : step == 2 ? UI_TR_HOLE :
+                    step == 3 ? UI_TR_CLUE : UI_TR_FINISH;
+        drawTextCenter(128, 148, ui(label), GOLD_LT, 1);
+        if (step == 1) {
+            drawTextCenter(128, 160, ui(UI_TR_TRACE), WHITE, 1);
+            drawTextCenter(128, 172, ui(UI_TU_DRAG), ACCENT, 1);
+        } else {
+            char action[MSG_LEN];
+            uiFmt(action, sizeof action, UI_TR_PEEL, S.hand == HAND_LEFT ? "R" : "L");
+            drawTextCenter(128, 160, action, WHITE, 1);
+            drawTextCenter(128, 172, ui(step == 3 ? UI_TU_N1 :
+                          step == 2 ? UI_TR_HEAT : UI_TR_SAFE), ACCENT, 1);
+        }
+        return;
+    }
     // The objective remains visible when score callouts replace the message line.
     // The shelf number already identifies progression at the top of the screen.
     if (g->state == ST_PLAY || g->state == ST_PAUSE)
@@ -2884,9 +2960,13 @@ static void drawTitle(const Game *g)
     fillRect(BX(16), 76, 140, 56, BLACK);
     rectOutline(BX(16), 76, 140, 56, GOLD);
     drawTextCenter(BX(86), 84, ui(UI_T_CRACK), ACCENT, 1);
-    drawTextCenter(BX(86), 96, ui(UI_T_DONTBURN), INK, 1);
     char dh[40]; uiFmt(dh, sizeof dh, UI_T_DRAGHINT, S.hand == HAND_LEFT ? "R" : "L");
-    drawTextCenter(BX(86), 112, dh, DIM_TEXT, 1);
+    drawTextCenter(BX(86), 96, dh, DIM_TEXT, 1);
+    // A real replayable lesson, not a static description of the rules.
+    // Keep the established Classic, Daily and Options button coordinates.
+    roundRect(BX(20), 104, 132, 26, S.tutorDone ? DIM : GOLD_DK);
+    rectOutline(BX(20), 104, 132, 26, GOLD_LT);
+    drawTextCenter(BX(86), 113, ui(UI_TR_START), WHITE, 1);
     // mode buttons
     bool blink = frame & 32;
     roundRect(BX(20), TB_Y, 64, 22, blink ? GOLD : GOLD_DK);
@@ -3153,6 +3233,20 @@ static void drawResultsCard(const Game *g)
     rectOutline(BX(cx - cw / 2), cy, cw, ch, cardFlash ? WHITE : GOLD_LT);
     rectOutline(BX(cx - cw / 2 + 2), cy + 2, cw - 4, ch - 4, cardFlash ? GOLD_LT : GOLD_DK);
     char title[48], s[48];
+    if (g->training) {
+        drawTextCenter(BX(cx), cy + 8, ui(UI_TR_DONE), GOLD_LT, 1);
+        drawPassDiamonds(g, cy + 20, false);
+        hline(BX(lx), cy + 46, cw - 20, DIM);
+        siprintf(s, "%d", g->wordsThisShelf);
+        drawStatRow(lx, rx, cy + 57, ui(UI_R_WORDS), INK, s, GOLD_LT);
+        siprintf(s, "%d", g->peels);
+        drawStatRow(lx, rx, cy + 70, ui(UI_PEELS), INK, s, GOLD_LT);
+        drawTextCenter(BX(cx), cy + 85, ui(UI_R_NOTSCORED), DIM_TEXT, 1);
+        hline(BX(lx), cy + 100, cw - 20, DIM);
+        drawTextCenter(BX(cx), cy + 111, ui(UI_TR_PLAY), GOLD_LT, 1);
+        drawTextCenter(BX(cx), cy + 133, ui(UI_TR_BACK), WHITE, 1);
+        return;
+    }
     if (g->mode == MODE_DAILY) strcpy(title, ui(g->practice ? UI_R_PRACTICEDONE : UI_R_PASSDONE_D));
     else if (g->twist) {
         uiFmt(title, sizeof title, UI_R_ACCEPTED_T, boardTwistName(g->twist));
@@ -3530,6 +3624,7 @@ static void topSigs(const Game *g, u32 sig[4])
         h0 = hmix(h0, shownScore); h0 = hmix(h0, g->shelf); h0 = hmix(h0, g->mode); h0 = hmix(h0, g->lives);
         h0 = hmix(h0, g->twist + (shelfAge < 120 ? 100 : 0)); h0 = hmix(h0, g->practice + g->lockdown * 2 + g->dailyMod * 4);
         h0 = hmix(h0, fireNext);
+        h0 = hmix(h0, g->training);
         h1 = hmix(h1, g->passLen);
         for (int i = 0; i < g->passLen; i++) h1 = hmix(h1, g->found[i] + letterPop[i] * 2);
         h1 = hmix(h1, g->state == ST_FAIL);
@@ -3537,6 +3632,7 @@ static void topSigs(const Game *g, u32 sig[4])
         h2 = hstr(h2, chainWordNow); h2 = hmix(h2, chainScoreNow); h2 = hmix(h2, chainValidNow); h2 = hmix(h2, invalidTimer);
         h2 = hstr(h2, g->lastWord); h2 = hmix(h2, g->lastWordScore); h2 = hmix(h2, g->ledgerN);
         h2 = hmix(h2, g->ledgerN ? g->ledgerPts[ledgerIndex(g, 0)] : 0);
+        h3 = hmix(h3, g->training ? boardTrainingStage(g) : 0);
         h3 = hmix(h3, g->shelf); h3 = hstr(h3, g->msg); h3 = hmix(h3, g->state == ST_FAIL ? 1 + g->fail : 0);
         h3 = hmix(h3, g->msgTimer > 46); h3 = hmix(h3, g->msgTimer != 0); h3 = hmix(h3, msgAge < 20 ? msgAge + 1 : 0);
     }
@@ -3599,6 +3695,8 @@ void gfxFrame(const Game *g)
         frameMid = accent; frameDk = lerp15(accent, BLACK, 9); frameLt = lerp15(accent, WHITE, 8);
         buildHeatTables();
     }
+    if (g->state == ST_PLAY || g->state == ST_PAUSE || g->state == ST_PASSED || g->state == ST_FAIL)
+        refreshDiamondCache(g);
     boardChainWord(g, chainWordNow);
     fireLow = boardLowestFireRow(g);
     dangerSetup(g);

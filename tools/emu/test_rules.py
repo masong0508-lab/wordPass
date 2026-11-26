@@ -1909,7 +1909,7 @@ def _():
         to_title(); e.run(20); e.shot(f'{out}/rules_title_hint_{"left" if left else "right"}.png')
         px = e.pixels()
         # "DRAG TO SPELL. L PEEKS": the L or R is the 16th character, at x BX(86 - 65 + 90); R has a pixel in the right column of its second row, L none
-        lit = sum(px[e.bx + 115, 192 + 112 + 1]) > 100
+        lit = sum(px[e.bx + 115, 192 + 96 + 1]) > 100
         assert lit == left, f'title tagline for the {"left" if left else "right"} hand: lit={lit}'
     set_hand(False)
 

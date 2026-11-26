@@ -395,6 +395,19 @@ enum {
     UI_P_NEARBY,
     UI_TU_FIND,
     UI_MS_PEEKRELEASE,
+    UI_TR_TITLE,
+    UI_TR_START,
+    UI_TR_WORD,
+    UI_TR_HOLE,
+    UI_TR_CLUE,
+    UI_TR_FINISH,
+    UI_TR_TRACE,
+    UI_TR_PEEL,
+    UI_TR_SAFE,
+    UI_TR_HEAT,
+    UI_TR_PLAY,
+    UI_TR_BACK,
+    UI_TR_DONE,
     UI_COUNT
 };
 #endif

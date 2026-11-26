@@ -31,7 +31,7 @@ static void queueMsg(const char *m, int frames)
 // TUTOR_DRAG: drag a word. TUTOR_PEEK: peek. TUTOR_FIND: (after the first peel) find a pass letter.
 // TUTOR_REST: keep finding letters until the whole password is revealed. Only a cleared
 // first shelf finishes the guide. Gameplay messages temporarily replace its next action.
-static bool tutorOn(void) { return G.mode == MODE_CLASSIC && G.shelf == 1 && !S.tutorDone && G.tutorStep < TUTOR_DONE; }
+static bool tutorOn(void) { return !G.training && G.mode == MODE_CLASSIC && G.shelf == 1 && !S.tutorDone && G.tutorStep < TUTOR_DONE; }
 
 static int foundCount(void)
 {
@@ -111,7 +111,7 @@ static void startShelf(void)
 {
     // A retry deals a new board with no earned clues. Restart the unfinished
     // lesson too, so its next action and automatic word hint remain useful.
-    if (G.mode == MODE_CLASSIC && G.shelf == 1 && !S.tutorDone) G.tutorStep = TUTOR_DRAG;
+    if (!G.training && G.mode == MODE_CLASSIC && G.shelf == 1 && !S.tutorDone) G.tutorStep = TUTOR_DRAG;
     dropStroke();
     G.armed = 0; G.peekLatch = 0;
     G.cue = CUE_NONE; G.cueAge = 0; G.ghostDone = 0; G.idleFrames = 0; G.hintLen = 0;
@@ -143,9 +143,10 @@ static void refreshClock(void)
 
 static bool dailyRecorded;      // this Daily attempt's result is already in the records
 
-static bool newGame(int mode)
+static bool beginGame(int mode, bool training)
 {
-    G.practice = false;
+    G.training = training;
+    G.practice = training;
     if (mode == MODE_DAILY) {
         refreshClock();
         if (!G.clockOk) { setMsg(ui(UI_MS_CLOCK), 120); return false; }
@@ -161,7 +162,7 @@ static bool newGame(int mode)
     G.hintShown = 0;
     G.curC = 3; G.curR = 3; G.curOn = 0;
     G.lives = BOOKMARKS_MAX;
-    G.tutorStep = (mode == MODE_CLASSIC && !S.tutorDone) ? TUTOR_DRAG : TUTOR_DONE;
+    G.tutorStep = (!training && mode == MODE_CLASSIC && !S.tutorDone) ? TUTOR_DRAG : TUTOR_DONE;
     G.twist = 0; G.lastTwist = 0;
     memset(G.recentPass, 0, sizeof(G.recentPass)); G.recentHead = 0;
     startShelf();
@@ -183,12 +184,15 @@ static bool newGame(int mode)
     G.state = ST_PLAY;
     return true;
 }
+static bool newGame(int mode) { return beginGame(mode, false); }
+static void newTraining(void) { (void)beginGame(MODE_CLASSIC, true); }
 
 // Fold a finished run into the saved records. A Daily replay (practice) or a Daily without a
 // readable clock records nothing; a scored Daily updates the last score, the best (a higher score only; it keeps its own date), the
 // streak and the games played exactly once.
 static void recordScore(void)
 {
+    if (G.training) return;
     bool best = false;
     if (G.mode == MODE_DAILY) {
         if (G.practice || !G.clockOk || dailyRecorded) return;
@@ -218,6 +222,7 @@ static void recordScore(void)
 // is where the DS gets switched off. One write at most.
 static void recordAndSave(void)
 {
+    if (G.training) return;
     unsigned before = settingsSaveCount();
     recordScore();
     if (G.mode == MODE_CLASSIC && settingsSaveCount() == before) settingsSave();
@@ -366,6 +371,8 @@ static void openGuide(int from)
 
 static void quitToTitle(void)
 {
+    bool wasTraining = G.training;
+    G.training = false;
     // walking away from a scored Daily forfeits it: the attempt is spent, so the score so far stands
     if (G.mode == MODE_DAILY && G.state == ST_PAUSE) recordScore();
     G.practice = false;
@@ -380,7 +387,7 @@ static void quitToTitle(void)
     refreshClock();
     gfxFadeIn();
     musicMenu();
-    settingsSave();
+    if (!wasTraining) settingsSave();
 }
 
 static void enterFail(void)
@@ -389,7 +396,7 @@ static void enterFail(void)
     dropStroke();
     G.state = ST_FAIL;
     boardClearChain(&G);
-    if (G.mode == MODE_CLASSIC) {
+    if (G.mode == MODE_CLASSIC && !G.training) {
         if (G.lives > 0) G.lives--;   // a failed shelf costs a bookmark
         if (G.lives == 0) S.gamesPlayed++;   // the last bookmark: the run is over
     }
@@ -426,12 +433,12 @@ static void announceShuffle(void)
 // hint prioritizes a flame, an unplayed word and lower-heat longer words. It stops at the first touch of the board.
 static void useHint(void)
 {
-    if (G.hints <= 0) { setMsg(ui(UI_MS_NOHINT), 60); return; }
+    if (G.hints <= 0 && !G.training) { setMsg(ui(UI_MS_NOHINT), 60); return; }
     boardClearChain(&G);
     dropStroke();                      // a stylus still down must not restart a chain and cancel the ghost
     G.hintLen = boardHintChain(&G, G.hintC, G.hintR, MAX_CHAIN);
     if (!G.hintLen) { setMsg(ui(UI_MS_NOHINTWORD), 60); return; }
-    G.hints--;
+    if (!G.training) G.hints--;
     // Following a word hint must chain gems. A one-shot PEEK latch otherwise
     // turns that first touch into a destructive peel instead of the shown word.
     G.peekLatch = 0; G.peekHeld = 0; G.armed = 0; musicPeek(false);
@@ -520,10 +527,10 @@ static void pauseActivate(int id)
             G.state = ST_PLAY;
             break;
         case PAUSE_RESTART:
-            if (G.mode == MODE_CLASSIC && G.lives <= 1) { setMsg(ui(UI_MS_LASTBOOK), 60); G.pauseArm = 0; break; }   // the last one cannot be spent
+            if (!G.training && G.mode == MODE_CLASSIC && G.lives <= 1) { setMsg(ui(UI_MS_LASTBOOK), 60); G.pauseArm = 0; break; }   // the last one cannot be spent
             if (!armed) { G.pauseArm = 90; G.pauseArmId = id; break; }
             G.pauseArm = 0;
-            if (G.mode == MODE_CLASSIC) G.lives--;
+            if (!G.training && G.mode == MODE_CLASSIC) G.lives--;
             G.score = G.shelfStartScore; startShelf(); G.state = ST_PLAY;
             break;
         case PAUSE_GUIDE:
@@ -656,6 +663,10 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
         if (peel) {
             int letter = G.cell[c][r].letter;
             int res = boardPeel(&G, c, r);
+            if (!res && G.training) {
+                gfxNope(c, r);
+                musicSfx(SFX_INVALID, 0);
+            }
             if (res == 2) {
                 gfxBurst(c, r, BURST_REVEAL, letter);
                 int reward = boardPassLetterReward(G.shelf);   // every pass letter pays
@@ -681,7 +692,7 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
             if (boardPassComplete(&G)) {
                 G.state = ST_PASSED; G.stateTimer = 0; G.fail = FAIL_NONE;
                 dropStroke();
-                if (G.shelf == 1) tutorFinish();       // the first shelf is cleared: the guide has done its job
+                if (!G.training && G.shelf == 1) tutorFinish();       // the first shelf is cleared: the guide has done its job
                 clearSticky();
                 boardClearChain(&G);
                 G.peekHeld = 0; G.armed = 0; G.peekLatch = 0; musicPeek(false);
@@ -749,7 +760,7 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
     }
     chainSfx(chainBefore);
     // first-shelf nudge: three words in and no peek yet (the guide says it better, so this is for players past it)
-    if (G.shelf == 1 && G.mode == MODE_CLASSIC && S.tutorDone && !G.hintShown && G.peels == 0 && G.wordsThisShelf >= 3) {
+    if (!G.training && G.shelf == 1 && G.mode == MODE_CLASSIC && S.tutorDone && !G.hintShown && G.peels == 0 && G.wordsThisShelf >= 3) {
         G.hintShown = 1;
         { char hm[MSG_LEN]; uiFmt(hm, sizeof hm, UI_TU_PEELHINT, handKey()); setMsg(hm, 300); }
     }
@@ -811,10 +822,12 @@ int main(void)
                     if (gfxInTitleOptions(t.px, t.py)) { G.state = ST_OPTIONS; G.optRow = 0; musicSfx(SFX_MENU, 0); }
                     else if (gfxInTitleDaily(t.px, t.py)) newGame(MODE_DAILY);
                     else if (gfxInTitleClassic(t.px, t.py)) newGame(MODE_CLASSIC);
+                    else if (gfxInTitleTraining(t.px, t.py)) newTraining();
                     else if (gfxInTitleLedger(t.px, t.py)) { G.state = ST_STATS; musicSfx(SFX_MENU, 0); }
                     else if (gfxInTitleGuide(t.px, t.py)) openGuide(ST_TITLE);
                     else if (gfxInTitleLanguage(t.px, t.py)) { G.langPick = langCur(); G.langFrom = ST_TITLE; G.state = ST_LANGPICK; }
-                } else if (down & (KEY_START | KEY_A)) { srand(seedCounter); newGame(MODE_CLASSIC); }
+                } else if ((down & KEY_A) && (held & KEY_L)) newTraining();
+                else if (down & (KEY_START | KEY_A)) { srand(seedCounter); newGame(MODE_CLASSIC); }
                 else if (down & (KEY_LEFT | KEY_L)) { gfxTipFlip(-1); musicSfx(SFX_MENU, 0); }
                 else if (down & (KEY_RIGHT | KEY_R)) { gfxTipFlip(1); musicSfx(SFX_MENU, 0); }
                 else if (down & KEY_SELECT) newGame(MODE_DAILY);
@@ -1074,6 +1087,20 @@ int main(void)
             case ST_PASSED:
                 G.stateTimer++;
                 if (G.stateTimer == 1) cardTapQueued = false;
+                if (G.training) {
+                    if (G.stateTimer > CARD_QUEUE_FROM &&
+                        G.stateTimer <= CARD_GATE_PASSED &&
+                        (down & (KEY_TOUCH | KEY_A | KEY_START))) cardTapQueued = true;
+                    if (G.stateTimer > CARD_GATE_PASSED) {
+                        if (down & KEY_B) quitToTitle();
+                        else if ((down & (KEY_TOUCH | KEY_A | KEY_START)) || cardTapQueued) {
+                            cardTapQueued = false;
+                            srand(seedCounter);
+                            newGame(MODE_CLASSIC);
+                        }
+                    }
+                    break;
+                }
                 // a tap once the card is up but before it takes input is kept and applied the moment it does (never dropped)
                 if (G.stateTimer > CARD_QUEUE_FROM && G.stateTimer <= CARD_GATE_PASSED && (down & (KEY_TOUCH | KEY_START | KEY_A))) cardTapQueued = true;
                 if (G.stateTimer > CARD_GATE_PASSED && ((down & (KEY_TOUCH | KEY_START | KEY_A)) || cardTapQueued)) {
