@@ -68,8 +68,24 @@ def main(rom, output):
         n = s["hintLen"]
         path = [(int(e.mem.unsigned[game + off["hintC"] + i]),
                  int(e.mem.unsigned[game + off["hintR"] + i])) for i in range(n)]
+        # SELECT must retain the numbered teaching word and cost nothing.
+        for _ in range(2):
+            e.press("SELECT", settle=12)
+            hinted = e.state()
+            assert hinted["hintLen"] == n and hinted["hints"] == s["hints"], code
+            assert hinted["turn"] == 0 and hinted["score"] == 0, code
+            assert [(int(e.mem.unsigned[game + off["hintC"] + i]),
+                     int(e.mem.unsigned[game + off["hintR"] + i]))
+                    for i in range(n)] == path, code
+        def prompt_row():
+            px = e.pixels()
+            return tuple(px[x, y] for y in range(160, 167) for x in range(12, 244))
+        before = prompt_row()
         e.chain(path)
         assert e.state()["chainLen"] == n and e.state()["chainScore"] > 0, code
+        e.run(8)
+        assert prompt_row() != before, (code, "missing ready-to-submit prompt")
+        e.shot(str(out / f"{code}-01-ready.png"))
         e.press("A", settle=40)
         s = e.state()
         assert s["turn"] == 1 and s["score"] > 0, code

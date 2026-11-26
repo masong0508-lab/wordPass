@@ -49,7 +49,23 @@ def main(rom, output):
         e.hold("L", False)
         assert integer("scriptPreviewTurns") == 0
         coaching(code, "01-early-peel", 4)
-        e.chain([(int(e.mem.unsigned[nc+i]), int(e.mem.unsigned[nr+i])) for i in range(n)])
+        path = [(int(e.mem.unsigned[nc+i]), int(e.mem.unsigned[nr+i])) for i in range(n)]
+        offsets = member_offsets(e.rom_elf, "scriptPreviewBoard", ("chainLen", "chainC", "chainR"))
+        def prompt_row():
+            px = e.pixels()
+            return tuple(px[x, y] for y in range(160, 167) for x in range(12, 244))
+        before = prompt_row()
+        for _ in range(2):
+            e.press("R", settle=12)
+            assert integer("scriptPreviewTurns") == 0 and integer("scriptPreviewHints") == 0
+            assert int(e.mem.unsigned[board+offsets["chainLen"]]) == n
+            assert [(int(e.mem.unsigned[board+offsets["chainC"]+i]),
+                     int(e.mem.unsigned[board+offsets["chainR"]+i]))
+                    for i in range(n)] == path
+        assert prompt_row() != before, (code, "missing ready-to-submit prompt")
+        e.shot(str(out / f"{code}-01-ready.png"))
+        e.press("Y", settle=8)
+        e.chain(path)
         points = integer("chainScoreNow")
         assert points > 0
         e.press("A", settle=16)
