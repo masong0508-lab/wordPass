@@ -33,6 +33,24 @@ unreviewed word lists; complete UI translations, native-speaker proofreading,
 rights review, mode parity and physical-hardware performance validation remain
 open. Japanese, Korean and Chinese are still future milestones.
 
+## Russian and Ukrainian main-game integration (development candidate)
+
+The source-backed 13-language candidate uses the same title, language picker
+and save preference as the original eleven languages. Choose **Русский** or
+**Українська** (marked BETA during integration), then use the regular
+Classic, Daily or Tutorial button. The selected language survives reboot.
+Both real 100,000-word packs and the themed password pools are included in
+one ROM, while only one pack occupies the DS heap at a time.
+
+Build with `make WP_CYR_MAIN=1 CYR_EXTERNAL_DIR=sourced-preview` after
+generating the pinned source packs (see the sourced language workflow and
+docs/CYR-SOURCES.md). The ordinary eleven-language build and separate
+engineering preview remain available. This is a development candidate:
+the Unicode board still uses its own rules, unranked Daily practice and
+language-specific checkpoints. Complete options/guide translation, ranked
+record integration, difficulty parity, native-speaker editorial review and
+source redistribution review remain outstanding.
+
 ## Learn by playing
 
 Start with **PLAY TUTORIAL** on the regular title screen (or hold L and press A).
