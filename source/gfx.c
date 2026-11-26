@@ -2674,10 +2674,17 @@ static void drawScriptPreviewTop(void)
         } else if (step == 1) {
             drawTextCenter(128, 148, uk ? "1/4 СЛОВА ДАЮТЬ ПІДКАЗКИ" :
                            "1/4 СЛОВА ДАЮТ ПОДСКАЗКИ", GOLD_LT, 1);
-            drawTextCenter(128, 160, uk ? "ЗʼЄДНАЙТЕ ЦИФРИ ЗА ПОРЯДКОМ" :
-                           "СОЕДИНИТЕ ЦИФРЫ ПО ПОРЯДКУ", WHITE, 1);
-            drawTextCenter(128, 172, uk ? "A: ПРИЙНЯТИ СЛОВО" :
-                           "A: ПРИНЯТЬ СЛОВО", ACCENT, 1);
+            if (chainValidNow) {
+                drawTextCenter(128, 160, uk ? "A: ПРИЙНЯТИ СЛОВО" :
+                               "A: ПРИНЯТЬ СЛОВО", GOLD_LT, 1);
+                drawTextCenter(128, 172, uk ? "УРОК БЕЗ ВОГНЮ" :
+                               "УРОК БЕЗ ОГНЯ", ACCENT, 1);
+            } else {
+                drawTextCenter(128, 160, uk ? "ЗʼЄДНАЙТЕ ЦИФРИ ЗА ПОРЯДКОМ" :
+                               "СОЕДИНИТЕ ЦИФРЫ ПО ПОРЯДКУ", WHITE, 1);
+                drawTextCenter(128, 172, uk ? "R: ПІДКАЗКА" :
+                               "R: ПОДСКАЗКА", ACCENT, 1);
+            }
         } else {
             const char *label = step == 2 ? (uk ? "2/4 ВІДКРИЙТЕ ЧИСЛО" : "2/4 ОТКРОЙТЕ ЧИСЛО") :
                 step == 3 ? (uk ? "3/4 ЧИСЛО 1: ОДНА ЛІТЕРА ПОРУЧ" : "3/4 ЧИСЛО 1: ОДНА БУКВА РЯДОМ") :
@@ -2951,8 +2958,25 @@ static void drawTop(const Game *g)
         const char *reminder = ui(step == 1 ? UI_TU_DRAG : UI_TU_FIND);
         bool correcting = g->msgTimer > 0 && !strcmp(g->msg, reminder);
         if (step == 1) {
-            drawTextCenter(128, 160, ui(UI_TR_TRACE), WHITE, 1);
-            drawTextCenter(128, 172, reminder, correcting ? FIRE2 : ACCENT, 1);
+            // Reuse the already validated frame quote; never run another
+            // dictionary lookup during the clipped top-screen redraw.
+            bool ready = chainValidNow && !g->peekHeld;
+            if (ready) {
+                char action[MSG_LEN];
+                siprintf(action, "A / %s", ui(UI_P_SUBMIT));
+                drawTextCenter(128, 160, action, GOLD_LT, 1);
+                drawTextCenter(128, 172, ui(UI_TR_SAFE), ACCENT, 1);
+            } else {
+                bool wordError = g->msgTimer > 0 &&
+                    (!strcmp(g->msg, ui(UI_MS_NOTLIB)) ||
+                     !strcmp(g->msg, ui(UI_MS_BRIT)) ||
+                     !strcmp(g->msg, ui(UI_MS_AMER)) ||
+                     !strcmp(g->msg, ui(UI_CO_OBSCURE)));
+                drawTextCenter(128, 160, ui(UI_TR_TRACE), WHITE, 1);
+                drawTextCenter(128, 172, wordError ? g->msg :
+                    correcting ? reminder : ui(UI_MS_HINTIDLE),
+                    (correcting || wordError) ? FIRE2 : ACCENT, 1);
+            }
         } else {
             char action[MSG_LEN];
             uiFmt(action, sizeof action, UI_TR_PEEL, S.hand == HAND_LEFT ? "R" : "L");
@@ -3714,6 +3738,10 @@ static void topSigs(const Game *g, u32 sig[4])
         h2 = hstr(h2, g->lastWord); h2 = hmix(h2, g->lastWordScore); h2 = hmix(h2, g->ledgerN);
         h2 = hmix(h2, g->ledgerN ? g->ledgerPts[ledgerIndex(g, 0)] : 0);
         h3 = hmix(h3, g->training ? boardTrainingStage(g) : 0);
+        if (g->training) {
+            h3 = hmix(h3, chainValidNow);
+            h3 = hmix(h3, g->peekHeld);
+        }
         h3 = hmix(h3, g->shelf); h3 = hstr(h3, g->msg); h3 = hmix(h3, g->state == ST_FAIL ? 1 + g->fail : 0);
         h3 = hmix(h3, g->msgTimer > 46); h3 = hmix(h3, g->msgTimer != 0); h3 = hmix(h3, msgAge < 20 ? msgAge + 1 : 0);
     }
