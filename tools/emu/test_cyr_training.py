@@ -25,6 +25,22 @@ def main(rom, output):
         assert amber > 20, (code, tag, "missing visible coaching", amber)
         e.shot(str(out / f"{code}-{tag}.png"))
 
+    def stage_strip(step):
+        e.run(8)
+        px=e.pixels()
+        colors=[px[20+58*i,144] for i in range(4)]
+        if step<4:
+            assert len(set(colors[step:]))==1, ("inconsistent unstarted stages",step,colors)
+            assert colors[step-1]!=colors[step], ("active stage not highlighted",step,colors)
+        if step>1:
+            assert len(set(colors[:step-1]))==1 and colors[step-2]!=colors[step-1], (
+                "completed stages not distinguished",step,colors)
+        return colors
+    def evidence():
+        e.run(8)
+        px=e.pixels()
+        return tuple(px[x,y] for y in range(114,128) for x in range(96,177))
+
     def expect(language):
         for _ in range(40):
             if e.state()["state"] == 9 and integer("scriptPreviewLanguage") == language:
@@ -48,6 +64,7 @@ def main(rom, output):
             return sum(int(e.mem.unsigned[board + state_off + c*8 + r]) == 2
                        for c in range(7) for r in range(8))
         assert flames() == 1, code
+        strip=stage_strip(1)
         e.shot(str(out / f"{code}-01-word.png"))
         e.hold("L")
         e.tap(*e.center(6, 0), settle=8)
@@ -77,6 +94,7 @@ def main(rom, output):
         assert integer("scriptPreviewTurns") == 1 and integer("scriptPreviewScore") == points
         assert flames() == 0, code
         assert integer("scriptPreviewTrainingNotice") == 0
+        assert stage_strip(2)!=strip, code
         e.shot(str(out / f"{code}-02-peel.png"))
         e.hold("L")
         e.tap(*e.center(0, 7), settle=8)
@@ -89,11 +107,15 @@ def main(rom, output):
         assert integer("scriptPreviewTurns") == 2
         assert integer("scriptPreviewTrainingNotice") == 0
         assert int(e.mem.unsigned[board + 56 + 6*8]) == 0
+        stage_strip(3)
+        initial_evidence=evidence()
+        assert len(set(initial_evidence))>1, (code,"deduction readout missing")
         e.shot(str(out / f"{code}-03-clue.png"))
         e.hold("L")
         e.tap(*e.center(6, 1), settle=8)
         e.hold("L", False)
         assert int(e.mem.unsigned[board + 218]) == 1
+        stage_strip(4)
         e.shot(str(out / f"{code}-04-password.png"))
         length = int(e.mem.unsigned[board + 227])
         clue_off = member_offsets(e.rom_elf, "scriptPreviewBoard", ("clueC","clueR"))
@@ -103,6 +125,7 @@ def main(rom, output):
         e.tap(*e.center(0,7), settle=8)
         e.hold("L", False)
         assert tile_state(0,7) == 0 and integer("scriptPreviewTurns") == 4
+        assert evidence()!=initial_evidence, (code,"stale 1/1 readout after free focus change")
         before = (integer("scriptPreviewTurns"),integer("scriptPreviewScore"),
                   integer("scriptPreviewPeels"),integer("scriptPreviewHints"))
         for c,r,peek in ((3,5,False),(4,6,True)):

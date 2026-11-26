@@ -319,6 +319,31 @@ static void drawTextCenter(int cx, int y, const char *s, u16 col, int scale)
     drawText(cx - textWidth(s, scale) / 2, y, s, col, scale);
 }
 
+// Shared tutorial-only instruction card. Each segment represents one
+// lesson; finished segments use the accent, the active segment is gold.
+static __attribute__((noinline)) void drawLessonPanel(int step)
+{
+    fillRect(12,147,232,34,DIM2);
+    rectOutline(12,147,232,34,GOLD_DK);
+    for (int i=0;i<4;++i)
+        fillRect(14+i*58,144,54,2,i+1<step ? ACCENT : i+1==step ? GOLD_LT : DIM);
+}
+
+// A readout from the existing public clue inference, never the hidden map.
+// The fraction means letters still hidden / covered neighboring locations.
+static __attribute__((noinline)) void drawLessonEvidence(const char *clue,
+        const char *legend,int left,int covered)
+{
+    char count[8];
+    if (left<0 || left>covered || covered>6) return;
+    drawTextCenter(128,100,clue,ACCENT,1);
+    siprintf(count,"%d/%d",left,covered);
+    drawTextCenter(128,114,count,left==covered && covered ? GOLD_LT : WHITE,2);
+    if (covered && (left==0 || left==covered))
+        drawChar(162,114,left ? '+' : '-',left ? GOLD_LT : C(9,28,30),2);
+    drawTextCenter(128,136,legend,INK,1);
+}
+
 // text with a dark drop shadow
 static void drawTextShadow(int x, int y, const char *s, u16 col, int scale)
 {
@@ -414,11 +439,11 @@ static void buildHeatTables(void)
 typedef struct { u32 w[TILE_W / 2]; } GemRow;
 // A shelf contains at most POOL_MAX_LEN distinct password letters.
 // The retail ROM retains its full cache. The dual-engine preview has less
-// main-RAM headroom: cache six distinct diamond letters and use the existing
+// main-RAM headroom: cache five distinct diamond letters and use the existing
 // gem + glyph path for the rest. The common 56-cell plain-tile path stays
 // unchanged, and no dictionary or password content is removed.
 #ifdef WP_CYR_PREVIEW
-#define DIAMOND_CACHE_SLOTS 6
+#define DIAMOND_CACHE_SLOTS 5
 #else
 #define DIAMOND_CACHE_SLOTS POOL_MAX_LEN
 #endif
@@ -2649,7 +2674,7 @@ static void drawScriptPreviewTop(void)
     // The first Russian/Ukrainian shelves both say "КНИГИ". Show the
     // active language explicitly so switching remains unambiguous and testable.
     if (scriptPreviewTraining) drawTextCenter(128, 31,
-        scriptPreviewLanguage ? "НАВЧАННЯ БЕЗ ВОГНЮ" : "ОБУЧЕНИЕ БЕЗ ОГНЯ", GOLD_LT, 1);
+        scriptPreviewLanguage ? "БЕЗПЕЧНЕ НАВЧАННЯ" : "БЕЗОПАСНОЕ ОБУЧЕНИЕ", GOLD_LT, 1);
     else if (scriptPreviewDaily) {
         char dateLabel[48];
         int ymd = scriptPreviewDailyDate;
@@ -2686,7 +2711,15 @@ static void drawScriptPreviewTop(void)
     drawTextCenter(128, 88, progress, ACCENT, 1);
     hline(26, 96, 204, DIM);
     char chain[88] = {0};
-    if (scriptBoardChainSpellingUtf8(b, &scriptPreviewDict,
+    int lesson=scriptPreviewTrainingStage();
+    if ((lesson==3 || lesson==4) && !b->chainLen) {
+        int c=lesson==3 ? 6 : b->clueC, r=lesson==3 ? 0 : b->clueR;
+        int left=0,covered=0;
+        if (scriptBoardClueInference(b,c,r,&left,&covered)!=SCRIPT_CLUE_UNSEEN)
+            drawLessonEvidence(scriptPreviewLanguage ? "ПІДКАЗКА" : "ПОДСКАЗКА",
+                scriptPreviewLanguage ? "ЛІТЕРИ / ЗАКРИТІ КЛІТИНКИ" : "БУКВЫ / ЗАКРЫТЫЕ КЛЕТКИ",
+                left,covered);
+    } else if (scriptBoardChainSpellingUtf8(b, &scriptPreviewDict,
                                     scriptQuoteApostropheNow, chain, sizeof chain)) {
         drawTextCenter(128, 106, scriptPreviewLanguage ? "ПОТОЧНЕ СЛОВО" : "ТЕКУЩЕЕ СЛОВО", DIM_TEXT, 1);
         drawTextCenter(128, 122, chain, WHITE, fontTextColumns(chain) > 16 ? 1 : 2);
@@ -2706,7 +2739,8 @@ static void drawScriptPreviewTop(void)
     }
     if (scriptPreviewTraining) {
         const bool uk = scriptPreviewLanguage != 0;
-        int step = scriptPreviewTrainingStage();
+        int step = lesson;
+        drawLessonPanel(step);
         if (step == 5) {
             drawTextCenter(128, 148, uk ? "УРОК ЗАВЕРШЕНО" : "УРОК ЗАВЕРШЁН", GOLD_LT, 1);
             drawTextCenter(128, 160, uk ? "A: ПОЧАТИ ГРУ" : "A: НАЧАТЬ ИГРУ", WHITE, 1);
@@ -2914,6 +2948,17 @@ static void drawTop(const Game *g)
         }
     }
 
+    // In deduction practice, replace the stale last word with the focused
+    // clue's actual remaining/covered count. A new selected word still
+    // gets the ordinary live word preview.
+    int lesson=boardTrainingStage(g);
+    bool lessonEvidence=(lesson==3 || lesson==4) && !g->chainLen;
+    if (lessonEvidence) {
+        int c,r,left=0,covered=0;
+        if (inspectedClue(g,&c,&r)>=0 &&
+            boardClueInference(g,c,r,&left,&covered)!=CLUE_NO_DATA)
+            drawLessonEvidence(ui(UI_P_CLUE),ui(UI_TR_RATIO),left,covered);
+    }
     // current chain large, or the last word and its score
     char w[WORD_BUF]; strcpy(w, chainWordNow);
     for (char *p = w; *p; p++) *p -= 32;
@@ -2937,7 +2982,7 @@ static void drawTop(const Game *g)
             cx2 += jx;
             for (const char *p = w; *p; p++, cx2 += pitch) drawChar2Shadow(cx2, 104, *p, wc, DIM2);
         }
-    } else if (g->lastWord[0]) {
+    } else if (g->lastWord[0] && !lessonEvidence) {
         char lw[MAX_WORD + 1]; strcpy(lw, g->lastWord);
         for (char *p = lw; *p; p++) *p -= 32;
         int lsc = textWidth(lw, 2) <= 200 ? 2 : 1, lx = SCREEN_W / 2 - textWidth(lw, lsc) / 2;   // 17 letters at 2x; the fire meter starts at x 222
@@ -2976,7 +3021,7 @@ static void drawTop(const Game *g)
 
     // word ledger: the last five words of the shelf, newest (with its points) at the right,
     // fading with age. One 1x line without a shadow: rows 137..143, inside HUD slice 2.
-    if (g->ledgerN && clipY0 <= 143 && clipY1 > 137) {
+    if (g->ledgerN && !g->training && clipY0 <= 143 && clipY1 > 137) {
         int x = 238;
         int shown = g->ledgerN < 5 ? g->ledgerN : 5;
         for (int age = 0; age < shown; age++) {
@@ -2998,7 +3043,8 @@ static void drawTop(const Game *g)
     // Explicit tutorial gets a stable, multi-line teaching prompt rather
     // than racing transient score popups. The same board remains visible.
     if (g->training && (g->state == ST_PLAY || g->state == ST_PAUSE)) {
-        int step = boardTrainingStage(g);
+        int step = lesson;
+        drawLessonPanel(step);
         int label = step == 1 ? UI_TR_WORD : step == 2 ? UI_TR_HOLE :
                     step == 3 ? UI_TR_CLUE : UI_TR_FINISH;
         drawTextCenter(128, 148, ui(label), GOLD_LT, 1);
@@ -3773,6 +3819,9 @@ static void topSigs(const Game *g, u32 sig[4])
         if (scriptPreviewTraining) {
             h2 = hmix(h2, chainScoreNow);
             h2 = hmix(h2, scriptQuoteTierNow);
+            h2 = hmix(h2, scriptPreviewTrainingStage());
+            h2 = hmix(h2, b->clueC*8+b->clueR);
+            h2 = hmix(h2, scriptPreviewPeels);
         }
         h3 = hmix(h3, scriptPreviewTrainingStage());
         h3 = hmix(h3, scriptPreviewTrainingNotice);
@@ -3805,6 +3854,9 @@ static void topSigs(const Game *g, u32 sig[4])
         if (g->training) {
             h3 = hmix(h3, chainValidNow);
             h3 = hmix(h3, g->peekHeld);
+            h2 = hmix(h2, boardTrainingStage(g));
+            h2 = hmix(h2, g->wordClueC*8+g->wordClueR);
+            h2 = hmix(h2, g->peels);
         }
         h3 = hmix(h3, g->shelf); h3 = hstr(h3, g->msg); h3 = hmix(h3, g->state == ST_FAIL ? 1 + g->fail : 0);
         h3 = hmix(h3, g->msgTimer > 46); h3 = hmix(h3, g->msgTimer != 0); h3 = hmix(h3, msgAge < 20 ? msgAge + 1 : 0);
