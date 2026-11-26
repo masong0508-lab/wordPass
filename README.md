@@ -38,19 +38,23 @@ open. Japanese, Korean and Chinese are still future milestones.
 Start with **PLAY TUTORIAL** on the regular title screen (or hold L and press A).
 It is a replayable practice shelf, not a scored Classic or Daily run.
 
-1. Drag through the numbered gems in order and press A or SUBMIT to spell a
-   real word. Words score points and leave a numbered clue at the endpoint.
+1. Drag through the numbered gems, including the burning gem, and press A
+   or SUBMIT. A real word puts out the flame, scores points and leaves a
+   numbered clue at the endpoint. The practice flame stays still, and an
+   unrelated word cannot skip the exercise.
 2. Hold L (R in the left-hand layout) and tap the highlighted gem to peel it.
    The blank hole reveals a number: how many adjacent locations contain
    password letters, including already revealed diamonds.
-3. Follow the one-neighbor clue to the highlighted password letter. The gold
-   diamond is a revealed letter and the password tracker fills automatically.
+3. Read the corner's 1: only one covered neighbor remains, so its real
+   gold + marker guarantees a password letter. Peel it to reveal a diamond;
+   the password tracker fills automatically.
 4. Follow the remaining pointers until the whole password is revealed.
    You do not type the password. A starts a fresh Classic run; B returns
    to the title.
 
 Practice uses the selected language's real dictionary and scoring rules.
-There is no fire damage in the lesson, and practice does not alter records.
+The stationary practice flame cannot spread or damage the shelf; no new
+flames ignite and practice does not alter records.
 In ordinary play, peeling costs a turn and adds heat, and short words also
 add heat: use numbered clues to limit guesses and spell through flames.
 
