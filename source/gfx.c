@@ -2642,7 +2642,7 @@ static void drawScriptPreviewTop(void)
         } else if (step == 1) {
             drawTextCenter(128, 148, uk ? "1/4 СЛОВА ДАЮТЬ ПІДКАЗКИ" :
                            "1/4 СЛОВА ДАЮТ ПОДСКАЗКИ", GOLD_LT, 1);
-            drawTextCenter(128, 160, uk ? "ЗЄДНАЙТЕ ЦИФРИ ЗА ПОРЯДКОМ" :
+            drawTextCenter(128, 160, uk ? "ЗʼЄДНАЙТЕ ЦИФРИ ЗА ПОРЯДКОМ" :
                            "СОЕДИНИТЕ ЦИФРЫ ПО ПОРЯДКУ", WHITE, 1);
             drawTextCenter(128, 172, uk ? "A: ПРИЙНЯТИ СЛОВО" :
                            "A: ПРИНЯТЬ СЛОВО", ACCENT, 1);
@@ -2655,6 +2655,13 @@ static void drawScriptPreviewTop(void)
                            "L: КОСНИТЕСЬ МЕТКИ И ОТПУСТИТЕ", WHITE, 1);
             drawTextCenter(128, 172, uk ? "L+A: З КУРСОРОМ / БЕЗ ВОГНЮ" :
                            "L+A: С КУРСОРОМ / БЕЗ ОГНЯ", ACCENT, 1);
+        }
+        if (scriptPreviewTrainingNotice || scriptPreviewCheckpointStatus == SCRIPT_CHECKPOINT_TRAINING) {
+            fillRect(13, 172, 230, 8, BLACK);
+            const char *notice = scriptPreviewTrainingNotice == 2 ?
+                (uk ? "ДОТРИМУЙТЕСЬ МІТОК УРОКУ" : "СЛЕДУЙТЕ МЕТКАМ УРОКА") :
+                (uk ? "УРОК БЕЗ ЗБЕРЕЖЕННЯ ТА ДНЯ" : "УРОК БЕЗ СОХРАНЕНИЯ И ДНЯ");
+            drawTextCenter(128, 172, notice, FIRE2, 1);
         }
         return;
     }
@@ -3636,6 +3643,10 @@ static void topSigs(const Game *g, u32 sig[4])
         h3 = hmix(h3, scriptPreviewRescues);
         h3 = hmix(h3, scriptPreviewRescueError);
         h2 = hmix(h2, scriptPreviewTraining);
+        if (scriptPreviewTraining) {
+            h2 = hmix(h2, chainScoreNow);
+            h2 = hmix(h2, scriptQuoteTierNow);
+        }
         h3 = hmix(h3, scriptPreviewTrainingStage());
         h3 = hmix(h3, scriptPreviewTrainingNotice);
         h3 = hmix(h3, scriptPreviewCheckpointStatus);

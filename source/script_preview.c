@@ -369,7 +369,8 @@ bool scriptPreviewOpen(int language, uint32_t seed)
 }
 bool scriptPreviewToggleDaily(int date, uint32_t freeSeed)
 {
-    if (!scriptPreviewDict.image || scriptPreviewTraining) return false;
+    if (scriptPreviewTraining) { scriptPreviewTrainingNotice = 3; return false; }
+    if (!scriptPreviewDict.image) return false;
     int next = !scriptPreviewDaily;
     if (next && !scriptDailyValidDate(date)) {
         scriptPreviewDailyClockError = 1;
@@ -405,7 +406,10 @@ int scriptPreviewPeel(int c, int r)
         return -1;
     if (scriptPreviewTraining) {
         int cc, rr;
-        if (!scriptPreviewTrainingTarget(&cc, &rr) || c != cc || r != rr) return -1;
+        if (!scriptPreviewTrainingTarget(&cc, &rr) || c != cc || r != rr) {
+            scriptPreviewTrainingNotice = 2;
+            return -1;
+        }
     }
     int result = scriptBoardPeel(&scriptPreviewBoard, c, r);
     if (result >= 0 || result == -2) {
