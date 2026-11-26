@@ -130,6 +130,11 @@ jobs:
           name: wordPass-cyr-preview
       - name: Smoke test
         run: python3 tools/emu/smoke.py wordPass.nds smoke-out
+      - name: Early title and handedness regression
+        timeout-minutes: 5
+        env:
+          WP_ONLY: 'side-aware hints:'
+        run: python3 tools/emu/test_rules.py wordPass.nds rules-out/title-check
       - name: FAT card saves, reboots and damaged language fallback
         timeout-minutes: 12
         run: python3 tools/emu/test_fat.py wordPass.nds wordPass.elf fat-out
