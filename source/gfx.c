@@ -812,6 +812,7 @@ void gfxNope(int c, int r) { nopeC = c; nopeR = r; nopeTimer = 6; }
 // title buttons on the touch screen
 #define TB_Y 134
 bool gfxInTitleClassic(int x, int y) { return x >= BX(20) && x < BX(84) && y >= TB_Y && y < TB_Y + 22; }
+bool gfxInTitleTraining(int x, int y) { return x >= BX(20) && x < BX(152) && y >= 104 && y < 131; }
 bool gfxInTitleDaily(int x, int y)   { return x >= BX(88) && x < BX(152) && y >= TB_Y && y < TB_Y + 22; }
 bool gfxInTitleOptions(int x, int y) { return x >= BX(54) && x < BX(118) && y >= TB_Y + 26 && y < TB_Y + 46; }
 bool gfxInTitleLedger(int x, int y)  { return x >= BX(12) && x < BX(160) && y >= TB_Y + 46 && y < SCREEN_H - 1; }   // the BEST line, just under OPTIONS
@@ -2239,6 +2240,29 @@ static void drawTopGuide(const Game *g)
 // they vanish the instant the player acts and never show while the stylus is down.
 static void drawCues(const Game *g)
 {
+    if (g->training && g->state == ST_PLAY) {
+        // Unlike ordinary idle hints, teaching targets stay visible until
+        // the action is completed. Their numbers are order, not clues.
+        int stage = boardTrainingStage(g);
+        if (stage == 1 && !g->peekHeld) {
+            for (int i = 0; i < g->hintLen; ++i) {
+                int x, y; cellOrigin(g->hintC[i], g->hintR[i], &x, &y);
+                rectOutline(x, y, TILE_W, TILE_H, ACCENT);
+                char n[3]; fmtInt(n, i + 1);
+                fillRect(x + 1, y + 1, textWidth(n, 1) + 2, 9, BLACK);
+                drawText(x + 2, y + 2, n, GOLD_LT, 1);
+            }
+        } else {
+            int c, r;
+            if (boardTrainingTarget(g, &c, &r)) {
+                int x, y; cellOrigin(c, r, &x, &y);
+                rectOutline(x, y, TILE_W, TILE_H, GOLD_LT);
+                rectOutline(x + 1, y + 1, TILE_W - 2, TILE_H - 2, WHITE);
+                if (!g->armed) gPointer(x + TILE_W - 7, y + TILE_H - 3, false);
+            }
+        }
+        return;
+    }
     if (!g->cue || g->state != ST_PLAY) return;
     int age = g->cueAge;
     int bob = tri16(age, 36) / 5;                          // 0..3 px, 36 frames a bob (under 2 Hz)
@@ -2695,7 +2719,8 @@ static void drawTop(const Game *g)
     char s[40];
     {   // the mode under the logo: CLASSIC, LOCKDOWN (tiers), DAILY <modifier> or PRACTICE <modifier>, then the twist for a moment
         const char *ml; u16 mc;
-        if (g->mode == MODE_DAILY) {
+        if (g->training) { ml = ui(UI_TR_TITLE); mc = GOLD_LT; }
+        else if (g->mode == MODE_DAILY) {
             uiFmt(s, sizeof s, g->practice ? UI_H_MODE_PRACTICE : UI_H_MODE_DAILY, boardDailyModName(g->dailyMod));
             ml = s; mc = g->practice ? DIM_TEXT : GOLD_LT;
         } else if (g->lockdown) { ml = boardLockdownName(g->lockTier); mc = FIRE1; }
@@ -2770,7 +2795,7 @@ static void drawTop(const Game *g)
     }
 
     // bookmarks: three small books, filled while you still hold them (Classic only)
-    if (g->mode == MODE_CLASSIC)
+    if (g->mode == MODE_CLASSIC && !g->training)
         for (int i = 0; i < 3; i++) {
             int bx = 214 + i * 8, by = 38;
             if (i < g->lives) {
@@ -2813,6 +2838,25 @@ static void drawTop(const Game *g)
         }
     }
 
+    // Explicit tutorial gets a stable, multi-line teaching prompt rather
+    // than racing transient score popups. The same board remains visible.
+    if (g->training && (g->state == ST_PLAY || g->state == ST_PAUSE)) {
+        int step = boardTrainingStage(g);
+        int label = step == 1 ? UI_TR_WORD : step == 2 ? UI_TR_HOLE :
+                    step == 3 ? UI_TR_CLUE : UI_TR_FINISH;
+        drawTextCenter(128, 148, ui(label), GOLD_LT, 1);
+        if (step == 1) {
+            drawTextCenter(128, 160, ui(UI_TR_TRACE), WHITE, 1);
+            drawTextCenter(128, 172, ui(UI_TU_DRAG), ACCENT, 1);
+        } else {
+            char action[MSG_LEN];
+            uiFmt(action, sizeof action, UI_TR_PEEL, S.hand == HAND_LEFT ? "R" : "L");
+            drawTextCenter(128, 160, action, WHITE, 1);
+            drawTextCenter(128, 172, ui(step == 3 ? UI_TU_N1 :
+                          step == 2 ? UI_TR_HEAT : UI_TR_SAFE), ACCENT, 1);
+        }
+        return;
+    }
     // The objective remains visible when score callouts replace the message line.
     // The shelf number already identifies progression at the top of the screen.
     if (g->state == ST_PLAY || g->state == ST_PAUSE)
@@ -2885,8 +2929,11 @@ static void drawTitle(const Game *g)
     rectOutline(BX(16), 76, 140, 56, GOLD);
     drawTextCenter(BX(86), 84, ui(UI_T_CRACK), ACCENT, 1);
     drawTextCenter(BX(86), 96, ui(UI_T_DONTBURN), INK, 1);
-    char dh[40]; uiFmt(dh, sizeof dh, UI_T_DRAGHINT, S.hand == HAND_LEFT ? "R" : "L");
-    drawTextCenter(BX(86), 112, dh, DIM_TEXT, 1);
+    // A real replayable lesson, not a static description of the rules.
+    // Keep the established Classic, Daily and Options button coordinates.
+    roundRect(BX(20), 104, 132, 26, S.tutorDone ? DIM : GOLD_DK);
+    rectOutline(BX(20), 104, 132, 26, GOLD_LT);
+    drawTextCenter(BX(86), 113, ui(UI_TR_START), WHITE, 1);
     // mode buttons
     bool blink = frame & 32;
     roundRect(BX(20), TB_Y, 64, 22, blink ? GOLD : GOLD_DK);
@@ -3153,6 +3200,20 @@ static void drawResultsCard(const Game *g)
     rectOutline(BX(cx - cw / 2), cy, cw, ch, cardFlash ? WHITE : GOLD_LT);
     rectOutline(BX(cx - cw / 2 + 2), cy + 2, cw - 4, ch - 4, cardFlash ? GOLD_LT : GOLD_DK);
     char title[48], s[48];
+    if (g->training) {
+        drawTextCenter(BX(cx), cy + 8, ui(UI_TR_DONE), GOLD_LT, 1);
+        drawPassDiamonds(g, cy + 20, false);
+        hline(BX(lx), cy + 46, cw - 20, DIM);
+        siprintf(s, "%d", g->wordsThisShelf);
+        drawStatRow(lx, rx, cy + 57, ui(UI_R_WORDS), INK, s, GOLD_LT);
+        siprintf(s, "%d", g->peels);
+        drawStatRow(lx, rx, cy + 70, ui(UI_PEELS), INK, s, GOLD_LT);
+        drawTextCenter(BX(cx), cy + 85, ui(UI_R_NOTSCORED), DIM_TEXT, 1);
+        hline(BX(lx), cy + 100, cw - 20, DIM);
+        drawTextCenter(BX(cx), cy + 111, ui(UI_TR_PLAY), GOLD_LT, 1);
+        drawTextCenter(BX(cx), cy + 133, ui(UI_TR_BACK), WHITE, 1);
+        return;
+    }
     if (g->mode == MODE_DAILY) strcpy(title, ui(g->practice ? UI_R_PRACTICEDONE : UI_R_PASSDONE_D));
     else if (g->twist) {
         uiFmt(title, sizeof title, UI_R_ACCEPTED_T, boardTwistName(g->twist));
@@ -3530,6 +3591,7 @@ static void topSigs(const Game *g, u32 sig[4])
         h0 = hmix(h0, shownScore); h0 = hmix(h0, g->shelf); h0 = hmix(h0, g->mode); h0 = hmix(h0, g->lives);
         h0 = hmix(h0, g->twist + (shelfAge < 120 ? 100 : 0)); h0 = hmix(h0, g->practice + g->lockdown * 2 + g->dailyMod * 4);
         h0 = hmix(h0, fireNext);
+        h0 = hmix(h0, g->training);
         h1 = hmix(h1, g->passLen);
         for (int i = 0; i < g->passLen; i++) h1 = hmix(h1, g->found[i] + letterPop[i] * 2);
         h1 = hmix(h1, g->state == ST_FAIL);
@@ -3537,6 +3599,7 @@ static void topSigs(const Game *g, u32 sig[4])
         h2 = hstr(h2, chainWordNow); h2 = hmix(h2, chainScoreNow); h2 = hmix(h2, chainValidNow); h2 = hmix(h2, invalidTimer);
         h2 = hstr(h2, g->lastWord); h2 = hmix(h2, g->lastWordScore); h2 = hmix(h2, g->ledgerN);
         h2 = hmix(h2, g->ledgerN ? g->ledgerPts[ledgerIndex(g, 0)] : 0);
+        h3 = hmix(h3, g->training ? boardTrainingStage(g) : 0);
         h3 = hmix(h3, g->shelf); h3 = hstr(h3, g->msg); h3 = hmix(h3, g->state == ST_FAIL ? 1 + g->fail : 0);
         h3 = hmix(h3, g->msgTimer > 46); h3 = hmix(h3, g->msgTimer != 0); h3 = hmix(h3, msgAge < 20 ? msgAge + 1 : 0);
     }
