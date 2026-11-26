@@ -357,6 +357,8 @@ void boardNewShelf(Game *g);
 // 4 finish the password, 5 complete. Zero outside the training board.
 int boardTrainingStage(const Game *g);
 bool boardTrainingTarget(const Game *g, int *c, int *r);
+// Final-stage help visits a visible forced clue, never a hidden answer.
+bool boardTrainingClue(const Game *g, int afterC, int afterR, int *c, int *r);
 u32  boardRand(void);                // xorshift32 for every board decision (never for cosmetics)
 void boardSeed(u32 seed);
 int  boardDailyMod(int seed);                // DAILYMOD_* for a date
