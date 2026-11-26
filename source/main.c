@@ -301,10 +301,65 @@ static bool enterScriptPreview(int language, u32 seed, int from)
 }
 #endif
 
-// the next available language in a direction, wrapping (English is always there)
+// The selected language can differ from the active WPD3 table while the
+// integrated title is waiting to launch a Unicode board.
+static int selectedLanguage(void)
+{
+#ifdef WP_CYR_MAIN
+    if (S.language==LANG_RU || S.language==LANG_UK) return S.language;
+#endif
+    return langCur();
+}
+
+#ifdef WP_CYR_MAIN
+static void selectScriptLanguage(int idx)
+{
+    // No simultaneous Latin and Cyrillic heap allocations. Load and
+    // validate the selected Unicode pack only when a game is launched.
+    bool changed=langCur()!=LANG_EN;
+    (void)langLoad(LANG_EN);
+    if (changed) boardNewShelf(&G);
+    S.language=(u8)idx;
+    S.languageChosen=1;
+    settingsSave();
+}
+#endif
+
 static void cycleLanguage(int dir)
 {
+#ifdef WP_CYR_MAIN
+    (void)dir;
+    G.langPick=selectedLanguage(); G.langFrom=ST_OPTIONS; G.state=ST_LANGPICK;
+#else
     gameSetLanguage(langNextAvailable(langCur(), dir));
+#endif
+}
+
+// All title launch actions go through the selected language, not the
+// English fallback table used by the shared menu shell.
+static void startSelectedGame(int mode,bool training,u32 seed)
+{
+#ifdef WP_CYR_MAIN
+    int idx=selectedLanguage();
+    if (idx>=LANG_COUNT) {
+        if (mode==MODE_DAILY) {
+            refreshClock();
+            if (!G.clockOk) { setMsg(ui(UI_MS_CLOCK),120); return; }
+        }
+        gfxLoading(idx==LANG_RU ? "РУССКИЙ" : "УКРАЇНСЬКА");
+        if (!enterScriptPreview(idx-LANG_COUNT,seed,ST_TITLE) ||
+            (training && !scriptPreviewToggleTraining(seed)) ||
+            (mode==MODE_DAILY && !scriptPreviewToggleDaily(G.dailySeed,seed))) {
+            if (G.state==ST_SCRIPT_PREVIEW) leaveScriptPreview();
+            G.langFrom=ST_TITLE; G.langPick=idx; G.state=ST_LANGPICK;
+            setMsg("RU/UK LANGUAGE LOAD FAILED",180);
+        }
+        return;
+    }
+#else
+    (void)seed;
+#endif
+    if (training) newTraining(); else newGame(mode);
 }
 
 // Experimental ROM: two playable but INCOMPLETE script-ID engines appear as
@@ -343,7 +398,7 @@ static void cycleOption(int row, int dir)
         case 4: S.fire = (S.fire + FIRE_COUNT + dir) % FIRE_COUNT; break;
         case 5: S.music = !S.music; break;
         case 6: S.library = (S.library + LIB_COUNT + dir) % LIB_COUNT; break;
-        case 7: if (langCur() == LANG_EN) S.spelling = (S.spelling + SPELL_COUNT + dir) % SPELL_COUNT; break;   // ENGLISH ONLY: other languages ignore it
+        case 7: if (selectedLanguage() == LANG_EN) S.spelling = (S.spelling + SPELL_COUNT + dir) % SPELL_COUNT; break;   // ENGLISH ONLY: other languages ignore it
         case 8: cycleLanguage(dir); break;
     }
     gfxApplySettings();
@@ -872,14 +927,18 @@ int main(void)
     if (S.language != LANG_EN) {     // the saved language, if its files are on this ROM; English otherwise
         int want = S.language;
         S.language = LANG_EN;
+#ifdef WP_CYR_MAIN
+        if (want==LANG_RU || want==LANG_UK) S.language=(u8)want;
+        else
+#endif
         if (langAvailable(want) && langLoad(want)) S.language = (u8)langCur();
     }
     boardNewShelf(&G);
     refreshClock();
     if (!S.languageChosen) {         // first boot: choose a language before the title (only when there is a choice)
         bool other = false;
-        for (int i = 1; i < LANG_COUNT; i++) other = other || langAvailable(i);
-        if (other) { G.langPick = langCur(); G.langFrom = ST_TITLE; G.state = ST_LANGPICK; }
+        for (int i = 1; i < LANG_PICK_COUNT; i++) other = other || pickerAvailable(i);
+        if (other) { G.langPick = selectedLanguage(); G.langFrom = ST_TITLE; G.state = ST_LANGPICK; }
     }
     unsigned seedCounter = 0;
 
@@ -892,7 +951,7 @@ int main(void)
 
         switch (G.state) {
             case ST_TITLE:
-#ifdef WP_CYR_PREVIEW
+#if defined(WP_CYR_PREVIEW) && !defined(WP_CYR_MAIN)
                 // Hold L+R, press Y: engineering-only Russian/Ukrainian DS
                 // preview. Never enters the production language selector or
                 // writes a partially translated locale into the save card.
@@ -907,17 +966,17 @@ int main(void)
                     // only the drawn buttons do anything; a stray tap elsewhere is ignored
                     srand(seedCounter ^ (t.px << 8) ^ t.py);
                     if (gfxInTitleOptions(t.px, t.py)) { G.state = ST_OPTIONS; G.optRow = 0; musicSfx(SFX_MENU, 0); }
-                    else if (gfxInTitleDaily(t.px, t.py)) newGame(MODE_DAILY);
-                    else if (gfxInTitleClassic(t.px, t.py)) newGame(MODE_CLASSIC);
-                    else if (gfxInTitleTraining(t.px, t.py)) newTraining();
+                    else if (gfxInTitleDaily(t.px, t.py)) startSelectedGame(MODE_DAILY,false,seedCounter);
+                    else if (gfxInTitleClassic(t.px, t.py)) startSelectedGame(MODE_CLASSIC,false,seedCounter);
+                    else if (gfxInTitleTraining(t.px, t.py)) startSelectedGame(MODE_CLASSIC,true,seedCounter);
                     else if (gfxInTitleLedger(t.px, t.py)) { G.state = ST_STATS; musicSfx(SFX_MENU, 0); }
                     else if (gfxInTitleGuide(t.px, t.py)) openGuide(ST_TITLE);
-                    else if (gfxInTitleLanguage(t.px, t.py)) { G.langPick = langCur(); G.langFrom = ST_TITLE; G.state = ST_LANGPICK; }
-                } else if ((down & KEY_A) && (held & KEY_L)) newTraining();
-                else if (down & (KEY_START | KEY_A)) { srand(seedCounter); newGame(MODE_CLASSIC); }
+                    else if (gfxInTitleLanguage(t.px, t.py)) { G.langPick = selectedLanguage(); G.langFrom = ST_TITLE; G.state = ST_LANGPICK; }
+                } else if ((down & KEY_A) && (held & KEY_L)) startSelectedGame(MODE_CLASSIC,true,seedCounter);
+                else if (down & (KEY_START | KEY_A)) { srand(seedCounter); startSelectedGame(MODE_CLASSIC,false,seedCounter); }
                 else if (down & (KEY_LEFT | KEY_L)) { gfxTipFlip(-1); musicSfx(SFX_MENU, 0); }
                 else if (down & (KEY_RIGHT | KEY_R)) { gfxTipFlip(1); musicSfx(SFX_MENU, 0); }
-                else if (down & KEY_SELECT) newGame(MODE_DAILY);
+                else if (down & KEY_SELECT) startSelectedGame(MODE_DAILY,false,seedCounter);
                 else if (down & KEY_Y) { G.state = ST_OPTIONS; G.optRow = 0; musicSfx(SFX_MENU, 0); }
                 else if (down & KEY_X) { G.state = ST_STATS; musicSfx(SFX_MENU, 0); }
                 else if (down & KEY_B) openGuide(ST_TITLE);
@@ -945,6 +1004,12 @@ int main(void)
                 if (go && pickerAvailable(G.langPick)) {
 #ifdef WP_CYR_PREVIEW
                     if (G.langPick >= LANG_COUNT) {
+#ifdef WP_CYR_MAIN
+                        G.state=G.langFrom;
+                        selectScriptLanguage(G.langPick);
+                        musicSfx(SFX_MENU,0);
+                        break;
+#else
                         // A named beta board, not a release locale. Leave
                         // S.language and the save format completely untouched.
                         int which = G.langPick - LANG_COUNT;
@@ -954,6 +1019,7 @@ int main(void)
                             setMsg("RU/UK PREVIEW FILES MISSING", 110);
                         }
                         break;
+#endif
                     }
 #endif
                     G.state = G.langFrom;
@@ -975,7 +1041,7 @@ int main(void)
                 if (hit >= 0) { int dir = (hit & 1) ? 1 : -1; G.optRow = hit >> 1; cycleOption(G.optRow, dir); gfxOptionNudge(dir); }
                 if (down & KEY_UP)    { G.optRow = (G.optRow + OPT_ROWS - 1) % OPT_ROWS; musicSfx(SFX_MENU, 0); }
                 if (down & KEY_DOWN)  { G.optRow = (G.optRow + 1) % OPT_ROWS; musicSfx(SFX_MENU, 0); }
-                if ((down & KEY_A) && G.optRow == 8) { G.langPick = langCur(); G.langFrom = ST_OPTIONS; G.state = ST_LANGPICK; break; }   // A on LANGUAGE opens the chooser
+                if ((down & KEY_A) && G.optRow == 8) { G.langPick = selectedLanguage(); G.langFrom = ST_OPTIONS; G.state = ST_LANGPICK; break; }   // A on LANGUAGE opens the chooser
                 if (down & (KEY_RIGHT | KEY_A)) { cycleOption(G.optRow, 1); gfxOptionNudge(1); }
                 if (down & KEY_LEFT)  { cycleOption(G.optRow, -1); gfxOptionNudge(-1); }
                 break;
@@ -1060,6 +1126,9 @@ int main(void)
                 if (down & KEY_X) {
                     int next = scriptPreviewLanguage ^ 1;
                     bool wasDaily = scriptPreviewDaily != 0;
+#ifdef WP_CYR_MAIN
+                    bool wasTraining=scriptPreviewTraining!=0;
+#endif
                     int date = scriptPreviewDailyDate;
                     if (!scriptPreviewOpen(next, seedCounter)) {
                         leaveScriptPreview();
@@ -1069,6 +1138,13 @@ int main(void)
                         // language, but never carry score/ledger across it.
                         (void)scriptPreviewToggleDaily(date, seedCounter);
                     }
+#ifdef WP_CYR_MAIN
+                    if (G.state==ST_SCRIPT_PREVIEW) {
+                        if (wasTraining) (void)scriptPreviewToggleTraining(seedCounter);
+                        S.language=(u8)(LANG_COUNT+next);
+                        settingsSave();
+                    }
+#endif
                     break;
                 }
                 if (down & KEY_SELECT) {
@@ -1091,8 +1167,12 @@ int main(void)
                     else (void)scriptPreviewHint();
                 }
                 if (down & KEY_A) {
-                    if (scriptPreviewRules.status == SCRIPT_PASSED)
+                    if (scriptPreviewRules.status == SCRIPT_PASSED) {
+#ifdef WP_CYR_MAIN
+                        if (scriptPreviewDaily) { leaveScriptPreview(); break; }
+#endif
                         (void)scriptPreviewAdvance(seedCounter);
+                    }
                     else if (scriptPreviewRules.status == SCRIPT_FAILED)
                         (void)scriptPreviewNewPass(seedCounter);
                     else if (scriptPreviewCursorActive) {
