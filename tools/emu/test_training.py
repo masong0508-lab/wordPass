@@ -36,6 +36,22 @@ def main(rom, output):
                     if px[x, y][0] >= 240 and 170 <= px[x, y][1] <= 220 and px[x, y][2] <= 65)
         assert count > 20, (lang, key, "missing amber reminder", count)
 
+    def stage_strip(step):
+        e.run(8)
+        px=e.pixels()
+        colors=[px[20+58*i,144] for i in range(4)]
+        if step<4:
+            assert len(set(colors[step:]))==1, ("inconsistent unstarted stages",step,colors)
+            assert colors[step-1]!=colors[step], ("active stage not highlighted",step,colors)
+        if step>1:
+            assert len(set(colors[:step-1]))==1 and colors[step-2]!=colors[step-1], (
+                "completed stages not distinguished",step,colors)
+        return colors
+    def evidence():
+        e.run(8)
+        px=e.pixels()
+        return tuple(px[x,y] for y in range(114,128) for x in range(96,177))
+
     # A full real-input playthrough in all retail languages, with both
     # hand layouts exercised and before/after saved-record comparisons.
     for lang, code in enumerate(LANG_CODES):
@@ -62,6 +78,7 @@ def main(rom, output):
         assert s["state"] == ST_PLAY and training() and s["practice"], code
         assert s["turn"] == 0 and 3 <= s["hintLen"] <= 20, code
         assert sum(s["cell"][c][r][1] == BURN for c in range(7) for r in range(8)) == 1, code
+        strip=stage_strip(1)
         e.shot(str(out / f"{code}-01-word.png"))
         # A premature peel is a harmless mistake, not a lost turn.
         assert s["cell"][5][0][1] == HOLE, code
@@ -93,6 +110,7 @@ def main(rom, output):
         s = e.state()
         assert s["turn"] == 1 and s["score"] > 0, code
         assert all(s["cell"][c][r][1] != BURN for c in range(7) for r in range(8)), code
+        assert stage_strip(2)!=strip, code
         e.shot(str(out / f"{code}-02-peel.png"))
         e.peel(0, 7)
         assert e.state()["turn"] == 1 and e.state()["peels"] == 0, code
@@ -101,16 +119,21 @@ def main(rom, output):
         s = e.state()
         assert s["turn"] == 2 and s["cell"][6][0][1] == HOLE, code
         assert not s["msgTimer"] or s["msg"] != messages["TU_FIND"][lang][:31], code
+        stage_strip(3)
+        initial_evidence=evidence()
+        assert len(set(initial_evidence))>2, (code,"deduction readout missing")
         e.shot(str(out / f"{code}-03-clue.png"))
         e.peel(6, 1)
         s = e.state()
         assert s["found"][0] == 1 and s["turn"] == 3, code
+        stage_strip(4)
         e.shot(str(out / f"{code}-04-password.png"))
         # Explore an unmarked blank, then solve the island from public
         # focused clues and covered-neighbor states, never the back map.
         length = s["passLen"]
         e.peel(0, 7)
         assert e.state()["turn"] == 4 and e.state()["cell"][0][7][1] == HOLE, code
+        assert evidence()!=initial_evidence, (code,"stale 1/1 readout after free focus change")
         before = e.state()
         for c,r,peek in ((3,5,False),(4,6,True)):
             if peek:
