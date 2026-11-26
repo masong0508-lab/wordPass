@@ -5,7 +5,7 @@ the guide; the test reads only their exposed path plus public progress.
 """
 from pathlib import Path
 import sys
-from wp import Emu, ST_TITLE, ST_PLAY, ST_PASSED, ST_OPTIONS, HOLE, BURN, LANG_CODES, REPO, symbol
+from wp import Emu, ST_TITLE, ST_PLAY, ST_PASSED, ST_OPTIONS, HOLE, BURN, TILE, SECRET, LANG_CODES, REPO, symbol
 from elf_abi import member_offsets
 
 
@@ -18,7 +18,7 @@ def main(rom, output):
         e.press("A", settle=30)
     assert e.state()["state"] == ST_TITLE
     game = symbol(e.rom_elf, "G")
-    off = member_offsets(e.rom_elf, "G", ("training", "hintC", "hintR"))
+    off = member_offsets(e.rom_elf, "G", ("training", "hintC", "hintR", "wordClueC", "wordClueR"))
     def training():
         return bool(e.mem.unsigned[game + off["training"]])
 
@@ -105,14 +105,28 @@ def main(rom, output):
         s = e.state()
         assert s["found"][0] == 1 and s["turn"] == 3, code
         e.shot(str(out / f"{code}-04-password.png"))
-        # The visible lesson target order is fixed by the practice design;
-        # these coordinates do not read or write any ordinary shelf secret.
-        targets = [(3,4),(4,5),(5,6),(6,7),(3,6),(4,7),(6,4),(5,4)]
-        for c, rr in targets[:s["passLen"]-1]:
-            e.peel(c, rr)
+        # Explore an unmarked blank, then solve the island from public
+        # focused clues and covered-neighbor states, never the back map.
+        length = s["passLen"]
+        e.peel(0, 7)
+        assert e.state()["turn"] == 4 and e.state()["cell"][0][7][1] == HOLE, code
+        for _ in range(length-1):
+            before = e.state()
+            e.press("SELECT", settle=12)
+            s = e.state()
+            assert s["turn"] == before["turn"] and s["score"] == before["score"], code
+            assert s["hints"] == before["hints"], code
+            c = int(e.mem.unsigned[game + off["wordClueC"]])
+            r = int(e.mem.unsigned[game + off["wordClueR"]])
+            assert s["cell"][c][r][1] == HOLE, code
+            covered = [(cc, rr) for cc, rr in e.neighbors(c,r) if s["cell"][cc][rr][1] == TILE]
+            assert covered, code
+            cc, rr = covered[-1]
+            e.peel(cc, rr)
+            assert e.state()["cell"][cc][rr][1] == SECRET, code
         s = e.state()
         assert s["state"] == ST_PASSED and all(s["found"]) and not s["fail"], code
-        assert s["turn"] == s["passLen"] + 2 and s["ignitions"] == 0, code
+        assert s["turn"] == s["passLen"] + 3 and s["ignitions"] == 0, code
         assert e.records() == records and s["statWords"] == start["statWords"] and s["statGames"] == start["statGames"], code
         e.run(60)
         e.shot(str(out / f"{code}-05-complete.png"))

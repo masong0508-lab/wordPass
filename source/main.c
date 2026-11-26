@@ -606,6 +606,15 @@ static void chainSfx(int before)
     else if (now < before && !(now == 0 && before > 1)) musicSfx(SFX_UNTAP, now < 1 ? 1 : now);
 }
 
+static bool focusTrainingClue(void)
+{
+    int c,r;
+    if (!boardTrainingClue(&G,G.wordClueC,G.wordClueR,&c,&r)) return false;
+    G.wordClueC=(u8)c; G.wordClueR=(u8)r;
+    G.curOn=0; G.armed=0;
+    return true;
+}
+
 static void handlePlay(u32 down, u32 held, touchPosition *t)
 {
     if (down & KEY_X) { G.peekLatch = !G.peekLatch; gfxPress(PRESS_PEEK); }
@@ -621,6 +630,16 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
 
     if (down & KEY_START) { enterPause(); return; }
     if ((down & KEY_SELECT) && !(held & KEY_TOUCH)) {
+        if (G.training && boardTrainingStage(&G)==4) {
+            if (focusTrainingClue()) {
+                // With no shoulder held, latch PEEK for the next peel.
+                // With a shoulder held, keep the ordinary momentary mode.
+                G.peekLatch=(held & (KEY_L | KEY_R))==0;
+                G.peekHeld=1; musicPeek(true);
+                musicSfx(SFX_MENU,0);
+            }
+            return;
+        }
         // A physical shoulder still means PEEK. Instead of charging for a
         // word hint that cannot be followed, SELECT scans already-visible
         // numbered clues and moves the cursor to one worth inspecting.
@@ -677,7 +696,13 @@ static void handlePlay(u32 down, u32 held, touchPosition *t)
         else if ((keysUp() & KEY_TOUCH) && G.armed) { peel = true; c = G.armC; r = G.armR; G.armed = 0; G.peekLatch = 0; }
         if (peel) {
             int letter = G.cell[c][r].letter;
+            int trainingStage=boardTrainingStage(&G);
             int res = boardPeel(&G, c, r);
+            if (trainingStage==3 && res==2 && boardTrainingStage(&G)==4)
+                (void)focusTrainingClue();
+            else if (trainingStage==4 && res==1) {
+                G.wordClueC=(u8)c; G.wordClueR=(u8)r;
+            }
             if (!res && G.training) {
                 gfxNope(c, r);
                 musicSfx(SFX_INVALID, 0);

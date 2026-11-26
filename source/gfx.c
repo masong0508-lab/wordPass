@@ -1065,7 +1065,7 @@ static int inspectedClue(const Game *g, int *c, int *r)
         *c = 6; *r = 0;
         return boardBackNumber(g, *c, *r);
     }
-    if (!g->peekHeld) return -1;
+    if (!g->peekHeld && !(g->training && boardTrainingStage(g)==4)) return -1;
     if (g->armed) { *c = g->armC; *r = g->armR; }
     else if (g->curOn) { *c = g->curC; *r = g->curR; }
     else { *c = g->wordClueC; *r = g->wordClueR; }
@@ -2290,8 +2290,8 @@ static void drawCues(const Game *g)
                 fillRect(x + 1, y + 1, textWidth(n, 1) + 2, 9, BLACK);
                 drawText(x + 2, y + 2, n, GOLD_LT, 1);
             }
-        } else if (stage != 3) {
-            // Stage three uses the real '+' deduction, not a secret arrow.
+        } else if (stage == 2) {
+            // Stages three and four use public clues, never secret arrows.
             int c, r;
             if (boardTrainingTarget(g, &c, &r)) {
                 int x, y; cellOrigin(c, r, &x, &y);
@@ -2515,7 +2515,7 @@ static void drawScriptPreviewBoard(void)
                 fillRect(x + 1, y + 1, 8, 9, BLACK);
                 drawChar(x + 2, y + 2, '1' + i, GOLD_LT, 1);
             }
-        } else if (!deductionLesson) {
+        } else if (scriptPreviewTrainingStage()==2) {
             int c, r;
             if (scriptPreviewTrainingTarget(&c, &r)) {
                 int x, y; cellOrigin(c, r, &x, &y);
@@ -2699,9 +2699,12 @@ static void drawScriptPreviewTop(void)
                 step == 3 ? (uk ? "3/4 + ОЗНАЧАЄ ЛІТЕРУ ПАРОЛЯ" : "3/4 + ОЗНАЧАЕТ БУКВУ ПАРОЛЯ") :
                             (uk ? "4/4 ВІДКРИЙТЕ ВЕСЬ ПАРОЛЬ" : "4/4 ОТКРОЙТЕ ВЕСЬ ПАРОЛЬ");
             drawTextCenter(128, 148, label, GOLD_LT, 1);
-            drawTextCenter(128, 160, uk ? "L: ТОРКНІТЬСЯ МІТКИ Й ВІДПУСТІТЬ" :
-                           "L: КОСНИТЕСЬ МЕТКИ И ОТПУСТИТЕ", WHITE, 1);
-            drawTextCenter(128, 172, step == 3 ?
+            drawTextCenter(128, 160, step==4 ?
+                           (uk ? "L: ВІДКРИВАЙТЕ ЗА ЧИСЛАМИ" : "L: ОТКРЫВАЙТЕ ПО ЧИСЛАМ") :
+                           (uk ? "L: ТОРКНІТЬСЯ МІТКИ Й ВІДПУСТІТЬ" :
+                                 "L: КОСНИТЕСЬ МЕТКИ И ОТПУСТИТЕ"), WHITE, 1);
+            drawTextCenter(128, 172, step==4 ?
+                           (uk ? "R: НАСТУПНА ПІДКАЗКА" : "R: СЛЕДУЮЩАЯ ПОДСКАЗКА") : step == 3 ?
                            (uk ? "1 З 1: ЄДИНА ЗАКРИТА КЛІТИНКА" : "1 ИЗ 1: ЕДИНСТВЕННАЯ ЗАКРЫТАЯ") :
                            (uk ? "L+A: З КУРСОРОМ / БЕЗ ВОГНЮ" :
                                  "L+A: С КУРСОРОМ / БЕЗ ОГНЯ"), ACCENT, 1);
@@ -2993,10 +2996,11 @@ static void drawTop(const Game *g)
             }
         } else {
             char action[MSG_LEN];
-            uiFmt(action, sizeof action, UI_TR_PEEL, S.hand == HAND_LEFT ? "R" : "L");
+            uiFmt(action, sizeof action, step==4 ? UI_TU_PEEK : UI_TR_PEEL,
+                  S.hand == HAND_LEFT ? "R" : "L");
             drawTextCenter(128, 160, action, WHITE, 1);
             drawTextCenter(128, 172, correcting ? reminder : ui(step == 3 ? UI_TU_N1 :
-                          step == 2 ? UI_G_FIRE1 : UI_TR_SAFE), correcting ? FIRE2 : ACCENT, 1);
+                          step == 2 ? UI_G_FIRE1 : UI_MS_HINTIDLE), correcting ? FIRE2 : ACCENT, 1);
         }
         return;
     }

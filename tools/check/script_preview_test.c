@@ -617,16 +617,35 @@ static void guidedTraining(void)
     CHECK(scriptPreviewPeel(6,1) == 1 &&
           scriptPreviewTrainingStage() == 4,
           "find the indicated actual neighboring letter");
-    int len = scriptPreviewBoard.passLen;
+    int len = scriptPreviewBoard.passLen, c, r;
+    CHECK(!scriptPreviewTrainingTarget(&c,&r) &&
+          scriptPreviewPeel(0,7)==0 && scriptPreviewPeel(0,7)==-1 &&
+          scriptPreviewTurns==4,
+          "independent practice allows exploratory blank peels but not repeated holes");
     for (int i=1; i<len; ++i) {
-        int c, r;
-        CHECK(scriptPreviewTrainingTarget(&c,&r) &&
-              scriptPreviewPeel(c,r) > 0,
-              "complete the remaining real password letters");
+        int turns=scriptPreviewTurns, points=scriptPreviewScore;
+        bool hint=scriptPreviewHint();
+        c=scriptPreviewBoard.clueC; r=scriptPreviewBoard.clueR;
+        CHECK(hint && scriptPreviewTurns==turns && scriptPreviewScore==points &&
+              !scriptPreviewHints &&
+              scriptBoardClueInference(&scriptPreviewBoard,c,r,&left,&covered)==SCRIPT_CLUE_PASS &&
+              left>0 && left==covered,
+              "free clue navigation uses only public evidence");
+        if (!hint) break;
+        int nc=-1,nr=-1;
+        for (int cc=c-1;cc<=c+1;++cc)
+            for (int rr=r-1;rr<=r+1;++rr) {
+                if (cc<0 || cc>=SCRIPT_COLS || rr<0 || rr>=SCRIPT_ROWS) continue;
+                bool neighbor=cc==c ? rr!=r : rr==r || rr==r+((c&1)?1:-1);
+                if (neighbor && scriptPreviewBoard.state[cc][rr]==SCRIPT_TILE)
+                    { nc=cc; nr=rr; }
+            }
+        CHECK(nc>=0 && scriptPreviewPeel(nc,nr)>0,
+              "deduce a real remaining password letter without reading the secret map");
     }
     CHECK(scriptPreviewTrainingStage() == 5 &&
           scriptPreviewRules.status == SCRIPT_PASSED &&
-          scriptPreviewTurns == len + 2 && !scriptPreviewRules.ignitions,
+          scriptPreviewTurns == len + 3 && !scriptPreviewRules.ignitions,
           "complete actual Cyrillic tutorial without fire");
     CHECK(scriptPreviewAdvance(304) && !scriptPreviewTraining &&
           scriptPreviewShelf == 1 && !scriptPreviewScore && !scriptPreviewTurns &&

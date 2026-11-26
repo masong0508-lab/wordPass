@@ -48,9 +48,12 @@ It is a replayable practice shelf, not a scored Classic or Daily run.
 3. Read the corner's 1: only one covered neighbor remains, so its real
    gold + marker guarantees a password letter. Peel it to reveal a diamond;
    the password tracker fills automatically.
-4. Follow the remaining pointers until the whole password is revealed.
-   You do not type the password. A starts a fresh Classic run; B returns
-   to the title.
+4. Solve the remaining letters yourself from the open numbered clues.
+   A gold + means every covered neighbor of the inspected clue is a
+   password letter. SELECT (R in Russian/Ukrainian preview) focuses another
+   forced clue for free, not a hidden answer. Explore any covered gem;
+   blank peels reveal more clues. You do not type the password. A starts
+   a fresh Classic run; B returns to the title.
 
 Practice uses the selected language's real dictionary and scoring rules.
 The stationary practice flame cannot spread or damage the shelf; no new

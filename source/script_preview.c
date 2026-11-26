@@ -197,7 +197,11 @@ static bool startPass(unsigned shelf, uint32_t seed, int bankedScore)
         memset(nextBoard.back, 0, sizeof nextBoard.back);
         for (unsigned i = 0; i < nextBoard.passLen; ++i)
             nextBoard.back[cols[i]][rows[i]] = (uint8_t)(i + 1);
+        static const uint8_t hc[7] = {3,4,6,6,5,2,2}, hr[7] = {5,6,5,6,5,5,6};
         nextBoard.state[5][0] = SCRIPT_HOLE;
+        for (int i=0; i<7; ++i) nextBoard.state[hc[i]][hr[i]]=SCRIPT_HOLE;
+        for (unsigned i=nextBoard.passLen; i<9; ++i)
+            nextBoard.state[cols[i]][rows[i]]=SCRIPT_HOLE;
     }
     // Generate up to two distinct legal opening words; explicit L+R rescue
     // still plants only one word after charging its normal turn and heat.
@@ -251,15 +255,22 @@ bool scriptPreviewTrainingTarget(int *c, int *r)
     int stage = scriptPreviewTrainingStage();
     if (!c || !r) return false;
     if (stage == 2) { *c = 6; *r = 0; return true; }
-    if (stage != 3 && stage != 4) return false;
-    const ScriptBoard *b = &scriptPreviewBoard;
-    for (unsigned i = 0; i < b->passLen; ++i)
-        if (!b->found[i])
-            for (int cc = 0; cc < SCRIPT_COLS; ++cc)
-                for (int rr = 0; rr < SCRIPT_ROWS; ++rr)
-                    if (b->back[cc][rr] == i + 1u) {
-                        *c = cc; *r = rr; return true;
-                    }
+    if (stage == 3) { *c = 6; *r = 1; return true; }
+    return false;
+}
+static bool focusTrainingClue(void)
+{
+    if (scriptPreviewTrainingStage()!=4) return false;
+    const ScriptBoard *b=&scriptPreviewBoard;
+    static const uint8_t cc[4]={3,4,6,6}, rr[4]={5,6,5,6};
+    int start=-1;
+    for (int i=0;i<4;++i)
+        if (cc[i]==b->clueC && rr[i]==b->clueR) start=i;
+    for (int i=1;i<=4;++i) {
+        int k=(start+i)%4;
+        if (scriptBoardClueInference(b,cc[k],rr[k],NULL,NULL)==SCRIPT_CLUE_PASS)
+            return scriptPreviewFocusClue(cc[k],rr[k]);
+    }
     return false;
 }
 bool scriptPreviewToggleTraining(uint32_t seed)
@@ -414,7 +425,8 @@ int scriptPreviewPeel(int c, int r)
 {
     if (!scriptPreviewDict.image || scriptPreviewRules.status != SCRIPT_RUNNING)
         return -1;
-    if (scriptPreviewTraining) {
+    int stage = scriptPreviewTrainingStage();
+    if (scriptPreviewTraining && stage != 4) {
         int cc, rr;
         if (!scriptPreviewTrainingTarget(&cc, &rr) || c != cc || r != rr) {
             scriptPreviewTrainingNotice = scriptPreviewTrainingStage() == 1 ?
@@ -435,6 +447,8 @@ int scriptPreviewPeel(int c, int r)
         int bonus = takeTurn(1, true, result == -2);
         scriptPreviewTurns = scriptPreviewRules.turns;
         scriptPreviewScore += bonus;
+        if (stage==3 && scriptPreviewTrainingStage()==4)
+            (void)focusTrainingClue();
     }
     return result;
 }
@@ -462,6 +476,9 @@ bool scriptPreviewHint(void)
 {
     if (!scriptPreviewDict.image || scriptPreviewRules.status != SCRIPT_RUNNING ||
         (scriptPreviewHints && !scriptPreviewTraining)) return false;
+    // In the final lesson R visits a public clue, leaving the chain,
+    // score, turn count and hint allowance untouched.
+    if (scriptPreviewTrainingStage()==4) return focusTrainingClue();
     uint8_t c[SCRIPT_HINT_MAX], r[SCRIPT_HINT_MAX];
     int n;
     if (scriptPreviewTrainingStage() == 1) {
