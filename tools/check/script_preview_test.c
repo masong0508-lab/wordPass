@@ -548,6 +548,23 @@ static void guidedTraining(void)
     CHECK(scriptPreviewPeel(1,2) == -1 && scriptPreviewTurns == 0 &&
           scriptPreviewTrainingNotice == SCRIPT_TRAIN_NOTICE_WORD_FIRST,
           "early peel explains that a word must be spelled first");
+    // Hinting must reinforce the numbered path, even after a partial
+    // touch/controller chain, and must never spend the normal hint budget.
+    CHECK(scriptPreviewChain(scriptPreviewTrainingC[0], scriptPreviewTrainingR[0]),
+          "start a partial numbered chain");
+    for (int attempt=0; attempt<2; ++attempt) {
+        CHECK(scriptPreviewHint() &&
+              scriptPreviewBoard.chainLen == scriptPreviewTrainingLen &&
+              !memcmp(scriptPreviewBoard.chainC, scriptPreviewTrainingC,
+                      (size_t)scriptPreviewTrainingLen) &&
+              !memcmp(scriptPreviewBoard.chainR, scriptPreviewTrainingR,
+                      (size_t)scriptPreviewTrainingLen) &&
+              scriptPreviewQuote(NULL) > 0 &&
+              scriptPreviewTrainingStage() == 1 && !scriptPreviewTurns &&
+              !scriptPreviewScore && !scriptPreviewPeels && !scriptPreviewHints,
+              "repeatable free tutorial hint selects the exact accepted numbered word");
+    }
+    scriptBoardClearChain(&scriptPreviewBoard);
     for (int i=0; i<scriptPreviewTrainingLen; ++i)
         CHECK(scriptPreviewChain(scriptPreviewTrainingC[i],scriptPreviewTrainingR[i]),
               "numbered tutorial route follows actual adjacent gems");
