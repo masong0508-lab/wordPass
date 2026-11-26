@@ -19,6 +19,78 @@ def check(condition, label):
     if not condition:
         raise AssertionError(label)
 
+def exercise_loss(e, out, scorch):
+    """Cause a real loss via a single ordinary peel after arranging fire.
+    The emulator-only setup does not alter the game action's rules or status.
+    """
+    board = symbol(e.rom_elf, "scriptPreviewBoard")
+    rules = symbol(e.rom_elf, "scriptPreviewRules")
+    off = member_offsets(e.rom_elf, "scriptPreviewRules",
+                         ("status", "failReason", "burnEvery", "burnTick"))
+    pass_len = int(e.mem.unsigned[board + 227])
+    check(4 <= pass_len <= 9, "loss fixture needs a real hidden password")
+    def reason():
+        return int(e.mem.unsigned[rules + off["failReason"]])
+    def status():
+        return int(e.mem.unsigned[rules + off["status"]])
+    check(status() == 0 and reason() == 0 and
+          get_int(e, "scriptPreviewTurns") == 0,
+          "loss fixture must begin on a fresh running shelf")
+    before = e.emu.screenshot().convert("RGB").crop((26, 70, 230, 84))
+    if scorch:
+        # Make one genuine hidden secret dangerous, then use actual stylus
+        # input to trigger the existing fatal scorch check.
+        index = next(i for i in range(56)
+                     if int(e.mem.unsigned[board + 153 + i]))
+        c, r = divmod(index, 8)
+        e.mem.write_byte(board + 56 + index, 2)  # SCRIPT_BURN
+    else:
+        # A due fire step encountering a bottom-row flame loses the shelf.
+        # The top-left ordinary peel spends one real turn to trigger it.
+        e.mem.write_byte(board + 56 + 6 * 8 + 7, 2)
+        e.mem.write_byte(rules + off["burnTick"],
+                         int(e.mem.unsigned[rules + off["burnEvery"]]) - 1)
+        c, r = 0, 0
+    original_found = bytes(e.mem.unsigned[board + 218:board + 218 + pass_len])
+    old_score = get_int(e, "scriptPreviewScore")
+    e.hold("L")
+    e.tap(*e.center(c, r), settle=14)
+    e.hold("L", False)
+    check(status() == 2 and reason() == (1 if scorch else 2) and
+          get_int(e, "scriptPreviewTurns") == 1 and
+          get_int(e, "scriptPreviewScore") == old_score,
+          "actual peel must preserve score and distinguish the two loss reasons")
+    check(bytes(e.mem.unsigned[board + 218:board + 218 + pass_len]) == original_found,
+          "displaying a lost password may not mark any letter found")
+    e.run(12)
+    after = e.emu.screenshot().convert("RGB").crop((26, 70, 230, 84))
+    check(ImageChops.difference(before, after).getbbox() is not None,
+          "terminal loss must redraw the password plaque")
+    # A fully revealed lost-password plaque is independent of found flags.
+    # Temporarily set flags only in this diagnostic, compare its rendered
+    # glyph region, then restore the original real game state before retry.
+    try:
+        for i in range(pass_len):
+            e.mem.write_byte(board + 218 + i, 1)
+        e.run(12)
+        full = e.emu.screenshot().convert("RGB").crop((26, 70, 230, 84))
+        check(ImageChops.difference(after, full).getbbox() is None,
+              "lost answer must already display every character")
+    finally:
+        for i, value in enumerate(original_found):
+            e.mem.write_byte(board + 218 + i, value)
+        e.run(12)
+    tag = "ru-scorched-password" if scorch else "uk-bottom-fire"
+    e.shot(str(out / (tag + ".png")))
+    e.press("A", settle=12)
+    check(status() == 0 and reason() == 0 and
+          get_int(e, "scriptPreviewTurns") == 0,
+          "real retry must clear the terminal reason and start a fresh shelf")
+    fresh = e.emu.screenshot().convert("RGB").crop((26, 70, 230, 84))
+    check(ImageChops.difference(after, fresh).getbbox() is not None,
+          "retry must restore the live masked password")
+
+
 def main(rom, output):
     out = Path(output)
     out.mkdir(parents=True, exist_ok=True)
@@ -404,6 +476,7 @@ def main(rom, output):
           get_int(e, "scriptPreviewTurns") == 0 and
           get_int(e, "scriptPreviewShelf") == 1,
           "Russian first-shelf replay must discard its attempt score")
+    exercise_loss(e, out, scorch=True)
     e.press("X", settle=20)
     await_preview(1)
     check(e.state()["state"] == 9 and get_int(e, "scriptPreviewLanguage") == 1,
@@ -589,6 +662,7 @@ def main(rom, output):
     await_preview(1)
     check(e.state()["state"] == 9 and get_int(e, "scriptPreviewLanguage") == 1,
           "D-pad UP wrapping / A should choose Українська DEMO")
+    exercise_loss(e, out, scorch=False)
     e.press("START", settle=16)
     await_title()
     check(e.state()["state"] == 0, "controller-selected Ukrainian DEMO must exit safely")

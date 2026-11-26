@@ -2540,21 +2540,24 @@ static void drawScriptPreviewTop(void)
     drawTextCenter(128, 47, theme, ACCENT, 2);
     char word[80] = {0};
     if (scriptBoardPassUtf8(b, &scriptPreviewDict, word, sizeof word)) {
-        // Hidden symbols are still readable as placeholders until peeled.
-        // This is NOT displayed as a spoiler; build a separate masked string.
+        // Live shelves show only peeled letters. Once a shelf is actually
+        // lost, reveal its answer (not the hidden board coordinates) just
+        // like the retail game. Do not change found flags or award points.
+        bool lost = scriptPreviewRules.status == SCRIPT_FAILED;
         char masked[80] = {0};
         const char *p = word;
         int at = 0;
         for (int i = 0; i < b->passLen && at < (int)sizeof masked - 5; i++) {
             const char *before = p;
             (void)fontGlyphNext(&p);
-            if (b->found[i]) {
+            if (b->found[i] || lost) {
                 while (before < p) masked[at++] = *before++;
             } else masked[at++] = '_';
             if (i != b->passLen - 1) masked[at++] = ' ';
         }
         masked[at] = 0;
-        drawTextCenter(128, 70, masked, scriptBoardPassComplete(b) ? GOLD_LT : WHITE, 2);
+        drawTextCenter(128, 70, masked,
+                       lost ? FIRE2 : scriptBoardPassComplete(b) ? GOLD_LT : WHITE, 2);
     }
     // Clarify the objective: front gems make words, while peels uncover
     // hidden password symbols. This is the same FOUND x/y information shown
@@ -2607,10 +2610,18 @@ static void drawScriptPreviewTop(void)
                       "ПОЛИЦЮ ВРЯТОВАНО +%d - A: ДАЛІ" :
                       "ПОЛКА СПАСЕНА +%d - A: ДАЛЬШЕ", scriptPreviewRules.lastBonus);
         drawTextCenter(128, 169, msg, GOLD_LT, 1);
-    } else if (scriptPreviewRules.status == SCRIPT_FAILED)
-        drawTextCenter(128, 169, scriptPreviewLanguage ?
-                       "ВОГОНЬ - A: ЗНОВУ" : "ПОЖАР - A: СНОВА", FIRE2, 1);
-    else if (scriptPreviewDailyClockError)
+    } else if (scriptPreviewRules.status == SCRIPT_FAILED) {
+        const char *msg;
+        if (scriptPreviewRules.failReason == SCRIPT_LOSS_SCORCH)
+            msg = scriptPreviewLanguage ?
+                  "ПАРОЛЬ ЗГОРІВ - A: ЗНОВУ" : "ПАРОЛЬ СГОРЕЛ - A: СНОВА";
+        else if (scriptPreviewRules.failReason == SCRIPT_LOSS_FIRE)
+            msg = scriptPreviewLanguage ?
+                  "ВОГОНЬ УНИЗУ - A: ЗНОВУ" : "ОГОНЬ ВНИЗУ - A: СНОВА";
+        else msg = scriptPreviewLanguage ?
+                   "ПОРАЗКА - A: ЗНОВУ" : "ПОРАЖЕНИЕ - A: СНОВА";
+        drawTextCenter(128, 169, msg, FIRE2, 1);
+    } else if (scriptPreviewDailyClockError)
         drawTextCenter(128, 169, scriptPreviewLanguage ?
                        "ВСТАНОВІТЬ ДАТУ НА DS" : "УСТАНОВИТЕ ДАТУ НА DS", FIRE2, 1);
     else if (scriptPreviewRescueError)
@@ -3457,6 +3468,8 @@ static void topSigs(const Game *g, u32 sig[4])
         h2 = hmix(h2, scriptPreviewDaily); // the manual's SELECT description
         h1 = hmix(h1, b->passLen);
         h1 = hmix(h1, b->passTheme);
+        // A terminal loss changes the answer even if no letter was peeled.
+        h1 = hmix(h1, scriptPreviewRules.status == SCRIPT_FAILED);
         for (int i = 0; i < b->passLen; i++) {
             h1 = hmix(h1, b->pass[i]);
             h1 = hmix(h1, b->found[i]);
@@ -3472,6 +3485,7 @@ static void topSigs(const Game *g, u32 sig[4])
         h3 = hmix(h3, scriptQuoteTierNow);
         h3 = hmix(h3, b->chainLen >= WPD4_MIN_WORD); // invalid-word message visibility
         h3 = hmix(h3, scriptPreviewRules.status);
+        h3 = hmix(h3, scriptPreviewRules.failReason);
         h3 = hmix(h3, scriptPreviewRules.lastBonus);
         h3 = hmix(h3, scriptPreviewDaily);
         h3 = hmix(h3, scriptPreviewDailyClockError);

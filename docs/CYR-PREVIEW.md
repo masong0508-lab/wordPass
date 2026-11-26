@@ -117,8 +117,12 @@ Replaying a free-play shelf discards the **current attempt's** word points
 and completion bonus. Points from previously completed shelves stay banked.
 Press **A after completing the password** to bank that shelf and advance;
 pressing Select on the completed shelf instead replays it without banking
-the same bonus repeatedly. Retrying after fire follows the same rule.
-Daily Practice always retries from zero. If a replacement board cannot be
+the same bonus repeatedly. Retrying after fire follows the same rule. If a shelf is lost, the plaque
+shows the complete answer in red, together with a localized explanation
+of whether the password was scorched or fire reached the bottom. The
+actual found-letter count is unchanged; this is post-loss feedback, not
+a free reveal during active play. A retries the shelf and masks the new
+password. Daily Practice always retries from zero. If a replacement board cannot be
 generated, the current board, selection, score and mode remain intact.
 
 **Fair clue reading:** An earlier engineering renderer painted a tiny gold
