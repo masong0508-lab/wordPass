@@ -169,6 +169,35 @@ def main():
             'cycling clues altered game state or unexpectedly left PEEK'
         e.hold('L', False)
 
+    def revisit_open_clues():
+        # Normal play must accept the same harmless open-number inspection
+        # taught in practice. A latched PEEK must survive the inspection so
+        # the player's next touch can actually peel the inferred neighbor.
+        fixture(column=2, background=HOLE, keep_word=True)
+        e.set_cell(6,2,TILE,'x')
+        e.set_back(6,2,1)
+        stable=resources()
+        learned=clues()
+        for shoulder in ('L','R'):
+            e.hold(shoulder)
+            e.tap(*e.center(6,1),settle=12)
+            g=e.state()
+            assert focus()==(6,1) and g['peek'] and not g['armed']
+            assert resources()==stable and clues()==learned and not g['chainLen']
+            e.hold(shoulder,False)
+            e.run(4)
+        e.press('X',settle=4)
+        e.tap(*e.center(6,1),settle=12)
+        g=e.state()
+        assert focus()==(6,1) and g['peek'] and not g['armed']
+        assert resources()==stable and clues()==learned
+        e.tap(*e.center(6,2),settle=12)
+        g=e.state()
+        assert g['cell'][6][2][1]==SECRET and g['found'][0]
+        assert g['turn']==stable['turn']+1 and g['peels']==stable['peels']+1
+        assert not g['peek'], 'successful latched peel did not leave PEEK'
+        e.shot(str(args.output / f'normal_clue_revisit_{e.bx}.png'))
+
     def diamond_hint():
         path = fixture(keep_word=True)
         e.set_pass(4, 1 << 2)          # C is the third letter in the debug password ABCD
@@ -511,6 +540,7 @@ def main():
 
     scenarios = (('SELECT leaves PEEK safely', select_from_peek),
                  ('held-shoulder SELECT cycles useful visible clues freely', focus_visible_clue_with_select),
+                 ('normal play revisits open clues without consuming the next peel', revisit_open_clues),
                  ('submit ring and button match chaining or PEEK mode', submit_affordances_respect_peek),
                  ('word cues stay coherent when entering and leaving PEEK', word_cues_respect_peek),
                  ('diamond starts a usable word hint', diamond_hint),
