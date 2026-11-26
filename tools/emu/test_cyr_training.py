@@ -96,16 +96,34 @@ def main(rom, output):
         assert int(e.mem.unsigned[board + 218]) == 1
         e.shot(str(out / f"{code}-04-password.png"))
         length = int(e.mem.unsigned[board + 227])
-        targets = [(3,4),(4,5),(5,6),(6,7),(3,6),(4,7),(6,4),(5,4)]
+        clue_off = member_offsets(e.rom_elf, "scriptPreviewBoard", ("clueC","clueR"))
+        def tile_state(c,r):
+            return int(e.mem.unsigned[board + state_off + c*8 + r])
         e.hold("L")
-        for cell in targets[:length-1]:
-            e.tap(*e.center(*cell), settle=8)
+        e.tap(*e.center(0,7), settle=8)
         e.hold("L", False)
+        assert tile_state(0,7) == 0 and integer("scriptPreviewTurns") == 4
+        for _ in range(length-1):
+            before = (integer("scriptPreviewTurns"), integer("scriptPreviewScore"),
+                      integer("scriptPreviewHints"))
+            e.press("R", settle=12)
+            assert before == (integer("scriptPreviewTurns"), integer("scriptPreviewScore"),
+                              integer("scriptPreviewHints"))
+            c = int(e.mem.unsigned[board + clue_off["clueC"]])
+            r = int(e.mem.unsigned[board + clue_off["clueR"]])
+            assert tile_state(c,r)==0
+            covered = [(cc,rr) for cc,rr in e.neighbors(c,r) if tile_state(cc,rr)==1]
+            assert covered, code
+            cc,rr = covered[-1]
+            e.hold("L")
+            e.tap(*e.center(cc,rr), settle=8)
+            e.hold("L", False)
+            assert tile_state(cc,rr)==3, code
         rules = symbol(e.rom_elf, "scriptPreviewRules")
         status = member_offsets(e.rom_elf, "scriptPreviewRules", ("status", "ignitions"))
         assert int(e.mem.unsigned[rules+status["status"]]) == 1
-        assert integer("scriptPreviewTurns") == length+2
-        assert integer("scriptPreviewPeels") == length+1
+        assert integer("scriptPreviewTurns") == length+3
+        assert integer("scriptPreviewPeels") == length+2
         assert int.from_bytes(bytes(e.mem.unsigned[rules+status["ignitions"]:rules+status["ignitions"]+2]), "little") == 0
         e.shot(str(out / f"{code}-05-complete.png"))
         e.press("A", settle=20)
