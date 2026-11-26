@@ -5,7 +5,7 @@ the guide; the test reads only their exposed path plus public progress.
 """
 from pathlib import Path
 import sys
-from wp import Emu, ST_TITLE, ST_PLAY, ST_PASSED, ST_OPTIONS, HOLE, LANG_CODES, symbol
+from wp import Emu, ST_TITLE, ST_PLAY, ST_PASSED, ST_OPTIONS, HOLE, LANG_CODES, REPO, symbol
 from elf_abi import member_offsets
 
 
@@ -21,6 +21,20 @@ def main(rom, output):
     off = member_offsets(e.rom_elf, "G", ("training", "hintC", "hintR"))
     def training():
         return bool(e.mem.unsigned[game + off["training"]])
+
+    messages = {}
+    for line in (Path(REPO) / "tools/lang/ui_strings.tsv").read_text(encoding="utf-8").splitlines():
+        row = line.split("\t")
+        if row[0] in ("TU_DRAG", "TU_FIND"):
+            messages[row[0]] = row[4:]
+    def error_feedback(lang, key):
+        s = e.state()
+        assert s["msgTimer"] > 0 and s["msg"] == messages[key][lang][:31], (lang, key, s["msg"])
+        # Check the actually rendered reminder, not just its debug mirror.
+        px = e.pixels()
+        count = sum(1 for y in range(172, 179) for x in range(12, 244)
+                    if px[x, y][0] >= 240 and 170 <= px[x, y][1] <= 220 and px[x, y][2] <= 65)
+        assert count > 20, (lang, key, "missing amber reminder", count)
 
     # A full real-input playthrough in all retail languages, with both
     # hand layouts exercised and before/after saved-record comparisons.
@@ -50,6 +64,7 @@ def main(rom, output):
         # A premature peel is a harmless mistake, not a lost turn.
         e.peel(1, 2)
         assert e.state()["turn"] == 0 and e.state()["peels"] == 0
+        error_feedback(lang, "TU_DRAG")
         n = s["hintLen"]
         path = [(int(e.mem.unsigned[game + off["hintC"] + i]),
                  int(e.mem.unsigned[game + off["hintR"] + i])) for i in range(n)]
@@ -61,9 +76,11 @@ def main(rom, output):
         e.shot(str(out / f"{code}-02-peel.png"))
         e.peel(6, 0)
         assert e.state()["turn"] == 1 and e.state()["peels"] == 0, code
+        error_feedback(lang, "TU_FIND")
         e.peel(1, 2)
         s = e.state()
         assert s["turn"] == 2 and s["cell"][1][2][1] == HOLE, code
+        assert not s["msgTimer"] or s["msg"] != messages["TU_FIND"][lang][:31], code
         e.shot(str(out / f"{code}-03-clue.png"))
         e.peel(1, 3)
         s = e.state()
