@@ -990,19 +990,33 @@ static void trainingTests(void)
               boardTrainingTarget(&g,&c,&r) && c==6 && r==1 &&
               boardPeel(&g,c,r)==2 && g.found[0] &&
               boardTrainingStage(&g)==4);
+        CHECK("final practice has no secret target and accepts exploratory peels",
+              !boardTrainingTarget(&g,&c,&r) &&
+              boardPeel(&g,0,7)==1 && boardPeel(&g,0,7)==0 && g.turn==4);
+        int afterC=-1, afterR=-1;
         for (int i=1;i<g.passLen;++i) {
-            CHECK("remaining guided peel reveals a real password letter",
-                  boardTrainingTarget(&g,&c,&r) && boardPeel(&g,c,r)==2);
+            bool clue=boardTrainingClue(&g,afterC,afterR,&c,&r);
+            CHECK("a public forced clue exists for each remaining letter",
+                  clue && boardClueInference(&g,c,r,&left,&covered)==CLUE_PASS &&
+                  left>0 && left==covered);
+            if (!clue) break;
+            afterC=c; afterR=r;
+            int nc[6],nr[6],n=boardNeighbors(c,r,nc,nr),pick=-1;
+            for (int k=0;k<n;++k)
+                if (g.cell[nc[k]][nr[k]].state==CELL_TILE) pick=k;
+            CHECK("independent public deduction reveals a letter in any order",
+                  pick>=0 && boardPeel(&g,nc[pick],nr[pick])==2);
         }
         CHECK("tutorial wins through ordinary board completion, without fire",
               boardPassComplete(&g) && boardTrainingStage(&g)==5 &&
-              !g.fail && !g.ignitions && g.turn==g.passLen+2 &&
+              !g.fail && !g.ignitions && g.turn==g.passLen+3 &&
               g.heat<g.heatThreshold);
         CHECK("unranked lesson leaves lifetime and retail settings unchanged",
               !memcmp(&S,&before,sizeof S));
         g.training=false;
         CHECK("training targets inaccessible on ordinary boards",
-              boardTrainingStage(&g)==0 && !boardTrainingTarget(&g,&c,&r));
+              boardTrainingStage(&g)==0 && !boardTrainingTarget(&g,&c,&r) &&
+              !boardTrainingClue(&g,-1,-1,&c,&r));
     }
     S = saved;
 }
