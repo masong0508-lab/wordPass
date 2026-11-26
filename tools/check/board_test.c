@@ -941,22 +941,27 @@ static void trainingTests(void)
               !memcmp(g.pass, copy.pass, sizeof g.pass) &&
               !memcmp(g.back, copy.back, sizeof g.back) &&
               !memcmp(g.cell, copy.cell, sizeof g.cell));
-        int c, r;
+        int c, r, left, covered;
         CHECK("early peel refuses without spending a turn",
               !boardTrainingTarget(&g, &c, &r) &&
-              !boardPeel(&g,1,2) && g.turn == 0);
+              !boardPeel(&g,6,0) && g.turn == 0 &&
+              g.cell[5][0].state == CELL_HOLE && !g.peels);
         for (int i=0; i<g.hintLen; ++i)
             boardTryAddToChain(&g,g.hintC[i],g.hintR[i]);
         CHECK("numbered tutorial route is a real accepted dictionary word",
               boardChainScore(&g)>0 && boardSubmit(&g)>0 &&
               boardTrainingStage(&g)==2 && g.turn==1);
         CHECK("first marked blank has one real neighboring secret",
-              boardTrainingTarget(&g,&c,&r) && c==1 && r==2 &&
-              !boardPeel(&g,6,0) && g.turn==1 &&
+              boardTrainingTarget(&g,&c,&r) && c==6 && r==0 &&
+              !boardPeel(&g,0,7) && g.turn==1 &&
               boardPeel(&g,c,r)==1 && boardBackNumber(&g,c,r)==1 &&
               boardTrainingStage(&g)==3);
+        CHECK("tutorial clue proves its sole remaining covered neighbor",
+              boardClueInference(&g,6,0,&left,&covered)==CLUE_PASS &&
+              left==1 && covered==1 &&
+              !boardPeel(&g,0,7) && g.turn==2);
         CHECK("third step finds the indicated neighboring password letter",
-              boardTrainingTarget(&g,&c,&r) && c==1 && r==3 &&
+              boardTrainingTarget(&g,&c,&r) && c==6 && r==1 &&
               boardPeel(&g,c,r)==2 && g.found[0] &&
               boardTrainingStage(&g)==4);
         for (int i=1;i<g.passLen;++i) {
