@@ -1088,9 +1088,13 @@ int main(void)
                 G.stateTimer++;
                 if (G.stateTimer == 1) cardTapQueued = false;
                 if (G.training) {
+                    if (G.stateTimer > CARD_QUEUE_FROM &&
+                        G.stateTimer <= CARD_GATE_PASSED &&
+                        (down & (KEY_TOUCH | KEY_A | KEY_START))) cardTapQueued = true;
                     if (G.stateTimer > CARD_GATE_PASSED) {
                         if (down & KEY_B) quitToTitle();
-                        else if (down & (KEY_TOUCH | KEY_A | KEY_START)) {
+                        else if ((down & (KEY_TOUCH | KEY_A | KEY_START)) || cardTapQueued) {
+                            cardTapQueued = false;
                             srand(seedCounter);
                             newGame(MODE_CLASSIC);
                         }

@@ -919,6 +919,63 @@ static void musicTests(void)
 
 #include "songs_test.h"
 
+// Real lesson engine, including its gate on early/wrong peels. This
+// runs against the active dictionary and tile set, not English fixtures.
+static void trainingTests(void)
+{
+    Settings saved = S;
+    for (int library = LIB_FULL; library <= LIB_COMMON; ++library) {
+        S.library = (u8)library;
+        S.fire = FIRE_FAST; // even the hottest regular setting is safe here
+        Settings before = S;
+        Game g = {0}, copy = {0};
+        g.mode = copy.mode = MODE_CLASSIC;
+        g.shelf = copy.shelf = 1;
+        g.training = copy.training = true;
+        boardNewShelf(&g);
+        boardNewShelf(&copy);
+        CHECK("tutorial deals a repeatable puzzle, not random guessing",
+              g.practice && boardTrainingStage(&g) == 1 &&
+              g.hintLen >= 3 && g.hintLen <= MAX_CHAIN &&
+              g.passLen == copy.passLen &&
+              !memcmp(g.pass, copy.pass, sizeof g.pass) &&
+              !memcmp(g.back, copy.back, sizeof g.back) &&
+              !memcmp(g.cell, copy.cell, sizeof g.cell));
+        int c, r;
+        CHECK("early peel refuses without spending a turn",
+              !boardTrainingTarget(&g, &c, &r) &&
+              !boardPeel(&g,1,2) && g.turn == 0);
+        for (int i=0; i<g.hintLen; ++i)
+            boardTryAddToChain(&g,g.hintC[i],g.hintR[i]);
+        CHECK("numbered tutorial route is a real accepted dictionary word",
+              boardChainScore(&g)>0 && boardSubmit(&g)>0 &&
+              boardTrainingStage(&g)==2 && g.turn==1);
+        CHECK("first marked blank has one real neighboring secret",
+              boardTrainingTarget(&g,&c,&r) && c==1 && r==2 &&
+              !boardPeel(&g,6,0) && g.turn==1 &&
+              boardPeel(&g,c,r)==1 && boardBackNumber(&g,c,r)==1 &&
+              boardTrainingStage(&g)==3);
+        CHECK("third step finds the indicated neighboring password letter",
+              boardTrainingTarget(&g,&c,&r) && c==1 && r==3 &&
+              boardPeel(&g,c,r)==2 && g.found[0] &&
+              boardTrainingStage(&g)==4);
+        for (int i=1;i<g.passLen;++i) {
+            CHECK("remaining guided peel reveals a real password letter",
+                  boardTrainingTarget(&g,&c,&r) && boardPeel(&g,c,r)==2);
+        }
+        CHECK("tutorial wins through ordinary board completion, without fire",
+              boardPassComplete(&g) && boardTrainingStage(&g)==5 &&
+              !g.fail && !g.ignitions && g.turn==g.passLen+2 &&
+              g.heat<g.heatThreshold);
+        CHECK("unranked lesson leaves lifetime and retail settings unchanged",
+              !memcmp(&S,&before,sizeof S));
+        g.training=false;
+        CHECK("training targets inaccessible on ordinary boards",
+              boardTrainingStage(&g)==0 && !boardTrainingTarget(&g,&c,&r));
+    }
+    S = saved;
+}
+
 int main(int argc, char **argv)
 {
     if (!loadDict(argc > 1 ? argv[1] : "data/dict.bin", argc > 2 ? argv[2] : "data/pools.bin", argc > 3 ? argv[3] : "data/variants.bin")) return 1;
@@ -936,6 +993,7 @@ int main(int argc, char **argv)
     clueInferenceTests();
     clueNavigationTests();
     wordClueTests();
+    trainingTests();
 
     // ---- long words: the dictionary holds words up to 20 letters
     {
@@ -2174,6 +2232,7 @@ int main(int argc, char **argv)
             bool loaded = langLoad(li);
             CHECK(strcat(strcpy(list, nm), " loads and becomes the active language"), loaded && langCur() == li);
             if (!loaded) continue;
+            trainingTests();
             // tables: weights sum to 100, values 1..10 on tiles, rare letters are tiles, a vowel tile exists, the Qu flag follows the data
             const LangTables *T = langTables();
             int sum = 0, tiles = 0, vowelTiles = 0; bool vals = true;
