@@ -417,15 +417,15 @@ static void spillInk(Game *g)
     }
 }
 
-// The lesson has a known blank with exactly one neighboring password
-// letter, then a short sequence of actual hidden letters. Only the explicit
-// practice board may publish these teaching targets; Classic/Daily never do.
+// The corner clue has two neighbors. A pre-opened blank (5,0) leaves
+// exactly one covered neighbor (6,1), so its 1 is a logical proof rather
+// than a pointer to a guessed answer. Ordinary shelves never use this layout.
 int boardTrainingStage(const Game *g)
 {
     if (!g->training) return 0;
     if (boardPassComplete(g)) return 5;
     if (!g->wordsThisShelf) return 1;
-    if (g->cell[1][2].state != CELL_HOLE) return 2;
+    if (g->cell[6][0].state != CELL_HOLE) return 2;
     if (!g->found[0]) return 3;
     return 4;
 }
@@ -433,7 +433,7 @@ bool boardTrainingTarget(const Game *g, int *c, int *r)
 {
     int stage = boardTrainingStage(g);
     if (!c || !r) return false;
-    if (stage == 2) { *c = 1; *r = 2; return true; }
+    if (stage == 2) { *c = 6; *r = 0; return true; }
     if (stage != 3 && stage != 4) return false;
     for (int index = 1; index <= g->passLen; ++index) {
         if (g->found[index - 1]) continue;
@@ -447,11 +447,15 @@ bool boardTrainingTarget(const Game *g, int *c, int *r)
 }
 static void prepareTraining(Game *g)
 {
-    static const u8 cols[9] = {1,3,4,5,6,3,4,6,5};
-    static const u8 rows[9] = {3,4,5,6,7,6,7,4,4};
+    static const u8 cols[9] = {6,3,4,5,6,3,4,6,5};
+    static const u8 rows[9] = {1,4,5,6,7,6,7,4,4};
     memset(g->back, 0, sizeof g->back);
     for (int i = 0; i < g->passLen && i < 9; ++i)
         g->back[cols[i]][rows[i]] = (u8)(i + 1);
+    // The practice shelf starts with one visible blank, not a charged peel.
+    g->cell[5][0].state = CELL_HOLE;
+    g->cell[5][0].yoff = 0;
+    g->cell[5][0].yv = 0;
 
     // The guide's real dictionary-verified three-letter example is a
     // predictable first task in each active locale, not a made-up word.

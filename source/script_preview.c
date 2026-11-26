@@ -188,6 +188,17 @@ static bool startPass(unsigned shelf, uint32_t seed, int bankedScore)
     uint32_t passMask;
     if (!v4DictLookupSpellingIds(&scriptPreviewDict, nextBoard.pass,
                                 nextBoard.passLen, &passMask)) return false;
+    if (scriptPreviewTraining) {
+        // Same solvable corner as retail: (6,0) has one open and one
+        // covered neighbor. Set this before the planter so no numbered
+        // teaching word crosses an already opened hole or hidden letter.
+        static const uint8_t cols[9] = {6,3,4,5,6,3,4,6,5};
+        static const uint8_t rows[9] = {1,4,5,6,7,6,7,4,4};
+        memset(nextBoard.back, 0, sizeof nextBoard.back);
+        for (unsigned i = 0; i < nextBoard.passLen; ++i)
+            nextBoard.back[cols[i]][rows[i]] = (uint8_t)(i + 1);
+        nextBoard.state[5][0] = SCRIPT_HOLE;
+    }
     // Generate up to two distinct legal opening words; explicit L+R rescue
     // still plants only one word after charging its normal turn and heat.
     uint8_t pathsC[2][6], pathsR[2][6], lengths[2];
@@ -196,11 +207,6 @@ static bool startPass(unsigned shelf, uint32_t seed, int bankedScore)
         &scriptPreviewPools, seed, pathsC, pathsR, lengths);
     if (!openingWords) return false;
     if (scriptPreviewTraining) {
-        static const uint8_t cols[9] = {1,3,4,5,6,3,4,6,5};
-        static const uint8_t rows[9] = {3,4,5,6,7,6,7,4,4};
-        memset(nextBoard.back, 0, sizeof nextBoard.back);
-        for (unsigned i = 0; i < nextBoard.passLen; ++i)
-            nextBoard.back[cols[i]][rows[i]] = (uint8_t)(i + 1);
         memcpy(scriptPreviewTrainingC, pathsC[0], lengths[0]);
         memcpy(scriptPreviewTrainingR, pathsR[0], lengths[0]);
         scriptPreviewTrainingLen = lengths[0];
@@ -232,7 +238,7 @@ int scriptPreviewTrainingStage(void)
     if (!scriptPreviewTraining) return 0;
     if (scriptBoardPassComplete(b)) return 5;
     if (!scriptPreviewRules.words) return 1;
-    if (b->state[1][2] != SCRIPT_HOLE) return 2;
+    if (b->state[6][0] != SCRIPT_HOLE) return 2;
     if (!b->found[0]) return 3;
     return 4;
 }
@@ -240,7 +246,7 @@ bool scriptPreviewTrainingTarget(int *c, int *r)
 {
     int stage = scriptPreviewTrainingStage();
     if (!c || !r) return false;
-    if (stage == 2) { *c = 1; *r = 2; return true; }
+    if (stage == 2) { *c = 6; *r = 0; return true; }
     if (stage != 3 && stage != 4) return false;
     const ScriptBoard *b = &scriptPreviewBoard;
     for (unsigned i = 0; i < b->passLen; ++i)

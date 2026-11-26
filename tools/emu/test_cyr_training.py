@@ -45,7 +45,7 @@ def main(rom, output):
         assert 4 <= n <= 6
         e.shot(str(out / f"{code}-01-word.png"))
         e.hold("L")
-        e.tap(*e.center(1, 2), settle=8)
+        e.tap(*e.center(6, 0), settle=8)
         e.hold("L", False)
         assert integer("scriptPreviewTurns") == 0
         coaching(code, "01-early-peel", 4)
@@ -73,19 +73,19 @@ def main(rom, output):
         assert integer("scriptPreviewTrainingNotice") == 0
         e.shot(str(out / f"{code}-02-peel.png"))
         e.hold("L")
-        e.tap(*e.center(6, 0), settle=8)
+        e.tap(*e.center(0, 7), settle=8)
         e.hold("L", False)
         assert integer("scriptPreviewTurns") == 1
         coaching(code, "02-wrong-target", 2)
         e.hold("L")
-        e.tap(*e.center(1, 2), settle=8)
+        e.tap(*e.center(6, 0), settle=8)
         e.hold("L", False)
         assert integer("scriptPreviewTurns") == 2
         assert integer("scriptPreviewTrainingNotice") == 0
-        assert int(e.mem.unsigned[board + 56 + 1*8 + 2]) == 0
+        assert int(e.mem.unsigned[board + 56 + 6*8]) == 0
         e.shot(str(out / f"{code}-03-clue.png"))
         e.hold("L")
-        e.tap(*e.center(1, 3), settle=8)
+        e.tap(*e.center(6, 1), settle=8)
         e.hold("L", False)
         assert int(e.mem.unsigned[board + 218]) == 1
         e.shot(str(out / f"{code}-04-password.png"))

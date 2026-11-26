@@ -1059,6 +1059,12 @@ static void drawWordClue(int x, int y, int letter, int n, bool risk)
 // arms a peel, and a moved d-pad cursor selects another already-known clue.
 static int inspectedClue(const Game *g, int *c, int *r)
 {
+    // The third practice step pins the public clue, not its secret.
+    // The normal inference renderer supplies the '+' even before PEEK.
+    if (g->training && boardTrainingStage(g) == 3) {
+        *c = 6; *r = 0;
+        return boardBackNumber(g, *c, *r);
+    }
     if (!g->peekHeld) return -1;
     if (g->armed) { *c = g->armC; *r = g->armR; }
     else if (g->curOn) { *c = g->curC; *r = g->curR; }
@@ -2284,7 +2290,8 @@ static void drawCues(const Game *g)
                 fillRect(x + 1, y + 1, textWidth(n, 1) + 2, 9, BLACK);
                 drawText(x + 2, y + 2, n, GOLD_LT, 1);
             }
-        } else {
+        } else if (stage != 3) {
+            // Stage three uses the real '+' deduction, not a secret arrow.
             int c, r;
             if (boardTrainingTarget(g, &c, &r)) {
                 int x, y; cellOrigin(c, r, &x, &y);
@@ -2455,17 +2462,19 @@ static void drawScriptPreviewBoard(void)
     // Revisit any published word clue or permanent numbered hole. The
     // focus is anchored to board coordinates, not the falling front tile.
     // Keep the exact same six-neighbor bound; no search or allocation.
-    if (b->clueC < SCRIPT_COLS && b->clueR < SCRIPT_ROWS &&
-        (b->state[b->clueC][b->clueR] == SCRIPT_HOLE ||
-         (b->surveyed[b->clueC] & (1u << b->clueR)))) {
-        int certainty = scriptBoardClueInference(b, b->clueC, b->clueR,
-                                                 NULL, NULL);
+    bool deductionLesson = scriptPreviewTrainingStage() == 3;
+    int focusC = deductionLesson ? 6 : b->clueC;
+    int focusR = deductionLesson ? 0 : b->clueR;
+    if (focusC < SCRIPT_COLS && focusR < SCRIPT_ROWS &&
+        (b->state[focusC][focusR] == SCRIPT_HOLE ||
+         (b->surveyed[focusC] & (1u << focusR)))) {
+        int certainty = scriptBoardClueInference(b, focusC, focusR, NULL, NULL);
         int fx, fy;
-        cellOrigin(b->clueC, b->clueR, &fx, &fy);
-        bool centerRisk = b->state[b->clueC][b->clueR] == SCRIPT_BURN ||
-            (b->clueR > 0 && b->state[b->clueC][b->clueR - 1] == SCRIPT_BURN);
+        cellOrigin(focusC, focusR, &fx, &fy);
+        bool centerRisk = b->state[focusC][focusR] == SCRIPT_BURN ||
+            (focusR > 0 && b->state[focusC][focusR - 1] == SCRIPT_BURN);
         rectOutline(fx, fy, TILE_W, TILE_H, centerRisk ? FIRE1 : WHITE);
-        int nc[6], nr[6], n = boardNeighbors(b->clueC, b->clueR, nc, nr);
+        int nc[6], nr[6], n = boardNeighbors(focusC, focusR, nc, nr);
         for (int i = 0; i < n; i++) {
             int c = nc[i], r = nr[i];
             int x = gridX + c * TILE_W;
@@ -2506,7 +2515,7 @@ static void drawScriptPreviewBoard(void)
                 fillRect(x + 1, y + 1, 8, 9, BLACK);
                 drawChar(x + 2, y + 2, '1' + i, GOLD_LT, 1);
             }
-        } else {
+        } else if (!deductionLesson) {
             int c, r;
             if (scriptPreviewTrainingTarget(&c, &r)) {
                 int x, y; cellOrigin(c, r, &x, &y);
@@ -2687,13 +2696,15 @@ static void drawScriptPreviewTop(void)
             }
         } else {
             const char *label = step == 2 ? (uk ? "2/4 ВІДКРИЙТЕ ЧИСЛО" : "2/4 ОТКРОЙТЕ ЧИСЛО") :
-                step == 3 ? (uk ? "3/4 ЧИСЛО 1: ОДНА ЛІТЕРА ПОРУЧ" : "3/4 ЧИСЛО 1: ОДНА БУКВА РЯДОМ") :
+                step == 3 ? (uk ? "3/4 + ОЗНАЧАЄ ЛІТЕРУ ПАРОЛЯ" : "3/4 + ОЗНАЧАЕТ БУКВУ ПАРОЛЯ") :
                             (uk ? "4/4 ВІДКРИЙТЕ ВЕСЬ ПАРОЛЬ" : "4/4 ОТКРОЙТЕ ВЕСЬ ПАРОЛЬ");
             drawTextCenter(128, 148, label, GOLD_LT, 1);
             drawTextCenter(128, 160, uk ? "L: ТОРКНІТЬСЯ МІТКИ Й ВІДПУСТІТЬ" :
                            "L: КОСНИТЕСЬ МЕТКИ И ОТПУСТИТЕ", WHITE, 1);
-            drawTextCenter(128, 172, uk ? "L+A: З КУРСОРОМ / БЕЗ ВОГНЮ" :
-                           "L+A: С КУРСОРОМ / БЕЗ ОГНЯ", ACCENT, 1);
+            drawTextCenter(128, 172, step == 3 ?
+                           (uk ? "1 З 1: ЄДИНА ЗАКРИТА КЛІТИНКА" : "1 ИЗ 1: ЕДИНСТВЕННАЯ ЗАКРЫТАЯ") :
+                           (uk ? "L+A: З КУРСОРОМ / БЕЗ ВОГНЮ" :
+                                 "L+A: С КУРСОРОМ / БЕЗ ОГНЯ"), ACCENT, 1);
         }
         if (scriptPreviewTrainingNotice || scriptPreviewCheckpointStatus == SCRIPT_CHECKPOINT_TRAINING) {
             fillRect(13, 172, 230, 8, BLACK);

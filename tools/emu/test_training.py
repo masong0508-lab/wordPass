@@ -62,7 +62,8 @@ def main(rom, output):
         assert s["turn"] == 0 and 3 <= s["hintLen"] <= 20, code
         e.shot(str(out / f"{code}-01-word.png"))
         # A premature peel is a harmless mistake, not a lost turn.
-        e.peel(1, 2)
+        assert s["cell"][5][0][1] == HOLE, code
+        e.peel(6, 0)
         assert e.state()["turn"] == 0 and e.state()["peels"] == 0
         error_feedback(lang, "TU_DRAG")
         n = s["hintLen"]
@@ -90,15 +91,15 @@ def main(rom, output):
         s = e.state()
         assert s["turn"] == 1 and s["score"] > 0, code
         e.shot(str(out / f"{code}-02-peel.png"))
-        e.peel(6, 0)
+        e.peel(0, 7)
         assert e.state()["turn"] == 1 and e.state()["peels"] == 0, code
         error_feedback(lang, "TU_FIND")
-        e.peel(1, 2)
+        e.peel(6, 0)
         s = e.state()
-        assert s["turn"] == 2 and s["cell"][1][2][1] == HOLE, code
+        assert s["turn"] == 2 and s["cell"][6][0][1] == HOLE, code
         assert not s["msgTimer"] or s["msg"] != messages["TU_FIND"][lang][:31], code
         e.shot(str(out / f"{code}-03-clue.png"))
-        e.peel(1, 3)
+        e.peel(6, 1)
         s = e.state()
         assert s["found"][0] == 1 and s["turn"] == 3, code
         e.shot(str(out / f"{code}-04-password.png"))
