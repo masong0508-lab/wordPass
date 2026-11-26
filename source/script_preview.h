@@ -31,6 +31,15 @@ extern int scriptPreviewDaily;     // 0 classic-style demo; 1 unranked Daily pra
 extern int scriptPreviewDailyDate; // YYYYMMDD, independent of retail Daily records
 extern int scriptPreviewDailyClockError; // unset RTC feedback, no save writes
 extern int scriptPreviewHelp; // localized instructions overlay (top LCD only)
+extern int scriptPreviewTraining, scriptPreviewTrainingNotice;
+extern int scriptPreviewTrainingLen;
+extern uint8_t scriptPreviewTrainingC[6], scriptPreviewTrainingR[6];
+// Same four teaching stages as retail; zero outside the separate lesson.
+int scriptPreviewTrainingStage(void);
+bool scriptPreviewTrainingTarget(int *c, int *r);
+// Enter only from an untouched free-play run; leaving the lesson deals
+// a new real shelf. Never destroy real progress to open an exercise.
+bool scriptPreviewToggleTraining(uint32_t seed);
 extern int scriptPreviewLastTier;
 extern int scriptPreviewLastScore;
 extern int scriptPreviewCheckpointStatus;

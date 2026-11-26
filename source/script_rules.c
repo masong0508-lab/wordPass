@@ -50,7 +50,7 @@ int scriptRulesWordHeat(int letters)
 }
 static int rulesTurnCore(ScriptRules *rules, ScriptBoard *board,
                          const V4Tiles *tiles, int heatBase, bool peel,
-                         bool rescue, bool fatal)
+                         bool rescue, bool fatal, bool training)
 {
     if (!rules || !board || !tiles || !tiles->valid ||
         rules->status != SCRIPT_RUNNING) return 0;
@@ -75,6 +75,12 @@ static int rulesTurnCore(ScriptRules *rules, ScriptBoard *board,
         return rules->lastBonus;
     }
     if (heatBase < 0) heatBase = 0;
+    if (training) {
+        unsigned heat = rules->heat + (unsigned)heatBase;
+        unsigned limit = rules->heatThreshold ? rules->heatThreshold - 1u : 0u;
+        rules->heat = (uint16_t)(heat > limit ? limit : heat);
+        return 0;
+    }
     int budget = 12 + rules->shelf / 3;
     int overtime = (int)rules->turns - budget;
     if (overtime > 0) heatBase += 1 + overtime / 4;
@@ -110,7 +116,12 @@ static int rulesTurnCore(ScriptRules *rules, ScriptBoard *board,
 int scriptRulesTurn(ScriptRules *rules, ScriptBoard *board,
                     const V4Tiles *tiles, int heatBase, bool peel, bool fatal)
 {
-    return rulesTurnCore(rules, board, tiles, heatBase, peel, false, fatal);
+    return rulesTurnCore(rules, board, tiles, heatBase, peel, false, fatal, false);
+}
+int scriptRulesTrainingTurn(ScriptRules *rules, ScriptBoard *board,
+                            const V4Tiles *tiles, int heatBase, bool peel)
+{
+    return rulesTurnCore(rules, board, tiles, heatBase, peel, false, false, true);
 }
 int scriptRulesRescueTurn(ScriptRules *rules, ScriptBoard *board,
                           const V4Tiles *tiles)
@@ -122,5 +133,5 @@ int scriptRulesRescueTurn(ScriptRules *rules, ScriptBoard *board,
         return 0;
     // Recovering a legal move is not a word or a peel and never awards
     // points; it still advances flame, heat and overtime once.
-    return rulesTurnCore(rules, board, tiles, 2, false, true, false);
+    return rulesTurnCore(rules, board, tiles, 2, false, true, false, false);
 }

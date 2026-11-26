@@ -901,8 +901,10 @@ int main(void)
                 const bool scriptKeyAction =
                     (down & (KEY_A | KEY_B | KEY_X | KEY_Y | KEY_R |
                              KEY_SELECT | KEY_START)) != 0;
-                if (scriptKeyAction || (down & KEY_TOUCH))
+                if (scriptKeyAction || (down & KEY_TOUCH)) {
                     scriptPreviewCheckpointStatus = SCRIPT_CHECKPOINT_NONE;
+                    scriptPreviewTrainingNotice = 0;
+                }
                 if (scriptKeyAction) {
                     scriptDropPeekStroke();
                     // A submitted word or Y clearing it while the stylus
@@ -921,6 +923,16 @@ int main(void)
                         break; // dismissal must not also submit or touch a tile
                     }
                     if (!(down & KEY_START)) break;
+                }
+                // Visible practice button and controller shortcut. A fresh
+                // contact never leaks into the newly generated lesson.
+                if (!scriptPreviewHelp &&
+                    (((down & KEY_X) && (held & KEY_L)) ||
+                     ((down & KEY_TOUCH) && gfxScriptTrainingHit(t.px, t.py)))) {
+                    scriptDropPeekStroke();
+                    scriptWordStrokeSuppressed = true;
+                    (void)scriptPreviewToggleTraining(seedCounter);
+                    break;
                 }
                 // Deliberate preview-only shelf checkpoint commands. The
                 // retail settings path supplies the FAT device/directory,

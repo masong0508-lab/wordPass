@@ -436,6 +436,7 @@ int  gfxCellAt(int px, int py, int *c, int *r);
 // A normal tap on a numbered hole, or specifically on a word's number
 // badge, inspects that published clue instead of starting a word.
 bool gfxScriptClueHit(int px, int py, int c, int r);
+bool gfxScriptTrainingHit(int px, int py);
 #endif
 bool gfxInSubmit(int px, int py);
 bool gfxInClear(int px, int py);
