@@ -51,15 +51,17 @@ practice and language-specific checkpoints. The shared title and options
 screens are localized, and the Classic fire preference actually adjusts
 Unicode shelf heat and burn cadence. Training and Daily ignore this preference.
 The full Unicode dictionary is always active; common-only and English spelling
-filters are visibly unavailable. The unified build caches the most frequently
-dealt Latin glyph composites per active language to protect original-DS RAM.
+filters are visibly unavailable. The unified build stores the full Latin composite cache in otherwise-unused
+LCDC VRAM bank D instead of competing for original-DS main RAM. The shared
+eight-page guide is localized in both languages and accessible from the title
+or with L+Y during an active Unicode game.
 Classic career totals (terminal shelf attempts, clears, words, peels,
 revealed letters, highest score and shelf) are stored independently for
 Russian and Ukrainian in the main ledger. Training, Daily practice and
 abandoned attempts do not enter these totals. Two checked alternating
 8.3 FAT files per language leave the existing Latin save and checkpoints
 intact. These numeric records are not ranked Daily or complete word-history
-parity. Complete guide integration, difficulty parity, native-speaker
+parity. Difficulty parity, ranked Daily integration, native-speaker
 editorial review and source redistribution review remain outstanding.
 
 ## Learn by playing
