@@ -29,6 +29,7 @@ typedef struct {
     int8_t fireMode;
     uint8_t heat, heatLimit, burnEvery, burnTick, loss;
     uint8_t flame[CJ_CELLS];
+    uint32_t words; // accepted words only; recovery and peels are separate
 } CjGame;
 bool cjAdjacent(int a,int b);
 bool cjStart(CjGame *g,const CjLexicon *lex,uint32_t seed);

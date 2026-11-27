@@ -3,10 +3,10 @@
 #include <stdio.h>
 #include <string.h>
 
-ScriptCareer scriptCareer[2];
-bool scriptCareerSaveError[2];
-ScriptDailyCareer scriptDailyCareer[2];
-bool scriptDailySaveError[2];
+ScriptCareer scriptCareer[SCRIPT_CAREER_COUNT];
+bool scriptCareerSaveError[SCRIPT_CAREER_COUNT];
+ScriptDailyCareer scriptDailyCareer[SCRIPT_CAREER_COUNT];
+bool scriptDailySaveError[SCRIPT_CAREER_COUNT];
 #define CAREER_MAX 999999999u
 #define CAREER_PATH 128
 static uint32_t get32(const uint8_t *p)
@@ -32,7 +32,7 @@ static bool valid(const ScriptCareer *r)
 }
 bool scriptCareerEncode(unsigned lang,const ScriptCareer *r,uint8_t out[SCRIPT_CAREER_BYTES])
 {
-    if(lang>1 || !out || !valid(r)) return false;
+    if(lang>=SCRIPT_CAREER_COUNT || !out || !valid(r)) return false;
     memcpy(out,"WCR1",4);
     out[4]=(uint8_t)lang; out[5]=out[6]=out[7]=0;
     const uint32_t v[8]={r->serial,r->attempts,r->cleared,r->words,r->peels,r->revealed,r->bestScore,r->bestShelf};
@@ -42,7 +42,7 @@ bool scriptCareerEncode(unsigned lang,const ScriptCareer *r,uint8_t out[SCRIPT_C
 }
 bool scriptCareerDecode(unsigned lang,const uint8_t *b,size_t n,ScriptCareer *out)
 {
-    if(lang>1 || !b || !out || n!=SCRIPT_CAREER_BYTES ||
+    if(lang>=SCRIPT_CAREER_COUNT || !b || !out || n!=SCRIPT_CAREER_BYTES ||
        memcmp(b,"WCR1",4) || b[4]!=lang || b[5] || b[6] || b[7] ||
        get32(b+40)!=checksum(b,40)) return false;
     ScriptCareer r={get32(b+8),get32(b+12),get32(b+16),get32(b+20),
@@ -52,12 +52,17 @@ bool scriptCareerDecode(unsigned lang,const uint8_t *b,size_t n,ScriptCareer *ou
 }
 static bool pathFor(const char *cfg,unsigned lang,unsigned slot,char kind,char path[CAREER_PATH])
 {
-    if(!cfg || lang>1 || slot>1) return false;
+    if(!cfg || lang>=SCRIPT_CAREER_COUNT || slot>1) return false;
     const char *slash=strrchr(cfg,'/');
     if(!slash) return false;
     size_t n=(size_t)(slash-cfg)+1;
     char leaf[]="WPRU.C0";
-    if(lang) {leaf[2]='U';leaf[3]='K';}
+    static const char suffix[SCRIPT_CAREER_COUNT][2]={{'R','U'},{'U','K'},
+#ifdef WP_CJK_MAIN
+        {'Z','S'},{'Z','T'},{'J','A'},
+#endif
+    };
+    leaf[2]=suffix[lang][0];leaf[3]=suffix[lang][1];
     leaf[5]=kind;
     leaf[6]=(char)('0'+slot);
     if(n>CAREER_PATH-sizeof leaf) return false;
@@ -90,14 +95,14 @@ void scriptCareerLoad(const char *cfg)
     memset(scriptCareerSaveError,0,sizeof scriptCareerSaveError);
     memset(scriptDailyCareer,0,sizeof scriptDailyCareer);
     memset(scriptDailySaveError,0,sizeof scriptDailySaveError);
-    if(cfg) for(unsigned i=0;i<2;++i) {
+    if(cfg) for(unsigned i=0;i<SCRIPT_CAREER_COUNT;++i) {
         (void)newest(cfg,i,&scriptCareer[i]);
         (void)dailyNewest(cfg,i,&scriptDailyCareer[i]);
     }
 }
 bool scriptCareerStore(const char *cfg,unsigned lang)
 {
-    if(lang>1 || !cfg) return false;
+    if(lang>=SCRIPT_CAREER_COUNT || !cfg) return false;
     ScriptCareer old, next=scriptCareer[lang];
     int slot=newest(cfg,lang,&old);
     next.serial=slot<0?1:old.serial+1;
@@ -129,7 +134,7 @@ static uint32_t plus(uint32_t a,unsigned b)
 void scriptCareerFinish(const char *cfg,unsigned lang,unsigned score,unsigned shelf,
                         unsigned words,unsigned peels,unsigned revealed,bool passed)
 {
-    if(lang>1 || !shelf || shelf>999 || revealed>peels) return;
+    if(lang>=SCRIPT_CAREER_COUNT || !shelf || shelf>999 || revealed>peels) return;
     ScriptCareer *r=&scriptCareer[lang];
     r->attempts=plus(r->attempts,1);
     if(passed) {
@@ -185,7 +190,7 @@ static int dailyNewest(const char *cfg,unsigned lang,ScriptDailyCareer *r)
 }
 static bool dailyStore(const char *cfg,unsigned lang)
 {
-    if(!cfg || lang>1) return false;
+    if(!cfg || lang>=SCRIPT_CAREER_COUNT) return false;
     ScriptDailyCareer old,next=scriptDailyCareer[lang],verify;
     int slot=dailyNewest(cfg,lang,&old);
     next.serial=slot<0?1:old.serial+1;
@@ -213,7 +218,7 @@ static bool dailyStore(const char *cfg,unsigned lang)
 }
 bool scriptDailyCareerClaim(const char *cfg,unsigned lang,int date)
 {
-    if(!cfg || lang>1 || !scriptDailyValidDate(date)) return false;
+    if(!cfg || lang>=SCRIPT_CAREER_COUNT || !scriptDailyValidDate(date)) return false;
     ScriptDailyCareer *r=&scriptDailyCareer[lang];
     if((unsigned)date<=r->playedDate) return false;
     r->playedDate=(unsigned)date;
@@ -232,7 +237,7 @@ static bool consecutive(unsigned a,unsigned b)
 }
 bool scriptDailyCareerFinish(const char *cfg,unsigned lang,int date,unsigned score)
 {
-    if(!cfg || lang>1 || !scriptDailyValidDate(date)) return false;
+    if(!cfg || lang>=SCRIPT_CAREER_COUNT || !scriptDailyValidDate(date)) return false;
     ScriptDailyCareer *r=&scriptDailyCareer[lang];
     if(r->playedDate!=(unsigned)date || r->lastDate>=(unsigned)date) return false;
     if(score>CAREER_MAX) score=CAREER_MAX;

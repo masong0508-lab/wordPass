@@ -12,9 +12,16 @@ def main(rom,elf,output):
     card=str(out/"integrated-card.img")
     make_card(card,[("wordPass.nds",Path(dldi).read_bytes())])
     e=FatEmu(dldi,elf,card,argv=False,dismiss=False)
+    assert e.flags()["fatReady"] and e.flags()["fsReady"]
     so=member_offsets(elf,"S",("language",))
+    def records(name,lang):
+        a=symbol(elf,name)+32*lang
+        return tuple(int.from_bytes(bytes(e.mem.unsigned[a+i:a+i+4]),"little") for i in range(0,32,4))
+    def ranked():
+        a=symbol(elf,"cjkDailyRanked")
+        return int.from_bytes(bytes(e.mem.unsigned[a:a+4]),"little")
     ga=symbol(elf,"cjkGame")
-    fields=member_offsets(elf,"cjkGame",("len","turns","score","focus","tile","back","opened","heat","heatLimit","burnEvery","burnTick","flame","loss","shelf","passLen","foundMask","dealSeed","bankedScore"))
+    fields=member_offsets(elf,"cjkGame",("len","turns","score","focus","tile","back","opened","heat","heatLimit","burnEvery","burnTick","flame","loss","shelf","passLen","foundMask","dealSeed","bankedScore","words"))
     def read(name,n=1):
         a=ga+fields[name]
         return int.from_bytes(bytes(e.mem.unsigned[a:a+n]),"little")
@@ -32,7 +39,10 @@ def main(rom,elf,output):
         wait(0)
         assert int(e.mem.unsigned[symbol(elf,"S")+so["language"]])==i
     wait(8)
+    expected={}
     for i in range(13,16):
+        lang=i-11
+        assert records("scriptCareer",lang)==(0,)*8
         select(i);e.tap(52,147,settle=18);wait(10)
         assert read("tile",2)>255
         assert read("heatLimit")==10 and read("burnEvery")==4 and read("shelf",2)==1
@@ -61,6 +71,10 @@ def main(rom,elf,output):
         x=18+28*(p//6);y=20+25*(p%6)+12*((p//6)&1)
         e.tap(215,133,settle=12);e.tap(x,y,settle=12)
         assert read("loss")==1 and read("turns",4)==before+1
+        lost=records("scriptCareer",lang)
+        assert lost[1:4]==(1,0,1),lost
+        e.run(60)
+        assert records("scriptCareer",lang)==lost,"terminal fire loss double counted"
         e.shot(str(out/f"cjk-{i}-fire-loss.png"))
         old_seed=read("dealSeed",4)
         e.tap(215,161,settle=12)
@@ -74,15 +88,56 @@ def main(rom,elf,output):
                 e.tap(18+28*(p//6),20+25*(p%6)+12*((p//6)&1),settle=12)
         assert read("foundMask")==((1<<read("passLen"))-1) and not read("loss")
         bank=read("score",4)
+        career=records("scriptCareer",lang)
+        assert career[1]==2 and career[2]==1 and career[6]>=bank and career[7]==1,career
         e.tap(215,161,settle=12)
         assert read("shelf",2)==2 and read("turns",4)==0 and read("score",4)==bank
         e.press("B",settle=12);wait(0)
         e.tap(86,116,settle=18);wait(10)
         assert read("heatLimit")==0
+        raw=bytes(e.mem.unsigned[ga+fields["back"]:ga+fields["back"]+36])
+        for p in range(36):
+            if raw[p]:
+                e.tap(215,133,settle=12)
+                e.tap(18+28*(p//6),20+25*(p%6)+12*((p//6)&1),settle=12)
+        assert read("foundMask")==((1<<read("passLen"))-1)
         e.press("B",settle=12);wait(0)
+        assert records("scriptCareer",lang)==career,"training or abandoned shelf changed career"
         assert int.from_bytes(bytes(e.mem.unsigned[symbol(elf,"cjkPack"):symbol(elf,"cjkPack")+4]),"little")==0
+        e.set_clock(20261127)
+        e.tap(120,147,settle=18);wait(10)
+        assert ranked()==1
+        assert records("scriptDailyCareer",lang)[1]==20261127
+        board=bytes(e.mem.unsigned[ga+fields["tile"]:ga+fields["tile"]+72])
+        e.tap(215,105,settle=12);e.tap(215,49,settle=12)
+        dailyScore=read("score",4);assert dailyScore>0
+        e.press("B",settle=12);wait(0)
+        daily=records("scriptDailyCareer",lang)
+        assert daily[1:4]==(20261127,20261127,dailyScore) and daily[7]==1,daily
+        e.tap(120,147,settle=18);wait(10)
+        assert ranked()==0 and bytes(e.mem.unsigned[ga+fields["tile"]:ga+fields["tile"]+72])==board
+        e.tap(215,105,settle=12);e.tap(215,49,settle=12)
+        e.press("B",settle=12);wait(0)
+        assert records("scriptDailyCareer",lang)==daily
+        assert records("scriptCareer",lang)==career
+        e.press("X",settle=12);wait(6);e.shot(str(out/f"cjk-{i}-career.png"))
+        e.press("B",settle=12);wait(0)
+        expected[lang]=(career,daily)
+    # Reserving the next date survives power loss without manufacturing a result.
+    e.set_clock(20261128)
+    e.tap(120,147,settle=18);wait(10)
+    assert ranked()==1
     e.power_cycle();wait(0)
+    for lang,(career,daily) in expected.items():
+        assert records("scriptCareer",lang)==career
+        actual=records("scriptDailyCareer",lang)
+        if lang==4:
+            assert actual[1]==20261128 and actual[2:]==daily[2:]
+        else:assert actual==daily
+    e.set_clock(20261128);e.tap(120,147,settle=18);wait(10)
+    assert ranked()==0
+    e.press("B",settle=12);wait(0)
     assert int(e.mem.unsigned[symbol(elf,"S")+so["language"]])==15
     select(0);e.tap(52,147,settle=18);wait(1)
-    print("CJK INTEGRATION OK: 3 real touch launches, words, peels, fire, loss, retry, next shelf, training, persisted language and English")
+    print("CJK INTEGRATION OK: words, peels, fire, retry, progression, training, five independent careers, ranked Daily reservation, replay and reboot")
 if __name__=="__main__":main(*sys.argv[1:])
