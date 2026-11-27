@@ -46,10 +46,15 @@ Build with `make WP_CYR_MAIN=1 CYR_EXTERNAL_DIR=sourced-preview` after
 generating the pinned source packs (see the sourced language workflow and
 docs/CYR-SOURCES.md). The ordinary eleven-language build and separate
 engineering preview remain available. This is a development candidate:
-the Unicode board still uses its own rules, unranked Daily practice and
-language-specific checkpoints. Complete options/guide translation, ranked
-record integration, difficulty parity, native-speaker editorial review and
-source redistribution review remain outstanding.
+the Unicode board still uses its own progression rules, unranked Daily
+practice and language-specific checkpoints. The shared title and options
+screens are localized, and the Classic fire preference actually adjusts
+Unicode shelf heat and burn cadence. Training and Daily ignore this preference.
+The full Unicode dictionary is always active; common-only and English spelling
+filters are visibly unavailable. The unified build caches the most frequently
+dealt Latin glyph composites per active language to protect original-DS RAM.
+Complete guide/record integration, difficulty parity, native-speaker editorial
+review and source redistribution review remain outstanding.
 
 ## Learn by playing
 
