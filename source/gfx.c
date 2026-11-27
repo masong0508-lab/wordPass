@@ -3059,13 +3059,40 @@ static void drawScriptPreviewTop(void)
     hline(26, 96, 204, DIM);
     char chain[88] = {0};
     int lesson=scriptPreviewTrainingStage();
-    if ((lesson==3 || lesson==4) && !b->chainLen) {
+    bool evidence=(lesson==3 || lesson==4) && !b->chainLen;
+#ifdef WP_CYR_MAIN
+    // Apply the same public deduction readout outside the lesson. A new
+    // word takes precedence, and terminal outcomes retain their own HUD.
+    evidence |= !scriptPreviewTraining && !b->chainLen &&
+                scriptPreviewRules.status==SCRIPT_RUNNING;
+#endif
+    if (evidence) {
         int c=lesson==3 ? 6 : b->clueC, r=lesson==3 ? 0 : b->clueR;
         int left=0,covered=0;
-        if (scriptBoardClueInference(b,c,r,&left,&covered)!=SCRIPT_CLUE_UNSEEN)
+        int inference=scriptBoardClueInference(b,c,r,&left,&covered);
+        if (inference!=SCRIPT_CLUE_UNSEEN) {
             drawLessonEvidence(scriptPreviewLanguage ? "ПІДКАЗКА" : "ПОДСКАЗКА",
                 scriptPreviewLanguage ? "ЛІТЕРИ / ЗАКРИТІ КЛІТИНКИ" : "БУКВЫ / ЗАКРЫТЫЕ КЛЕТКИ",
                 left,covered);
+#ifdef WP_CYR_MAIN
+            if (!scriptPreviewTraining) {
+                const bool uk=scriptPreviewLanguage!=0;
+                const char *hint=covered==0 ? (uk?"УСІ СУСІДИ ВІДКРИТІ":"ВСЕ СОСЕДИ ОТКРЫТЫ") :
+                    inference==SCRIPT_CLUE_PASS ? (uk?"+: ЛІТЕРА ПАРОЛЯ":"+: БУКВА ПАРОЛЯ") :
+                    inference==SCRIPT_CLUE_SAFE ? (uk?"-: НЕМАЄ ЛІТЕРИ ПАРОЛЯ":"-: НЕТ БУКВЫ ПАРОЛЯ") :
+                    (uk?"ЗІСТАВТЕ СУСІДНІ ЧИСЛА":"СРАВНИТЕ СОСЕДНИЕ ЧИСЛА");
+                drawTextCenter(128,147,hint,ACCENT,1);
+            }
+#endif
+        }
+#ifdef WP_CYR_MAIN
+        else if (!scriptPreviewTraining) {
+            bool uk=scriptPreviewLanguage!=0;
+            drawTextCenter(128,108,uk?"ЗʼЄДНАЙТЕ 3 АБО БІЛЬШЕ ЛІТЕР":"СОЕДИНИТЕ 3 ИЛИ БОЛЬШЕ БУКВ",WHITE,1);
+            drawTextCenter(128,124,uk?"СЛОВО ВІДКРИЄ ЧИСЛО":"СЛОВО ОТКРОЕТ ЧИСЛО",ACCENT,1);
+            drawTextCenter(128,136,uk?"ЧИСЛА ВЕДУТЬ ДО ПАРОЛЯ":"ЧИСЛА ВЕДУТ К ПАРОЛЮ",ACCENT,1);
+        }
+#endif
     } else if (scriptBoardChainSpellingUtf8(b, &scriptPreviewDict,
                                     scriptQuoteApostropheNow, chain, sizeof chain)) {
         drawTextCenter(128, 106, scriptPreviewLanguage ? "ПОТОЧНЕ СЛОВО" : "ТЕКУЩЕЕ СЛОВО", DIM_TEXT, 1);
@@ -4343,6 +4370,16 @@ static void topSigs(const Game *g, u32 sig[4])
 #ifdef WP_CYR_MAIN
         h3 = hmix(h3,scriptPreviewDailyRanked);
         h3 = hmix(h3,scriptPreviewTouchPeek);
+        if (!scriptPreviewTraining) {
+            // Only public clue focus and completed turns can change the
+            // readout. Avoid repeating inference in the per-frame signature.
+            h2=hmix(h2,b->clueC*8+b->clueR);
+            h2=hmix(h2,scriptPreviewTurns);
+            h2=hmix(h2,scriptPreviewRules.status);
+            h3=hmix(h3,b->clueC*8+b->clueR);
+            h3=hmix(h3,scriptPreviewTurns);
+            h3=hmix(h3,b->chainLen);
+        }
 #endif
         h3 = hmix(h3, scriptPreviewLedger.combo);
         h3 = hmix(h3, scriptPreviewLedger.lastRepeat);

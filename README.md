@@ -69,6 +69,10 @@ controller shortcuts remain available. The localized Rules footer also opens
 the full eight-page guide by touch from a live shelf or tutorial, preserving
 the selected word and score. The separate engineering ROM
 retains its original three-button tutorial.
+In integrated Classic and Daily, the top LCD explains how to earn the first
+clue, then displays the focused published clue as remaining password letters
+over covered neighbors, with actionable + / - / compare guidance. A live word
+selection takes precedence. This uses the same public inference as training.
 The integrated renderer uses one bounded word-selection mask and subtle
 flame/valid-word edge animation. The shared
 eight-page guide is localized in both languages and accessible from the title

@@ -340,6 +340,13 @@ def main(rom, elf, output):
     enter_daily(1,20261126,0)
     assert integer("scriptPreviewSeed")==seed
     assert bytes(e.mem.unsigned[board:board+228])==puzzle
+    # A new board explains how to find its first clue. Once a public
+    # clue is revealed the top LCD switches to its remaining/covered ratio.
+    def clue_pixels():
+        e.run(12)
+        px=e.pixels()
+        return tuple(px[x,y] for y in range(114,128) for x in range(96,177))
+    fresh_pixels=clue_pixels()
     # A free clue inspection while touch PEEK is active must not peel twice
     # or spend its one-shot latch. Choose a blank on the fresh practice board.
     backs=bytes(e.mem.unsigned[board+offsets["back"]:board+offsets["back"]+56])
@@ -349,12 +356,38 @@ def main(rom, elf, output):
     touch_action(3)
     e.tap(*e.center(c,r),settle=12)
     assert integer("scriptPreviewTurns")==1 and integer("scriptPreviewTouchPeek")==0
+    revealed_pixels=clue_pixels()
+    assert revealed_pixels!=fresh_pixels and len(set(revealed_pixels))>1, "missing live deduction readout"
     touch_action(3)
     e.tap(*e.center(c,r),settle=12)
     assert integer("scriptPreviewTurns")==1 and integer("scriptPreviewTouchPeek")==1
+    assert clue_pixels()==revealed_pixels,"free reinspection changed the public count"
     touch_action(3)
     assert integer("scriptPreviewTouchPeek")==0
     e.shot(str(out/"uk-touch-clue.png"))
+    # Reveal another public blank whose ratio differs, then freely switch
+    # focus between them. Test fixtures may read back[]; the game never
+    # uses it to infer anything beyond the published numeral.
+    states=bytes(e.mem.unsigned[board+offsets["state"]:board+offsets["state"]+56])
+    def ratio(cc,rr):
+        ns=e.neighbors(cc,rr)
+        return (sum(backs[x*8+y]>0 and states[x*8+y]!=3 for x,y in ns),
+                sum(states[x*8+y] not in (0,3) for x,y in ns))
+    previous=ratio(c,r)
+    other=next(((cc,rr) for cc in range(7) for rr in range(8)
+                if states[cc*8+rr]==1 and backs[cc*8+rr]==0
+                and (cc,rr) not in e.neighbors(c,r)
+                and ratio(cc,rr)!=previous),None)
+    assert other is not None
+    touch_action(3)
+    e.tap(*e.center(*other),settle=12)
+    assert integer("scriptPreviewTurns")==2
+    other_pixels=clue_pixels()
+    assert other_pixels!=revealed_pixels,"second clue did not change the readout"
+    e.tap(*e.center(c,r),settle=12)
+    assert integer("scriptPreviewTurns")==2
+    assert clue_pixels()==revealed_pixels,"revisiting old clue did not restore its public ratio"
+    e.shot(str(out/"uk-live-deduction.png"))
     leave_daily()
     assert daily(1)==first,"practice changed scored results"
     enter_daily(1,20261127,1)
