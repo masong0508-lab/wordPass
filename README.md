@@ -46,8 +46,12 @@ Build with `make WP_CYR_MAIN=1 CYR_EXTERNAL_DIR=sourced-preview` after
 generating the pinned source packs (see the sourced language workflow and
 docs/CYR-SOURCES.md). The ordinary eleven-language build and separate
 engineering preview remain available. This is a development candidate:
-the Unicode board still uses its own progression rules, unranked Daily
-practice and language-specific checkpoints. The shared title and options
+the Unicode board still uses its own progression rules and language-specific
+checkpoints. Daily uses a date-seeded puzzle with a single scored attempt per
+language and day. A verified FAT reservation is required before a scored
+attempt; repeat days, earlier dates and no-card sessions are practice. Explicit
+exit records the score so far, while a reset leaves the date consumed.
+Daily results and streaks appear on the upper ledger screen. The shared title and options
 screens are localized, and the Classic fire preference actually adjusts
 Unicode shelf heat and burn cadence. Training and Daily ignore this preference.
 The full Unicode dictionary is always active; common-only and English spelling
@@ -57,11 +61,11 @@ eight-page guide is localized in both languages and accessible from the title
 or with L+Y during an active Unicode game.
 Classic career totals (terminal shelf attempts, clears, words, peels,
 revealed letters, highest score and shelf) are stored independently for
-Russian and Ukrainian in the main ledger. Training, Daily practice and
-abandoned attempts do not enter these totals. Two checked alternating
-8.3 FAT files per language leave the existing Latin save and checkpoints
-intact. These numeric records are not ranked Daily or complete word-history
-parity. Difficulty parity, ranked Daily integration, native-speaker
+Russian and Ukrainian in the main ledger. Training, all Daily play and
+abandoned Classic attempts do not enter these totals. Two checked alternating
+8.3 FAT files per language and record type leave the existing Latin save and
+checkpoints intact. Daily scores are local records, not online rankings.
+Complete word-history and difficulty parity, native-speaker
 editorial review and source redistribution review remain outstanding.
 
 ## Learn by playing
