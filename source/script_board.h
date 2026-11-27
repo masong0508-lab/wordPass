@@ -89,6 +89,7 @@ bool scriptBoardIgnite(ScriptBoard *board, uint32_t turnSeed);
 // movement and a tile gravity/refill pass are deterministic, heap-free.
 bool scriptBoardFireStep(ScriptBoard *board, const V4Tiles *tiles);
 // Find an existing valid 3..6-symbol path with bounded prefix-pruned DFS.
+// Prefer a word crossing the lowest active flame, then any valid word.
 // Returns path length, or zero when none is found within the search budget.
 // Outputs are caller-owned arrays with at least SCRIPT_HINT_MAX glyphs.
 #define SCRIPT_HINT_MAX 6

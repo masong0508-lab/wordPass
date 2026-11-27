@@ -75,6 +75,9 @@ over covered neighbors, with actionable + / - / compare guidance. A live word
 selection takes precedence. The integrated word readout shows the minimum
 three-letter length, the accepted-word score and added heat (including
 overtime), with a warning color when the meter reaches its ignition threshold.
+Hints first try a valid word crossing the lowest active flame, even if an
+ordinary longer word exists. The extra search is bounded and falls back to
+the previous solver when that flame cannot be reached.
 After the normal hint is spent and at least one move has been made, clearing
 the current chain offers a one-time recovery button. Two deliberate taps
 confirm the existing paid recovery (one move and two base heat, plus any
