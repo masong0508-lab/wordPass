@@ -263,6 +263,25 @@ static void exercise(const char *dbFile,const char *tbFile,const char *pbFile, b
 int main(int argc,char **argv)
 {
     if(argc!=7) { fprintf(stderr,"usage: %s ru.dict uk.dict ru.tiles uk.tiles ru.pools uk.pools\n",argv[0]);return 2; }
+    // The integrated build uses these real Classic fire settings.
+    // The base rule initializer remains deterministic for Daily/training.
+    ScriptRules normal, relaxed, fast;
+    for (unsigned shelf=1;shelf<=40;++shelf) {
+        scriptRulesStart(&normal,shelf,31);
+        relaxed=fast=normal;
+        scriptRulesApplyFireMode(&normal,1);
+        scriptRulesApplyFireMode(&relaxed,0);
+        scriptRulesApplyFireMode(&fast,2);
+        CHECK(relaxed.burnEvery==normal.burnEvery+1 &&
+              relaxed.heatThreshold==normal.heatThreshold+3,
+              "relaxed fire uses the same shelf's slower cadence and higher heat budget");
+        CHECK(fast.burnEvery==1 &&
+              fast.heatThreshold==(normal.heatThreshold>6?normal.heatThreshold-2:4),
+              "fast fire advances every turn and keeps a safe threshold floor");
+        CHECK(!normal.turns && !relaxed.turns && !fast.turns &&
+              normal.seed==relaxed.seed && normal.seed==fast.seed,
+              "fire preference preserves seed and turn state");
+    }
     exercise(argv[1],argv[3],argv[5],false);
     exercise(argv[2],argv[4],argv[6],true);
     printf(failures?"SCRIPT FIRE FAILED: %d failure(s)\n":

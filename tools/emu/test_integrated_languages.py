@@ -24,7 +24,16 @@ def main(rom, elf, output):
     def wait_state(state, script=None):
         for _ in range(3000):
             if e.state()["state"]==state and (script is None or integer("scriptPreviewLanguage")==script):
-                return
+                # scriptPreviewLanguage changes during the blocking load,
+                # before the next input poll, preference write and draw.
+                # Synchronize to two complete main-loop ticks with no keys.
+                frame=e.state()["frame"]
+                for _ in range(3000):
+                    e.run(1)
+                    if e.state()["frame"]>=frame+2: break
+                else: raise AssertionError("game did not resume scanning input")
+                if e.state()["state"]==state and (script is None or integer("scriptPreviewLanguage")==script):
+                    return
             e.run(1)
         raise AssertionError((state,script,e.state()["state"],integer("scriptPreviewOpenError")))
     def select(idx):
@@ -42,9 +51,28 @@ def main(rom, elf, output):
     select(11)
     assert not any(buffers()),"menu must not retain Unicode pack heap"
     e.shot(str(out/"ru-title.png"))
+    # Options are reachable from the shared title and change actual
+    # Cyrillic fire progression. Unsupported common-only filtering is inert.
+    e.tap(86,170,settle=12)
+    wait_state(5)
+    fo=member_offsets(elf,"S",("fire","library"))
+    def option(name): return int(e.mem.unsigned[addr+fo[name]])
+    assert option("fire")==1
+    e.tap(130,32+13*4+6,settle=12)
+    assert option("fire")==2
+    library=option("library")
+    e.tap(130,32+13*6+6,settle=12)
+    assert option("library")==library
+    e.shot(str(out/"ru-options.png"))
+    e.press("B",settle=16)
+    wait_state(ST_TITLE)
     e.tap(86,116,settle=18)
     wait_state(9,0)
     assert integer("scriptPreviewTraining")==1 and integer("scriptPreviewTurns")==0
+    ro=member_offsets(elf,"scriptPreviewRules",("burnEvery","heatThreshold"))
+    ra=symbol(elf,"scriptPreviewRules")
+    def rule(name): return int(e.mem.unsigned[ra+ro[name]])
+    assert rule("burnEvery")==4 and rule("heatThreshold")==8
     assert any(buffers()) and preference()==11
     e.press("R",settle=12)
     e.press("A",settle=12)
@@ -59,6 +87,7 @@ def main(rom, elf, output):
     e.tap(52,147,settle=18)
     wait_state(9,0)
     assert not integer("scriptPreviewTraining") and not integer("scriptPreviewDaily")
+    assert rule("burnEvery")==1 and rule("heatThreshold")==6
     e.press("R",settle=12)
     e.press("A",settle=12)
     assert integer("scriptPreviewTurns")==1 and integer("scriptPreviewScore")>0
@@ -86,6 +115,7 @@ def main(rom, elf, output):
     e.tap(120,147,settle=18)
     wait_state(9,1)
     assert integer("scriptPreviewDaily")==1 and integer("scriptPreviewDailyDate")==20261126
+    assert rule("burnEvery")==4 and rule("heatThreshold")==8,"Daily must ignore fire preference"
     e.shot(str(out/"uk-daily.png"))
     e.press("START",settle=20)
     wait_state(ST_TITLE)

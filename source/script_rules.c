@@ -43,6 +43,18 @@ void scriptRulesStart(ScriptRules *rules, unsigned shelf, uint32_t seed)
     rules->heatThreshold = (uint8_t)heatThreshold;
     rules->status = SCRIPT_RUNNING;
 }
+// Apply the same three fire preferences as Classic. Daily and tutorial
+// callers keep their deterministic base cadence.
+void scriptRulesApplyFireMode(ScriptRules *rules, int mode)
+{
+    if (!rules) return;
+    if (mode==0) { rules->burnEvery++; rules->heatThreshold+=3; }
+    else if (mode==2) {
+        rules->burnEvery=1;
+        rules->heatThreshold=rules->heatThreshold>6 ?
+                             rules->heatThreshold-2 : 4;
+    }
+}
 int scriptRulesWordHeat(int letters)
 {
     if (letters <= 0) return 0;
