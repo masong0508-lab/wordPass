@@ -272,6 +272,13 @@ static void scriptDropPeekStroke(void)
     scriptWordStrokeActive = scriptWordStrokeSuppressed = false;
 }
 
+static bool scriptPeekMode(u32 held)
+{
+#ifdef WP_CYR_MAIN
+    if(scriptPreviewTouchPeek) return true;
+#endif
+    return (held & KEY_L)!=0;
+}
 static void leaveScriptPreview(void)
 {
     scriptDropPeekStroke();
@@ -1071,6 +1078,9 @@ int main(void)
                     scriptPreviewTrainingNotice = 0;
                 }
                 if (scriptKeyAction) {
+#ifdef WP_CYR_MAIN
+                    scriptPreviewTouchPeek=0;
+#endif
                     scriptDropPeekStroke();
                     // A submitted word or Y clearing it while the stylus
                     // remains down must not start a second phantom chain.
@@ -1121,6 +1131,38 @@ int main(void)
                         break;
                     }
                 }
+#ifdef WP_CYR_MAIN
+                if(!scriptPreviewTraining && (down & KEY_TOUCH) && !scriptKeyAction) {
+                    int action=gfxScriptPlayAction(t.px,t.py);
+                    if(action) {
+                        scriptDropPeekStroke();
+                        scriptWordStrokeSuppressed=true;
+                        scriptPreviewCursorHide();
+                        if(action==1) {
+                            scriptPreviewTouchPeek=0;
+                            if(scriptPreviewRules.status!=SCRIPT_RUNNING) {
+                                if(scriptPreviewDaily) { leaveScriptPreview(); break; }
+                                if(scriptPreviewRules.status==SCRIPT_PASSED)
+                                    (void)scriptPreviewAdvance(seedCounter);
+                                else (void)scriptPreviewNewPass(seedCounter);
+                            } else if(scriptPreviewBoard.chainLen)
+                                (void)scriptPreviewSubmit();
+                        } else if(scriptPreviewRules.status==SCRIPT_RUNNING) {
+                            if(action==2) {
+                                scriptPreviewTouchPeek=0;
+                                scriptBoardClearChain(&scriptPreviewBoard);
+                            } else if(action==3) {
+                                scriptPreviewTouchPeek=0;
+                                (void)scriptPreviewHint();
+                            } else {
+                                scriptPreviewTouchPeek=!scriptPreviewTouchPeek;
+                                scriptBoardClearChain(&scriptPreviewBoard);
+                            }
+                        }
+                        break;
+                    }
+                }
+#endif
                 // Deliberate preview-only shelf checkpoint commands. The
                 // retail settings path supplies the FAT device/directory,
                 // never the actual retail filename to write.
@@ -1222,13 +1264,20 @@ int main(void)
                         // L at the beginning of the stroke determines the
                         // gesture: it must never turn into letter chaining
                         // after a cancelled peek or a released shoulder.
-                        scriptPeekStroke = (held & KEY_L) != 0;
+                        scriptPeekStroke = scriptPeekMode(held);
                         scriptPeelArmed = false;
                         if (scriptPeekStroke &&
                             gfxCellAt(t.px, t.py, &col, &row)) {
-                            scriptPeelArmed = true;
-                            scriptPeelCol = col;
-                            scriptPeelRow = row;
+#ifdef WP_CYR_MAIN
+                            if(scriptPreviewBoard.state[col][row]==SCRIPT_HOLE) {
+                                (void)scriptPreviewFocusClue(col,row);
+                            } else
+#endif
+                            {
+                                scriptPeelArmed = true;
+                                scriptPeelCol = col;
+                                scriptPeelRow = row;
+                            }
                         } else if (!scriptPeekStroke &&
                                    !scriptWordStrokeSuppressed &&
                                    gfxCellAt(t.px, t.py, &col, &row)) {
@@ -1249,11 +1298,11 @@ int main(void)
                         // Moving away (even to another gem) or releasing L
                         // disarms permanently until a fresh stylus stroke.
                         if (scriptPeelArmed &&
-                            (!(held & KEY_L) ||
+                            (!scriptPeekMode(held) ||
                              !gfxCellAt(t.px, t.py, &col, &row) ||
                              col != scriptPeelCol || row != scriptPeelRow))
                             scriptPeelArmed = false;
-                    } else if (held & KEY_L) {
+                    } else if (scriptPeekMode(held)) {
                         // Grabbing peek partway through a word stroke
                         // suppresses the REST of that stroke. Releasing L
                         // must not start an accidental second word gesture.
@@ -1296,8 +1345,14 @@ int main(void)
                 } else if (keysUp() & KEY_TOUCH) {
                     // A real peel is a single irreversible turn; canceling a
                     // drag costs zero turns, heat or clues, like retail.
-                    if (scriptPeekStroke && scriptPeelArmed && (held & KEY_L))
-                        (void)scriptPreviewPeel(scriptPeelCol, scriptPeelRow);
+                    if (scriptPeekStroke && scriptPeelArmed && scriptPeekMode(held)) {
+#ifdef WP_CYR_MAIN
+                        int result=scriptPreviewPeel(scriptPeelCol,scriptPeelRow);
+                        if(result>=0 || result==-2) scriptPreviewTouchPeek=0;
+#else
+                        (void)scriptPreviewPeel(scriptPeelCol,scriptPeelRow);
+#endif
+                    }
                     scriptDropPeekStroke();
                 }
                 break;
