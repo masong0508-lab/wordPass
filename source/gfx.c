@@ -2861,15 +2861,36 @@ static void drawScriptPreviewBoard(void)
         scriptPreviewTraining ? (scriptPreviewLanguage ? "ВИХІД" : "ВЫХОД") :
         (scriptPreviewLanguage ? "НАВЧАННЯ" : "ОБУЧЕНИЕ"), WHITE, 1);
     char label[20];
+#ifdef WP_CYR_MAIN
+    // Identify the actual attempt, not just the day. Practice and scored
+    // attempts must remain distinct even when they use the same board.
+    if (scriptPreviewTraining)
+        drawTextCenter(panelX+39,20,"УРОК",ACCENT,1);
+    else if (scriptPreviewDaily)
+        drawTextCenter(panelX+39,20,scriptPreviewDailyRanked?
+            (scriptPreviewLanguage?"ЗАЛІК":"ЗАЧЁТ"):"ПРАКТИКА",
+            scriptPreviewDailyRanked?GOLD_LT:WHITE,1);
+    else {
+        sniprintf(label,sizeof label,scriptPreviewLanguage?"ПОЛИЦЯ %d":"ПОЛКА %d",scriptPreviewShelf);
+        drawTextCenter(panelX+39,20,label,ACCENT,1);
+    }
+#else
     if (scriptPreviewDaily) strcpy(label, "ДЕНЬ");
     else sniprintf(label, sizeof label, scriptPreviewLanguage ? "ПОЛИЦЯ %d" : "ПОЛКА %d", scriptPreviewShelf);
     drawText(px0 + 6, 20, label, ACCENT, 1);
+#endif
     hline(px0 + 2, 33, 70, GOLD_DK);
     drawText(px0 + 7, 40, scriptPreviewLanguage ? "УКРАЇНСЬКА" : "РУССКИЙ", WHITE, 1);
     char n[28];
     drawText(px0 + 4, 57, scriptPreviewLanguage ? "БАЛИ" : "СЧЁТ", DIM_TEXT, 1);
     fmtInt(n, scriptPreviewScore);
+#ifdef WP_CYR_MAIN
+    // The two-times glyphs fit exactly between the score label and heat.
+    // Large totals retain every digit by falling back to normal scale.
+    drawText(px0+4,67,n,GOLD_LT,textWidth(n,2)<=64?2:1);
+#else
     drawText(px0 + 4, 67, n, GOLD_LT, 1);
+#endif
     sniprintf(n, sizeof n, scriptPreviewLanguage ? "СПЕКА %d/%d" : "ЖАР %d/%d",
              scriptPreviewRules.heat, scriptPreviewRules.heatThreshold);
     drawText(px0 + 4, 81, n,
@@ -3140,7 +3161,7 @@ static void drawScriptPreviewTop(void)
                 int heat=scriptRulesWordHeat(b->chainLen)+scriptRulesOvertimeHeat(
                     scriptRulesOvertime(&scriptPreviewRules,scriptPreviewRules.turns+1));
                 sniprintf(pts,sizeof pts,scriptPreviewLanguage?
-                    "+%d БАЛІВ / ЖАР +%d":"+%d ОЧКОВ / ЖАР +%d",points,heat);
+                    "+%d БАЛІВ / СПЕКА +%d":"+%d ОЧКОВ / ЖАР +%d",points,heat);
                 drawTextCenter(128,147,pts,
                     scriptPreviewRules.heat+heat>=scriptPreviewRules.heatThreshold?FIRE2:GOLD_LT,1);
             } else
@@ -3165,14 +3186,23 @@ static void drawScriptPreviewTop(void)
         drawLessonPanel(step);
         if (step == 5) {
             drawTextCenter(128, 148, uk ? "УРОК ЗАВЕРШЕНО" : "УРОК ЗАВЕРШЁН", GOLD_LT, 1);
+#ifdef WP_CYR_MAIN
+            drawTextCenter(128,160,uk?"ГРАТИ / A":"ИГРАТЬ / A",WHITE,1);
+            drawTextCenter(128,172,uk?"ПОВТОРИТИ / SELECT":"ПОВТОРИТЬ / SELECT",ACCENT,1);
+#else
             drawTextCenter(128, 160, uk ? "A: ПОЧАТИ ГРУ" : "A: НАЧАТЬ ИГРУ", WHITE, 1);
             drawTextCenter(128, 172, uk ? "SELECT: ПОВТОРИТИ" : "SELECT: ПОВТОРИТЬ", ACCENT, 1);
+#endif
         } else if (step == 1) {
             drawTextCenter(128, 148, uk ? "1/4 ЗАГАСІТЬ ПОЛУМʼЯ СЛОВОМ" :
                            "1/4 ПОТУШИТЕ ПЛАМЯ СЛОВОМ", GOLD_LT, 1);
             if (chainValidNow) {
+#ifdef WP_CYR_MAIN
+                drawTextCenter(128,160,uk?"ПРИЙНЯТИ / A":"ПРИНЯТЬ / A",GOLD_LT,1);
+#else
                 drawTextCenter(128, 160, uk ? "A: ПРИЙНЯТИ СЛОВО" :
                                "A: ПРИНЯТЬ СЛОВО", GOLD_LT, 1);
+#endif
                 drawTextCenter(128, 172, uk ? "СЛОВО ДАЄ ПІДКАЗКУ" :
                                "СЛОВО ДАЁТ ПОДСКАЗКУ", ACCENT, 1);
             } else {
