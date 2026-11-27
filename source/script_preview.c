@@ -5,6 +5,7 @@
 #ifdef WP_CYR_PREVIEW
 #ifdef WP_CYR_MAIN
 #include "game.h"
+#include "script_career.h"
 #endif
 #include <stdio.h>
 #include <stdlib.h>
@@ -428,6 +429,23 @@ bool scriptPreviewAdvance(uint32_t seed)
     return startPass(nextShelf, seed ^ (nextShelf * 0x9e3779b9u),
                      scriptPreviewScore);
 }
+#ifdef WP_CYR_MAIN
+// Each accepted action enters while RUNNING. Only its first terminal
+// transition reaches this hook; retry/advance/exit cannot count twice.
+static void finishCareer(void)
+{
+    if (scriptPreviewTraining || scriptPreviewDaily ||
+        scriptPreviewRules.status==SCRIPT_RUNNING) return;
+    unsigned revealed=0;
+    for(unsigned i=0;i<scriptPreviewBoard.passLen;++i)
+        revealed+=scriptPreviewBoard.found[i]!=0;
+    scriptCareerFinish(settingsPersistent()?settingsCfgPath():NULL,
+        (unsigned)scriptPreviewLanguage,
+        scriptPreviewScore>0?(unsigned)scriptPreviewScore:0,
+        (unsigned)scriptPreviewShelf,scriptPreviewRules.words,
+        scriptPreviewRules.peels,revealed,scriptPreviewRules.status==SCRIPT_PASSED);
+}
+#endif
 int scriptPreviewPeel(int c, int r)
 {
     if (!scriptPreviewDict.image || scriptPreviewRules.status != SCRIPT_RUNNING)
@@ -462,6 +480,9 @@ int scriptPreviewPeel(int c, int r)
         scriptPreviewScore += bonus;
         if (stage==3 && scriptPreviewTrainingStage()==4)
             (void)focusTrainingClue();
+#ifdef WP_CYR_MAIN
+        finishCareer();
+#endif
     }
     return result;
 }
@@ -564,6 +585,9 @@ bool scriptPreviewRescue(void)
     scriptLedgerPeel(&scriptPreviewLedger); // any recovery breaks the combo
     scriptPreviewLastTier = scriptPreviewLastScore = 0;
     scriptPreviewTurns = scriptPreviewRules.turns;
+#ifdef WP_CYR_MAIN
+    finishCareer();
+#endif
     return true;
 }
 // The initial lesson must extinguish the planted stationary flame.
@@ -637,6 +661,9 @@ int scriptPreviewSubmit(void)
         scriptPreviewScore += points;
         scriptPreviewScore += takeTurn(scriptRulesWordHeat(length), false, false);
         scriptPreviewTurns = scriptPreviewRules.turns;
+#ifdef WP_CYR_MAIN
+        finishCareer();
+#endif
     }
     scriptPreviewLastScore = points;
     return points;
