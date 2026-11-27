@@ -22,6 +22,8 @@ jobs:
           /tmp/cjk-test
           gcc -std=c11 -O2 -Wall -Wextra -Werror -fsanitize=address,undefined -Isource -Igenerated test_recovery.c source/cjk_core.c -o /tmp/cjk-recovery
           /tmp/cjk-recovery
+          gcc -std=c11 -O2 -Wall -Wextra -Werror -fsanitize=address,undefined -Isource test_fire.c source/cjk_core.c -o /tmp/cjk-fire
+          /tmp/cjk-fire
           cp /usr/share/doc/fonts-noto-cjk/copyright generated/FONT-NOTICE.txt
       - uses: actions/upload-artifact@v7
         with:

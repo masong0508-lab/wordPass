@@ -35,8 +35,7 @@ bool cjkAvailable(int locale){return locale>=0&&locale<3&&available[locale];}
 static u16 *surface;
 CjGame cjkGame;
 static int lang=-1, armed=-1;
-static bool peek, dirty=true, noHint=false,recoveryBlocked=false,drag,suppress;
-static unsigned seed=1;
+static bool peek, dirty=true, noHint=false,recoveryBlocked=false,drag,suppress,peelBlocked;
 static const uint16_t titles[3][5]={{0x7b80,0x4f53,0x4e2d,0x6587,0},{0x7e41,0x9ad4,0x4e2d,0x6587,0},{0x65e5,0x672c,0x8a9e,0,0}};
 #define RGB(r,cjkGame,b) ((u16)(0x8000|(r)|((cjkGame)<<5)|((b)<<10)))
 #define BG RGB(2,3,5)
@@ -93,10 +92,19 @@ static bool selected(int i){for(int k=0;k<cjkGame.len;k++)if(cjkGame.chain[k]==i
 static void button(int y,int id,u16 col){
     box(178,y,74,24,PANEL,col);nativeText(215-nativeWidth(id)/2,y+4,id,col);
 }
-static void start(void){peek=false;armed=-1;noHint=recoveryBlocked=false;cjStart(&cjkGame,&lex,seed++);}
+static void resetInput(void){
+    peek=false;armed=-1;drag=false;suppress=true;
+    noHint=recoveryBlocked=peelBlocked=false;dirty=true;
+}
+static bool nextOrRetry(void){
+    if(dailyMode)return false;
+    bool ok=cjkGame.loss?cjRetryShelf(&cjkGame):cjNextShelf(&cjkGame);
+    if(ok){resetInput();cjkEpoch++;}
+    return ok;
+}
 static void hint(void){
-    peek=false;armed=-1;recoveryBlocked=false;
-    if(cjComplete(&cjkGame)){noHint=false;dirty=true;return;}
+    peek=false;armed=-1;recoveryBlocked=peelBlocked=false;
+    if(cjEnded(&cjkGame)){noHint=false;dirty=true;return;}
     if(noHint){
         noHint=false;
         if(!cjRecover(&cjkGame))recoveryBlocked=true;
@@ -111,7 +119,7 @@ void cjkDraw(u16 *target,bool upper,int y0,int y1){
     rect(0,0,256,192,BG);
     if(upper){
     box(4,4,248,184,BG,GOLD);
-    centered(10,dailyMode?"CJK DAILY PRACTICE":"WORDPASS - CJK PRACTICE",GOLD);
+    centered(10,dailyMode?"CJK DAILY PRACTICE":cjkGame.heatLimit?"WORDPASS - CJK CLASSIC":"WORDPASS - CJK PRACTICE",GOLD);
     nativeTitle(lang,96,27,TEAL);
     int found=0;for(int i=0;i<cjkGame.passLen;i++)found+=(cjkGame.foundMask>>i)&1u;
     int x=128-12*cjkGame.passLen;
@@ -121,25 +129,50 @@ void cjkDraw(u16 *target,bool upper,int y0,int y1){
         else ascii(x+24*i+7,58,"?",GOLD);
     }
     char msg[48];
+    nativeText(12,27,UI_SHELF,GOLD);
+    sniprintf(msg,sizeof msg,"%u",(unsigned)cjkGame.shelf);ascii(48,30,msg,WHITE);
+    if(cjkGame.heatLimit){
+        nativeText(172,23,UI_HEAT,TEAL);
+        sniprintf(msg,sizeof msg,"%u/%u",(unsigned)cjkGame.heat,(unsigned)cjkGame.heatLimit);
+        ascii(208,26,msg,GOLD);
+        box(174,42,70,4,PANEL,GOLD);
+        int amount=68*cjkGame.heat/cjkGame.heatLimit;
+        rect(175,43,amount>68?68:amount,2,cjkGame.heat+3>=cjkGame.heatLimit?RED:GOLD);
+    }
     box(54,77,148,3,PANEL,GOLD);rect(55,78,146*found/cjkGame.passLen,1,TEAL);
     nativeText(12,82,UI_PASS,TEAL);sniprintf(msg,sizeof msg,"%d/%d",found,cjkGame.passLen);ascii(49,85,msg,WHITE);
     nativeText(115,82,UI_MOVES,TEAL);sniprintf(msg,sizeof msg,"%lu",(unsigned long)cjkGame.turns);ascii(153,85,msg,WHITE);
-    if(cjComplete(&cjkGame)){
+    if(cjkGame.loss){
+        nativeCenter(108,UI_FIRE_LOST,RED);nativeCenter(131,dailyMode?UI_MENU:UI_RETRY,WHITE);
+    }else if(cjComplete(&cjkGame)){
         nativeCenter(108,UI_DONE,GOLD);nativeCenter(131,dailyMode?UI_MENU:UI_NEXT_BOARD,WHITE);
+    }else if(peelBlocked){
+        nativeCenter(108,UI_FIRE_WARN,RED);
     }else if(cjkGame.len){
         int idx=cjSelected(&cjkGame);
         for(int i=0;i<cjkGame.len;i++)glyph(lang,128-cjkGame.len*9+i*18,98,cjkGame.tile[cjkGame.chain[i]],idx>=0?GOLD:WHITE);
-        if(idx>=0){const CjWord *w=&cjkGame.lex->words[idx];centered(120,w->reading,TEAL);centered(136,w->meaning,WHITE);}
+        if(idx>=0){
+            const CjWord *w=&cjkGame.lex->words[idx];centered(120,w->reading,TEAL);centered(136,w->meaning,WHITE);
+            if(cjkGame.heatLimit){
+                int delta=cjHeatCost(&cjkGame,cjWordHeat(cjkGame.len));
+                for(int i=0;i<cjkGame.len;i++)if(cjkGame.flame[cjkGame.chain[i]])delta-=2;
+                sniprintf(msg,sizeof msg,"%s%d",delta>=0?"+":"",delta);
+                ascii(194,102,msg,delta>0?GOLD:TEAL);
+            }
+        }
         else nativeCenter(120,cjkGame.len<2?UI_LINK_TWO:UI_UNKNOWN,RED);
     }else if(noHint||recoveryBlocked){
         nativeCenter(105,recoveryBlocked?UI_RECOVERY_BLOCKED:UI_NO_HINT,RED);
-        if(noHint)nativeCenter(128,UI_RECOVERY_COST,GOLD);
+        if(noHint){
+            nativeCenter(128,UI_RECOVERY_COST,GOLD);
+            if(cjkGame.heatLimit){sniprintf(msg,sizeof msg,"+%d",cjHeatCost(&cjkGame,2));ascii(218,143,msg,GOLD);}
+        }
     }else if(cjkGame.lastWord!=UINT16_MAX){
         const CjWord *w=&cjkGame.lex->words[cjkGame.lastWord];
         centered(100,w->reading,TEAL);centered(116,w->meaning,WHITE);
     }else nativeCenter(105,UI_MAKE_WORD,WHITE);
     int remaining=0,covered=0;
-    bool evidence=!cjComplete(&cjkGame)&&cjEvidence(&cjkGame,cjkGame.focus,&remaining,&covered);
+    bool evidence=!cjEnded(&cjkGame)&&cjEvidence(&cjkGame,cjkGame.focus,&remaining,&covered);
     if(evidence){
         nativeText(16,151,UI_CLUE,GOLD);sniprintf(msg,sizeof msg,"%d/%d",remaining,covered);ascii(168,154,msg,TEAL);
     }
@@ -147,7 +180,7 @@ void cjkDraw(u16 *target,bool upper,int y0,int y1){
     return;
     }
     int remaining=0,covered=0;
-    bool evidence=!cjComplete(&cjkGame)&&cjEvidence(&cjkGame,cjkGame.focus,&remaining,&covered);
+    bool evidence=!cjEnded(&cjkGame)&&cjEvidence(&cjkGame,cjkGame.focus,&remaining,&covered);
     char msg[48];
     for(int i=0;i<CJ_CELLS;i++){
         int a,b;origin(i,&a,&b);
@@ -155,8 +188,10 @@ void cjkDraw(u16 *target,bool upper,int y0,int y1){
         u16 border=selected(i)?WHITE:cjkGame.focus==i?TEAL:GOLD;
         if(evidence&&!selected(i)&&!cjkGame.opened[i]&&cjAdjacent(cjkGame.focus,i))
             border=remaining==0?TEAL:remaining==covered?WHITE:RGB(11,19,29);
-        box(a,b,26,23,hole?BG:PANEL,border);
+        if(cjkGame.flame[i]||(peek&&cjPeelBlocked(&cjkGame,i)))border=RED;
+        box(a,b,26,23,hole?BG:cjkGame.flame[i]?RGB(13,4,3):PANEL,border);
         if(!hole)glyph(lang,a+5,b+3,cjkGame.tile[i],cjkGame.opened[i]?TEAL:WHITE);
+        if(cjkGame.flame[i]){rect(a+3,b+19,20,2,RED);rect(a+8,b+17,10,2,GOLD);}
         int clue=cjClue(&cjkGame,i);
         if(clue>=0){char digit[2]={(char)('0'+clue),0};rect(a,b,9,10,BG);ascii(a,b,digit,GOLD);}
     }
@@ -164,7 +199,7 @@ void cjkDraw(u16 *target,bool upper,int y0,int y1){
     button(37,UI_ACCEPT,cjSelected(&cjkGame)>=0?GOLD:WHITE);
     button(65,UI_CLEAR,WHITE);button(93,noHint?UI_RECOVER:UI_HINT,noHint?GOLD:TEAL);
     button(121,peek?UI_CANCEL:UI_OPEN,peek?GOLD:WHITE);
-    button(149,cjComplete(&cjkGame)&&!dailyMode?UI_NEXT:UI_MENU,WHITE);
+    button(149,dailyMode?UI_MENU:cjkGame.loss?UI_RETRY:cjComplete(&cjkGame)?UI_NEXT:UI_MENU,WHITE);
     ascii(5,178,"B: MENU   R: HINT   L: OPEN",TEAL);
 }
 
@@ -172,7 +207,7 @@ void cjkLeave(void){
     free(words);free(cjkPack);words=NULL;cjkPack=NULL;glyphs=NULL;uiLabels=NULL;ascii8=NULL;
     memset(&cjkGame,0,sizeof cjkGame);memset(&lex,0,sizeof lex);lang=-1;armed=-1;drag=suppress=false;
 }
-bool cjkEnter(int locale,u32 initialSeed,bool daily){
+bool cjkEnter(int locale,u32 initialSeed,bool daily,bool training,int difficulty){
     cjkLeave();
     if(!cjkAvailable(locale))return false;
     FILE *f=fopen(packPaths[locale],"rb");
@@ -204,7 +239,9 @@ bool cjkEnter(int locale,u32 initialSeed,bool daily){
     for(unsigned i=0;i<nu;i++)if(!uiLabels[i][0]||uiLabels[i][14])goto bad;
     ascii8=(const uint8_t (*)[10])(cjkPack+16+76*count+34*ng+30*nu);
     lex.words=words;lex.count=(uint16_t)count;
-    lang=locale;seed=initialSeed;dailyMode=daily;start();cjkEpoch++;return true;
+    lang=locale;dailyMode=daily;
+    if(!cjStartMode(&cjkGame,&lex,initialSeed,training?CJ_FIRE_OFF:daily?CJ_FIRE_NORMAL:difficulty,1,0))goto bad;
+    resetInput();cjkEpoch++;return true;
 bad:
     cjkLeave();return false;
 }
@@ -212,8 +249,13 @@ bool cjkInput(u32 down,u32 held,u32 up,const touchPosition *t){
     if(!cjkPack)return false;
     dirty=false;
     if(down&(KEY_B|KEY_START))return false;
-    if(down&(KEY_A|KEY_Y|KEY_R)){armed=-1;drag=false;suppress=true;peek=false;
-        if(down&KEY_A){noHint=recoveryBlocked=false;if(cjComplete(&cjkGame)){if(dailyMode)return false;start();}else cjSubmit(&cjkGame);}
+    if(cjEnded(&cjkGame)){
+        if((down&KEY_A)||((down&KEY_TOUCH)&&t->px>=178&&t->px<252&&t->py>=149&&t->py<173))
+            return nextOrRetry();
+        return true;
+    }
+    if(down&(KEY_A|KEY_Y|KEY_R)){armed=-1;drag=false;suppress=true;peek=false;peelBlocked=false;
+        if(down&KEY_A){noHint=recoveryBlocked=false;cjSubmit(&cjkGame);}
         else if(down&KEY_Y){cjkGame.len=0;noHint=recoveryBlocked=false;}
         else hint();
         dirty=true;
@@ -221,13 +263,13 @@ bool cjkInput(u32 down,u32 held,u32 up,const touchPosition *t){
     if((down&KEY_TOUCH)&&!(down&(KEY_A|KEY_B|KEY_START|KEY_Y|KEY_R))){
         suppress=false;drag=false;armed=-1;
         bool hintTap=t->px>=178&&t->px<252&&t->py>=93&&t->py<117;
-        if(!hintTap){dirty|=noHint||recoveryBlocked;noHint=recoveryBlocked=false;}
+        if(!hintTap){dirty|=noHint||recoveryBlocked||peelBlocked;noHint=recoveryBlocked=peelBlocked=false;}
         if(t->px>=178&&t->px<252){
             if(t->py>=37&&t->py<61)cjSubmit(&cjkGame);
             else if(t->py>=65&&t->py<89){cjkGame.len=0;peek=false;}
             else if(t->py>=93&&t->py<117)hint();
             else if(t->py>=121&&t->py<145){peek=!peek;cjkGame.len=0;}
-            else if(t->py>=149&&t->py<173){if(cjComplete(&cjkGame)&&!dailyMode)start();else return false;}
+            else if(t->py>=149&&t->py<173)return false;
             suppress=true;dirty=true;
         }else{
             int i=hit(t->px,t->py);
@@ -246,7 +288,7 @@ bool cjkInput(u32 down,u32 held,u32 up,const touchPosition *t){
         else if(drag&&i>=0)dirty|=cjAdd(&cjkGame,i);
     }
     if(up&KEY_TOUCH){
-        if(armed>=0){cjPeel(&cjkGame,armed);peek=false;dirty=true;}
+        if(armed>=0){peelBlocked=cjPeel(&cjkGame,armed)==-2;peek=false;dirty=true;}
         armed=-1;drag=suppress=false;
     }
     if(dirty)cjkEpoch++;
