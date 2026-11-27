@@ -4,6 +4,7 @@
 #include "script_preview.h"
 #ifdef WP_CYR_MAIN
 #include "script_career.h"
+#include "integrated_guide.h"
 #endif
 #include "build_info.h"
 #include <string.h>
@@ -1828,18 +1829,37 @@ static void drawGuide(const Game *g)
     drawTopDots();
     rectOutline(0, 0, SCREEN_W, SCREEN_H, GOLD_DK);
     rectOutline(1, 1, SCREEN_W - 2, SCREEN_H - 2, GOLD);
+#ifdef WP_CYR_MAIN
+    const char *const *localized=scriptMenu()?integratedGuide[S.language==LANG_UK][page]:NULL;
+    if (!localized)
+#endif
     if (guideCachePage != page || guideCacheLang != langCur()) { guideLines(page, guideCache); guideCachePage = page; guideCacheLang = langCur(); }
 
-    const char *title = guideTitle(page);
+    const char *title =
+#ifdef WP_CYR_MAIN
+        localized ? localized[0] :
+#endif
+        guideTitle(page);
     drawTextShadow(SCREEN_W / 2 - textWidth(title, 2) / 2, 8, title, GOLD_LT, 2);
     int bx = guideBackX();
     rectOutline(bx, 6, GD_BACK_W, 15, DIM);
-    drawTextCenter(bx + GD_BACK_W / 2, 10, ui(UI_GD_BACK), INK, 1);
+    drawTextCenter(bx+GD_BACK_W/2,10,
+#ifdef WP_CYR_MAIN
+        localized?"НАЗАД":
+#endif
+        ui(UI_GD_BACK),INK,1);
     char cnt[8]; fmtInt(cnt, page + 1); strcat(cnt, "/"); fmtInt(cnt + strlen(cnt), GUIDE_PAGES);
     drawText(S.hand == HAND_LEFT ? SCREEN_W - 8 - textWidth(cnt, 1) : 8, 10, cnt, DIM_TEXT, 1);   // the page counter takes the other corner
     hline(GD_TEXT_X, 25, SCREEN_W - 2 * GD_TEXT_X, GOLD_DK);
 
     int y = GD_TEXT_Y;
+#ifdef WP_CYR_MAIN
+    if (localized) {
+        // UTF-8 glyph drawing, not the Latin-only marked text renderer.
+        for (int i=1;i<10 && localized[i];++i)
+            drawText(GD_TEXT_X,y+3+14*(i-1),localized[i],i==1?GOLD_LT:INK,1);
+    } else
+#endif
     for (int i = 0; i < GUIDE_MAX_LINES; i++) {
         if (!guideCache[i][0]) { y += GUIDE_GAP_H; continue; }
         int a = (guideAge - 3 * i - 2) * 16 / 6;               // each line fades up over six frames, three after the one above
@@ -2362,8 +2382,61 @@ static void gdControls(int t)
     gCaption(ui(CAP[hi]), ACCENT);
 }
 
+#ifdef WP_CYR_MAIN
+// A compact diagram complements each native-language instruction page.
+// These examples use the actual renderer and do not need a loaded pack.
+static void drawIntegratedGuideTop(int page)
+{
+    bool uk=S.language==LANG_UK;
+    const char *const *lines=integratedGuide[uk][page];
+    drawTopDots();
+    rectOutline(8,8,240,176,GOLD_DK);
+    rectOutline(9,9,238,174,GOLD);
+    drawTextCenter(128,16,lines[0],GOLD_LT,2);
+    hline(20,36,216,GOLD_DK);
+    if (page==0 || page==1 || page==3) {
+        const char *letters[3]={"К","О","Т"};
+        if (uk) { letters[1]="І"; }
+        for(int i=0;i<3;++i) {
+            int x=70+i*40;
+            blitGem(x,66,page==3 && i==2?5:i);
+            drawTextCenter(x+12,71,letters[i],page==3 && i==2?BLACK:WHITE,2);
+            if(page==1) drawTextCenter(x+12,96,i==0?"1":i==1?"2":"3",ACCENT,1);
+        }
+        drawTextCenter(128,113,page==0?"? ? ?":page==1?(uk?"КІТ":"КОТ"):"L + TAP",GOLD_LT,2);
+    } else if (page==2) {
+        drawTextCenter(128,58,"1/1",GOLD_LT,2);
+        drawHoleCell(87,87,1,false,false);
+        blitGem(145,87,2);
+        drawChar(151,91,'+',GOLD_LT,2);
+        drawTextCenter(128,115,"0/2  -",C(9,28,30),1);
+    } else if (page==4) {
+        for(int i=0;i<3;++i) blitGem(74+i*40,66,i==1?6:1);
+        drawTextCenter(128,102,"3: +3   4: +2",FIRE2,1);
+        drawTextCenter(128,116,"5-6: +1  7+: 0",ACCENT,1);
+    } else if (page==5) {
+        drawTextCenter(128,61,"+50%",GOLD_LT,3);
+        drawTextCenter(128,103,uk?"ПОВТОР: 1/2":"ПОВТОР: 1/2",ACCENT,1);
+    } else if (page==6) {
+        const char *modes[3]={uk?"КЛАСИКА":"КЛАССИКА","ДЕНЬ",uk?"НАВЧАННЯ":"ОБУЧЕНИЕ"};
+        for(int i=0;i<3;++i) {
+            rectOutline(50,48+i*26,156,21,i==0?GOLD_LT:ACCENT);
+            drawTextCenter(128,55+i*26,modes[i],WHITE,1);
+        }
+    } else {
+        drawTextCenter(128,55,"L + START",GOLD_LT,2);
+        drawTextCenter(128,82,"L + B",ACCENT,2);
+        drawTextCenter(128,109,"L + Y",WHITE,2);
+    }
+    drawTextCenter(128,145,lines[1],INK,1);
+    drawTextCenter(128,162,uk?"B: НАЗАД  /  A: ДАЛІ":"B: НАЗАД  /  A: ДАЛЕЕ",DIM_TEXT,1);
+}
+#endif
 static void drawTopGuide(const Game *g)
 {
+#ifdef WP_CYR_MAIN
+    if (scriptMenu()) { drawIntegratedGuideTop(g->guidePage); return; }
+#endif
     drawTopDots();
     rectOutline(8, 8, 240, 176, GOLD_DK);
     rectOutline(9, 9, 238, 174, GOLD);
