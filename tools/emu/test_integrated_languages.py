@@ -54,6 +54,19 @@ def main(rom, elf, output):
     select(11)
     assert not any(buffers()),"menu must not retain Unicode pack heap"
     e.shot(str(out/"ru-title.png"))
+    def guide_pages(tag,return_state):
+        wait_state(7)
+        assert e.state()["guidePage"]==0
+        for page in range(8):
+            assert e.state()["guidePage"]==page
+            e.run(12)
+            e.shot(str(out/f"{tag}-guide-{page+1}.png"))
+            if page<7: e.press("RIGHT",settle=8)
+        e.press("B",settle=12)
+        wait_state(return_state)
+    e.press("B",settle=12)
+    guide_pages("ru",ST_TITLE)
+    assert not any(buffers())
     # Options are reachable from the shared title and change actual
     # Cyrillic fire progression. Unsupported common-only filtering is inert.
     e.tap(86,170,settle=12)
@@ -126,8 +139,19 @@ def main(rom, elf, output):
     assert career(0)==ru and career(1)==(0,)*8,"career save must survive power cycle separately"
     assert preference()==12,"Ukrainian selection was lost on reboot"
     e.shot(str(out/"uk-title.png"))
+    e.press("B",settle=12)
+    guide_pages("uk",ST_TITLE)
     e.tap(86,116,settle=18)
     wait_state(9,1)
+    assert integer("scriptPreviewTraining")==1
+    # The guide must work in a live tutorial without destroying progress.
+    e.press("R",settle=12)
+    stable=bytes(e.mem.unsigned[board:board+228])
+    e.hold("L")
+    e.press("Y",settle=12)
+    e.hold("L",False)
+    guide_pages("uk-live",9)
+    assert bytes(e.mem.unsigned[board:board+228])==stable
     assert integer("scriptPreviewTraining")==1
     # Change languages inside the tutorial: preserve the lesson, not score.
     e.press("X",settle=18)
