@@ -56,7 +56,11 @@ screens are localized, and the Classic fire preference actually adjusts
 Unicode shelf heat and burn cadence. Training and Daily ignore this preference.
 The full Unicode dictionary is always active; common-only and English spelling
 filters are visibly unavailable. The unified build stores the full Latin composite cache in otherwise-unused
-LCDC VRAM bank D instead of competing for original-DS main RAM. The shared
+LCDC VRAM bank D instead of competing for original-DS main RAM. The same
+bank now caches all ordinary gem glyphs in the active Unicode alphabet;
+the atlas is regenerated on a language or theme change, not each frame.
+The integrated renderer uses one bounded word-selection mask and subtle
+flame/valid-word edge animation. The shared
 eight-page guide is localized in both languages and accessible from the title
 or with L+Y during an active Unicode game. The integrated Classic and Daily
 panels have touch buttons for submit, clear, hint and a one-shot peel.
