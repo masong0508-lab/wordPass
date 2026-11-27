@@ -93,9 +93,8 @@ static int rulesTurnCore(ScriptRules *rules, ScriptBoard *board,
         rules->heat = (uint16_t)(heat > limit ? limit : heat);
         return 0;
     }
-    int budget = 12 + rules->shelf / 3;
-    int overtime = (int)rules->turns - budget;
-    if (overtime > 0) heatBase += 1 + overtime / 4;
+    int overtime = scriptRulesOvertime(rules, rules->turns);
+    heatBase += scriptRulesOvertimeHeat(overtime);
     unsigned nextHeat = rules->heat + (unsigned)heatBase;
     if (nextHeat > 65535u) nextHeat = 65535u;
     rules->heat = (uint16_t)nextHeat;

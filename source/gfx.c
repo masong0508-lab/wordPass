@@ -2929,7 +2929,7 @@ static void drawScriptPreviewBoard(void)
                 scriptPreviewDaily?"МЕНЮ":
                 scriptPreviewRules.status==SCRIPT_PASSED?(uk?"ДАЛІ":"ДАЛЕЕ"):(uk?"ЗНОВУ":"СНОВА"),
             uk?"ОЧИСТИТИ":"СБРОС",
-            uk?"ПІДКАЗКА":"ПОДСКАЗКА",
+            scriptPreviewHints?(uk?"ВИЧЕРПАНО":"НЕТ ПОДСК."):(uk?"ПІДКАЗКА":"ПОДСКАЗКА"),
             scriptPreviewTouchPeek?(uk?"СКАСУВАТИ":"ОТМЕНА"):(uk?"ВІДКРИТИ":"ОТКРЫТЬ")
         };
         for(int i=0;i<4;++i) {
@@ -3115,10 +3115,31 @@ static void drawScriptPreviewTop(void)
             sniprintf(pts, sizeof pts, "+%d %s", points,
                      scriptPreviewLanguage ? (tier == 1 ? "ЗВИЧАЙНЕ" : "РІДКІСНЕ")
                                            : (tier == 1 ? "ЧАСТОЕ" : "РЕДКОЕ"));
+#ifdef WP_CYR_MAIN
+            if (!scriptPreviewTraining) {
+                // The quote is the added heat before ignition/reset, not
+                // the final meter value. Include the real overtime penalty.
+                int heat=scriptRulesWordHeat(b->chainLen)+scriptRulesOvertimeHeat(
+                    scriptRulesOvertime(&scriptPreviewRules,scriptPreviewRules.turns+1));
+                sniprintf(pts,sizeof pts,scriptPreviewLanguage?
+                    "+%d БАЛІВ / ЖАР +%d":"+%d ОЧКОВ / ЖАР +%d",points,heat);
+                drawTextCenter(128,147,pts,
+                    scriptPreviewRules.heat+heat>=scriptPreviewRules.heatThreshold?FIRE2:GOLD_LT,1);
+            } else
+#endif
             drawTextCenter(128, scriptPreviewTraining ? 137 : 147, pts, GOLD_LT, 1);
         } else if (b->chainLen >= 3 && scriptPreviewTrainingFireSelected())
             drawTextCenter(128, scriptPreviewTraining ? 137 : 147, scriptPreviewLanguage ?
                            "НЕМАЄ В СЛОВНИКУ" : "НЕТ В СЛОВАРЕ", FIRE2, 1);
+#ifdef WP_CYR_MAIN
+        else if (b->chainLen<3) {
+            sniprintf(pts,sizeof pts,scriptPreviewLanguage?
+                "ЛІТЕРИ %u/3":"БУКВЫ %u/3",(unsigned)b->chainLen);
+            drawTextCenter(128,scriptPreviewTraining?137:147,pts,ACCENT,1);
+        } else if (scriptPreviewTraining)
+            drawTextCenter(128,137,scriptPreviewLanguage?
+                "ДОДАЙТЕ ВОГОНЬ":"ДОБАВЬТЕ ОГОНЬ",FIRE2,1);
+#endif
     }
     if (scriptPreviewTraining) {
         const bool uk = scriptPreviewLanguage != 0;
@@ -4371,6 +4392,11 @@ static void topSigs(const Game *g, u32 sig[4])
         h3 = hmix(h3, chainScoreNow); // quote occupies rows 147..153
         h3 = hmix(h3, scriptQuoteTierNow);
         h3 = hmix(h3, b->chainLen >= WPD4_MIN_WORD); // invalid-word message visibility
+#ifdef WP_CYR_MAIN
+        h3 = hmix(h3,b->chainLen); // exact short-word count and heat quote
+        h3 = hmix(h3,scriptPreviewRules.heat);
+        h3 = hmix(h3,scriptPreviewRules.heatThreshold);
+#endif
         h3 = hmix(h3, scriptPreviewRules.status);
         h3 = hmix(h3, scriptPreviewRules.failReason);
         h3 = hmix(h3, scriptPreviewRules.lastBonus);
