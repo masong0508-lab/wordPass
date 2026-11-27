@@ -1197,8 +1197,12 @@ int main(void)
 #endif
                         (void)scriptPreviewAdvance(seedCounter);
                     }
-                    else if (scriptPreviewRules.status == SCRIPT_FAILED)
+                    else if (scriptPreviewRules.status == SCRIPT_FAILED) {
+#ifdef WP_CYR_MAIN
+                        if(scriptPreviewDaily) { leaveScriptPreview(); break; }
+#endif
                         (void)scriptPreviewNewPass(seedCounter);
+                    }
                     else if (scriptPreviewCursorActive) {
                         if (held & KEY_L) (void)scriptPreviewCursorPeel();
                         else (void)scriptPreviewCursorSelect();
