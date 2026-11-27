@@ -444,12 +444,23 @@ typedef struct { u32 w[TILE_W / 2]; } GemRow;
 // unchanged, and no dictionary or password content is removed.
 #if defined(WP_CYR_MAIN)
 #define DIAMOND_CACHE_SLOTS 2
-#elif defined(WP_CYR_PREVIEW)
+#define LETTER_CACHE_SLOTS 20
+static u8 letterSlot[26];
+static int cacheLanguage=-1;
+#else
+#define LETTER_CACHE_SLOTS 26
+#ifdef WP_CYR_PREVIEW
 #define DIAMOND_CACHE_SLOTS 4
 #else
 #define DIAMOND_CACHE_SLOTS POOL_MAX_LEN
 #endif
-static ALIGN(4) GemRow gemLetter[26][COMP_ROWS], diamondLetter[DIAMOND_CACHE_SLOTS][COMP_ROWS];
+#endif
+static ALIGN(4) GemRow gemLetter[LETTER_CACHE_SLOTS][COMP_ROWS], diamondLetter[DIAMOND_CACHE_SLOTS][COMP_ROWS];
+#ifdef WP_CYR_MAIN
+#define LETTER_SLOT(l) letterSlot[(l)]
+#else
+#define LETTER_SLOT(l) (l)
+#endif
 static u8 diamondSlot[27];
 static u32 diamondCacheMask;
 
@@ -507,9 +518,25 @@ static void buildGemCache(void)
     clearScratch(PLAQUE_W, PLAQUE_H);
     drawGemSized(0, 0, PLAQUE_W, PLAQUE_H, &GEM_DIAMOND, false);
     for (int j = 0; j < PLAQUE_H; j++) for (int k = 0; k < PLAQUE_W; k++) plaqueCache[j][k] = cur[j * SCREEN_W + k];
+#ifdef WP_CYR_MAIN
+    // Cache the most frequently dealt Latin letters for the active pack.
+    // Six less frequent letters use the original gem + glyph draw path.
+    // This recovers 5760 bytes for the two new localized menus.
+    memset(letterSlot,255,sizeof letterSlot);
+    cacheLanguage=-1;
+    for (int slot=0;slot<LETTER_CACHE_SLOTS;++slot) {
+        int best=-1;
+        for (int l=0;l<26;++l)
+            if (letterSlot[l]==255 && (best<0 || langWeight(l)>langWeight(best)))
+                best=l;
+        letterSlot[best]=(u8)slot;
+        if (langWeight(best)>0) cacheLanguage=langCur();
+    }
+#endif
     for (int l = 0; l < 26; l++) {
+        if (LETTER_SLOT(l)>=LETTER_CACHE_SLOTS) continue;
         const GemPal *p = GEM_PALS[palOf[l]];
-        buildComposite(gemLetter[l], p, l, C(31,31,29), p->dark);
+        buildComposite(gemLetter[LETTER_SLOT(l)], p, l, C(31,31,29), p->dark);
     }
     diamondCacheMask = 0;
     memset(diamondSlot, 255, sizeof diamondSlot);
@@ -1185,8 +1212,8 @@ static ITCM_CODE __attribute__((noinline)) void drawBoard(const Game *g)
                         bool risk = r > 0 && g->cell[c][r - 1].state == CELL_BURN;
                         if (g->wordClue[c][r]) drawWordClue(x, y, cl->letter, g->wordClue[c][r] - 1, risk);
                         else drawGhostCell(x, yd, cl->letter, risk);   // a peel under a flame scorches
-                    } else if (!sq && !lit && !cl->flash && yd + 1 >= clipY0 && yd + 1 + COMP_ROWS <= clipY1) {
-                        blitComposite(gemLetter[cl->letter], x, yd + 1);   // the common case: one 48-byte move per row
+                    } else if (LETTER_SLOT(cl->letter)<LETTER_CACHE_SLOTS && !sq && !lit && !cl->flash && yd + 1 >= clipY0 && yd + 1 + COMP_ROWS <= clipY1) {
+                        blitComposite(gemLetter[LETTER_SLOT(cl->letter)], x, yd + 1);   // the common case: one 48-byte move per row
                     } else {
                         int pal = palOf[cl->letter];
                         const GemPal *p = GEM_PALS[pal];
@@ -1544,6 +1571,10 @@ static inline bool menuState(int st) { return st == ST_TITLE || st == ST_OPTIONS
 // never use BX() here.
 
 static void drawTipCard(int which);
+static const char *menuLabel(int id);
+#ifdef WP_CYR_MAIN
+static bool scriptMenu(void) { return S.language==LANG_RU || S.language==LANG_UK; }
+#endif
 
 static const short OPT_NAMES[OPT_ROWS] = { UI_O_THEME, UI_O_FRAME, UI_O_ACCENT, UI_O_HAND, UI_FIRE, UI_O_MUSIC, UI_O_LIBRARY, UI_O_SPELLING, UI_O_LANGUAGE };
 static const short LIB_NAMES[LIB_COUNT] = { UI_V_FULL, UI_V_COMMON };
@@ -1593,12 +1624,15 @@ static void drawOptionsHelp(void)
         UI_H_THEME, UI_H_FRAME, UI_H_ACCENT, UI_H_HAND, UI_H_FIRE, UI_H_MUSIC, UI_H_LIBRARY, UI_H_SPELL, UI_H_LANG
     };
     char h[48];
-    const char *t = ui(OPT_HELP[G.optRow]);
+    const char *t = menuLabel(OPT_HELP[G.optRow]);
+#ifdef WP_CYR_MAIN
+    if (!scriptMenu())
+#endif
     if (G.optRow == 2 && S.accent) { uiFmt(h, sizeof h, UI_H_ACCENTNAME, ui(ACCENT_NAMES[S.accent])); t = h; }
-    if (G.optRow == 7 && S.language != LANG_EN) t = ui(UI_H_SPELL_EN);
+    if (G.optRow == 7 && S.language != LANG_EN) t = menuLabel(UI_H_SPELL_EN);
     drawTextCenter(128, 132, t, INK, 1);
-    if (G.optRow == 8) drawTextCenter(128, 141, ui(UI_H_LANGNOTE), ACCENT, 1);
-    if (G.optRow == 0 && S.theme == THEME_CLEAR) drawTextCenter(128, 141, ui(UI_H_CLEAR), ACCENT, 1);
+    if (G.optRow == 8) drawTextCenter(128, 141, menuLabel(UI_H_LANGNOTE), ACCENT, 1);
+    if (G.optRow == 0 && S.theme == THEME_CLEAR) drawTextCenter(128, 141, menuLabel(UI_H_CLEAR), ACCENT, 1);
 }
 
 static void drawTopTitle(void)
@@ -1607,13 +1641,20 @@ static void drawTopTitle(void)
     rectOutline(9, 9, 238, 174, GOLD);
     drawLogo(16, 16, 2);
     if (G.state == ST_OPTIONS) {
-        drawTextCenter(128, 44, ui(UI_O_MAKE), GOLD_LT, 1);
+        drawTextCenter(128,44,menuLabel(UI_O_MAKE),GOLD_LT,1);
         drawMiniBoard();
         drawOptionsHelp();
         char s[48];
-        if (S.bestClassic) { uiFmt(s, sizeof s, UI_O_BESTLINE, S.bestClassic, S.bestClassicShelf); drawTextCenter(128, 150, s, DIM_TEXT, 1); }
-        if (S.bestDaily)   { uiFmt(s, sizeof s, UI_O_BESTDAILY, S.bestDaily, S.bestDailyDate / 100 % 100, S.bestDailyDate % 100); drawTextCenter(128, 160, s, DIM_TEXT, 1); }
-        drawTextCenter(128, 172, ui(UI_O_TAPHINT), DIM_TEXT, 1);
+#ifdef WP_CYR_MAIN
+        if (scriptMenu()) {
+            drawTextCenter(128,156,S.language==LANG_UK?"ДЕНЬ: БЕЗ РЕКОРДІВ":"ДЕНЬ: БЕЗ РЕКОРДОВ",DIM_TEXT,1);
+        } else
+#endif
+        {
+            if (S.bestClassic) { uiFmt(s, sizeof s, UI_O_BESTLINE, S.bestClassic, S.bestClassicShelf); drawTextCenter(128, 150, s, DIM_TEXT, 1); }
+            if (S.bestDaily)   { uiFmt(s, sizeof s, UI_O_BESTDAILY, S.bestDaily, S.bestDailyDate / 100 % 100, S.bestDailyDate % 100); drawTextCenter(128, 160, s, DIM_TEXT, 1); }
+        }
+        drawTextCenter(128,172,menuLabel(UI_O_TAPHINT),DIM_TEXT,1);
         return;
     }
     if (G.state == ST_STATS) {
@@ -1622,13 +1663,22 @@ static void drawTopTitle(void)
         drawTextCenter(128, 120, ui(UI_S_CLOSE), DIM_TEXT, 1);
         return;
     }
-    drawTipCard(tipIndex);
+#ifdef WP_CYR_MAIN
+    if (scriptMenu()) {
+        bool uk=S.language==LANG_UK;
+        drawTextCenter(128,58,uk?"ЗНАЙДІТЬ УСІ ЛІТЕРИ ПАРОЛЯ":"НАЙДИТЕ ВСЕ БУКВЫ ПАРОЛЯ",GOLD_LT,1);
+        drawTextCenter(128,88,uk?"СКЛАДАЙТЕ СЛОВА":"СОСТАВЛЯЙТЕ СЛОВА",WHITE,1);
+        drawTextCenter(128,108,uk?"ЧИСЛА ВКАЗУЮТЬ НА СУСІДІВ":"ЧИСЛА УКАЗЫВАЮТ НА СОСЕДЕЙ",ACCENT,1);
+        drawTextCenter(128,128,uk?"СПРОБУЙТЕ НАВЧАННЯ":"ПОПРОБУЙТЕ ОБУЧЕНИЕ",INK,1);
+    } else
+#endif
+        drawTipCard(tipIndex);
     // Quiet, fixed-width identifiers for screenshots and hardware bug reports.
     // The left label ends before the pager dots; the flavor stays at the right.
     drawText(16, 175, WP_BUILD_LABEL, DIM_TEXT, 1);
     drawText(192, 175, WP_BUILD_FLAVOR, DIM_TEXT, 1);
     if (G.msg[0]) drawTextCenter(128, 158, G.msg, GOLD_LT, 1);   // e.g. SET THE DS CLOCK FOR DAILY
-    else if (!S.tutorDone) drawTextCenter(128, 158, ui(UI_T_NEWHERE), ACCENT, 1);   // until the first guided shelf is done
+    else if (!S.tutorDone) drawTextCenter(128,158,menuLabel(UI_T_NEWHERE),ACCENT,1);   // until the first guided shelf is done
 }
 
 // accent dot grid over the whole top screen, restricted to the slice being drawn
@@ -3172,7 +3222,64 @@ static const char *menuLabel(int id)
             case UI_T_OPTIONS: return uk?"ОПЦІЇ":"ОПЦИИ";
             case UI_T_DAILY: return "ДЕНЬ";
             case UI_T_PRACTICE: return uk?"ПРАКТИКА":"ПРАКТИКА";
-            case UI_T_SETCLOCK: return uk?"ДАТА DS":"ДАТА DS";
+            case UI_T_SETCLOCK: return "ДАТА DS";
+            case UI_T_GUIDE: return uk?"? ГРА":"? ИГРА";
+            case UI_T_NEWHERE: return uk?"ПОЧНІТЬ З НАВЧАННЯ":"НАЧНИТЕ С ОБУЧЕНИЯ";
+            case UI_T_OPTIONS_H: return uk?"ОПЦІЇ":"ОПЦИИ";
+            case UI_LP_TITLE: return uk?"МОВА":"ЯЗЫК";
+            case UI_O_THEME: return "ТЕМА";
+            case UI_O_FRAME: return "РАМКА";
+            case UI_O_ACCENT: return uk?"КОЛІР":"ЦВЕТ";
+            case UI_O_HAND: return "РУКА";
+            case UI_FIRE: return uk?"ВОГОНЬ":"ОГОНЬ";
+            case UI_O_MUSIC: return uk?"МУЗИКА":"МУЗЫКА";
+            case UI_O_LIBRARY: return uk?"СЛОВНИК":"СЛОВАРЬ";
+            case UI_O_SPELLING: return uk?"ПРАВОПИС":"ОРФОГР.";
+            case UI_O_LANGUAGE: return uk?"МОВА":"ЯЗЫК";
+            case UI_V_FULL: return uk?"ПОВНИЙ":"ПОЛНЫЙ";
+            case UI_V_JEWEL: return uk?"КАМЕНІ":"КАМНИ";
+            case UI_V_INK: return uk?"ЧОРНИЛО":"ЧЕРНИЛА";
+            case UI_V_CANDY: return uk?"ЦУКЕРКИ":"КОНФЕТЫ";
+            case UI_V_EMBER: return uk?"ВУГІЛЛЯ":"УГОЛЬ";
+            case UI_V_CLEAR: return "КОНТРАСТ";
+            case UI_V_GOLD: return "ЗОЛОТО";
+            case UI_V_SILVER: return uk?"СРІБЛО":"СЕРЕБРО";
+            case UI_V_ACCENT: return uk?"КОЛІР":"ЦВЕТ";
+            case UI_V_AUTO: return "АВТО";
+            case UI_V_TEAL: return uk?"БІРЮЗА":"БИРЮЗА";
+            case UI_V_MAGENTA: return "ПУРПУР";
+            case UI_V_LIME: return "ЛАЙМ";
+            case UI_V_ORANGE: return uk?"ПОМАРАНЧ.":"ОРАНЖ.";
+            case UI_V_SKY: return "НЕБО";
+            case UI_V_VIOLET: return uk?"ФІОЛЕТ.":"ФИОЛЕТ.";
+            case UI_V_PINK: return uk?"РОЖЕВИЙ":"РОЗОВЫЙ";
+            case UI_V_MINT: return uk?"МʼЯТА":"МЯТА";
+            case UI_V_RELAXED: return uk?"ПОВІЛЬНО":"МЕДЛЕННО";
+            case UI_V_NORMAL: return "НОРМА";
+            case UI_V_FAST: return uk?"ШВИДКО":"БЫСТРО";
+            case UI_V_LEFT: return uk?"ЛІВА":"ЛЕВАЯ";
+            case UI_V_RIGHT: return uk?"ПРАВА":"ПРАВАЯ";
+            case UI_V_ON: return uk?"УВІМК":"ВКЛ";
+            case UI_V_OFF: return uk?"ВИМК":"ВЫКЛ";
+            case UI_V_ENONLY: return uk?"ЛИШЕ EN":"ТОЛЬКО EN";
+            case UI_H_THEME: return uk?"ТЕМА ЗМІНЮЄ КОЛІР КАМЕНІВ":"ТЕМА МЕНЯЕТ ЦВЕТ КАМНЕЙ";
+            case UI_H_FRAME: return uk?"КОЛІР РАМКИ ПОЛЯ":"ЦВЕТ РАМКИ ПОЛЯ";
+            case UI_H_ACCENT: return uk?"АВТО: КОЛІР ЗА НОМЕРОМ ПОЛИЦІ":"АВТО: ЦВЕТ ПО НОМЕРУ ПОЛКИ";
+            case UI_H_HAND: return uk?"ДЗЕРКАЛЬНО ЗМІНЮЄ ПОЛЕ Й ПАНЕЛЬ":"ОТРАЖАЕТ ПОЛЕ И ПАНЕЛЬ";
+            case UI_H_FIRE: return uk?"ШВИДКІСТЬ ВОГНЮ В КЛАСИЦІ":"СКОРОСТЬ ОГНЯ В КЛАССИКЕ";
+            case UI_H_MUSIC: return uk?"МУЗИКА УВІМК АБО ВИМК":"МУЗЫКА ВКЛ ИЛИ ВЫКЛ";
+            case UI_H_LIBRARY: return uk?"ВИКОРИСТОВУЄТЬСЯ ПОВНИЙ СЛОВНИК":"ИСПОЛЬЗУЕТСЯ ПОЛНЫЙ СЛОВАРЬ";
+            case UI_H_SPELL_EN: return uk?"ВАРІАНТИ НАПИСАННЯ: ЛИШЕ EN":"ВАРИАНТЫ НАПИСАНИЯ: ТОЛЬКО EN";
+            case UI_H_LANG: return uk?"ОБЕРІТЬ МОВУ ГРИ":"ВЫБЕРИТЕ ЯЗЫК ИГРЫ";
+            case UI_H_LANGNOTE: return uk?"ПІДТРИМКА УКРАЇНСЬКОЇ ТА РОСІЙСЬКОЇ":"ПОДДЕРЖКА РУССКОГО И УКРАИНСКОГО";
+            case UI_H_CLEAR: return uk?"ВИСОКИЙ КОЛЬОРОВИЙ КОНТРАСТ":"ВЫСОКИЙ ЦВЕТОВОЙ КОНТРАСТ";
+            case UI_O_MAKE: return uk?"НАЛАШТУЙТЕ ГРУ":"НАСТРОЙТЕ ИГРУ";
+            case UI_O_TAPHINT: return uk?"ДОТИК ДО РЯДКА АБО D-PAD":"КАСАНИЕ СТРОКИ ИЛИ D-PAD";
+            case UI_OP_BACK: return "НАЗАД";
+            case UI_OP_NOSAVE: return uk?"НЕМАЄ КАРТКИ ПАМʼЯТІ":"НЕТ КАРТЫ ПАМЯТИ";
+            case UI_OP_SAVEFAIL: return uk?"ПОМИЛКА ЗБЕРЕЖЕННЯ":"ОШИБКА СОХРАНЕНИЯ";
+            case UI_OP_LANGFAIL: return uk?"ПОМИЛКА ФАЙЛУ МОВИ":"ОШИБКА ФАЙЛА ЯЗЫКА";
+            case UI_OP_SAVED: return uk?"ЗБЕРЕЖЕНО":"СОХРАНЕНО";
         }
     }
 #endif
@@ -3213,7 +3320,7 @@ static void drawTitle(const Game *g)
         int pp = (frame & 31) < 16 ? (frame & 15) : 15 - (frame & 15);
         fillRect(BX(GUIDE_BTN_X), 7, GUIDE_BTN_W, 17, cue ? lerp15(BLACK, ACCENT, pp / 3) : BLACK);
         rectOutline(BX(GUIDE_BTN_X), 7, GUIDE_BTN_W, 17, cue ? lerp15(GOLD_DK, WHITE, pp) : GOLD_DK);
-        drawTextCenter(BX(GUIDE_BTN_X + GUIDE_BTN_W / 2), 12, ui(UI_T_GUIDE), cue ? lerp15(ACCENT, WHITE, pp / 2) : INK, 1);
+        drawTextCenter(BX(GUIDE_BTN_X + GUIDE_BTN_W / 2), 12, menuLabel(UI_T_GUIDE), cue ? lerp15(ACCENT, WHITE, pp / 2) : INK, 1);
     }
     {   // the language tag: tap to open the language chooser (the name in gold once it is not English)
         bool en = S.language == LANG_EN;
@@ -3286,14 +3393,18 @@ static void drawTitle(const Game *g)
 static const char *optValue(int row)
 {
     switch (row) {
-        case 0: return ui(THEME_NAMES[S.theme]);
-        case 1: return ui(FRAME_NAMES[S.frame]);
-        case 2: return ui(ACCENT_NAMES[S.accent]);
-        case 3: return ui(S.hand ? UI_V_LEFT : UI_V_RIGHT);
-        case 4: return ui(FIRE_NAMES[S.fire]);
-        case 5: return ui(S.music ? UI_V_ON : UI_V_OFF);
-        case 6: return ui(LIB_NAMES[S.library]);
-        case 7: return ui(S.language == LANG_EN ? SPELL_NAMES[S.spelling] : UI_V_ENONLY);
+        case 0: return menuLabel(THEME_NAMES[S.theme]);
+        case 1: return menuLabel(FRAME_NAMES[S.frame]);
+        case 2: return menuLabel(ACCENT_NAMES[S.accent]);
+        case 3: return menuLabel(S.hand ? UI_V_LEFT : UI_V_RIGHT);
+        case 4: return menuLabel(FIRE_NAMES[S.fire]);
+        case 5: return menuLabel(S.music ? UI_V_ON : UI_V_OFF);
+        case 6:
+#ifdef WP_CYR_MAIN
+            if (scriptMenu()) return menuLabel(UI_V_FULL);
+#endif
+            return ui(LIB_NAMES[S.library]);
+        case 7: return menuLabel(S.language == LANG_EN ? SPELL_NAMES[S.spelling] : UI_V_ENONLY);
         default: return menuLanguageName();
     }
 }
@@ -3308,26 +3419,29 @@ static void drawOptions(const Game *g)
     drawBoardDots();
     drawBoardFrame();
     boardX0 = savedX0;
-    drawTextShadow(86 - textWidth(ui(UI_T_OPTIONS_H), 2) / 2, 14, ui(UI_T_OPTIONS_H), GOLD_LT, 2);
+    drawTextShadow(86-textWidth(menuLabel(UI_T_OPTIONS_H),2)/2,14,menuLabel(UI_T_OPTIONS_H),GOLD_LT,2);
     int sel = g->optRow;
     for (int i = 0; i < OPT_ROWS; i++) {
         int y = OPT_Y0 + i * OPT_DY;
         bool on = i == sel;
         if (on) { fillRect(12, y, 148, OPT_DY - 1, lerp15(BLACK, ACCENT, 4)); rectOutline(12, y, 148, OPT_DY - 1, ACCENT); }
-        drawText(18, y + 3, ui(OPT_NAMES[i]), on ? WHITE : INK, 1);
+        drawText(18,y+3,menuLabel(OPT_NAMES[i]),on?WHITE:INK,1);
         const char *val = optValue(i);
         u16 lc = on ? ((nudgeTimer > 0 && nudgeDir < 0) ? WHITE : ACCENT) : DIM_TEXT;
         u16 rc = on ? ((nudgeTimer > 0 && nudgeDir > 0) ? WHITE : ACCENT) : DIM_TEXT;
-        bool fixed = i == 7 && S.language != LANG_EN;       // SPELLING in another language is a note, not a choice: no chevrons
+        bool fixed = i == 7 && S.language != LANG_EN;
+#ifdef WP_CYR_MAIN
+        fixed = fixed || (i==6 && scriptMenu());
+#endif
         if (!fixed) { drawChar(76, y + 3, '<', lc, 1); drawChar(149, y + 3, '>', rc, 1); }
         drawText(112 - textWidth(val, 1) / 2 + 3, y + 3, val, fixed ? DIM_TEXT : on ? WHITE : INK, 1);     // centred between the chevrons
     }
     rectOutline(54, 153, 64, 17, DIM);
-    drawTextCenter(86, 158, ui(UI_OP_BACK), INK, 1);
-    if (langLoadFailed()) drawTextCenter(86, 176, ui(UI_OP_LANGFAIL), FIRE2, 1);     // a damaged language file: English stayed
-    else if (!settingsPersistent()) drawTextCenter(86, 176, ui(UI_OP_NOSAVE), DIM_TEXT, 1);
-    else if (settingsSaveFailed()) drawTextCenter(86, 176, ui(UI_OP_SAVEFAIL), FIRE2, 1);
-    else drawTextCenter(86, 176, ui(UI_OP_SAVED), DIM_TEXT, 1);
+    drawTextCenter(86,158,menuLabel(UI_OP_BACK),INK,1);
+    if (langLoadFailed()) drawTextCenter(86,176,menuLabel(UI_OP_LANGFAIL),FIRE2,1);
+    else if (!settingsPersistent()) drawTextCenter(86,176,menuLabel(UI_OP_NOSAVE),DIM_TEXT,1);
+    else if (settingsSaveFailed()) drawTextCenter(86,176,menuLabel(UI_OP_SAVEFAIL),FIRE2,1);
+    else drawTextCenter(86,176,menuLabel(UI_OP_SAVED),DIM_TEXT,1);
 }
 
 // THE LEDGER: lifetime stats from the saved records, on the touch screen like the options
@@ -3681,7 +3795,7 @@ static void drawLangPick(const Game *g)
     drawBoardDots();
     drawBoardFrame();
     boardX0 = savedX0;
-    drawTextShadow(86 - textWidth(ui(UI_LP_TITLE), 2) / 2, 7, ui(UI_LP_TITLE), GOLD_LT, 2);
+    drawTextShadow(86-textWidth(menuLabel(UI_LP_TITLE),2)/2,7,menuLabel(UI_LP_TITLE),GOLD_LT,2);
     for (int i = 0; i < PICK_COUNT; i++) {
         int y = PICK_Y0 + i * PICK_DY;
         bool on = i == g->langPick;
@@ -4014,6 +4128,9 @@ void gfxFrame(const Game *g)
         frameMid = accent; frameDk = lerp15(accent, BLACK, 9); frameLt = lerp15(accent, WHITE, 8);
         buildHeatTables();
     }
+#ifdef WP_CYR_MAIN
+    if (cacheLanguage!=langCur()) buildGemCache();
+#endif
     if (g->state == ST_PLAY || g->state == ST_PAUSE || g->state == ST_PASSED || g->state == ST_FAIL)
         refreshDiamondCache(g);
     boardChainWord(g, chainWordNow);
