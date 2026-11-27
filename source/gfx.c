@@ -2875,6 +2875,15 @@ static void drawScriptPreviewBoard(void)
     drawText(px0 + 4, 81, n,
              scriptPreviewRules.heat >= scriptPreviewRules.heatThreshold - 2 ?
              FIRE2 : DIM_TEXT, 1);
+#ifdef WP_CYR_MAIN
+    // Use the existing gap between heat and turn labels for an at-a-glance
+    // danger meter. Same geometry for both handed layouts; no texture.
+    unsigned threshold=scriptPreviewRules.heatThreshold;
+    unsigned heat=scriptPreviewRules.heat;
+    unsigned hw=threshold && heat<threshold ? 70u*heat/threshold : threshold?70u:0u;
+    fillRect(panelX+4,89,70,3,DIM);
+    fillRect(panelX+4,89,hw,3,heat+2>=threshold?FIRE2:GOLD_LT);
+#endif
     sniprintf(n, sizeof n, scriptPreviewLanguage ? "ХІД %u" : "ХОД %u", scriptPreviewRules.turns);
     drawText(px0 + 4, 94, n, WHITE, 1);
     hline(px0 + 2, 107, 70, GOLD_DK);
@@ -3065,7 +3074,16 @@ static void drawScriptPreviewTop(void)
              scriptPreviewLanguage ? "ЗНАЙДЕНО %u/%u" : "НАЙДЕНО %u/%u",
              revealed, (unsigned)b->passLen);
     drawTextCenter(128, 88, progress, ACCENT, 1);
+#ifdef WP_CYR_MAIN
+    // Public found flags only. The track spans the existing divider, not
+    // the password, clue readout or touch controls.
+    fillRect(26,96,204,3,DIM);
+    if(b->passLen)
+        fillRect(26,96,204u*revealed/b->passLen,3,
+                 revealed==b->passLen?GOLD_LT:ACCENT);
+#else
     hline(26, 96, 204, DIM);
+#endif
     char chain[88] = {0};
     int lesson=scriptPreviewTrainingStage();
     bool evidence=(lesson==3 || lesson==4) && !b->chainLen;
@@ -4382,6 +4400,11 @@ static void topSigs(const Game *g, u32 sig[4])
             h1 = hmix(h1, b->pass[i]);
             h1 = hmix(h1, b->found[i]);
         }
+#ifdef WP_CYR_MAIN
+        // Password meter begins in slice 2, but its found flags live in
+        // slice 1's signature. Keep both synchronized on a successful peel.
+        h2 = hmix(h2,h1);
+#endif
         h2 = hmix(h2, b->chainLen);
         h2 = hmix(h2, scriptQuoteApostropheNow);
         for (int i = 0; i < b->chainLen; i++) {
