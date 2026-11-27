@@ -1798,7 +1798,12 @@ static int guideBase;                      // frame >> 2 when the page opened
 static int guidePageSeen = -1;             // the page the top screen was last laid out for
 static int guideAge;                       // frames since the page opened: the words type in over the first ~50
 static int guideNavUsed;                   // the prev/next buttons pulse until one has been used
+// Both caches are CPU-only: no DMA or byte writes into LCDC VRAM.
+#ifdef WP_CYR_MAIN
+static DTCM_BSS char guideCache[GUIDE_MAX_LINES][GUIDE_LINE_BUF];
+#else
 static char guideCache[GUIDE_MAX_LINES][GUIDE_LINE_BUF];
+#endif
 static int guideCachePage = -1, guideCacheLang = -1;   // the cache is for one page in one language
 
 static int gTick(void) { return ((frame >> 2) - guideBase) & (GUIDE_LOOP - 1); }
@@ -2583,7 +2588,11 @@ static uint32_t scriptQuoteApostropheNow;
 // Unicode case/switch handling. Resolve the at-most-64 alphabet members
 // once on a language/image change, and draw each tile by its symbol ID.
 // ROM glyph pointers are stable even when the dictionary is unloaded.
+#ifdef WP_CYR_MAIN
+static DTCM_BSS const u8 *scriptGlyphById[WPD4_MAX_SYMBOLS];
+#else
 static const u8 *scriptGlyphById[WPD4_MAX_SYMBOLS];
+#endif
 static uint32_t scriptGlyphEpochSeen = UINT32_MAX;
 // Observable in the test ELF, so the emulator can prove that 120 consecutive
 // frames never rebuild the cache; incremented only on alphabet changes.
