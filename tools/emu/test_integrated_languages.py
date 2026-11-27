@@ -98,7 +98,7 @@ def main(rom, elf, output):
     e.tap(86,116,settle=18)
     wait_state(9,0)
     assert integer("scriptPreviewTraining")==1 and integer("scriptPreviewTurns")==0
-    ro=member_offsets(elf,"scriptPreviewRules",("burnEvery","heatThreshold"))
+    ro=member_offsets(elf,"scriptPreviewRules",("burnEvery","heatThreshold","heat"))
     ra=symbol(elf,"scriptPreviewRules")
     def rule(name): return int(e.mem.unsigned[ra+ro[name]])
     assert rule("burnEvery")==4 and rule("heatThreshold")==8
@@ -178,7 +178,7 @@ def main(rom, elf, output):
     assert integer("scriptCompositeBuilds")==count
     assert integer("scriptCompositeTilesLast")==56
     board=symbol(elf,"scriptPreviewBoard")
-    offsets=member_offsets(elf,"scriptPreviewBoard",("back","passLen","chainLen","chainC","chainR","state","tile"))
+    offsets=member_offsets(elf,"scriptPreviewBoard",("back","passLen","chainLen","chainC","chainR","state","tile","found"))
     def check_atlas_pixels(tag):
         # The 35 Latin composites precede the 64 Unicode slots. Check the
         # actual touch LCD, not only the reported number of cache hits.
@@ -216,7 +216,30 @@ def main(rom, elf, output):
         colors=[int.from_bytes(gradients[i:i+2],"little") for i in range(0,140,2)]
         assert len(set(colors))>8,(tag,"heat gradient not populated")
         e.shot(str(out/f"{tag}-vram-cache.png"))
+    def check_hud_meters(tag):
+        # Inspect the actual LCD after the dirty-slice redraw. Both tracks
+        # must reflect the public state and use the same touch layout.
+        e.run(12)
+        pixels=e.pixels()
+        def bar(x,y,w,n):
+            row=[pixels[x+i,y] for i in range(w)]
+            assert all(p!=(0,0,0) for p in row),(tag,"missing track",x,y)
+            if 0<n<w:
+                assert len(set(row[:n]))==1 and len(set(row[n:]))==1
+                assert row[0]!=row[-1],(tag,"missing fill",n,w)
+            else:
+                assert len(set(row))==1,(tag,"uneven track",n,w)
+            return row
+        length=int(e.mem.unsigned[board+offsets["passLen"]])
+        found=sum(bool(e.mem.unsigned[board+offsets["found"]+i]) for i in range(length))
+        bar(26,97,204,204*found//length)
+        # The board can be mirrored; the panel follows its original hitbox.
+        panel=176 if e.cell_rect(0,0)[0]<80 else 4
+        heat=int.from_bytes(bytes(e.mem.unsigned[ra+ro["heat"]:ra+ro["heat"]+2]),"little")
+        threshold=rule("heatThreshold")
+        bar(panel+4,192+90,70,min(70,70*heat//max(1,threshold)))
     check_atlas_pixels("ru")
+    check_hud_meters("ru-fresh")
     def touch_action(row):
         e.tap(215,118+18*row,settle=12)
     def board_byte(name):
@@ -262,6 +285,7 @@ def main(rom, elf, output):
     e.shot(str(out/"ru-word-heat-quote.png"))
     touch_action(0)
     assert integer("scriptPreviewTurns")==1 and integer("scriptPreviewScore")==quoted
+    check_hud_meters("ru-word")
     e.shot(str(out/"ru-classic.png"))
     # Play a real terminal shelf. Secret positions are a test-only fixture
     # read; all scored reveals still go through physical DS touch input.
@@ -286,6 +310,7 @@ def main(rom, elf, output):
             e.tap(*e.center(c,r),settle=12)
             assert integer("scriptPreviewTurns")==prior+1
             assert integer("scriptPreviewTouchPeek")==0
+            check_hud_meters("ru-password-peel")
         else:
             e.hold("L")
             e.tap(*e.center(c,r),settle=12)
@@ -339,6 +364,7 @@ def main(rom, elf, output):
     assert daily(0)==daily(1)==(0,)*8
     enter_daily(1,20261126,1)
     check_atlas_pixels("uk")
+    check_hud_meters("uk-daily-fresh")
     assert rule("burnEvery")==4 and rule("heatThreshold")==8,"Daily must ignore fire preference"
     assert daily(1)[1:]==(20261126,0,0,0,0,0,0)
     puzzle=bytes(e.mem.unsigned[board:board+228])
@@ -350,6 +376,7 @@ def main(rom, elf, output):
     e.press("A",settle=16)
     points=integer("scriptPreviewScore")
     assert points>0
+    check_hud_meters("uk-daily-word")
     e.shot(str(out/"uk-daily.png"))
     leave_daily()
     first=daily(1)
