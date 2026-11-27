@@ -455,6 +455,9 @@ typedef struct { u32 w[TILE_W / 2]; } GemRow;
 typedef struct {
     GemRow letters[LETTER_CACHE_SLOTS][COMP_ROWS];
     GemRow diamonds[DIAMOND_CACHE_SLOTS][COMP_ROWS];
+    // A separate bounded Unicode atlas preserves the entire Latin cache.
+    // All 64 possible WPD4 symbols fit alongside the original 35 entries.
+    GemRow scriptLetters[WPD4_MAX_SYMBOLS][COMP_ROWS];
 } IntegratedGemCache;
 _Static_assert(sizeof(IntegratedGemCache)<=128*1024,"gem cache fits VRAM D");
 #define INTEGRATED_CACHE ((IntegratedGemCache *)0x06860000u)
@@ -2587,6 +2590,39 @@ static void scriptRefreshGlyphs(void)
     scriptGlyphEpochSeen = scriptPreviewGlyphEpoch;
     scriptGlyphCacheBuilds++;
 }
+#ifdef WP_CYR_MAIN
+// Build the active dictionary's normal gem composites only when its
+// alphabet or color theme changes. These are entirely public front tiles,
+// not password locations. All storage is in already-mapped LCDC VRAM D.
+static uint32_t scriptCompositeEpoch=UINT32_MAX;
+static int scriptCompositeTheme=-1;
+unsigned scriptCompositeBuilds, scriptCompositeTilesLast;
+static void scriptRefreshComposites(void)
+{
+    const V4Dict *dict=&scriptPreviewDict;
+    if(scriptCompositeEpoch==scriptPreviewGlyphEpoch &&
+       scriptCompositeTheme==S.theme) return;
+    u16 *saved=cur;
+    int c0=clipY0,c1=clipY1;
+    cur=vramBack; clipY0=0; clipY1=SCREEN_H;
+    for(unsigned id=0;id<dict->symbols && id<WPD4_MAX_SYMBOLS;++id) {
+        const GemPal *pal=GEM_PALS[v4TilesVowel(&scriptPreviewTiles,id)?0:id%4+1];
+        clearScratch(TILE_W,TILE_H);
+        drawGemSized(0,0,TILE_W,TILE_H,pal,false);
+        drawGlyph(8,5,scriptGlyphById[id],pal->dark,2);
+        drawGlyph(7,4,scriptGlyphById[id],WHITE,2);
+        for(int j=0;j<COMP_ROWS;++j) {
+            u16 *dst=(u16 *)INTEGRATED_CACHE->scriptLetters[id][j].w;
+            const u16 *src=cur+(j+1)*SCREEN_W;
+            for(int k=0;k<TILE_W;++k) dst[k]=src[k]?src[k]:BLACK;
+        }
+    }
+    cur=saved;clipY0=c0;clipY1=c1;
+    scriptCompositeEpoch=scriptPreviewGlyphEpoch;
+    scriptCompositeTheme=S.theme;
+    scriptCompositeBuilds++;
+}
+#endif
 // Keep the inspection hitbox consistent with the rendered 8x9 numeral
 // badge. Center taps on surveyed front gems still select/submit letters.
 // Called only on fresh non-peek touch-down, with a validated hex hit.
@@ -2635,6 +2671,19 @@ static void drawScriptPreviewBoard(void)
     const V4Tiles *tiles = &scriptPreviewTiles;
     // One epoch check per render, rather than 56 glyph-codepoint switches.
     scriptRefreshGlyphs();
+#ifdef WP_CYR_MAIN
+    scriptRefreshComposites();
+    unsigned cached=0;
+    // Build a compact selection mask once, rather than walking the whole
+    // selected word for each of the 56 board locations.
+    u8 selected[SCRIPT_COLS]={0};
+    for(int k=0;k<b->chainLen && k<SCRIPT_MAX_CHAIN;++k)
+        if(b->chainC[k]<SCRIPT_COLS && b->chainR[k]<SCRIPT_ROWS)
+            selected[b->chainC[k]]|=(u8)(1u<<b->chainR[k]);
+    const u16 chainRim=lerp15(GOLD_LT,WHITE,tri16(frame,48)/4);
+    const u16 flameRim=lerp15(FIRE1,GOLD_LT,tri16(frame,48)/2);
+    const bool peek=scriptPreviewTouchPeek || (keysHeld() & KEY_L);
+#endif
     fillRect(0, 0, SCREEN_W, SCREEN_H, BLACK);
     drawBoardFrame();
     for (int c = 0; c < SCRIPT_COLS; c++) {
@@ -2655,14 +2704,27 @@ static void drawScriptPreviewBoard(void)
                                 state == SCRIPT_BURN ? &GEM_FIRE :
                                 GEM_PALS[v4TilesVowel(tiles, id) ? 0 :
                                          (int)(id % 4) + 1];
-            drawGemSized(x, y, TILE_W, TILE_H, pal, false);
-            const u8 *glyph = scriptGlyphById[id];
-            u16 fg = state == SCRIPT_DIAMOND ? C(4,6,10) : WHITE;
-            drawGlyph(x + 8, y + 5, glyph, pal->dark, 2);
-            drawGlyph(x + 7, y + 4, glyph, fg, 2);
 #ifdef WP_CYR_MAIN
+            if(state==SCRIPT_TILE && id<WPD4_MAX_SYMBOLS &&
+               x>=0 && x+TILE_W<=SCREEN_W && !(x&1) &&
+               y+1>=clipY0 && y+1+COMP_ROWS<=clipY1) {
+                blitComposite(INTEGRATED_CACHE->scriptLetters[id],x,y+1);
+                cached++;
+            } else
+#endif
+            {
+                drawGemSized(x,y,TILE_W,TILE_H,pal,false);
+                const u8 *glyph=scriptGlyphById[id];
+                u16 fg=state==SCRIPT_DIAMOND?C(4,6,10):WHITE;
+                drawGlyph(x+8,y+5,glyph,pal->dark,2);
+                drawGlyph(x+7,y+4,glyph,fg,2);
+            }
+#ifdef WP_CYR_MAIN
+            // A gentle edge glow communicates burning and word readiness;
+            // neither obscures the letter or moves the hitbox.
+            if(state==SCRIPT_BURN) hline(x+4,y+2,TILE_W-8,flameRim);
             // PEEK shows only public flame hazards, never back-layer letters.
-            if(scriptPreviewTouchPeek || (keysHeld() & KEY_L)) {
+            if(peek) {
                 if(state==SCRIPT_BURN || (r>0 && b->state[c][r-1]==SCRIPT_BURN)) {
                     rectOutline(x,y,TILE_W,TILE_H,FIRE2);
                     drawChar(x+2,y+2,'!',FIRE2,1);
@@ -2679,14 +2741,24 @@ static void drawScriptPreviewBoard(void)
                     drawChar(x + 16, y + 13, '0' + clue, GOLD_LT, 1);
                 }
             }
+#ifdef WP_CYR_MAIN
+            if(selected[c]&(1u<<r)) {
+                rectOutline(x,y,TILE_W,TILE_H,chainValidNow?chainRim:GOLD_LT);
+                rectOutline(x+1,y+1,TILE_W-2,TILE_H-2,WHITE);
+            }
+#else
             for (int k = 0; k < b->chainLen; k++)
                 if (b->chainC[k] == c && b->chainR[k] == r) {
                     rectOutline(x, y, TILE_W, TILE_H, GOLD_LT);
                     rectOutline(x + 1, y + 1, TILE_W - 2, TILE_H - 2, WHITE);
                     break;
                 }
+#endif
         }
     }
+#ifdef WP_CYR_MAIN
+    scriptCompositeTilesLast=cached;
+#endif
     // Revisit any published word clue or permanent numbered hole. The
     // focus is anchored to board coordinates, not the falling front tile.
     // Keep the exact same six-neighbor bound; no search or allocation.
