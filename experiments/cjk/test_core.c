@@ -7,7 +7,7 @@ int main(void){
     unsigned boards=0;
     for(int lang=0;lang<3;lang++){
         const CjLexicon *lex=&lexicons[lang];
-        assert(lex->count>=130);
+        assert(lex->count>=252);
         for(unsigned i=0;i<lex->count;i++){
             const CjWord *w=&lex->words[i];
             assert(cjLookup(lex,w->text,w->len)==(int)i);

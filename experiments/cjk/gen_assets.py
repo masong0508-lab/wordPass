@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Build bounded CJK starter vocabulary and optional 16px raster glyphs."""
-import argparse, json, unicodedata, struct
+import argparse, json, unicodedata, struct, hashlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -36,6 +36,10 @@ UI = {
     "FIRE_WARN": ("先灭火再揭开", "先滅火再揭開", "消火してから開く"),
     "FIRE_LOST": ("火势蔓延，失败", "火勢蔓延，失敗", "火が最下段に到達"),
     "RETRY": ("重试", "重試", "再挑戦"),
+    "TRAIN_WORD": ("先点提示，再确认", "先點提示，再確認", "ヒントから単語を決定"),
+    "TRAIN_OPEN": ("点揭开，再点格子", "點揭開，再點格子", "開くを選びマスに触れる"),
+    "TRAIN_CLUE": ("数字表示相邻密码数", "數字表示相鄰密碼數", "数字は周囲の暗号の数"),
+    "TRAIN_PASS": ("找齐全部密码字", "找齊全部密碼字", "暗号の文字を全部探す"),
 }
 
 def read_words():
@@ -49,7 +53,20 @@ def read_words():
         assert 0 < len(reading) <= 30 and 0 < len(gloss) <= 30, lineno
         seen[lang].add(word)
         sets[lang].append((word, reading, gloss))
-    assert all(len(sets[x]) >= 130 for x in LOCALES)
+    assert all(len(sets[x]) >= 252 for x in LOCALES)
+    # Preserve the old record sequence exactly, including pronunciation.
+    # The integrated game uses these 132 entries for earlier Daily dates.
+    old = (
+        '27704091a7f1ba7700863a3ae0563c0b1144dc093020d694da50a3cbee4ee94e',
+        'c790a89d98a7587893af3396389cbdd5b48fadaebd0f17672c81be2e35ee5e4c',
+        '610ba83d08503dfb3d7d0f612de041fc9c350c8f25f49986a80b298803245e1a',
+    )
+    for i, locale in enumerate(LOCALES):
+        prefix = b''.join(struct.pack('<6HBx31s31s',
+                          *([ord(c) for c in w]+[0]*(6-len(w))),
+                          len(w), r.encode('ascii'), g.encode('ascii'))
+                          for w,r,g in sets[locale][:132])
+        assert hashlib.sha256(prefix).hexdigest()==old[i], locale
     return sets
 
 def q(s):

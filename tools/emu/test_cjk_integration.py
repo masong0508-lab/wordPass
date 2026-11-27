@@ -45,6 +45,10 @@ def main(rom,elf,output):
         assert records("scriptCareer",lang)==(0,)*8
         select(i);e.tap(52,147,settle=18);wait(10)
         assert read("tile",2)>255
+        # Both cached VRAM banks must display the same settled board.
+        e.run(20);first=e.emu.screenshot().convert("RGB").tobytes()
+        e.run(1);second=e.emu.screenshot().convert("RGB").tobytes()
+        assert first==second,"stable CJK frame differs between VRAM banks"
         assert read("heatLimit")==10 and read("burnEvery")==4 and read("shelf",2)==1
         e.shot(str(out/f"cjk-{i}-fresh.png"))
         e.tap(215,105,settle=12)
@@ -95,6 +99,12 @@ def main(rom,elf,output):
         e.press("B",settle=12);wait(0)
         e.tap(86,116,settle=18);wait(10)
         assert read("heatLimit")==0
+        e.run(12);lesson1=e.emu.screenshot().convert("RGB").crop((0,171,256,190)).tobytes()
+        e.tap(215,105,settle=12);e.tap(215,49,settle=12)
+        assert read("words",4)==1
+        e.run(12);lesson2=e.emu.screenshot().convert("RGB").crop((0,171,256,190)).tobytes()
+        assert lesson1!=lesson2,"training prompt did not progress"
+        e.shot(str(out/f"cjk-{i}-training.png"))
         raw=bytes(e.mem.unsigned[ga+fields["back"]:ga+fields["back"]+36])
         for p in range(36):
             if raw[p]:

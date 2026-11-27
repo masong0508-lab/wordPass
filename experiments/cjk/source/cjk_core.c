@@ -1,11 +1,50 @@
 #include "cjk_core.h"
 #include <string.h>
 static bool cellOK(int i){return i>=0 && i<CJ_CELLS;}
+// Ascending neighbor order matches the original all-cell scan. The sentinel
+// permits fast, bounded traversal without division or a per-node 36-cell scan.
+static const uint8_t neighbors[CJ_CELLS][7]={
+    {1,6,255,255,255,255,255},
+    {0,2,6,7,255,255,255},
+    {1,3,7,8,255,255,255},
+    {2,4,8,9,255,255,255},
+    {3,5,9,10,255,255,255},
+    {4,10,11,255,255,255,255},
+    {0,1,7,12,13,255,255},
+    {1,2,6,8,13,14,255},
+    {2,3,7,9,14,15,255},
+    {3,4,8,10,15,16,255},
+    {4,5,9,11,16,17,255},
+    {5,10,17,255,255,255,255},
+    {6,13,18,255,255,255,255},
+    {6,7,12,14,18,19,255},
+    {7,8,13,15,19,20,255},
+    {8,9,14,16,20,21,255},
+    {9,10,15,17,21,22,255},
+    {10,11,16,22,23,255,255},
+    {12,13,19,24,25,255,255},
+    {13,14,18,20,25,26,255},
+    {14,15,19,21,26,27,255},
+    {15,16,20,22,27,28,255},
+    {16,17,21,23,28,29,255},
+    {17,22,29,255,255,255,255},
+    {18,25,30,255,255,255,255},
+    {18,19,24,26,30,31,255},
+    {19,20,25,27,31,32,255},
+    {20,21,26,28,32,33,255},
+    {21,22,27,29,33,34,255},
+    {22,23,28,34,35,255,255},
+    {24,25,31,255,255,255,255},
+    {25,26,30,32,255,255,255},
+    {26,27,31,33,255,255,255},
+    {27,28,32,34,255,255,255},
+    {28,29,33,35,255,255,255},
+    {29,34,255,255,255,255,255},
+};
 bool cjAdjacent(int a,int b){
-    if(!cellOK(a)||!cellOK(b)||a==b)return false;
-    int ac=a/CJ_ROWS,ar=a%CJ_ROWS,bc=b/CJ_ROWS,br=b%CJ_ROWS;
-    int dc=bc-ac,dr=br-ar;
-    return dc==0?(dr==1||dr==-1):((dc==1||dc==-1)&&(dr==0||dr==((ac&1)?1:-1)));
+    if(!cellOK(a)||!cellOK(b))return false;
+    for(const uint8_t *p=neighbors[a];*p!=255;p++)if(*p==b)return true;
+    return false;
 }
 static uint32_t next(CjGame *g){g->rng=g->rng*1664525u+1013904223u;return g->rng;}
 static uint16_t randomChar(CjGame *g){
@@ -157,14 +196,14 @@ bool cjSubmit(CjGame *g){
 }
 int cjClue(const CjGame *g,int cell){
     if(!g||!cellOK(cell)||(!g->opened[cell]&&!g->surveyed[cell]))return -1;
-    int n=0;for(int i=0;i<CJ_CELLS;i++)if(cjAdjacent(cell,i)&&g->back[i])n++;
+    int n=0;for(const uint8_t *p=neighbors[cell];*p!=255;p++)n+=g->back[*p]!=0;
     return n;
 }
 bool cjEvidence(const CjGame *g,int cell,int *remaining,int *covered){
     if(!remaining||!covered||cjClue(g,cell)<0)return false;
     int left=0,unknown=0;
-    for(int i=0;i<CJ_CELLS;i++)if(cjAdjacent(cell,i)&&!g->opened[i]){
-        unknown++;left+=g->back[i]!=0;
+    for(const uint8_t *p=neighbors[cell];*p!=255;p++)if(!g->opened[*p]){
+        unknown++;left+=g->back[*p]!=0;
     }
     *remaining=left;*covered=unknown;return true;
 }
@@ -177,10 +216,16 @@ int cjPeel(CjGame *g,int cell){
     if(index){int p=index-1;g->foundMask|=(uint8_t)(1u<<p);g->tile[cell]=g->pass[p];}
     spendTurn(g,1,0);return index;
 }
+#ifdef CJ_HINT_TEST
+unsigned cjHintVisits;
+#define HINT_VISIT() (++cjHintVisits)
+#else
+#define HINT_VISIT() ((void)0)
+#endif
 static bool walk(const CjGame *g,const CjWord *w,int cell,int d,uint64_t used,
                  uint8_t path[CJ_MAX],unsigned *budget,int urgent,bool hitFire){
     if(!*budget||!tileOK(g,cell)||(used&(UINT64_C(1)<<cell)))return false;
-    --*budget;
+    HINT_VISIT();--*budget;
     if(g->tile[cell]!=w->text[d])return false;
     hitFire|=g->flame[cell]&&cell%CJ_ROWS==urgent;
     int left=w->len-d-1,row=cell%CJ_ROWS;
@@ -188,26 +233,59 @@ static bool walk(const CjGame *g,const CjWord *w,int cell,int d,uint64_t used,
     path[d]=(uint8_t)cell;
     if(d+1==w->len)return urgent<0||hitFire;
     used|=UINT64_C(1)<<cell;
-    for(int i=0;i<CJ_CELLS;i++)
-        if(cjAdjacent(cell,i)&&walk(g,w,i,d+1,used,path,budget,urgent,hitFire))return true;
+    for(const uint8_t *p=neighbors[cell];*p!=255;p++)
+        if(walk(g,w,*p,d+1,used,path,budget,urgent,hitFire))return true;
     return false;
 }
-static bool findHint(CjGame *g,int urgent,unsigned budget){
+// Stack-only index of playable root tiles, ordered by codepoint then cell.
+// Binary search rejects absent first characters without entering the DFS.
+typedef struct { uint32_t key[CJ_CELLS]; unsigned count; } HintRoots;
+static void rootsBuild(const CjGame *g,HintRoots *roots){
+    roots->count=0;
+    for(int p=0;p<CJ_CELLS;p++)if(tileOK(g,p)){
+        uint32_t key=((uint32_t)g->tile[p]<<6)|(unsigned)p;
+        unsigned j=roots->count++;
+        while(j&&roots->key[j-1]>key){roots->key[j]=roots->key[j-1];j--;}
+        roots->key[j]=key;
+    }
+}
+static unsigned rootFirst(const HintRoots *roots,uint16_t cp){
+    uint32_t key=(uint32_t)cp<<6;
+    unsigned lo=0,hi=roots->count;
+    while(lo<hi){unsigned mid=(lo+hi)/2;if(roots->key[mid]<key)lo=mid+1;else hi=mid;}
+    return lo;
+}
+static bool findHint(CjGame *g,const HintRoots *roots,int urgent,unsigned budget){
     uint8_t path[CJ_MAX];
-    for(unsigned w=0;w<g->lex->count&&budget;w++)
-        for(int p=0;p<CJ_CELLS&&budget;p++)
-            if(walk(g,&g->lex->words[w],p,0,0,path,&budget,urgent,false)){
-                g->len=g->lex->words[w].len;memcpy(g->chain,path,g->len);return true;
+    for(unsigned w=0;w<g->lex->count&&budget;w++){
+        const CjWord *word=&g->lex->words[w];
+        uint16_t first=word->text[0];
+        for(unsigned i=rootFirst(roots,first);i<roots->count&&budget&&(roots->key[i]>>6)==first;i++)
+            if(walk(g,word,(int)(roots->key[i]&63),0,0,path,&budget,urgent,false)){
+                g->len=word->len;memcpy(g->chain,path,g->len);return true;
             }
+    }
     return false;
 }
-
 bool cjHint(CjGame *g){
+#ifdef CJ_HINT_TEST
+    cjHintVisits=0;
+#endif
     if(!g||!g->lex||cjEnded(g))return false;
+    HintRoots roots;rootsBuild(g,&roots);
     int urgent=-1;
     for(int i=0;i<CJ_CELLS;i++)if(g->flame[i]&&i%CJ_ROWS>urgent)urgent=i%CJ_ROWS;
-    if(urgent>=0&&findHint(g,urgent,12000))return true;
-    return findHint(g,-1,24000);
+    if(urgent>=0&&findHint(g,&roots,urgent,12000))return true;
+    return findHint(g,&roots,-1,24000);
+}
+int cjTrainingStep(const CjGame *g){
+    if(!g||!g->lex||g->heatLimit||cjEnded(g))return 0;
+    if(!g->words)return 1;
+    unsigned opened=0;for(int i=0;i<CJ_CELLS;i++)opened+=g->opened[i]!=0;
+    return opened==0?2:opened==1?3:4;
+}
+unsigned cjDailyVocabulary(unsigned count,int date){
+    return date>0&&date<=20261127&&count>132?132:count;
 }
 bool cjRecover(CjGame *g){
     if(!g||!g->lex||!g->lex->words||!g->lex->count||cjEnded(g))return false;
