@@ -155,6 +155,14 @@ def main(rom, elf, output):
             checked.add(id)
             if len(checked)==6: break
         assert len(checked)>=4,(tag,checked)
+        # Preserve the Latin/Unicode atlas offsets, then check the HUD
+        # caches moved out of main RAM to meet the original DS budget.
+        hud=atlas+64*960
+        plaque=bytes(e.mem.unsigned[hud:hud+22*26*2])
+        gradients=bytes(e.mem.unsigned[hud+22*26*2:hud+22*26*2+70*4])
+        assert any(plaque) and any(gradients),(tag,"empty LCDC HUD cache")
+        colors=[int.from_bytes(gradients[i:i+2],"little") for i in range(0,140,2)]
+        assert len(set(colors))>8,(tag,"heat gradient not populated")
         e.shot(str(out/f"{tag}-vram-cache.png"))
     check_atlas_pixels("ru")
     def touch_action(row):
