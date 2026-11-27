@@ -2725,7 +2725,10 @@ static void drawScriptPreviewBoard(void)
             if(state==SCRIPT_BURN) hline(x+4,y+2,TILE_W-8,flameRim);
             // PEEK shows only public flame hazards, never back-layer letters.
             if(peek) {
-                if(state==SCRIPT_BURN || (r>0 && b->state[c][r-1]==SCRIPT_BURN)) {
+                // Revealed diamonds are immutable firebreaks, not
+                // peel targets. Warn only where a peel can actually scorch.
+                if(state==SCRIPT_BURN ||
+                   (state==SCRIPT_TILE && r>0 && b->state[c][r-1]==SCRIPT_BURN)) {
                     rectOutline(x,y,TILE_W,TILE_H,FIRE2);
                     drawChar(x+2,y+2,'!',FIRE2,1);
                 }
