@@ -238,8 +238,15 @@ def main(rom, elf, output):
         heat=int.from_bytes(bytes(e.mem.unsigned[ra+ro["heat"]:ra+ro["heat"]+2]),"little")
         threshold=rule("heatThreshold")
         bar(panel+4,192+90,70,min(70,70*heat//max(1,threshold)))
+    def hud_region(y0,y1):
+        e.run(12)
+        pixels=e.pixels()
+        panel=176 if e.cell_rect(0,0)[0]<80 else 4
+        return tuple(pixels[x,y+192] for y in range(y0,y1)
+                     for x in range(panel+6,panel+72))
     check_atlas_pixels("ru")
     check_hud_meters("ru-fresh")
+    assert len(set(hud_region(75,81)))>1,"fresh score is not using large digits"
     def touch_action(row):
         e.tap(215,118+18*row,settle=12)
     def board_byte(name):
@@ -365,6 +372,8 @@ def main(rom, elf, output):
     enter_daily(1,20261126,1)
     check_atlas_pixels("uk")
     check_hud_meters("uk-daily-fresh")
+    scored_badge=hud_region(20,28)
+    assert len(set(scored_badge))>1,"missing scored Daily status"
     assert rule("burnEvery")==4 and rule("heatThreshold")==8,"Daily must ignore fire preference"
     assert daily(1)[1:]==(20261126,0,0,0,0,0,0)
     puzzle=bytes(e.mem.unsigned[board:board+228])
@@ -385,6 +394,8 @@ def main(rom, elf, output):
     wait_state(ST_TITLE)
     assert daily(1)==first
     enter_daily(1,20261126,0)
+    practice_badge=hud_region(20,28)
+    assert len(set(practice_badge))>1 and practice_badge!=scored_badge,"practice and scored HUD look identical"
     assert integer("scriptPreviewSeed")==seed
     assert bytes(e.mem.unsigned[board:board+228])==puzzle
     # A new board explains how to find its first clue. Once a public
