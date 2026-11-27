@@ -419,21 +419,12 @@ static const GemPal *GEM_PALS[NGEMPAL];
 // the pass plaque's found-letter diamond (22x26), rendered once and blitted per HUD slice
 #define PLAQUE_W 22
 #define PLAQUE_H 26
-static ALIGN(4) u16 plaqueCache[PLAQUE_H][PLAQUE_W];
 _Static_assert((PLAQUE_W * 2) % 4 == 0, "plaque rows must be word multiples");
 
 // gem cache index per letter (replaces groupFor + a palette search in the board loop)
 static u8 palOf[26];
 // heat bar gradient, one entry per bar pixel, rebuilt when the frame colours change
 #define HEAT_W 70
-static u16 heatTop[HEAT_W], heatBody[HEAT_W];
-static void buildHeatTables(void)
-{
-    for (int i = 0; i < HEAT_W; i++) {
-        heatTop[i] = lerp15(GOLD, FIRE1, i * 16 / HEAT_W);
-        heatBody[i] = lerp15(GOLD_DK, FIRE1, i * 16 / HEAT_W);
-    }
-}
 // Letter-on-gem composites: rows 1..20 of every letter gem and every diamond letter,
 // fully opaque, copied to the board with 12-word row moves. Rows 0 and 21 are left to the
 // backdrop because the accent dot grid is painted after the per-cell fills and shows
@@ -458,12 +449,22 @@ typedef struct {
     // A separate bounded Unicode atlas preserves the entire Latin cache.
     // All 64 possible WPD4 symbols fit alongside the original 35 entries.
     GemRow scriptLetters[WPD4_MAX_SYMBOLS][COMP_ROWS];
+    // These existing HUD caches contain only aligned halfwords/words.
+    // LCDC VRAM accepts those writes directly, unlike byte-oriented data.
+    // Appending them keeps the validated composite offsets unchanged.
+    u16 plaque[PLAQUE_H][PLAQUE_W];
+    u16 heatTop[HEAT_W], heatBody[HEAT_W];
 } IntegratedGemCache;
 _Static_assert(sizeof(IntegratedGemCache)<=128*1024,"gem cache fits VRAM D");
 #define INTEGRATED_CACHE ((IntegratedGemCache *)0x06860000u)
 #define gemLetter (INTEGRATED_CACHE->letters)
 #define diamondLetter (INTEGRATED_CACHE->diamonds)
+#define plaqueCache (INTEGRATED_CACHE->plaque)
+#define heatTop (INTEGRATED_CACHE->heatTop)
+#define heatBody (INTEGRATED_CACHE->heatBody)
 #else
+static ALIGN(4) u16 plaqueCache[PLAQUE_H][PLAQUE_W];
+static u16 heatTop[HEAT_W], heatBody[HEAT_W];
 #define LETTER_CACHE_SLOTS 26
 #ifdef WP_CYR_PREVIEW
 #define DIAMOND_CACHE_SLOTS 4
@@ -475,6 +476,14 @@ static ALIGN(4) GemRow gemLetter[LETTER_CACHE_SLOTS][COMP_ROWS], diamondLetter[D
 #define LETTER_SLOT(l) (l)
 static u8 diamondSlot[27];
 static u32 diamondCacheMask;
+
+static void buildHeatTables(void)
+{
+    for (int i = 0; i < HEAT_W; i++) {
+        heatTop[i] = lerp15(GOLD, FIRE1, i * 16 / HEAT_W);
+        heatBody[i] = lerp15(GOLD_DK, FIRE1, i * 16 / HEAT_W);
+    }
+}
 
 static void setupTheme(void)
 {
