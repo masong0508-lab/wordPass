@@ -23,6 +23,17 @@ int scriptPreviewShelf;
 ScriptRules scriptPreviewRules;
 ScriptLedger scriptPreviewLedger;
 int scriptPreviewDaily, scriptPreviewDailyDate, scriptPreviewDailyClockError;
+#ifdef WP_CYR_MAIN
+int scriptPreviewDailyRanked; // 0 practice, 1 scored attempt, 2 recorded/closed
+static void finishRankedDaily(void)
+{
+    if(scriptPreviewDailyRanked!=1) return;
+    scriptPreviewDailyRanked=2; // close the result exactly once
+    (void)scriptDailyCareerFinish(settingsPersistent()?settingsCfgPath():NULL,
+        (unsigned)scriptPreviewLanguage,scriptPreviewDailyDate,
+        scriptPreviewScore>0?(unsigned)scriptPreviewScore:0);
+}
+#endif
 int scriptPreviewHelp;
 int scriptPreviewTraining, scriptPreviewTrainingNotice, scriptPreviewTrainingLen;
 uint8_t scriptPreviewTrainingC[6], scriptPreviewTrainingR[6];
@@ -141,6 +152,10 @@ static unsigned char *readPreview(const char *code, const char *file,
 }
 void scriptPreviewClose(void)
 {
+#ifdef WP_CYR_MAIN
+    finishRankedDaily();
+    scriptPreviewDailyRanked=0;
+#endif
     for (unsigned i = 0; i < 3; i++) {
         free(images[i]);
         images[i] = NULL;
@@ -299,7 +314,16 @@ bool scriptPreviewToggleTraining(uint32_t seed)
 }
 bool scriptPreviewNewPass(uint32_t seed)
 {
+#ifdef WP_CYR_MAIN
+    // A live scored Daily is a single attempt. Replays after a terminal
+    // result use the same puzzle but can never update the record.
+    if(scriptPreviewDailyRanked==1) return false;
+    bool ok=startPass((unsigned)scriptPreviewShelf,seed,shelfStartScore);
+    if(ok) scriptPreviewDailyRanked=0;
+    return ok;
+#else
     return startPass((unsigned)scriptPreviewShelf, seed, shelfStartScore);
+#endif
 }
 static int takeTurn(int heat, bool peel, bool fatal)
 {
@@ -406,6 +430,9 @@ bool scriptPreviewToggleDaily(int date, uint32_t freeSeed)
         return false;
     }
     int previousDate = scriptPreviewDailyDate;
+#ifdef WP_CYR_MAIN
+    if(!next) finishRankedDaily(); // leaving forfeits the remaining attempt
+#endif
     scriptPreviewDaily = next;
     scriptPreviewDailyDate = next ? date : 0;
     if (!startPass(1, freeSeed, 0)) {
@@ -414,6 +441,11 @@ bool scriptPreviewToggleDaily(int date, uint32_t freeSeed)
         return false;
     }
     scriptPreviewDailyClockError = 0;
+#ifdef WP_CYR_MAIN
+    scriptPreviewDailyRanked=next && scriptDailyCareerClaim(
+        settingsPersistent()?settingsCfgPath():NULL,
+        (unsigned)scriptPreviewLanguage,date);
+#endif
     return true;
 }
 bool scriptPreviewAdvance(uint32_t seed)
@@ -434,8 +466,8 @@ bool scriptPreviewAdvance(uint32_t seed)
 // transition reaches this hook; retry/advance/exit cannot count twice.
 static void finishCareer(void)
 {
-    if (scriptPreviewTraining || scriptPreviewDaily ||
-        scriptPreviewRules.status==SCRIPT_RUNNING) return;
+    if(scriptPreviewTraining || scriptPreviewRules.status==SCRIPT_RUNNING) return;
+    if(scriptPreviewDaily) { finishRankedDaily(); return; }
     unsigned revealed=0;
     for(unsigned i=0;i<scriptPreviewBoard.passLen;++i)
         revealed+=scriptPreviewBoard.found[i]!=0;
