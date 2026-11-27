@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Build bounded CJK starter vocabulary and optional 16px raster glyphs."""
-import argparse, json, unicodedata
+import argparse, json, unicodedata, struct
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -108,10 +108,46 @@ def glyph_header(sets, path):
     out.extend(('};','#endif'))
     return '\n'.join(out) + '\n'
 
+def write_packs(sets, path, dest):
+    from PIL import ImageFont
+    fonts = {}
+    for idx in range(5):
+        f = ImageFont.truetype(str(path), 16, index=idx)
+        fonts[f.getname()[0]] = f
+    dest.mkdir(parents=True, exist_ok=True)
+    ids = 'enum {' + ','.join('UI_' + k for k in UI) + ',UI_COUNT};'
+    (dest/'cjk_ui_ids.h').write_text(ids+'\n', encoding='ascii')
+    ascii_font = ImageFont.load_default()
+    ascii_bytes = bytes(v for cp in range(32,127) for v in bitmap(ascii_font, chr(cp), 8, 10))
+    for i, locale in enumerate(LOCALES):
+        words = sets[locale]
+        chars = sorted(set(''.join(w[0] for w in words) + LABELS[i] +
+                           ''.join(t[i] for t in UI.values())))
+        payload = bytearray()
+        for word, reading, gloss in words:
+            codes = [ord(c) for c in word]+[0]*(6-len(word))
+            payload.extend(struct.pack('<6HBx31s31s', *codes, len(word),
+                                       reading.encode('ascii'), gloss.encode('ascii')))
+        for ch in chars:
+            payload.extend(struct.pack('<17H', ord(ch), *bitmap(fonts[FACES[i]], ch,16,16)))
+        for labels in UI.values():
+            codes = [ord(c) for c in labels[i]]
+            assert len(codes) <= 14
+            payload.extend(struct.pack('<15H', *(codes+[0]*(15-len(codes)))))
+        payload.extend(ascii_bytes)
+        checksum = 2166136261
+        for b in payload:
+            checksum = ((checksum ^ b)*16777619)&0xffffffff
+        data = struct.pack('<4sHHHHI', b'CJK1',len(words),len(chars),len(UI),0,checksum)+payload
+        assert len(data) <= 65536 and len(words)*24+len(data) <= 131072
+        (dest/f'{i}.bin').write_bytes(data)
+        print(locale, 'pack', len(data), 'bytes',len(chars),'glyphs')
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument('--words-only', action='store_true')
     p.add_argument('--font', default='/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc')
+    p.add_argument('--pack-dir', type=Path)
     args=p.parse_args()
     sets=read_words()
     out=ROOT/'generated'
@@ -119,6 +155,8 @@ def main():
     (out/'words_generated.h').write_text(words_header(sets), encoding='utf-8')
     if not args.words_only:
         (out/'glyphs_generated.h').write_text(glyph_header(sets, Path(args.font)), encoding='utf-8')
+    if args.pack_dir:
+        write_packs(sets, Path(args.font), args.pack_dir)
     print('CJK starter records:', {k:len(v) for k,v in sets.items()})
 
 if __name__ == '__main__':

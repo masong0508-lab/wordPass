@@ -2,6 +2,9 @@
 // particles, floating popups, hardware fades and screen shake.
 #include "game.h"
 #include "script_preview.h"
+#ifdef WP_CJK_MAIN
+#include "cjk_integrated.h"
+#endif
 #ifdef WP_CYR_MAIN
 #include "script_career.h"
 #include "integrated_guide.h"
@@ -1580,6 +1583,9 @@ static void drawTipCard(int which);
 static const char *menuLabel(int id);
 #ifdef WP_CYR_MAIN
 static bool scriptMenu(void) { return S.language==LANG_RU || S.language==LANG_UK; }
+#ifdef WP_CJK_MAIN
+static bool cjkMenu(void) { return S.language>=LANG_ZH_HANS&&S.language<LANG_PICK_COUNT; }
+#endif
 #endif
 
 static const short OPT_NAMES[OPT_ROWS] = { UI_O_THEME, UI_O_FRAME, UI_O_ACCENT, UI_O_HAND, UI_FIRE, UI_O_MUSIC, UI_O_LIBRARY, UI_O_SPELLING, UI_O_LANGUAGE };
@@ -1646,6 +1652,19 @@ static void drawTopTitle(void)
     rectOutline(8, 8, 240, 176, GOLD_DK);
     rectOutline(9, 9, 238, 174, GOLD);
     drawLogo(16, 16, 2);
+#ifdef WP_CJK_MAIN
+    if(cjkMenu() && G.state!=ST_OPTIONS){
+        drawTextCenter(128,58,"CJK PRACTICE BETA",GOLD_LT,1);
+        drawTextCenter(128,85,"CONNECT TWO OR MORE CHARACTERS",WHITE,1);
+        drawTextCenter(128,108,"WORDS REVEAL PASSWORD CLUES",ACCENT,1);
+        drawTextCenter(128,130,"DAILY IS UNRANKED PRACTICE",INK,1);
+        drawTextCenter(128,153,"FIRE AND CAREER NOT YET ENABLED",DIM_TEXT,1);
+        drawText(16,175,WP_BUILD_LABEL,DIM_TEXT,1);
+        drawText(192,175,WP_BUILD_FLAVOR,DIM_TEXT,1);
+        if(G.msg[0])drawTextCenter(128,164,G.msg,FIRE2,1);
+        return;
+    }
+#endif
     if (G.state == ST_OPTIONS) {
         drawTextCenter(128,44,menuLabel(UI_O_MAKE),GOLD_LT,1);
         drawMiniBoard();
@@ -3374,6 +3393,9 @@ static void drawScriptPreviewTop(void)
 
 static void drawTop(const Game *g)
 {
+#ifdef WP_CJK_MAIN
+    if(g->state==ST_CJK_PLAY){cjkDraw(cur,true,clipY0,clipY1);return;}
+#endif
 #ifdef WP_CYR_PREVIEW
     if (g->state == ST_SCRIPT_PREVIEW) { drawScriptPreviewTop(); return; }
 #endif
@@ -3606,11 +3628,21 @@ static const char *menuLanguageName(void)
 #ifdef WP_CYR_MAIN
     if (S.language==LANG_RU) return "РУССКИЙ";
     if (S.language==LANG_UK) return "УКРАЇНСЬКА";
+#ifdef WP_CJK_MAIN
+    if(cjkMenu())return S.language==LANG_JA?"JAPANESE":S.language==LANG_ZH_HANS?"ZH-HANS":"ZH-HANT";
+#endif
 #endif
     return langName(langCur());
 }
 static const char *menuLabel(int id)
 {
+#ifdef WP_CJK_MAIN
+    if(cjkMenu()){
+        if(id==UI_T_CLASSIC)return "PRACTICE";
+        if(id==UI_TR_START)return "CJK PRACTICE (L+A)";
+        if(id==UI_T_NEWHERE)return "START WITH PRACTICE";
+    }
+#endif
 #ifdef WP_CYR_MAIN
     if (S.language==LANG_RU || S.language==LANG_UK) {
         bool uk=S.language==LANG_UK;
@@ -3733,7 +3765,7 @@ static void drawTitle(const Game *g)
     drawTextCenter(BX(86),84,menuLabel(UI_T_CRACK),ACCENT,1);
     char dh[40]; uiFmt(dh,sizeof dh,UI_T_DRAGHINT,S.hand==HAND_LEFT?"R":"L");
 #ifdef WP_CYR_MAIN
-    if (S.language>=LANG_COUNT)
+    if (scriptMenu())
         drawTextCenter(BX(86),96,S.language==LANG_UK?"СЛОВА / ПАРОЛЬ":"СЛОВА / ПАРОЛЬ",DIM_TEXT,1);
     else
 #endif
@@ -3753,7 +3785,13 @@ static void drawTitle(const Game *g)
     rectOutline(BX(88), TB_Y, 64, 22, g->clockOk ? GOLD_DK : DIM2);
     char d1[24], d2[24];
 #ifdef WP_CYR_MAIN
-    if (S.language>=LANG_COUNT) {
+#ifdef WP_CJK_MAIN
+    if(cjkMenu()){
+        drawTextCenter(BX(120),TB_Y+3,"DAILY",GOLD_LT,1);
+        drawTextCenter(BX(120),TB_Y+12,"PRACTICE",INK,1);
+    } else
+#endif
+    if (scriptMenu()) {
         const ScriptDailyCareer *d=&scriptDailyCareer[S.language-LANG_COUNT];
         bool scored=g->clockOk && settingsPersistent() && (unsigned)g->dailySeed>d->playedDate;
         drawTextCenter(BX(120),TB_Y+3,menuLabel(UI_T_DAILY),scored?GOLD_LT:ACCENT,1);
@@ -3786,6 +3824,9 @@ static void drawTitle(const Game *g)
         drawText(BX(20),180,best,GOLD_LT,1);
         return;
     }
+#endif
+#ifdef WP_CJK_MAIN
+    if(cjkMenu()){drawText(BX(20),180,"CJK BETA - NO RECORDS",DIM_TEXT,1);return;}
 #endif
     // the BEST line is also the way into THE LEDGER (tap it, or press X)
     // Scores of six digits and up read as thousands (123K) so the two ends of the line never meet.
@@ -3873,6 +3914,14 @@ static void drawStats(const Game *g)
     fillRect(0, 0, SCREEN_W, SCREEN_H, BLACK);
     drawBoardDots();
     drawBoardFrame();
+#ifdef WP_CJK_MAIN
+    if(cjkMenu()){
+        drawTextCenter(BX(86),32,"CJK PRACTICE",GOLD_LT,1);
+        drawTextCenter(BX(86),64,"NO RANKED RECORDS",WHITE,1);
+        drawTextCenter(BX(86),168,"BACK",INK,1);
+        return;
+    }
+#endif
 #ifdef WP_CYR_MAIN
     if (scriptMenu()) {
         bool uk=S.language==LANG_UK;
@@ -4216,6 +4265,12 @@ static void drawPauseCard(const Game *g)
 #endif
 int gfxLangPickRowAt(int x, int y)
 {
+#ifdef WP_CJK_MAIN
+    if(x>=174&&x<252&&y>=28&&y<148){
+        int r=(y-28)/40;
+        if((y-28)%40<35)return LANG_ZH_HANS+r;
+    }
+#endif
     if (x < 12 || x >= 160 || y < PICK_Y0) return -1;
     int r = (y - PICK_Y0) / PICK_DY;
     return r < PICK_COUNT ? r : -1;
@@ -4256,6 +4311,18 @@ static void drawLangPick(const Game *g)
 #ifdef WP_CYR_PREVIEW
 #ifdef WP_CYR_MAIN
     drawTextCenter(86,181,g->msgTimer>0?g->msg:"RU/UK BETA",g->msgTimer>0?FIRE2:DIM_TEXT,1);
+#ifdef WP_CJK_MAIN
+    drawTextCenter(213,12,"CJK BETA",GOLD_LT,1);
+    for(int i=0;i<3;i++){
+        int y=28+i*40;bool on=g->langPick==LANG_ZH_HANS+i;
+        u16 fg=cjkAvailable(i)?WHITE:DIM_TEXT;
+        fillRect(174,y,78,35,on?DIM:BLACK);
+        rectOutline(174,y,78,35,on?GOLD_LT:ACCENT);
+        drawTextCenter(213,y+5,i==2?"JAPANESE":"CHINESE",fg,1);
+        drawTextCenter(213,y+17,i==0?"SIMPLIFIED":i==1?"TRADITIONAL":"KANA/KANJI",fg,1);
+        if(S.language==LANG_ZH_HANS+i)drawChar(176,y+27,'*',GOLD_LT,1);
+    }
+#endif
 #else
     drawTextCenter(86,181,"RU/UK: TEST WORDS",DIM_TEXT,1);
 #endif
@@ -4406,6 +4473,12 @@ static inline u32 hmix(u32 h, u32 v) { return (h ^ v) * 16777619u; }
 static u32 hstr(u32 h, const char *t) { while (*t) h = hmix(h, (u8)*t++); return h; }
 static void topSigs(const Game *g, u32 sig[4])
 {
+#ifdef WP_CJK_MAIN
+    if(g->state==ST_CJK_PLAY){
+        for(int sl=0;sl<4;sl++)topSigNow[sl]=sig[sl]=0xc4a00000u+cjkEpoch;
+        return;
+    }
+#endif
     bool play = !menuState(g->state);
     u32 h0 = 2166136261u, h1 = h0, h2 = h0, h3 = h0;
 #ifdef WP_CYR_PREVIEW
@@ -4674,6 +4747,12 @@ void gfxFrame(const Game *g)
     // The hardware dim is re-requested by overlayCard every frame it is wanted; a state
     // that draws no card (play) must not inherit it from the previous frame's card.
     dimOn = false;
+#ifdef WP_CJK_MAIN
+    if(g->state==ST_CJK_PLAY){
+        cjkDraw(cur,false,0,SCREEN_H);
+        PROF(0); PROF(1); PROF(2); PROF(3); PROF(4);
+    } else
+#endif
 #ifdef WP_CYR_PREVIEW
     if (g->state == ST_SCRIPT_PREVIEW) {
         drawScriptPreviewBoard();
@@ -4761,6 +4840,9 @@ void gfxFrame(const Game *g)
     // frame, so the screen updates at once while each vblank stays well under budget.
     cur = vramSub;
     int kind = menuState(g->state) ? (g->state == ST_GUIDE ? 2 : 1) : 0;   // title/options/ledger, the guide, in-game
+#ifdef WP_CJK_MAIN
+    if(g->state==ST_CJK_PLAY)kind=3;
+#endif
     if (kind != lastTopKind) { lastTopKind = kind; topNeed = 0xF; }
     // Slices whose content changed (the chain word, the score, a callout, the plaque) are drawn this very vblank,
     // before the 15 Hz rotation: the top screen then shows an event on the same frame as the touch screen. At most

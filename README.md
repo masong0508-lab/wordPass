@@ -31,7 +31,7 @@ clues. **Neither language is finished or available in the normal retail
 Classic/Daily picker.** The optional source-backed variant includes much larger
 unreviewed word lists; complete UI translations, native-speaker proofreading,
 rights review, mode parity and physical-hardware performance validation remain
-open. Japanese, Korean and Chinese are still future milestones.
+open. Chinese and Japanese now have a separate opt-in 16-language integration candidate; Korean is a future milestone.
 
 ## Russian and Ukrainian main-game integration (development candidate)
 
@@ -885,3 +885,7 @@ the FreeDict dictionaries (GPL-2+) for extra senses; Open German WordNet (OdeNet
 Collaborative Interlingual Index; the Voikko Finnish morphology (corevoikko/voikko-fi, GPL-2+) and the Universal
 Dependencies Finnish treebanks (CC BY-SA 4.0, FTB CC BY 4.0) for the Finnish dictionary; LDNOOBW bad-word lists
 (CC BY 4.0).
+
+### 16-language CJK integration candidate (opt-in)
+
+Build with `make WP_CJK_MAIN=1 CYR_EXTERNAL_DIR=sourced-preview CJK_ASSETS_DIR=cjk-packs` after `python3 experiments/cjk/gen_assets.py --pack-dir cjk-packs`. The right-hand language-picker column launches Simplified Chinese, Traditional Chinese and Japanese through the shared title, with persistent language preference and the original 13 languages retained. Each CJK locale loads its own checked NitroFS resource on entry and releases it on exit. The selected CJK board has native-script controls, hints, clues, password reveals and pronunciation. Daily is deterministic but **unranked practice**, not full Classic/Daily/fire/career parity; the shared title/options shell is not fully translated. Standalone preview remains available. The 64 KiB static reserve gate is unchanged; Thumb size optimization applies only to selected control modules in this build.

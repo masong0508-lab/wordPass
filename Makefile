@@ -44,6 +44,13 @@ CFLAGS   := -g -Wall -Wextra -Wshadow -O2 -ffunction-sections -fdata-sections\
 # The regular ROM keeps its 11-language picker and settings format.
 # The integrated development candidate must use the real, validated source
 # packs. Never silently promote the small engineering fixture vocabulary.
+ifeq ($(WP_CJK_MAIN),1)
+override WP_CYR_MAIN := 1
+ifeq ($(strip $(CJK_ASSETS_DIR)),)
+$(error WP_CJK_MAIN requires CJK_ASSETS_DIR with generated CJK packs)
+endif
+CFLAGS += -DWP_CJK_MAIN
+endif
 ifeq ($(WP_CYR_MAIN),1)
 ifeq ($(strip $(CYR_EXTERNAL_DIR)),)
 $(error WP_CYR_MAIN requires CYR_EXTERNAL_DIR containing sourced RU/UK packs)
@@ -74,6 +81,10 @@ export VPATH := $(foreach dir,$(SOURCES),$(CURDIR)/$(dir))\
 export DEPSDIR := $(CURDIR)/$(BUILD)
 
 CFILES   := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
+ifeq ($(WP_CJK_MAIN),1)
+export VPATH := $(VPATH) $(CURDIR)/experiments/cjk/source
+CFILES += cjk_core.c cjk_integrated.c
+endif
 # The standard 11-language ROM must not compile or link any experimental
 # Russian/Ukrainian WPD4 gameplay, dictionary, ledger or Daily modules.
 # Native make check names its test sources explicitly, independently of this
@@ -96,6 +107,9 @@ export HFILES := $(addsuffix .h,$(subst .,_,$(BINFILES)))
 export INCLUDE := $(foreach dir,$(INCLUDES),-iquote $(CURDIR)/$(dir))\
                   $(foreach dir,$(LIBDIRS),-I$(dir)/include)\
                   -I$(CURDIR)/$(BUILD)
+ifeq ($(WP_CJK_MAIN),1)
+export INCLUDE := $(INCLUDE) -I$(CURDIR)/experiments/cjk/source -I$(abspath $(CJK_ASSETS_DIR))
+endif
 export LIBPATHS := $(foreach dir,$(LIBDIRS),-L$(dir)/lib)
 
 icons := $(wildcard *.bmp)
@@ -119,6 +133,7 @@ $(BUILD):
 	        python3 tools/lang/install_cyr_preview.py --input-root "$(CYR_EXTERNAL_DIR)" --output-root "$(NITRO)/cyrpreview"; \
 	    else python3 tools/lang/build_preview.py $(NITRO)/cyrpreview; fi; \
 	else rm -rf $(NITRO)/cyrpreview; fi
+	@if [ "$(WP_CJK_MAIN)" = "1" ]; then mkdir -p $(NITRO)/cjk; cp "$(CJK_ASSETS_DIR)"/[012].bin $(NITRO)/cjk/; else rm -rf $(NITRO)/cjk; fi
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
 # Regenerate the dictionary from a word list, marking COMMON words as the common tier:
@@ -246,8 +261,13 @@ clean:
 
 else
 
-$(OUTPUT).nds: $(OUTPUT).elf $(GAME_ICON) $(wildcard $(NITRO_FILES)/lang/*/*.bin)
+$(OUTPUT).nds: $(OUTPUT).elf $(GAME_ICON) $(wildcard $(NITRO_FILES)/lang/*/*.bin) $(wildcard $(NITRO_FILES)/cjk/*.bin)
 $(OUTPUT).elf: $(OFILES)
+ifeq ($(WP_CJK_MAIN),1)
+# Cold control paths use Thumb size optimization; keep frame renderer,
+# board physics, dictionaries, audio and hot cache code at the former flags.
+main.o guide.o settings.o ui.o script_preview.o script_career.o script_daily.o script_checkpoint.o cjk_core.o cjk_integrated.o: CFLAGS += -mthumb -Os
+endif
 $(OFILES_SOURCES) : $(HFILES)
 
 %.bin.o %_bin.h : %.bin
