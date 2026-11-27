@@ -4,6 +4,7 @@
 #include "script_preview.h"
 #ifdef WP_CYR_MAIN
 #include "script_career.h"
+#include "integrated_guide.h"
 #endif
 #include "build_info.h"
 #include <string.h>
@@ -446,10 +447,19 @@ typedef struct { u32 w[TILE_W / 2]; } GemRow;
 // gem + glyph path for the rest. The common 56-cell plain-tile path stays
 // unchanged, and no dictionary or password content is removed.
 #if defined(WP_CYR_MAIN)
-#define DIAMOND_CACHE_SLOTS 2
-#define LETTER_CACHE_SLOTS 20
-static u8 letterSlot[26];
-static int cacheLanguage=-1;
+// Bank D is otherwise unused by the dual-screen bitmap renderer.
+// In LCDC mode its 128 KiB is directly accessible to ARM9. The existing
+// aligned word-copy blitter works unchanged, with no main-RAM allocation.
+#define DIAMOND_CACHE_SLOTS POOL_MAX_LEN
+#define LETTER_CACHE_SLOTS 26
+typedef struct {
+    GemRow letters[LETTER_CACHE_SLOTS][COMP_ROWS];
+    GemRow diamonds[DIAMOND_CACHE_SLOTS][COMP_ROWS];
+} IntegratedGemCache;
+_Static_assert(sizeof(IntegratedGemCache)<=128*1024,"gem cache fits VRAM D");
+#define INTEGRATED_CACHE ((IntegratedGemCache *)0x06860000u)
+#define gemLetter (INTEGRATED_CACHE->letters)
+#define diamondLetter (INTEGRATED_CACHE->diamonds)
 #else
 #define LETTER_CACHE_SLOTS 26
 #ifdef WP_CYR_PREVIEW
@@ -457,13 +467,9 @@ static int cacheLanguage=-1;
 #else
 #define DIAMOND_CACHE_SLOTS POOL_MAX_LEN
 #endif
-#endif
 static ALIGN(4) GemRow gemLetter[LETTER_CACHE_SLOTS][COMP_ROWS], diamondLetter[DIAMOND_CACHE_SLOTS][COMP_ROWS];
-#ifdef WP_CYR_MAIN
-#define LETTER_SLOT(l) letterSlot[(l)]
-#else
-#define LETTER_SLOT(l) (l)
 #endif
+#define LETTER_SLOT(l) (l)
 static u8 diamondSlot[27];
 static u32 diamondCacheMask;
 
@@ -521,21 +527,6 @@ static void buildGemCache(void)
     clearScratch(PLAQUE_W, PLAQUE_H);
     drawGemSized(0, 0, PLAQUE_W, PLAQUE_H, &GEM_DIAMOND, false);
     for (int j = 0; j < PLAQUE_H; j++) for (int k = 0; k < PLAQUE_W; k++) plaqueCache[j][k] = cur[j * SCREEN_W + k];
-#ifdef WP_CYR_MAIN
-    // Cache the most frequently dealt Latin letters for the active pack.
-    // Six less frequent letters use the original gem + glyph draw path.
-    // This recovers 5760 bytes for the two new localized menus.
-    memset(letterSlot,255,sizeof letterSlot);
-    cacheLanguage=-1;
-    for (int slot=0;slot<LETTER_CACHE_SLOTS;++slot) {
-        int best=-1;
-        for (int l=0;l<26;++l)
-            if (letterSlot[l]==255 && (best<0 || langWeight(l)>langWeight(best)))
-                best=l;
-        letterSlot[best]=(u8)slot;
-        if (langWeight(best)>0) cacheLanguage=langCur();
-    }
-#endif
     for (int l = 0; l < 26; l++) {
         if (LETTER_SLOT(l)>=LETTER_CACHE_SLOTS) continue;
         const GemPal *p = GEM_PALS[palOf[l]];
@@ -1838,18 +1829,37 @@ static void drawGuide(const Game *g)
     drawTopDots();
     rectOutline(0, 0, SCREEN_W, SCREEN_H, GOLD_DK);
     rectOutline(1, 1, SCREEN_W - 2, SCREEN_H - 2, GOLD);
+#ifdef WP_CYR_MAIN
+    const char *const *localized=scriptMenu()?integratedGuide[S.language==LANG_UK][page]:NULL;
+    if (!localized)
+#endif
     if (guideCachePage != page || guideCacheLang != langCur()) { guideLines(page, guideCache); guideCachePage = page; guideCacheLang = langCur(); }
 
-    const char *title = guideTitle(page);
+    const char *title =
+#ifdef WP_CYR_MAIN
+        localized ? localized[0] :
+#endif
+        guideTitle(page);
     drawTextShadow(SCREEN_W / 2 - textWidth(title, 2) / 2, 8, title, GOLD_LT, 2);
     int bx = guideBackX();
     rectOutline(bx, 6, GD_BACK_W, 15, DIM);
-    drawTextCenter(bx + GD_BACK_W / 2, 10, ui(UI_GD_BACK), INK, 1);
+    drawTextCenter(bx+GD_BACK_W/2,10,
+#ifdef WP_CYR_MAIN
+        localized?"НАЗАД":
+#endif
+        ui(UI_GD_BACK),INK,1);
     char cnt[8]; fmtInt(cnt, page + 1); strcat(cnt, "/"); fmtInt(cnt + strlen(cnt), GUIDE_PAGES);
     drawText(S.hand == HAND_LEFT ? SCREEN_W - 8 - textWidth(cnt, 1) : 8, 10, cnt, DIM_TEXT, 1);   // the page counter takes the other corner
     hline(GD_TEXT_X, 25, SCREEN_W - 2 * GD_TEXT_X, GOLD_DK);
 
     int y = GD_TEXT_Y;
+#ifdef WP_CYR_MAIN
+    if (localized) {
+        // UTF-8 glyph drawing, not the Latin-only marked text renderer.
+        for (int i=1;i<10 && localized[i];++i)
+            drawText(GD_TEXT_X,y+3+14*(i-1),localized[i],i==1?GOLD_LT:INK,1);
+    } else
+#endif
     for (int i = 0; i < GUIDE_MAX_LINES; i++) {
         if (!guideCache[i][0]) { y += GUIDE_GAP_H; continue; }
         int a = (guideAge - 3 * i - 2) * 16 / 6;               // each line fades up over six frames, three after the one above
@@ -2372,8 +2382,61 @@ static void gdControls(int t)
     gCaption(ui(CAP[hi]), ACCENT);
 }
 
+#ifdef WP_CYR_MAIN
+// A compact diagram complements each native-language instruction page.
+// These examples use the actual renderer and do not need a loaded pack.
+static void drawIntegratedGuideTop(int page)
+{
+    bool uk=S.language==LANG_UK;
+    const char *const *lines=integratedGuide[uk][page];
+    drawTopDots();
+    rectOutline(8,8,240,176,GOLD_DK);
+    rectOutline(9,9,238,174,GOLD);
+    drawTextCenter(128,16,lines[0],GOLD_LT,2);
+    hline(20,36,216,GOLD_DK);
+    if (page==0 || page==1 || page==3) {
+        const char *letters[3]={"К","О","Т"};
+        if (uk) { letters[1]="І"; }
+        for(int i=0;i<3;++i) {
+            int x=70+i*40;
+            blitGem(x,66,page==3 && i==2?5:i);
+            drawTextCenter(x+12,71,letters[i],page==3 && i==2?BLACK:WHITE,2);
+            if(page==1) drawTextCenter(x+12,96,i==0?"1":i==1?"2":"3",ACCENT,1);
+        }
+        drawTextCenter(128,113,page==0?"? ? ?":page==1?(uk?"КІТ":"КОТ"):"L + TAP",GOLD_LT,2);
+    } else if (page==2) {
+        drawTextCenter(128,58,"1/1",GOLD_LT,2);
+        drawHoleCell(87,87,1,false,false);
+        blitGem(145,87,2);
+        drawChar(151,91,'+',GOLD_LT,2);
+        drawTextCenter(128,115,"0/2  -",C(9,28,30),1);
+    } else if (page==4) {
+        for(int i=0;i<3;++i) blitGem(74+i*40,66,i==1?6:1);
+        drawTextCenter(128,102,"3: +3   4: +2",FIRE2,1);
+        drawTextCenter(128,116,"5-6: +1  7+: 0",ACCENT,1);
+    } else if (page==5) {
+        drawTextCenter(128,61,"+50%",GOLD_LT,3);
+        drawTextCenter(128,103,uk?"ПОВТОР: 1/2":"ПОВТОР: 1/2",ACCENT,1);
+    } else if (page==6) {
+        const char *modes[3]={uk?"КЛАСИКА":"КЛАССИКА","ДЕНЬ",uk?"НАВЧАННЯ":"ОБУЧЕНИЕ"};
+        for(int i=0;i<3;++i) {
+            rectOutline(50,48+i*26,156,21,i==0?GOLD_LT:ACCENT);
+            drawTextCenter(128,55+i*26,modes[i],WHITE,1);
+        }
+    } else {
+        drawTextCenter(128,55,"L + START",GOLD_LT,2);
+        drawTextCenter(128,82,"L + B",ACCENT,2);
+        drawTextCenter(128,109,"L + Y",WHITE,2);
+    }
+    drawTextCenter(128,145,lines[1],INK,1);
+    drawTextCenter(128,162,uk?"B: НАЗАД  /  A: ДАЛІ":"B: НАЗАД  /  A: ДАЛЕЕ",DIM_TEXT,1);
+}
+#endif
 static void drawTopGuide(const Game *g)
 {
+#ifdef WP_CYR_MAIN
+    if (scriptMenu()) { drawIntegratedGuideTop(g->guidePage); return; }
+#endif
     drawTopDots();
     rectOutline(8, 8, 240, 176, GOLD_DK);
     rectOutline(9, 9, 238, 174, GOLD);
@@ -3961,6 +4024,9 @@ void gfxInit(void)
     vramSetBankA(VRAM_A_MAIN_BG_0x06000000);   // front/back bitmap pair for the touch screen
     vramSetBankB(VRAM_B_MAIN_BG_0x06020000);
     vramSetBankC(VRAM_C_SUB_BG);
+#ifdef WP_CYR_MAIN
+    vramSetBankD(VRAM_D_LCD); // independent ARM9-readable composite storage
+#endif
     bgMain = bgInit(3, BgType_Bmp16, BgSize_B16_256x256, 0, 0);
     int bgs = bgInitSub(3, BgType_Bmp16, BgSize_B16_256x256, 0, 0);
     vramSub = bgGetGfxPtr(bgs);
@@ -4174,9 +4240,6 @@ void gfxFrame(const Game *g)
         frameMid = accent; frameDk = lerp15(accent, BLACK, 9); frameLt = lerp15(accent, WHITE, 8);
         buildHeatTables();
     }
-#ifdef WP_CYR_MAIN
-    if (cacheLanguage!=langCur()) buildGemCache();
-#endif
     if (g->state == ST_PLAY || g->state == ST_PAUSE || g->state == ST_PASSED || g->state == ST_FAIL)
         refreshDiamondCache(g);
     boardChainWord(g, chainWordNow);

@@ -1079,7 +1079,13 @@ int main(void)
                 // L+Y opens localized rules without losing a selected chain.
                 // B closes the rules instead of unexpectedly quitting to title.
                 if ((down & KEY_Y) && (held & KEY_L)) {
+#ifdef WP_CYR_MAIN
+                    // Same eight-page native-language guide as the title.
+                    // Preserve the live dictionary, board, score and chain.
+                    openGuide(ST_SCRIPT_PREVIEW);
+#else
                     scriptPreviewHelp ^= 1;
+#endif
                     break;
                 }
                 if (scriptPreviewHelp) {

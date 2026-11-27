@@ -29,6 +29,7 @@ on:
       - 'source/script_rules.h'
       - 'source/script_career.c'
       - 'source/script_career.h'
+      - 'source/integrated_guide.h'
       - 'tools/check/script_career_test.c'
       - 'source/main.c'
       - 'source/gfx.c'
