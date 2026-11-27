@@ -80,6 +80,14 @@ int cjClue(const CjGame *g,int cell){
     int n=0;for(int i=0;i<CJ_CELLS;i++)if(cjAdjacent(cell,i)&&g->back[i])n++;
     return n;
 }
+bool cjEvidence(const CjGame *g,int cell,int *remaining,int *covered){
+    if(!remaining||!covered||cjClue(g,cell)<0)return false;
+    int left=0,unknown=0;
+    for(int i=0;i<CJ_CELLS;i++)if(cjAdjacent(cell,i)&&!g->opened[i]){
+        unknown++;left+=g->back[i]!=0;
+    }
+    *remaining=left;*covered=unknown;return true;
+}
 int cjPeel(CjGame *g,int cell){
     if(!g||!cellOK(cell)||cjComplete(g))return -1;
     if(g->opened[cell]){g->focus=(int8_t)cell;return -1;}
