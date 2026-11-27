@@ -58,7 +58,11 @@ The full Unicode dictionary is always active; common-only and English spelling
 filters are visibly unavailable. The unified build stores the full Latin composite cache in otherwise-unused
 LCDC VRAM bank D instead of competing for original-DS main RAM. The shared
 eight-page guide is localized in both languages and accessible from the title
-or with L+Y during an active Unicode game.
+or with L+Y during an active Unicode game. The integrated Classic and Daily
+panels have touch buttons for submit, clear, hint and a one-shot peel.
+A cancelled peel or free inspection of an open clue does not spend a turn;
+the red exclamation mark warns about visible flame hazards. Physical
+controller and stylus controls remain available.
 Classic career totals (terminal shelf attempts, clears, words, peels,
 revealed letters, highest score and shelf) are stored independently for
 Russian and Ukrainian in the main ledger. Training, all Daily play and
