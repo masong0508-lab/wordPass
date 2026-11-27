@@ -151,7 +151,7 @@ bool cjSubmit(CjGame *g){
         int p=g->chain[i];cleared+=g->flame[p]!=0;g->flame[p]=0;
         if(!g->opened[p])g->tile[p]=randomChar(g);
     }
-    g->score+=(uint32_t)(10*n+n*n+20*cleared);g->lastWord=(uint16_t)index;g->len=0;
+    g->score+=(uint32_t)(10*n+n*n+20*cleared);g->words++;g->lastWord=(uint16_t)index;g->len=0;
     spendTurn(g,cjWordHeat(n),cleared);
     return true;
 }

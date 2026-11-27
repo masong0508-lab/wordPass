@@ -1654,10 +1654,24 @@ static void drawTopTitle(void)
     drawLogo(16, 16, 2);
 #ifdef WP_CJK_MAIN
     if(cjkMenu() && G.state!=ST_OPTIONS){
+        if(G.state==ST_STATS){
+            const ScriptDailyCareer *d=&scriptDailyCareer[S.language-LANG_COUNT];
+            char num[16];
+            drawTextCenter(128,48,"DAILY RECORDS",GOLD_LT,2);
+            drawText(20,82,"BEST",INK,1);drawTextCenter(196,82,fmtScoreShort(num,(int)d->bestScore),GOLD_LT,1);
+            drawText(20,100,"LAST SCORE",INK,1);drawTextCenter(196,100,fmtScoreShort(num,(int)d->lastScore),WHITE,1);
+            unsigned streak=d->streak;
+            if(!G.clockOk||!d->lastDate||G.dailySeed<(int)d->lastDate||
+               settingsDayNumber(G.dailySeed)-settingsDayNumber((int)d->lastDate)>1)streak=0;
+            drawText(20,118,"STREAK",INK,1);drawTextCenter(196,118,fmtInt(num,(int)streak),WHITE,1);
+            drawText(20,136,"SCORED DAYS",INK,1);drawTextCenter(196,136,fmtScoreShort(num,(int)d->results),WHITE,1);
+            drawTextCenter(128,160,"B / TAP: BACK",ACCENT,1);
+            return;
+        }
         drawTextCenter(128,58,"CJK CLASSIC BETA",GOLD_LT,1);
         drawTextCenter(128,85,"CONNECT TWO OR MORE CHARACTERS",WHITE,1);
         drawTextCenter(128,108,"WORDS REVEAL PASSWORD CLUES",ACCENT,1);
-        drawTextCenter(128,130,"DAILY IS UNRANKED PRACTICE",INK,1);
+        drawTextCenter(128,130,"ONE SCORED DAILY PER DATE",INK,1);
         drawTextCenter(128,153,"TRAINING HAS NO FIRE",DIM_TEXT,1);
         drawText(16,175,WP_BUILD_LABEL,DIM_TEXT,1);
         drawText(192,175,WP_BUILD_FLAVOR,DIM_TEXT,1);
@@ -1671,6 +1685,11 @@ static void drawTopTitle(void)
         drawOptionsHelp();
         char s[48];
 #ifdef WP_CYR_MAIN
+#ifdef WP_CJK_MAIN
+        if(cjkMenu()){
+            drawTextCenter(128,156,"DAILY: ONE SCORED ATTEMPT",DIM_TEXT,1);
+        }else
+#endif
         if (scriptMenu()) {
             drawTextCenter(128,156,S.language==LANG_UK?"ДЕНЬ: ОДНА ЗАЛІКОВА СПРОБА":"ДЕНЬ: ОДНА ЗАЧЁТНАЯ ПОПЫТКА",DIM_TEXT,1);
         } else
@@ -3787,8 +3806,10 @@ static void drawTitle(const Game *g)
 #ifdef WP_CYR_MAIN
 #ifdef WP_CJK_MAIN
     if(cjkMenu()){
-        drawTextCenter(BX(120),TB_Y+3,"DAILY",GOLD_LT,1);
-        drawTextCenter(BX(120),TB_Y+12,"PRACTICE",INK,1);
+        const ScriptDailyCareer *d=&scriptDailyCareer[S.language-LANG_COUNT];
+        bool scored=g->clockOk&&settingsPersistent()&&(unsigned)g->dailySeed>d->playedDate;
+        drawTextCenter(BX(120),TB_Y+3,"DAILY",scored?GOLD_LT:ACCENT,1);
+        drawTextCenter(BX(120),TB_Y+12,!g->clockOk?"SET CLOCK":scored?"SCORED":"PRACTICE",INK,1);
     } else
 #endif
     if (scriptMenu()) {
@@ -3826,7 +3847,12 @@ static void drawTitle(const Game *g)
     }
 #endif
 #ifdef WP_CJK_MAIN
-    if(cjkMenu()){drawText(BX(20),180,"CJK BETA - NO RECORDS",DIM_TEXT,1);return;}
+    if(cjkMenu()){
+        char best[32],num[16];const ScriptCareer *r=&scriptCareer[S.language-LANG_COUNT];
+        siprintf(best,"BEST %s",fmtScoreShort(num,(int)r->bestScore));
+        drawText(BX(20),180,best,GOLD_LT,1);
+        drawText(BX(103),180,"RECORDS",ACCENT,1);return;
+    }
 #endif
     // the BEST line is also the way into THE LEDGER (tap it, or press X)
     // Scores of six digits and up read as thousands (123K) so the two ends of the line never meet.
@@ -3916,8 +3942,17 @@ static void drawStats(const Game *g)
     drawBoardFrame();
 #ifdef WP_CJK_MAIN
     if(cjkMenu()){
-        drawTextCenter(BX(86),32,"CJK PRACTICE",GOLD_LT,1);
-        drawTextCenter(BX(86),64,"NO RANKED RECORDS",WHITE,1);
+        unsigned lang=(unsigned)(S.language-LANG_COUNT);
+        const ScriptCareer *r=&scriptCareer[lang];
+        char val[16];
+        drawTextCenter(BX(86),12,"CAREER",GOLD_LT,2);
+        drawTextCenter(BX(86),30,menuLanguageName(),ACCENT,1);
+        const char *labels[7]={"ATTEMPTS","CLEARED","WORDS","OPENS","FOUND","BEST","BEST SHELF"};
+        const uint32_t vals[7]={r->attempts,r->cleared,r->words,r->peels,r->revealed,r->bestScore,r->bestShelf};
+        for(int i=0;i<7;i++)statRow(45+i*14,labels[i],fmtScoreShort(val,(int)vals[i]),i>=5?GOLD_LT:WHITE);
+        bool error=scriptCareerSaveError[lang]||scriptDailySaveError[lang];
+        drawTextCenter(BX(86),148,!settingsPersistent()?"SESSION ONLY":error?"SAVE FAILED":"SAVED",error?FIRE2:DIM_TEXT,1);
+        rectOutline(BX(54),162,64,20,DIM);
         drawTextCenter(BX(86),168,"BACK",INK,1);
         return;
     }

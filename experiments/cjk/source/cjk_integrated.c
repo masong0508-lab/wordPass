@@ -3,6 +3,7 @@
 #include <string.h>
 #include "cjk_core.h"
 #include "cjk_integrated.h"
+#include "../../../source/script_career.h"
 #include "cjk_ui_ids.h"
 #include <stdlib.h>
 typedef struct { uint16_t code,rows[16]; } CjGlyph;
@@ -15,6 +16,10 @@ static unsigned glyphCount;
 static const uint16_t (*uiLabels)[15];
 static const uint8_t (*ascii8)[10];
 static bool available[3],dailyMode;
+static const char *recordPath;
+static int dailyDate;
+int cjkDailyRanked;
+static bool recorded;
 static int clipLo,clipHi;
 unsigned cjkEpoch;
 static const char *const packPaths[]={"nitro:/cjk/0.bin","nitro:/cjk/1.bin","nitro:/cjk/2.bin"};
@@ -92,14 +97,32 @@ static bool selected(int i){for(int k=0;k<cjkGame.len;k++)if(cjkGame.chain[k]==i
 static void button(int y,int id,u16 col){
     box(178,y,74,24,PANEL,col);nativeText(215-nativeWidth(id)/2,y+4,id,col);
 }
+// RU/UK remain record IDs 0/1. CJK IDs 2/3/4 use different files.
+static unsigned recordLanguage(void){return (unsigned)(lang+2);}
+static void finishRecord(bool leaving){
+    if(lang<0||!cjkGame.lex||!cjkGame.heatLimit||recorded)return;
+    if(dailyMode){
+        if(cjkDailyRanked!=1||(!leaving&&!cjEnded(&cjkGame)))return;
+        recorded=true;cjkDailyRanked=2;
+        (void)scriptDailyCareerFinish(recordPath,recordLanguage(),dailyDate,cjkGame.score);
+    }else{
+        if(!cjEnded(&cjkGame))return;
+        recorded=true;
+        unsigned peels=0,revealed=0;
+        for(int i=0;i<CJ_CELLS;i++)if(cjkGame.opened[i]){peels++;revealed+=cjkGame.back[i]!=0;}
+        scriptCareerFinish(recordPath,recordLanguage(),cjkGame.score,cjkGame.shelf,
+                           cjkGame.words,peels,revealed,cjComplete(&cjkGame)&&!cjkGame.loss);
+    }
+}
 static void resetInput(void){
     peek=false;armed=-1;drag=false;suppress=true;
     noHint=recoveryBlocked=peelBlocked=false;dirty=true;
 }
 static bool nextOrRetry(void){
+    finishRecord(false);
     if(dailyMode)return false;
     bool ok=cjkGame.loss?cjRetryShelf(&cjkGame):cjNextShelf(&cjkGame);
-    if(ok){resetInput();cjkEpoch++;}
+    if(ok){recorded=false;resetInput();cjkEpoch++;}
     return ok;
 }
 static void hint(void){
@@ -119,7 +142,7 @@ void cjkDraw(u16 *target,bool upper,int y0,int y1){
     rect(0,0,256,192,BG);
     if(upper){
     box(4,4,248,184,BG,GOLD);
-    centered(10,dailyMode?"CJK DAILY PRACTICE":cjkGame.heatLimit?"WORDPASS - CJK CLASSIC":"WORDPASS - CJK PRACTICE",GOLD);
+    centered(10,dailyMode?(cjkDailyRanked?"CJK DAILY SCORED":"CJK DAILY PRACTICE"):cjkGame.heatLimit?"WORDPASS - CJK CLASSIC":"WORDPASS - CJK PRACTICE",GOLD);
     nativeTitle(lang,96,27,TEAL);
     int found=0;for(int i=0;i<cjkGame.passLen;i++)found+=(cjkGame.foundMask>>i)&1u;
     int x=128-12*cjkGame.passLen;
@@ -204,10 +227,12 @@ void cjkDraw(u16 *target,bool upper,int y0,int y1){
 }
 
 void cjkLeave(void){
+    finishRecord(true);
+    recordPath=NULL;dailyDate=0;dailyMode=false;cjkDailyRanked=0;recorded=false;
     free(words);free(cjkPack);words=NULL;cjkPack=NULL;glyphs=NULL;uiLabels=NULL;ascii8=NULL;
     memset(&cjkGame,0,sizeof cjkGame);memset(&lex,0,sizeof lex);lang=-1;armed=-1;drag=suppress=false;
 }
-bool cjkEnter(int locale,u32 initialSeed,bool daily,bool training,int difficulty){
+bool cjkEnter(int locale,u32 initialSeed,int date,bool training,int difficulty,const char *cfg){
     cjkLeave();
     if(!cjkAvailable(locale))return false;
     FILE *f=fopen(packPaths[locale],"rb");
@@ -239,8 +264,12 @@ bool cjkEnter(int locale,u32 initialSeed,bool daily,bool training,int difficulty
     for(unsigned i=0;i<nu;i++)if(!uiLabels[i][0]||uiLabels[i][14])goto bad;
     ascii8=(const uint8_t (*)[10])(cjkPack+16+76*count+34*ng+30*nu);
     lex.words=words;lex.count=(uint16_t)count;
-    lang=locale;dailyMode=daily;
+    bool daily=date!=0;
     if(!cjStartMode(&cjkGame,&lex,initialSeed,training?CJ_FIRE_OFF:daily?CJ_FIRE_NORMAL:difficulty,1,0))goto bad;
+    lang=locale;dailyMode=daily;dailyDate=date;recordPath=cfg;recorded=false;
+    // A date is consumed only AFTER resources and board generation succeed.
+    // A missing or unwritable card leaves the same puzzle in practice mode.
+    cjkDailyRanked=daily&&!training&&scriptDailyCareerClaim(cfg,recordLanguage(),date);
     resetInput();cjkEpoch++;return true;
 bad:
     cjkLeave();return false;
@@ -291,6 +320,6 @@ bool cjkInput(u32 down,u32 held,u32 up,const touchPosition *t){
         if(armed>=0){peelBlocked=cjPeel(&cjkGame,armed)==-2;peek=false;dirty=true;}
         armed=-1;drag=suppress=false;
     }
-    if(dirty)cjkEpoch++;
+    if(dirty){finishRecord(false);cjkEpoch++;}
     return true;
 }
