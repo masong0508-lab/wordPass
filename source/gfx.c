@@ -2,6 +2,9 @@
 // particles, floating popups, hardware fades and screen shake.
 #include "game.h"
 #include "script_preview.h"
+#ifdef WP_CYR_MAIN
+#include "script_career.h"
+#endif
 #include "build_info.h"
 #include <string.h>
 #include <stdio.h>
@@ -1658,6 +1661,16 @@ static void drawTopTitle(void)
         return;
     }
     if (G.state == ST_STATS) {
+#ifdef WP_CYR_MAIN
+        if (scriptMenu()) {
+            bool uk=S.language==LANG_UK;
+            drawTextCenter(128,70,uk?"РЕКОРДИ КЛАСИКИ":"РЕКОРДЫ КЛАССИКИ",GOLD_LT,1);
+            drawTextCenter(128,95,uk?"ЗАВЕРШЕНІ СПРОБИ":"ЗАВЕРШЁННЫЕ ПОПЫТКИ",INK,1);
+            drawTextCenter(128,112,uk?"БЕЗ НАВЧАННЯ ТА ДНЯ":"БЕЗ ОБУЧЕНИЯ И ДНЯ",DIM_TEXT,1);
+            drawTextCenter(128,137,uk?"B / ДОТИК: НАЗАД":"B / КАСАНИЕ: НАЗАД",ACCENT,1);
+            return;
+        }
+#endif
         drawTextCenter(128, 84, ui(UI_S_CAREER), GOLD_LT, 1);
         drawTextCenter(128, 100, ui(UI_S_WORDSPEEKS), INK, 1);
         drawTextCenter(128, 120, ui(UI_S_CLOSE), DIM_TEXT, 1);
@@ -3377,6 +3390,15 @@ static void drawTitle(const Game *g)
     fillRect(BX(54), TB_Y + 26, 64, 20, BLACK);
     rectOutline(BX(54), TB_Y + 26, 64, 20, DIM);
     drawTextCenter(BX(86),TB_Y+32,menuLabel(UI_T_OPTIONS),INK,1);
+#ifdef WP_CYR_MAIN
+    if (scriptMenu()) {
+        char best[32],num[16];
+        const ScriptCareer *r=&scriptCareer[S.language-LANG_COUNT];
+        siprintf(best,"%s %s",S.language==LANG_UK?"РЕКОРД":"РЕКОРД",fmtScoreShort(num,(int)r->bestScore));
+        drawText(BX(20),180,best,GOLD_LT,1);
+        return;
+    }
+#endif
     // the BEST line is also the way into THE LEDGER (tap it, or press X)
     // Scores of six digits and up read as thousands (123K) so the two ends of the line never meet.
     char s[32], n[16];
@@ -3463,6 +3485,30 @@ static void drawStats(const Game *g)
     fillRect(0, 0, SCREEN_W, SCREEN_H, BLACK);
     drawBoardDots();
     drawBoardFrame();
+#ifdef WP_CYR_MAIN
+    if (scriptMenu()) {
+        bool uk=S.language==LANG_UK;
+        unsigned lang=(unsigned)(S.language-LANG_COUNT);
+        const ScriptCareer *r=&scriptCareer[lang];
+        char val[16];
+        drawTextCenter(BX(86),12,uk?"КАРʼЄРА":"КАРЬЕРА",GOLD_LT,2);
+        drawTextCenter(BX(86),30,uk?"УКРАЇНСЬКА":"РУССКИЙ",ACCENT,1);
+        const char *labels[7]={uk?"СПРОБИ":"ПОПЫТКИ",uk?"ПОЛИЦІ":"ПОЛКИ",
+            "СЛОВА",uk?"ВІДКРИТТЯ":"ВСКРЫТИЯ",uk?"ЛІТЕРИ":"БУКВЫ","РЕКОРД",
+            uk?"МАКС. РІВ.":"МАКС. УР."};
+        const uint32_t vals[7]={r->attempts,r->cleared,r->words,r->peels,r->revealed,r->bestScore,r->bestShelf};
+        for(int i=0;i<7;++i) {
+            // Large totals abbreviate as K to protect the 144px row.
+            statRow(45+i*14,labels[i],fmtScoreShort(val,(int)vals[i]),i>=5?GOLD_LT:WHITE);
+        }
+        drawTextCenter(BX(86),148,!settingsPersistent()?menuLabel(UI_OP_NOSAVE):
+            scriptCareerSaveError[lang]?menuLabel(UI_OP_SAVEFAIL):menuLabel(UI_OP_SAVED),
+            scriptCareerSaveError[lang]?FIRE2:DIM_TEXT,1);
+        rectOutline(BX(54),162,64,20,DIM);
+        drawTextCenter(BX(86),168,menuLabel(UI_OP_BACK),INK,1);
+        return;
+    }
+#endif
     drawTextShadow(BX(86) - textWidth(ui(UI_T_LEDGER_H), 2) / 2, 12, ui(UI_T_LEDGER_H), GOLD_LT, 2);
     char s[32], w[SETTINGS_WORD_BUF];
     int y = 32;
