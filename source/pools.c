@@ -3,6 +3,7 @@
 // base + idx * len; nothing is copied until a pass is picked.
 #include "game.h"
 #include <string.h>
+#include <stdint.h>
 #include "pools_bin.h"
 
 #define MAX_THEMES 48

@@ -280,7 +280,7 @@ jobs:
           retention-days: 7
 
   cjk-assets:
-    if: contains(github.head_ref, '16-language')
+    if: github.event_name == 'workflow_dispatch' || contains(github.head_ref, '16-language')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

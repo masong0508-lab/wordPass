@@ -13,8 +13,8 @@ def main(rom,elf,output):
     make_card(card,[("wordPass.nds",Path(dldi).read_bytes())])
     e=FatEmu(dldi,elf,card,argv=False,dismiss=False)
     so=member_offsets(elf,"S",("language",))
-    ga=symbol(elf,"g")
-    fields=member_offsets(elf,"g",("len","turns","score","focus","tile","back","opened"))
+    ga=symbol(elf,"cjkGame")
+    fields=member_offsets(elf,"cjkGame",("len","turns","score","focus","tile","back","opened"))
     def read(name,n=1):
         a=ga+fields[name]
         return int.from_bytes(bytes(e.mem.unsigned[a:a+n]),"little")
@@ -44,7 +44,7 @@ def main(rom,elf,output):
         assert read("turns",4)==2
         e.shot(str(out/f"cjk-{i}-played.png"))
         e.press("B",settle=12);wait(0)
-        assert int.from_bytes(bytes(e.mem.unsigned[symbol(elf,"pack"):symbol(elf,"pack")+4]),"little")==0
+        assert int.from_bytes(bytes(e.mem.unsigned[symbol(elf,"cjkPack"):symbol(elf,"cjkPack")+4]),"little")==0
     e.power_cycle();wait(0)
     assert int(e.mem.unsigned[symbol(elf,"S")+so["language"]])==15
     select(0);e.tap(52,147,settle=18);wait(1)
