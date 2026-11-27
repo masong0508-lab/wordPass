@@ -30,6 +30,7 @@ extern ScriptLedger scriptPreviewLedger;
 extern int scriptPreviewDaily; // Classic or a deterministic Daily shelf
 #ifdef WP_CYR_MAIN
 extern int scriptPreviewDailyRanked; // practice, live scored, terminal scored
+extern int scriptPreviewTouchPeek; // one-shot touch peel mode
 #endif
 extern int scriptPreviewDailyDate; // YYYYMMDD, independent of retail Daily records
 extern int scriptPreviewDailyClockError; // unset RTC feedback, no save writes
