@@ -3119,6 +3119,11 @@ static void drawScriptPreviewTop(void)
                          (scriptPreviewLanguage ? "НЕМАЄ ВІЛЬНОГО МІСЦЯ" :
                                                   "НЕТ СВОБОДНОГО МЕСТА"),
                        FIRE2, 1);
+#ifdef WP_CYR_MAIN
+    else if(scriptPreviewTouchPeek)
+        drawTextCenter(128,169,scriptPreviewLanguage?
+            "ДОТИК, ВІДПУСТІТЬ / !: ВОГОНЬ":"КАСАНИЕ, ОТПУСТИТЕ / !: ОГОНЬ",GOLD_LT,1);
+#endif
     else if (scriptPreviewDaily)
         drawTextCenter(128,169,
 #ifdef WP_CYR_MAIN
@@ -4221,6 +4226,7 @@ static void topSigs(const Game *g, u32 sig[4])
         h3 = hmix(h3,scriptPreviewDailyClockError);
 #ifdef WP_CYR_MAIN
         h3 = hmix(h3,scriptPreviewDailyRanked);
+        h3 = hmix(h3,scriptPreviewTouchPeek);
 #endif
         h3 = hmix(h3, scriptPreviewLedger.combo);
         h3 = hmix(h3, scriptPreviewLedger.lastRepeat);
