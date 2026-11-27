@@ -75,7 +75,12 @@ over covered neighbors, with actionable + / - / compare guidance. A live word
 selection takes precedence. The integrated word readout shows the minimum
 three-letter length, the accepted-word score and added heat (including
 overtime), with a warning color when the meter reaches its ignition threshold.
-The normal hint button explicitly indicates when its allowance is spent.
+After the normal hint is spent and at least one move has been made, clearing
+the current chain offers a one-time recovery button. Two deliberate taps
+confirm the existing paid recovery (one move and two base heat, plus any
+overtime); touching elsewhere or using a key cancels the confirmation.
+The action plants a playable word without awarding points or revealing
+password letters, and keeps the same rules as L+R.
 This uses the same public inference as training.
 The integrated renderer uses one bounded word-selection mask and subtle
 flame/valid-word edge animation. The shared

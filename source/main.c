@@ -1073,6 +1073,13 @@ int main(void)
                 const bool scriptKeyAction =
                     (down & (KEY_A | KEY_B | KEY_X | KEY_Y | KEY_R |
                              KEY_SELECT | KEY_START)) != 0;
+#ifdef WP_CYR_MAIN
+                // Only a second fresh tap on the same recovery button
+                // may confirm. Any other input cancels without a turn.
+                if ((down & ~KEY_TOUCH) ||
+                    ((down & KEY_TOUCH) && gfxScriptPlayAction(t.px,t.py)!=3))
+                    scriptPreviewTouchRescue=0;
+#endif
                 if (scriptKeyAction || (down & KEY_TOUCH)) {
                     scriptPreviewCheckpointStatus = SCRIPT_CHECKPOINT_NONE;
                     scriptPreviewTrainingNotice = 0;
@@ -1180,7 +1187,18 @@ int main(void)
                                 scriptBoardClearChain(&scriptPreviewBoard);
                             } else if(action==3) {
                                 scriptPreviewTouchPeek=0;
-                                (void)scriptPreviewHint();
+                                if (scriptPreviewCanTouchRescue()) {
+                                    if (scriptPreviewTouchRescue) {
+                                        scriptPreviewTouchRescue=0;
+                                        (void)scriptPreviewRescue();
+                                    } else {
+                                        scriptPreviewTouchRescue=1;
+                                        scriptPreviewRescueError=0;
+                                    }
+                                } else {
+                                    scriptPreviewTouchRescue=0;
+                                    (void)scriptPreviewHint();
+                                }
                             } else {
                                 scriptPreviewTouchPeek=!scriptPreviewTouchPeek;
                                 scriptBoardClearChain(&scriptPreviewBoard);

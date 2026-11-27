@@ -446,6 +446,41 @@ def main(rom, elf, output):
     assert integer("scriptPreviewTurns")==2
     assert clue_pixels()==revealed_pixels,"revisiting old clue did not restore its public ratio"
     e.shot(str(out/"uk-live-deduction.png"))
+    # Recovery on a practice run must be deliberate. The first tap is
+    # still a normal hint; after that the new contextual action is armed.
+    touch_action(2)
+    assert integer("scriptPreviewHints")==1
+    touch_action(1)
+    before=(integer("scriptPreviewTurns"),integer("scriptPreviewScore"),
+            integer("scriptPreviewPeels"),integer("scriptPreviewHints"))
+    stable=bytes(e.mem.unsigned[board:board+228])
+    touch_action(2)
+    assert integer("scriptPreviewTouchRescue")==1
+    assert bytes(e.mem.unsigned[board:board+228])==stable
+    assert integer("scriptPreviewTurns")==before[0]
+    e.shot(str(out/"uk-recovery-confirm.png"))
+    touch_action(1)
+    assert integer("scriptPreviewTouchRescue")==0
+    assert integer("scriptPreviewTurns")==before[0]
+    touch_action(2)
+    assert integer("scriptPreviewTouchRescue")==1
+    e.tap(215,185,settle=12)
+    wait_state(7)
+    e.tap(230,15,settle=12)
+    wait_state(9,1)
+    assert integer("scriptPreviewTouchRescue")==0
+    assert integer("scriptPreviewTurns")==before[0]
+    touch_action(2)
+    touch_action(2)
+    assert integer("scriptPreviewTouchRescue")==0
+    assert integer("scriptPreviewRescues")==1
+    assert integer("scriptPreviewTurns")==before[0]+1
+    assert (integer("scriptPreviewScore"),integer("scriptPreviewPeels"),
+            integer("scriptPreviewHints"))==before[1:]
+    touch_action(2)
+    assert integer("scriptPreviewTurns")==before[0]+1
+    assert integer("scriptPreviewTouchRescue")==0
+    e.shot(str(out/"uk-recovery-used.png"))
     leave_daily()
     assert daily(1)==first,"practice changed scored results"
     enter_daily(1,20261127,1)

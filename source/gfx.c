@@ -2954,19 +2954,23 @@ static void drawScriptPreviewBoard(void)
     {
         bool uk=scriptPreviewLanguage!=0;
         bool running=scriptPreviewRules.status==SCRIPT_RUNNING;
+        bool recover=scriptPreviewCanTouchRescue();
         const char *actions[4]={
             running?(uk?"ПРИЙНЯТИ":"ПРИНЯТЬ"):
                 scriptPreviewDaily?"МЕНЮ":
                 scriptPreviewRules.status==SCRIPT_PASSED?(uk?"ДАЛІ":"ДАЛЕЕ"):(uk?"ЗНОВУ":"СНОВА"),
             uk?"ОЧИСТИТИ":"СБРОС",
-            scriptPreviewHints?(uk?"ВИЧЕРПАНО":"НЕТ ПОДСК."):(uk?"ПІДКАЗКА":"ПОДСКАЗКА"),
+            recover?(scriptPreviewTouchRescue?(uk?"ПІДТВЕРДИТИ":"ПОДТВЕРДИТЬ"):
+                     (uk?"ПОРЯТУНОК":"СПАСЕНИЕ")):
+                scriptPreviewHints?(uk?"ВИЧЕРПАНО":"НЕТ ПОДСК."):(uk?"ПІДКАЗКА":"ПОДСКАЗКА"),
             scriptPreviewTouchPeek?(uk?"СКАСУВАТИ":"ОТМЕНА"):(uk?"ВІДКРИТИ":"ОТКРЫТЬ")
         };
         for(int i=0;i<4;++i) {
             bool active=i==0?(!running || (chainValidNow && !scriptPreviewTouchPeek)):
-                running && (i!=2 || !scriptPreviewHints);
+                running && (i!=2 || !scriptPreviewHints || recover);
             int y=110+18*i;
-            bool selected=i==3 && scriptPreviewTouchPeek;
+            bool selected=(i==3 && scriptPreviewTouchPeek) ||
+                          (i==2 && recover && scriptPreviewTouchRescue);
             u16 outline=selected?GOLD_LT:active?ACCENT:DIM_TEXT;
             if(i==0 && active) outline=lerp15(GOLD_LT,WHITE,tri16(frame,40)/3);
             roundRect(panelX+4,y,70,16,selected?lerp15(BLACK,ACCENT,6):DIM);
@@ -3329,6 +3333,16 @@ static void drawScriptPreviewTop(void)
     } else if (scriptPreviewDailyClockError)
         drawTextCenter(128, 169, scriptPreviewLanguage ?
                        "ВСТАНОВІТЬ ДАТУ НА DS" : "УСТАНОВИТЕ ДАТУ НА DS", FIRE2, 1);
+#ifdef WP_CYR_MAIN
+    else if (scriptPreviewTouchRescue) {
+        char cost[64];
+        int heat=2+scriptRulesOvertimeHeat(
+            scriptRulesOvertime(&scriptPreviewRules,scriptPreviewRules.turns+1));
+        sniprintf(cost,sizeof cost,scriptPreviewLanguage?
+            "ЩЕ РАЗ: 1 ХІД / СПЕКА +%d":"ЕЩЁ РАЗ: 1 ХОД / ЖАР +%d",heat);
+        drawTextCenter(128,169,cost,FIRE2,1);
+    }
+#endif
     else if (scriptPreviewRescueError)
         drawTextCenter(128, 169,
                        scriptPreviewRescueError == 1 ?
@@ -4458,6 +4472,7 @@ static void topSigs(const Game *g, u32 sig[4])
 #ifdef WP_CYR_MAIN
         h3 = hmix(h3,scriptPreviewDailyRanked);
         h3 = hmix(h3,scriptPreviewTouchPeek);
+        h3 = hmix(h3,scriptPreviewTouchRescue);
         if (!scriptPreviewTraining) {
             // Only public clue focus and completed turns can change the
             // readout. Avoid repeating inference in the per-frame signature.
