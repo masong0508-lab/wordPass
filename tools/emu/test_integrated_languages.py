@@ -47,6 +47,9 @@ def main(rom, elf, output):
     def buffers():
         a=symbol(elf,"images")
         return bytes(e.mem.unsigned[a:a+12])
+    def career(lang):
+        a=symbol(elf,"scriptCareer")+32*lang
+        return tuple(int.from_bytes(bytes(e.mem.unsigned[a+i:a+i+4]),"little") for i in range(0,32,4))
     assert e.state()["state"]==ST_LANGPICK
     select(11)
     assert not any(buffers()),"menu must not retain Unicode pack heap"
@@ -81,6 +84,7 @@ def main(rom, elf, output):
     e.press("START",settle=20)
     wait_state(ST_TITLE)
     assert preference()==11 and not any(buffers())
+    assert career(0)==career(1)==(0,)*8,"training must not record a career attempt"
     e.power_cycle()
     wait_state(ST_TITLE)
     assert preference()==11,"Russian selection was lost on reboot"
@@ -92,11 +96,34 @@ def main(rom, elf, output):
     e.press("A",settle=12)
     assert integer("scriptPreviewTurns")==1 and integer("scriptPreviewScore")>0
     e.shot(str(out/"ru-classic.png"))
+    # Play a real terminal shelf. Secret positions are a test-only fixture
+    # read; all scored reveals still go through physical DS touch input.
+    board=symbol(elf,"scriptPreviewBoard")
+    offsets=member_offsets(elf,"scriptPreviewBoard",("back","passLen"))
+    length=int(e.mem.unsigned[board+offsets["passLen"]])
+    raw=bytes(e.mem.unsigned[board+offsets["back"]:board+offsets["back"]+56])
+    for n in range(1,length+1):
+        if career(0)[1]: break # a real scorch loss is also a terminal attempt
+        c,r=divmod(raw.index(n),8)
+        e.hold("L")
+        e.tap(*e.center(c,r),settle=12)
+        e.hold("L",False)
+    assert career(0)[1]==1 and career(0)[3]>=1 and career(0)[6]>0,career(0)
+    assert career(1)==(0,)*8
+    ru=career(0)
+    e.run(120)
+    assert career(0)==ru,"terminal shelf must never double count"
     e.press("START",settle=20)
+    wait_state(ST_TITLE)
+    e.press("X",settle=16)
+    wait_state(6)
+    e.shot(str(out/"ru-career.png"))
+    e.press("B",settle=16)
     wait_state(ST_TITLE)
     select(12)
     e.power_cycle()
     wait_state(ST_TITLE)
+    assert career(0)==ru and career(1)==(0,)*8,"career save must survive power cycle separately"
     assert preference()==12,"Ukrainian selection was lost on reboot"
     e.shot(str(out/"uk-title.png"))
     e.tap(86,116,settle=18)
@@ -117,6 +144,7 @@ def main(rom, elf, output):
     assert integer("scriptPreviewDaily")==1 and integer("scriptPreviewDailyDate")==20261126
     assert rule("burnEvery")==4 and rule("heatThreshold")==8,"Daily must ignore fire preference"
     e.shot(str(out/"uk-daily.png"))
+    assert career(0)==ru and career(1)==(0,)*8,"Daily must not contaminate Classic records"
     e.press("START",settle=20)
     wait_state(ST_TITLE)
     select(6)
