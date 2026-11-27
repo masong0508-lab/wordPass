@@ -2871,6 +2871,26 @@ static void drawScriptPreviewBoard(void)
     if (scriptPreviewTraining) {
         int step=scriptPreviewTrainingStage();
         const bool uk=scriptPreviewLanguage!=0;
+#ifdef WP_CYR_MAIN
+        // Mirror the actual game's four-button layout in the lesson.
+        // No shoulder button is required for any of its four stages.
+        const char *actions[4]={
+            step==5?(uk?"ГРАТИ":"ИГРАТЬ"):(uk?"ПРИЙНЯТИ":"ПРИНЯТЬ"),
+            step==5?(uk?"ПОВТОРИТИ":"ПОВТОРИТЬ"):(uk?"ОЧИСТИТИ":"СБРОС"),
+            uk?"ПІДКАЗКА":"ПОДСКАЗКА",
+            scriptPreviewTouchPeek?(uk?"СКАСУВАТИ":"ОТМЕНА"):(uk?"ВІДКРИТИ":"ОТКРЫТЬ")
+        };
+        for(int i=0;i<4;++i) {
+            bool active=i==0?(step==5 || (chainValidNow && !scriptPreviewTouchPeek)):
+                        i==1?true:i==2?(step==1 || step==4):(step>=2 && step<=4);
+            bool selected=i==3 && scriptPreviewTouchPeek;
+            int y=110+18*i;
+            roundRect(panelX+4,y,70,16,selected?lerp15(BLACK,ACCENT,6):DIM);
+            rectOutline(panelX+4,y,70,16,selected?GOLD_LT:active?ACCENT:DIM_TEXT);
+            drawTextCenter(panelX+39,y+5,actions[i],active?WHITE:DIM_TEXT,1);
+        }
+        drawTextCenter(panelX+39,182,"L+Y: ?",ACCENT,1);
+#else
         for (int i=0;i<3;++i) {
             int y=110+23*i;
             const char *label=i==0 ? (step==5 ? (uk?"ГРАТИ":"ИГРАТЬ") :
@@ -2885,6 +2905,7 @@ static void drawScriptPreviewBoard(void)
             drawTextCenter(panelX+39,y+7,label,active?WHITE:DIM_TEXT,1);
         }
         drawTextCenter(panelX+39,179,uk?"START ВИХІД":"START ВЫХОД",ACCENT,1);
+#endif
         return;
     }
 #ifdef WP_CYR_MAIN
@@ -3084,10 +3105,16 @@ static void drawScriptPreviewTop(void)
                 step == 3 ? (uk ? "3/4 + ОЗНАЧАЄ ЛІТЕРУ ПАРОЛЯ" : "3/4 + ОЗНАЧАЕТ БУКВУ ПАРОЛЯ") :
                             (uk ? "4/4 ВІДКРИЙТЕ ВЕСЬ ПАРОЛЬ" : "4/4 ОТКРОЙТЕ ВЕСЬ ПАРОЛЬ");
             drawTextCenter(128, 148, label, GOLD_LT, 1);
+#ifdef WP_CYR_MAIN
+            drawTextCenter(128,160,scriptPreviewTouchPeek?
+                (uk?"ТОРКНІТЬСЯ КЛІТИНКИ Й ВІДПУСТІТЬ":"КОСНИТЕСЬ КЛЕТКИ И ОТПУСТИТЕ"):
+                (uk?"НАТИСНІТЬ ВІДКРИТИ АБО ТРИМАЙТЕ L":"НАЖМИТЕ ОТКРЫТЬ ИЛИ ДЕРЖИТЕ L"),WHITE,1);
+#else
             drawTextCenter(128, 160, step==4 ?
                            (uk ? "L: ВІДКРИВАЙТЕ ЗА ЧИСЛАМИ" : "L: ОТКРЫВАЙТЕ ПО ЧИСЛАМ") :
                            (uk ? "L: ТОРКНІТЬСЯ МІТКИ Й ВІДПУСТІТЬ" :
                                  "L: КОСНИТЕСЬ МЕТКИ И ОТПУСТИТЕ"), WHITE, 1);
+#endif
             drawTextCenter(128, 172, step==4 ?
                            (uk ? "ПІДКАЗКА: R АБО КНОПКА" : "ПОДСКАЗКА: R ИЛИ КНОПКА") : step == 3 ?
                            (uk ? "1 З 1: ЄДИНА ЗАКРИТА КЛІТИНКА" : "1 ИЗ 1: ЕДИНСТВЕННАЯ ЗАКРЫТАЯ") :

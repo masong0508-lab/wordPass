@@ -1115,12 +1115,27 @@ int main(void)
                     (void)scriptPreviewToggleTraining(seedCounter);
                     break;
                 }
-                if (scriptPreviewTraining && (down & KEY_TOUCH)) {
+                if (scriptPreviewTraining && (down & KEY_TOUCH) && !scriptKeyAction) {
+#ifdef WP_CYR_MAIN
+                    int action=gfxScriptPlayAction(t.px,t.py);
+#else
                     int action=gfxScriptPracticeAction(t.px,t.py);
+#endif
                     if (action) {
                         int step=scriptPreviewTrainingStage();
                         scriptDropPeekStroke();
                         scriptWordStrokeSuppressed=true;
+#ifdef WP_CYR_MAIN
+                        scriptPreviewCursorHide();
+                        if (action==4) {
+                            if (step>=2 && step<=4) {
+                                scriptPreviewTouchPeek=!scriptPreviewTouchPeek;
+                                scriptBoardClearChain(&scriptPreviewBoard);
+                            }
+                            break;
+                        }
+                        scriptPreviewTouchPeek=0;
+#endif
                         if (action==1) {
                             if (step==5) (void)scriptPreviewAdvance(seedCounter);
                             else if (scriptPreviewBoard.chainLen) (void)scriptPreviewSubmit();
