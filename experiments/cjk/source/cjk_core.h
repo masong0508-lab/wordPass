@@ -30,6 +30,8 @@ int cjSelected(const CjGame *g);
 bool cjAdd(CjGame *g,int cell);
 bool cjSubmit(CjGame *g);
 int cjClue(const CjGame *g,int cell);
+// Read only an already-public clue; do not count uncovered diamonds twice.
+bool cjEvidence(const CjGame *g,int cell,int *remaining,int *covered);
 int cjPeel(CjGame *g,int cell);
 bool cjHint(CjGame *g);
 bool cjComplete(const CjGame *g);

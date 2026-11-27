@@ -8,6 +8,28 @@ LOCALES = ("zh-Hans", "zh-Hant", "ja")
 LABELS = ("简体中文", "繁體中文", "日本語")
 FACES = ("Noto Sans CJK SC", "Noto Sans CJK TC", "Noto Sans CJK JP")
 
+UI = {
+    "SCORE": ("分数", "分數", "得点"),
+    "ACCEPT": ("确认", "確認", "決定"),
+    "CLEAR": ("清除", "清除", "消去"),
+    "HINT": ("提示", "提示", "ヒント"),
+    "OPEN": ("揭开", "揭開", "開く"),
+    "CANCEL": ("取消", "取消", "取消"),
+    "NEXT": ("继续", "繼續", "次へ"),
+    "MENU": ("菜单", "選單", "メニュー"),
+    "PASS": ("密码", "密碼", "暗号"),
+    "MOVES": ("步数", "步數", "手数"),
+    "DONE": ("找到密码", "找到密碼", "暗号発見"),
+    "NEXT_BOARD": ("继续下一局", "繼續下一局", "次の盤面へ"),
+    "LINK_TWO": ("至少连接两个字", "至少連接兩個字", "二文字以上つなぐ"),
+    "UNKNOWN": ("词库中没有这个词", "詞庫中沒有這個詞", "語彙集にない単語"),
+    "MAKE_WORD": ("连接文字组成词语", "連接文字組成詞語", "文字をつないで単語に"),
+    "CLUE": ("待找字/未开格", "待找字/未開格", "残り字/未開封"),
+    "OPEN_PROMPT": ("点按并松开以揭开", "點按並放開以揭開", "マスに触れて離す"),
+    "WORD_PROMPT": ("连词取线索，揭格找密码", "連詞取線索，揭格找密碼", "単語で手掛かりを得る"),
+    "NO_HINT": ("没有找到词", "沒有找到詞", "単語が見つからない"),
+}
+
 def read_words():
     sets = {x: [] for x in LOCALES}
     seen = {x: set() for x in LOCALES}
@@ -19,7 +41,7 @@ def read_words():
         assert 0 < len(reading) <= 30 and 0 < len(gloss) <= 30, lineno
         seen[lang].add(word)
         sets[lang].append((word, reading, gloss))
-    assert all(len(sets[x]) >= 50 for x in LOCALES)
+    assert all(len(sets[x]) >= 130 for x in LOCALES)
     return sets
 
 def q(s):
@@ -57,8 +79,21 @@ def glyph_header(sets, path):
     out = ['#ifndef CJK_GLYPHS_GENERATED_H','#define CJK_GLYPHS_GENERATED_H',
            '#include <stdint.h>',
            'typedef struct { uint16_t code, rows[16]; } CjGlyph;']
+    out.append('enum {' + ','.join('UI_' + key for key in UI) + ',UI_COUNT};')
+    out.append('static const uint16_t cjk_ui[3][UI_COUNT][15] = {')
+    for i in range(3):
+        out.append('    {')
+        for key, texts in UI.items():
+            label = texts[i]
+            assert 1 <= len(label) <= 14, (key, label)
+            if key in ('ACCEPT','CLEAR','HINT','OPEN','CANCEL','NEXT','MENU','SCORE'):
+                assert len(label) <= 4, (key, label)
+            out.append('        {' + ','.join(hex(ord(ch)) for ch in label) + ',0},')
+        out.append('    },')
+    out.append('};')
     for i, lang in enumerate(LOCALES):
-        chars = sorted(set(''.join(w[0] for w in sets[lang]) + LABELS[i]))
+        chars = sorted(set(''.join(w[0] for w in sets[lang]) + LABELS[i] +
+                           ''.join(texts[i] for texts in UI.values())))
         out.append(f'static const CjGlyph glyph{i}[] = {{')
         for ch in chars:
             rows = bitmap(fonts[FACES[i]], ch, 16, 16)
