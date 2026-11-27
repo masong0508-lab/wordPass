@@ -58,7 +58,8 @@ enum {
     ST_STATS,         // 6: THE LEDGER, the lifetime stats screen (entered from the title)
     ST_GUIDE,         // 7: HOW TO PLAY, the in-game guide (from the title or the pause menu)
     ST_LANGPICK,      // 8: the LANGUAGE chooser (first boot, the title tag, the options row)
-    ST_SCRIPT_PREVIEW // 9: opt-in engineering preview build only, never a release locale
+    ST_SCRIPT_PREVIEW, // 9: existing script-ID gameplay
+    ST_CJK_PLAY        // 10: opt-in CJK practice in the main ROM
 };
 
 enum {
@@ -479,7 +480,11 @@ enum { LANG_EN = 0, LANG_ES, LANG_FR, LANG_DE, LANG_IT, LANG_PT, LANG_NL, LANG_S
 // Keep the legacy 26-letter resource tables and UI arrays at LANG_COUNT.
 // The integrated title stores these extra, stable selection IDs separately.
 #ifdef WP_CYR_MAIN
-enum { LANG_RU = LANG_COUNT, LANG_UK, LANG_PICK_COUNT };
+enum { LANG_RU = LANG_COUNT, LANG_UK,
+#ifdef WP_CJK_MAIN
+       LANG_ZH_HANS, LANG_ZH_HANT, LANG_JA,
+#endif
+       LANG_PICK_COUNT };
 #else
 #define LANG_PICK_COUNT LANG_COUNT
 #endif

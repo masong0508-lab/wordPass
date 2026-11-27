@@ -2,6 +2,9 @@
 // and fire that punishes lazy words and careless peeling.
 #include "game.h"
 #include "script_preview.h"
+#ifdef WP_CJK_MAIN
+#include "cjk_integrated.h"
+#endif
 #ifdef WP_CYR_MAIN
 #include "script_career.h"
 #endif
@@ -316,7 +319,7 @@ static bool enterScriptPreview(int language, u32 seed, int from)
 static int selectedLanguage(void)
 {
 #ifdef WP_CYR_MAIN
-    if (S.language==LANG_RU || S.language==LANG_UK) return S.language;
+    if (S.language>=LANG_COUNT && S.language<LANG_PICK_COUNT) return S.language;
 #endif
     return langCur();
 }
@@ -351,6 +354,21 @@ static void startSelectedGame(int mode,bool training,u32 seed)
 {
 #ifdef WP_CYR_MAIN
     int idx=selectedLanguage();
+#ifdef WP_CJK_MAIN
+    if(idx>=LANG_ZH_HANS && idx<LANG_PICK_COUNT){
+        if(mode==MODE_DAILY){
+            refreshClock();
+            if(!G.clockOk){setMsg("SET THE DS CLOCK FOR DAILY",120);return;}
+            seed=(u32)G.dailySeed;
+        }
+        (void)langLoad(LANG_EN);
+        gfxLoading(idx==LANG_JA?"JAPANESE":"CHINESE");
+        if(cjkEnter(idx-LANG_ZH_HANS,seed,mode==MODE_DAILY)){
+            G.state=ST_CJK_PLAY;G.mode=mode;G.training=0;
+        }else setMsg("CJK PACK LOAD FAILED",180);
+        return;
+    }
+#endif
     if (idx>=LANG_COUNT) {
         if (mode==MODE_DAILY) {
             refreshClock();
@@ -379,13 +397,20 @@ static bool pickerAvailable(int idx)
 {
 #ifdef WP_CYR_PREVIEW
     if (idx == LANG_COUNT || idx == LANG_COUNT + 1) return true;
+#ifdef WP_CJK_MAIN
+    if(idx>=LANG_ZH_HANS&&idx<LANG_PICK_COUNT)return cjkAvailable(idx-LANG_ZH_HANS);
+#endif
 #endif
     return langAvailable(idx);
 }
 static int pickerNextAvailable(int from, int dir)
 {
 #ifdef WP_CYR_PREVIEW
+#ifdef WP_CJK_MAIN
+    enum { PICK_COUNT = LANG_PICK_COUNT };
+#else
     enum { PICK_COUNT = LANG_COUNT + 2 };
+#endif
     if (from < 0 || from >= PICK_COUNT) from = LANG_EN;
     int step = dir < 0 ? -1 : 1;
     for (int i = 0; i < PICK_COUNT; i++) {
@@ -939,6 +964,9 @@ int main(void)
     dictInit();
     poolsInit();
     langInit();                       // NitroFS; without it only English is available
+#ifdef WP_CJK_MAIN
+    cjkProbe();
+#endif
     musicInit();
     memset(&G, 0, sizeof(G));
     G.state = ST_TITLE;
@@ -948,6 +976,9 @@ int main(void)
         S.language = LANG_EN;
 #ifdef WP_CYR_MAIN
         if (want==LANG_RU || want==LANG_UK) S.language=(u8)want;
+#ifdef WP_CJK_MAIN
+        else if(want>=LANG_ZH_HANS&&want<LANG_PICK_COUNT&&pickerAvailable(want))S.language=(u8)want;
+#endif
         else
 #endif
         if (langAvailable(want) && langLoad(want)) S.language = (u8)langCur();
@@ -1402,6 +1433,13 @@ int main(void)
                 }
                 break;
             }
+#endif
+#ifdef WP_CJK_MAIN
+            case ST_CJK_PLAY:
+                if(!cjkInput(down,held,keysUp(),&t)){
+                    cjkLeave();G.state=ST_TITLE;musicMenu();
+                }
+                break;
 #endif
             case ST_PLAY:
                 handlePlay(down, held, &t);

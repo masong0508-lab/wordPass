@@ -1,0 +1,234 @@
+#include <nds.h>
+#include <stdio.h>
+#include <string.h>
+#include "cjk_core.h"
+#include "cjk_integrated.h"
+#include "cjk_ui_ids.h"
+#include <stdlib.h>
+typedef struct { uint16_t code,rows[16]; } CjGlyph;
+_Static_assert(sizeof(CjGlyph)==34,"packed glyph stride");
+static unsigned char *pack;
+static CjWord *words;
+static CjLexicon lex;
+static const CjGlyph *glyphs;
+static unsigned glyphCount;
+static const uint16_t (*uiLabels)[15];
+static const uint8_t (*ascii8)[10];
+static bool available[3],dailyMode;
+static int clipLo,clipHi;
+unsigned cjkEpoch;
+static const char *const packPaths[]={"nitro:/cjk/0.bin","nitro:/cjk/1.bin","nitro:/cjk/2.bin"};
+static unsigned rd16(const unsigned char *b){return b[0]|((unsigned)b[1]<<8);}
+static uint32_t rd32(const unsigned char *b){return rd16(b)|((uint32_t)rd16(b+2)<<16);}
+static uint32_t hash(const unsigned char *p,size_t n){
+    uint32_t h=2166136261u;while(n--)h=(h^*p++)*16777619u;return h;
+}
+void cjkProbe(void){
+    for(int i=0;i<3;i++){
+        FILE *f=fopen(packPaths[i],"rb");char magic[4];
+        available[i]=f&&fread(magic,1,4,f)==4&&!memcmp(magic,"CJK1",4);
+        if(f)fclose(f);
+    }
+}
+bool cjkAvailable(int locale){return locale>=0&&locale<3&&available[locale];}
+
+static u16 *surface;
+static CjGame g;
+static int lang=-1, armed=-1;
+static bool peek, dirty=true, noHint=false,drag,suppress;
+static unsigned seed=1;
+static const uint16_t titles[3][5]={{0x7b80,0x4f53,0x4e2d,0x6587,0},{0x7e41,0x9ad4,0x4e2d,0x6587,0},{0x65e5,0x672c,0x8a9e,0,0}};
+#define RGB(r,g,b) ((u16)(0x8000|(r)|((g)<<5)|((b)<<10)))
+#define BG RGB(2,3,5)
+#define PANEL RGB(5,7,10)
+#define WHITE RGB(31,31,31)
+#define GOLD RGB(31,26,12)
+#define TEAL RGB(8,29,25)
+#define RED RGB(31,10,8)
+static void rect(int x,int y,int w,int h,u16 color){
+    int a=y<clipLo?clipLo:y,b=y+h>clipHi?clipHi:y+h;
+    int l=x<0?0:x,r=x+w>256?256:x+w;
+    for(int j=a;j<b;j++)for(int i=l;i<r;i++)surface[j*256+i]=color;
+}
+static void box(int x,int y,int w,int h,u16 fill,u16 edge){
+    rect(x,y,w,h,edge);rect(x+1,y+1,w-2,h-2,fill);
+}
+static void glyph(int locale,int x,int y,uint16_t cp,u16 color){
+    (void)locale;const CjGlyph *a=glyphs;unsigned n=glyphCount;
+    if(y+16<=clipLo||y>=clipHi)return;
+    unsigned lo=0,hi=n;
+    while(lo<hi){unsigned m=(lo+hi)/2;if(a[m].code<cp)lo=m+1;else hi=m;}
+    if(lo==n||a[lo].code!=cp){box(x,y,16,16,BG,RED);return;}
+    for(int r=0;r<16;r++)for(int c=0;c<16;c++)if(a[lo].rows[r]&(1u<<(15-c)))rect(x+c,y+r,1,1,color);
+}
+static void ascii(int x,int y,const char *s,u16 color){
+    for(;*s&&x<248;s++,x+=8){
+        unsigned ch=(unsigned char)*s;
+        if(ch<32||ch>126)ch='?';
+        for(int r=0;r<10;r++)for(int c=0;c<8;c++)if(ascii8[ch-32][r]&(1u<<(7-c)))rect(x+c,y+r,1,1,color);
+    }
+}
+static void centered(int y,const char *s,u16 color){
+    int x=128-(int)strlen(s)*4;if(x<0)x=0;ascii(x,y,s,color);
+}
+static int nativeWidth(int id){int n=0;while(uiLabels[id][n])n++;return n*16;}
+static void nativeText(int x,int y,int id,u16 color){
+    for(int i=0;uiLabels[id][i];i++)glyph(lang,x+i*16,y,uiLabels[id][i],color);
+}
+static void nativeCenter(int y,int id,u16 color){nativeText(128-nativeWidth(id)/2,y,id,color);}
+static void nativeTitle(int locale,int x,int y,u16 color){
+    for(int i=0;i<4&&titles[locale][i];i++)glyph(locale,x+i*17,y,titles[locale][i],color);
+}
+static void origin(int i,int *x,int *y){int c=i/CJ_ROWS,r=i%CJ_ROWS;*x=5+28*c;*y=10+25*r+((c&1)?12:0);}
+static int hit(int x,int y){
+    for(int i=0;i<CJ_CELLS;i++){int a,b;origin(i,&a,&b);if(x>=a&&x<a+26&&y>=b&&y<b+23)return i;}
+    return -1;
+}
+static bool selected(int i){for(int k=0;k<g.len;k++)if(g.chain[k]==i)return true;return false;}
+static void button(int y,int id,u16 col){
+    box(178,y,74,24,PANEL,col);nativeText(215-nativeWidth(id)/2,y+4,id,col);
+}
+static void start(void){peek=false;armed=-1;noHint=false;cjStart(&g,&lex,seed++);}
+static void hint(void){peek=false;armed=-1;noHint=!cjHint(&g);dirty=true;}
+void cjkDraw(u16 *target,bool upper,int y0,int y1){
+    if(!pack)return;
+    surface=target;clipLo=y0;clipHi=y1;
+    rect(0,0,256,192,BG);
+    if(upper){
+    box(4,4,248,184,BG,GOLD);
+    centered(10,dailyMode?"CJK DAILY PRACTICE":"WORDPASS - CJK PRACTICE",GOLD);
+    nativeTitle(lang,96,27,TEAL);
+    int found=0;for(int i=0;i<g.passLen;i++)found+=(g.foundMask>>i)&1u;
+    int x=128-12*g.passLen;
+    for(int i=0;i<g.passLen;i++){
+        box(x+24*i,51,22,24,PANEL,GOLD);
+        if((g.foundMask>>i)&1u)glyph(lang,x+24*i+3,55,g.pass[i],WHITE);
+        else ascii(x+24*i+7,58,"?",GOLD);
+    }
+    char msg[48];
+    box(54,77,148,3,PANEL,GOLD);rect(55,78,146*found/g.passLen,1,TEAL);
+    nativeText(12,82,UI_PASS,TEAL);sniprintf(msg,sizeof msg,"%d/%d",found,g.passLen);ascii(49,85,msg,WHITE);
+    nativeText(115,82,UI_MOVES,TEAL);sniprintf(msg,sizeof msg,"%lu",(unsigned long)g.turns);ascii(153,85,msg,WHITE);
+    if(cjComplete(&g)){
+        nativeCenter(108,UI_DONE,GOLD);nativeCenter(131,UI_NEXT_BOARD,WHITE);
+    }else if(g.len){
+        int idx=cjSelected(&g);
+        for(int i=0;i<g.len;i++)glyph(lang,128-g.len*9+i*18,98,g.tile[g.chain[i]],idx>=0?GOLD:WHITE);
+        if(idx>=0){const CjWord *w=&g.lex->words[idx];centered(120,w->reading,TEAL);centered(136,w->meaning,WHITE);}
+        else nativeCenter(120,g.len<2?UI_LINK_TWO:UI_UNKNOWN,RED);
+    }else if(g.lastWord!=UINT16_MAX){
+        const CjWord *w=&g.lex->words[g.lastWord];
+        centered(100,w->reading,TEAL);centered(116,w->meaning,WHITE);
+    }else nativeCenter(105,noHint?UI_NO_HINT:UI_MAKE_WORD,noHint?RED:WHITE);
+    int remaining=0,covered=0;
+    bool evidence=!cjComplete(&g)&&cjEvidence(&g,g.focus,&remaining,&covered);
+    if(evidence){
+        nativeText(16,151,UI_CLUE,GOLD);sniprintf(msg,sizeof msg,"%d/%d",remaining,covered);ascii(168,154,msg,TEAL);
+    }
+    nativeCenter(171,peek?UI_OPEN_PROMPT:UI_WORD_PROMPT,WHITE);
+    return;
+    }
+    int remaining=0,covered=0;
+    bool evidence=!cjComplete(&g)&&cjEvidence(&g,g.focus,&remaining,&covered);
+    char msg[48];
+    for(int i=0;i<CJ_CELLS;i++){
+        int a,b;origin(i,&a,&b);
+        bool hole=g.opened[i]&&!g.back[i];
+        u16 border=selected(i)?WHITE:g.focus==i?TEAL:GOLD;
+        if(evidence&&!selected(i)&&!g.opened[i]&&cjAdjacent(g.focus,i))
+            border=remaining==0?TEAL:remaining==covered?WHITE:RGB(11,19,29);
+        box(a,b,26,23,hole?BG:PANEL,border);
+        if(!hole)glyph(lang,a+5,b+3,g.tile[i],g.opened[i]?TEAL:WHITE);
+        int clue=cjClue(&g,i);
+        if(clue>=0){char digit[2]={(char)('0'+clue),0};rect(a,b,9,10,BG);ascii(a,b,digit,GOLD);}
+    }
+    sniprintf(msg,sizeof msg,"%lu",(unsigned long)g.score);nativeText(182,4,UI_SCORE,TEAL);ascii(182,23,msg,GOLD);
+    button(37,UI_ACCEPT,cjSelected(&g)>=0?GOLD:WHITE);
+    button(65,UI_CLEAR,WHITE);button(93,UI_HINT,TEAL);
+    button(121,peek?UI_CANCEL:UI_OPEN,peek?GOLD:WHITE);
+    button(149,cjComplete(&g)?UI_NEXT:UI_MENU,WHITE);
+    ascii(5,178,"B: MENU   R: HINT   L: OPEN",TEAL);
+}
+
+void cjkLeave(void){
+    free(words);free(pack);words=NULL;pack=NULL;glyphs=NULL;uiLabels=NULL;ascii8=NULL;
+    memset(&g,0,sizeof g);memset(&lex,0,sizeof lex);lang=-1;armed=-1;drag=suppress=false;
+}
+bool cjkEnter(int locale,u32 initialSeed,bool daily){
+    cjkLeave();
+    if(!cjkAvailable(locale))return false;
+    FILE *f=fopen(packPaths[locale],"rb");
+    if(!f)return false;
+    if(fseek(f,0,SEEK_END)){fclose(f);return false;}
+    long bytes=ftell(f);
+    if(bytes<16||bytes>65536||fseek(f,0,SEEK_SET)){fclose(f);return false;}
+    pack=malloc((size_t)bytes);
+    if(!pack){fclose(f);return false;}
+    bool loaded=fread(pack,1,(size_t)bytes,f)==(size_t)bytes;fclose(f);
+    if(!loaded||memcmp(pack,"CJK1",4))goto bad;
+    unsigned count=rd16(pack+4),ng=rd16(pack+6),nu=rd16(pack+8);
+    if(!count||count>1024||!ng||ng>1024||nu!=UI_COUNT||rd16(pack+10)||
+       16u+76u*count+34u*ng+30u*nu+950u!=(unsigned)bytes||
+       hash(pack+16,(size_t)bytes-16)!=rd32(pack+12))goto bad;
+    words=calloc(count,sizeof *words);if(!words)goto bad;
+    for(unsigned i=0;i<count;i++){
+        const unsigned char *r=pack+16+76*i;
+        unsigned n=r[12];if(n<2||n>CJ_MAX||r[13]||!memchr(r+14,0,31)||!memchr(r+45,0,31))goto bad;
+        for(unsigned j=0;j<n;j++){
+            unsigned cp=rd16(r+2*j);if(cp<0x3000||(cp>=0xd800&&cp<=0xdfff))goto bad;
+            words[i].text[j]=(uint16_t)cp;
+        }
+        words[i].len=(uint8_t)n;words[i].reading=(const char *)r+14;words[i].meaning=(const char *)r+45;
+    }
+    glyphs=(const CjGlyph *)(pack+16+76*count);glyphCount=ng;
+    for(unsigned i=1;i<ng;i++)if(glyphs[i-1].code>=glyphs[i].code)goto bad;
+    uiLabels=(const uint16_t (*)[15])(pack+16+76*count+34*ng);
+    for(unsigned i=0;i<nu;i++)if(!memchr(uiLabels[i],0,30)||uiLabels[i][14])goto bad;
+    ascii8=(const uint8_t (*)[10])(pack+16+76*count+34*ng+30*nu);
+    lex.words=words;lex.count=(uint16_t)count;
+    lang=locale;seed=initialSeed;dailyMode=daily;start();cjkEpoch++;return true;
+bad:
+    cjkLeave();return false;
+}
+bool cjkInput(u32 down,u32 held,u32 up,const touchPosition *t){
+    if(!pack)return false;
+    dirty=false;
+    if(down&(KEY_B|KEY_START))return false;
+    if(down&(KEY_A|KEY_Y|KEY_R)){armed=-1;drag=false;suppress=true;peek=false;
+        if(down&KEY_A){if(cjComplete(&g)){if(dailyMode)return false;start();}else cjSubmit(&g);}
+        else if(down&KEY_Y){g.len=0;noHint=false;}
+        else hint();
+        dirty=true;
+    }
+    if(down&KEY_TOUCH){
+        suppress=false;drag=false;armed=-1;noHint=false;
+        if(t->px>=178&&t->px<252){
+            if(t->py>=37&&t->py<61)cjSubmit(&g);
+            else if(t->py>=65&&t->py<89){g.len=0;peek=false;}
+            else if(t->py>=93&&t->py<117)hint();
+            else if(t->py>=121&&t->py<145){peek=!peek;g.len=0;}
+            else if(t->py>=149&&t->py<173){if(cjComplete(&g)&&!dailyMode)start();else return false;}
+            suppress=true;dirty=true;
+        }else{
+            int i=hit(t->px,t->py);
+            if(i>=0){
+                int x,y;origin(i,&x,&y);
+                if(peek||(held&KEY_L))armed=i;
+                else if((g.opened[i]&&!g.back[i])||(cjClue(&g,i)>=0&&!g.len&&t->px<x+9&&t->py<y+10)){
+                    g.focus=(int8_t)i;dirty=true;suppress=true;
+                }else{drag=true;dirty|=cjAdd(&g,i);}
+            }
+        }
+    }
+    if((held&KEY_TOUCH)&&!suppress){
+        int i=hit(t->px,t->py);
+        if(armed>=0&&i!=armed)armed=-1;
+        else if(drag&&i>=0)dirty|=cjAdd(&g,i);
+    }
+    if(up&KEY_TOUCH){
+        if(armed>=0){cjPeel(&g,armed);peek=false;dirty=true;}
+        armed=-1;drag=suppress=false;
+    }
+    if(dirty)cjkEpoch++;
+    return true;
+}
