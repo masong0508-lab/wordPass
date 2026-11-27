@@ -67,14 +67,29 @@ static void glyph(int locale,int x,int y,uint16_t cp,u16 color){
     unsigned lo=0,hi=n;
     while(lo<hi){unsigned m=(lo+hi)/2;if(a[m].code<cp)lo=m+1;else hi=m;}
     if(lo==n||a[lo].code!=cp){box(x,y,16,16,BG,RED);return;}
-    for(int r=0;r<16;r++)for(int c=0;c<16;c++)if(a[lo].rows[r]&(1u<<(15-c)))rect(x+c,y+r,1,1,color);
+    // Clip once per row, not once per painted pixel.
+    int left=x<0?-x:0,right=x+16>256?256-x:16;
+    if(left>=right)return;
+    for(int r=0;r<16;r++){
+        int yy=y+r;if(yy<clipLo||yy>=clipHi)continue;
+        unsigned mask=a[lo].rows[r];if(!mask)continue;
+        u16 *dst=surface+yy*256+x+left;
+        for(int col=left;col<right;col++,dst++)if(mask&(1u<<(15-col)))*dst=color;
+    }
 }
 static void ascii(int x,int y,const char *s,u16 color){
     if(y+10<=clipLo||y>=clipHi)return;
     for(;*s&&x<248;s++,x+=8){
         unsigned ch=(unsigned char)*s;
         if(ch<32||ch>126)ch='?';
-        for(int r=0;r<10;r++)for(int c=0;c<8;c++)if(ascii8[ch-32][r]&(1u<<(7-c)))rect(x+c,y+r,1,1,color);
+        int left=x<0?-x:0,right=x+8>256?256-x:8;
+        if(left>=right)continue;
+        for(int r=0;r<10;r++){
+            int yy=y+r;if(yy<clipLo||yy>=clipHi)continue;
+            unsigned mask=ascii8[ch-32][r];if(!mask)continue;
+            u16 *dst=surface+yy*256+x+left;
+            for(int col=left;col<right;col++,dst++)if(mask&(1u<<(7-col)))*dst=color;
+        }
     }
 }
 static void centered(int y,const char *s,u16 color){
@@ -93,7 +108,7 @@ static int hit(int x,int y){
     for(int i=0;i<CJ_CELLS;i++){int a,b;origin(i,&a,&b);if(x>=a&&x<a+26&&y>=b&&y<b+23)return i;}
     return -1;
 }
-static bool selected(int i){for(int k=0;k<cjkGame.len;k++)if(cjkGame.chain[k]==i)return true;return false;}
+static int selectionOrder(int i){for(int k=0;k<cjkGame.len;k++)if(cjkGame.chain[k]==i)return k+1;return 0;}
 static void button(int y,int id,u16 col){
     box(178,y,74,24,PANEL,col);nativeText(215-nativeWidth(id)/2,y+4,id,col);
 }
@@ -140,6 +155,7 @@ void cjkDraw(u16 *target,bool upper,int y0,int y1){
     if(!cjkPack)return;
     surface=target;clipLo=y0;clipHi=y1;
     rect(0,0,256,192,BG);
+    const int lesson=cjTrainingStep(&cjkGame);
     if(upper){
     box(4,4,248,184,BG,GOLD);
     centered(10,dailyMode?(cjkDailyRanked?"CJK DAILY SCORED":"CJK DAILY PRACTICE"):cjkGame.heatLimit?"WORDPASS - CJK CLASSIC":"WORDPASS - CJK PRACTICE",GOLD);
@@ -199,7 +215,8 @@ void cjkDraw(u16 *target,bool upper,int y0,int y1){
     if(evidence){
         nativeText(16,151,UI_CLUE,GOLD);sniprintf(msg,sizeof msg,"%d/%d",remaining,covered);ascii(168,154,msg,TEAL);
     }
-    nativeCenter(171,peek?UI_OPEN_PROMPT:UI_WORD_PROMPT,WHITE);
+    int lessonPrompt=lesson==1?UI_TRAIN_WORD:lesson==2?UI_TRAIN_OPEN:lesson==3?UI_TRAIN_CLUE:UI_TRAIN_PASS;
+    nativeCenter(171,peek?UI_OPEN_PROMPT:lesson?lessonPrompt:UI_WORD_PROMPT,lesson?GOLD:WHITE);
     return;
     }
     int remaining=0,covered=0;
@@ -208,8 +225,9 @@ void cjkDraw(u16 *target,bool upper,int y0,int y1){
     for(int i=0;i<CJ_CELLS;i++){
         int a,b;origin(i,&a,&b);
         bool hole=cjkGame.opened[i]&&!cjkGame.back[i];
-        u16 border=selected(i)?WHITE:cjkGame.focus==i?TEAL:GOLD;
-        if(evidence&&!selected(i)&&!cjkGame.opened[i]&&cjAdjacent(cjkGame.focus,i))
+        int order=selectionOrder(i);
+        u16 border=order?WHITE:cjkGame.focus==i?TEAL:GOLD;
+        if(evidence&&!order&&!cjkGame.opened[i]&&cjAdjacent(cjkGame.focus,i))
             border=remaining==0?TEAL:remaining==covered?WHITE:RGB(11,19,29);
         if(cjkGame.flame[i]||(peek&&cjPeelBlocked(&cjkGame,i)))border=RED;
         box(a,b,26,23,hole?BG:cjkGame.flame[i]?RGB(13,4,3):PANEL,border);
@@ -217,13 +235,19 @@ void cjkDraw(u16 *target,bool upper,int y0,int y1){
         if(cjkGame.flame[i]){rect(a+3,b+19,20,2,RED);rect(a+8,b+17,10,2,GOLD);}
         int clue=cjClue(&cjkGame,i);
         if(clue>=0){char digit[2]={(char)('0'+clue),0};rect(a,b,9,10,BG);ascii(a,b,digit,GOLD);}
+        // Number the selected path so a hint can be followed in order.
+        if(order){char digit[2]={(char)('0'+order),0};rect(a+18,b+13,8,10,BG);ascii(a+18,b+13,digit,WHITE);}
     }
     sniprintf(msg,sizeof msg,"%lu",(unsigned long)cjkGame.score);nativeText(182,4,UI_SCORE,TEAL);ascii(182,23,msg,GOLD);
     button(37,UI_ACCEPT,cjSelected(&cjkGame)>=0?GOLD:WHITE);
-    button(65,UI_CLEAR,WHITE);button(93,noHint?UI_RECOVER:UI_HINT,noHint?GOLD:TEAL);
-    button(121,peek?UI_CANCEL:UI_OPEN,peek?GOLD:WHITE);
+    button(65,UI_CLEAR,WHITE);button(93,noHint?UI_RECOVER:UI_HINT,noHint||(lesson==1&&!cjkGame.len)?GOLD:TEAL);
+    button(121,peek?UI_CANCEL:UI_OPEN,peek||lesson==2?GOLD:WHITE);
     button(149,dailyMode?UI_MENU:cjkGame.loss?UI_RETRY:cjComplete(&cjkGame)?UI_NEXT:UI_MENU,WHITE);
-    ascii(5,178,"B: MENU   R: HINT   L: OPEN",TEAL);
+    if(lesson){
+        ascii(5,178,"TRAINING",TEAL);
+        sniprintf(msg,sizeof msg,"%d/4",lesson);ascii(216,178,msg,GOLD);
+        box(78,178,130,8,PANEL,TEAL);rect(79,179,32*lesson,6,GOLD);
+    }else ascii(5,178,"B: MENU   R: HINT   L: OPEN",TEAL);
 }
 
 void cjkLeave(void){
@@ -263,7 +287,7 @@ bool cjkEnter(int locale,u32 initialSeed,int date,bool training,int difficulty,c
     uiLabels=(const uint16_t (*)[15])(cjkPack+16+76*count+34*ng);
     for(unsigned i=0;i<nu;i++)if(!uiLabels[i][0]||uiLabels[i][14])goto bad;
     ascii8=(const uint8_t (*)[10])(cjkPack+16+76*count+34*ng+30*nu);
-    lex.words=words;lex.count=(uint16_t)count;
+    lex.words=words;lex.count=(uint16_t)cjDailyVocabulary(count,date);
     bool daily=date!=0;
     if(!cjStartMode(&cjkGame,&lex,initialSeed,training?CJ_FIRE_OFF:daily?CJ_FIRE_NORMAL:difficulty,1,0))goto bad;
     lang=locale;dailyMode=daily;dailyDate=date;recordPath=cfg;recorded=false;

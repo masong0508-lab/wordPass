@@ -49,6 +49,13 @@ int cjClue(const CjGame *g,int cell);
 bool cjEvidence(const CjGame *g,int cell,int *remaining,int *covered);
 int cjPeel(CjGame *g,int cell);
 bool cjHint(CjGame *g);
+// Fire-free contextual tutorial step (1..4); 0 for ordinary/ended play.
+int cjTrainingStep(const CjGame *g);
+// Preserve the original Daily vocabulary for dates already released.
+unsigned cjDailyVocabulary(unsigned count,int date);
+#ifdef CJ_HINT_TEST
+extern unsigned cjHintVisits;
+#endif
 // Paid rescue only when no bounded hint exists; leaves password evidence intact.
 bool cjRecover(CjGame *g);
 bool cjComplete(const CjGame *g);

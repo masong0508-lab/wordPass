@@ -4783,8 +4783,16 @@ void gfxFrame(const Game *g)
     // that draws no card (play) must not inherit it from the previous frame's card.
     dimOn = false;
 #ifdef WP_CJK_MAIN
+    // Static CJK boards change only on input. Each of the two physical
+    // VRAM banks must receive the new epoch once, then can flip untouched.
+    static unsigned cjkBankEpoch[2],cjkBankValid;
+    if(g->state!=ST_CJK_PLAY)cjkBankValid=0;
     if(g->state==ST_CJK_PLAY){
-        cjkDraw(cur,false,0,SCREEN_H);
+        unsigned bank=(unsigned)backBank&1u,bit=1u<<bank;
+        if(!(cjkBankValid&bit)||cjkBankEpoch[bank]!=cjkEpoch){
+            cjkDraw(cur,false,0,SCREEN_H);
+            cjkBankEpoch[bank]=cjkEpoch;cjkBankValid|=bit;
+        }
         PROF(0); PROF(1); PROF(2); PROF(3); PROF(4);
     } else
 #endif
@@ -4886,6 +4894,10 @@ void gfxFrame(const Game *g)
     u32 sig[4]; topSigs(g, sig);
     for (int sl = 0; sl < 4; sl++) if (sig[sl] != topDrawn[sl]) topNeed |= 1 << sl;
     for (int sl = 0; sl < 4 && n < 2; sl++) if ((topNeed & (1 << sl)) && sliceFits(sl)) list[n++] = sl;
+    // CJK has no frame-driven HUD animation; only dirty slices are needed.
+#ifdef WP_CJK_MAIN
+    if(g->state!=ST_CJK_PLAY)
+#endif
     if (n < 2 && (n || topNeed == 0) && sliceFits(frame & 3) && !(n && list[0] == (frame & 3))) list[n++] = frame & 3;
     for (int i = 0; i < n; i++) {
         // A preceding slice has spent some of the remaining beam margin.
