@@ -291,6 +291,8 @@ jobs:
           /usr/bin/python3 experiments/cjk/gen_assets.py --pack-dir cjk-packs
           gcc -std=c11 -O2 -Wall -Wextra -Werror -Iexperiments/cjk/source -Iexperiments/cjk/generated experiments/cjk/test_core.c experiments/cjk/source/cjk_core.c -o /tmp/cjk-test
           /tmp/cjk-test
+          gcc -std=c11 -O2 -Wall -Wextra -Werror -fsanitize=address,undefined -Iexperiments/cjk/source -Iexperiments/cjk/generated experiments/cjk/test_recovery.c experiments/cjk/source/cjk_core.c -o /tmp/cjk-recovery
+          /tmp/cjk-recovery
           cp /usr/share/doc/fonts-noto-cjk/copyright cjk-packs/FONT-NOTICE.txt
       - uses: actions/upload-artifact@v7
         with:

@@ -9,7 +9,7 @@ static u16 top[256*192], bottom[256*192];
 static u16 *surface;
 static CjGame g;
 static int lang=-1, armed=-1;
-static bool peek, dirty=true, noHint=false;
+static bool peek, dirty=true, noHint=false,recoveryBlocked=false;
 static unsigned seed=1;
 static const uint16_t titles[3][5]={{0x7b80,0x4f53,0x4e2d,0x6587,0},{0x7e41,0x9ad4,0x4e2d,0x6587,0},{0x65e5,0x672c,0x8a9e,0,0}};
 #define RGB(r,g,b) ((u16)(0x8000|(r)|((g)<<5)|((b)<<10)))
@@ -61,8 +61,18 @@ static bool selected(int i){for(int k=0;k<g.len;k++)if(g.chain[k]==i)return true
 static void button(int y,int id,u16 col){
     box(178,y,74,24,PANEL,col);nativeText(215-nativeWidth(id)/2,y+4,id,col);
 }
-static void start(int locale){lang=locale;peek=false;armed=-1;noHint=false;cjStart(&g,&lexicons[lang],seed++);}
-static void hint(void){peek=false;armed=-1;noHint=!cjHint(&g);dirty=true;}
+static void start(int locale){lang=locale;peek=false;armed=-1;noHint=recoveryBlocked=false;cjStart(&g,&lexicons[lang],seed++);}
+static void hint(void){
+    peek=false;armed=-1;recoveryBlocked=false;
+    if(cjComplete(&g)){noHint=false;dirty=true;return;}
+    if(noHint){
+        noHint=false;
+        if(!cjRecover(&g))recoveryBlocked=true;
+    }else if(!cjHint(&g)){
+        g.len=0;noHint=true;
+    }
+    dirty=true;
+}
 static void render(void){
     surface=top;rect(0,0,256,192,BG);
     box(4,4,248,184,BG,GOLD);
@@ -97,10 +107,13 @@ static void render(void){
         for(int i=0;i<g.len;i++)glyph(lang,128-g.len*9+i*18,98,g.tile[g.chain[i]],idx>=0?GOLD:WHITE);
         if(idx>=0){const CjWord *w=&g.lex->words[idx];centered(120,w->reading,TEAL);centered(136,w->meaning,WHITE);}
         else nativeCenter(120,g.len<2?UI_LINK_TWO:UI_UNKNOWN,RED);
+    }else if(noHint||recoveryBlocked){
+        nativeCenter(105,recoveryBlocked?UI_RECOVERY_BLOCKED:UI_NO_HINT,RED);
+        if(noHint)nativeCenter(128,UI_RECOVERY_COST,GOLD);
     }else if(g.lastWord!=UINT16_MAX){
         const CjWord *w=&g.lex->words[g.lastWord];
         centered(100,w->reading,TEAL);centered(116,w->meaning,WHITE);
-    }else nativeCenter(105,noHint?UI_NO_HINT:UI_MAKE_WORD,noHint?RED:WHITE);
+    }else nativeCenter(105,UI_MAKE_WORD,WHITE);
     int remaining=0,covered=0;
     bool evidence=!cjComplete(&g)&&cjEvidence(&g,g.focus,&remaining,&covered);
     if(evidence){
@@ -121,7 +134,7 @@ static void render(void){
     }
     snprintf(msg,sizeof msg,"%lu",(unsigned long)g.score);nativeText(182,4,UI_SCORE,TEAL);ascii(182,23,msg,GOLD);
     button(37,UI_ACCEPT,cjSelected(&g)>=0?GOLD:WHITE);
-    button(65,UI_CLEAR,WHITE);button(93,UI_HINT,TEAL);
+    button(65,UI_CLEAR,WHITE);button(93,noHint?UI_RECOVER:UI_HINT,noHint?GOLD:TEAL);
     button(121,peek?UI_CANCEL:UI_OPEN,peek?GOLD:WHITE);
     button(149,cjComplete(&g)?UI_NEXT:UI_MENU,WHITE);
     ascii(5,178,"B: MENU   R: HINT   L: OPEN",TEAL);
@@ -140,11 +153,13 @@ int main(void){
             if(down&KEY_TOUCH){int choice=((int)t.py-15)/54;if(t.py>=15&&choice<3&&(t.py-15)%54<44){start(choice);dirty=true;suppress=true;}}
         }else{
             if(down&(KEY_B|KEY_START)){lang=-1;peek=false;armed=-1;drag=false;dirty=true;}
-            else if(down&KEY_A){cjSubmit(&g);dirty=true;}
-            else if(down&KEY_Y){g.len=0;dirty=true;}
-            else if(down&KEY_R){hint();}
-            if(down&KEY_TOUCH){
-                suppress=false;drag=false;armed=-1;noHint=false;
+            else if(down&KEY_A){noHint=recoveryBlocked=false;armed=-1;drag=false;suppress=true;cjSubmit(&g);dirty=true;}
+            else if(down&KEY_Y){noHint=recoveryBlocked=false;armed=-1;drag=false;suppress=true;g.len=0;dirty=true;}
+            else if(down&KEY_R){drag=false;suppress=true;hint();}
+            if((down&KEY_TOUCH)&&!(down&(KEY_A|KEY_B|KEY_START|KEY_Y|KEY_R))){
+                suppress=false;drag=false;armed=-1;
+                bool hintTap=t.px>=178&&t.px<252&&t.py>=93&&t.py<117;
+                if(!hintTap){dirty|=noHint||recoveryBlocked;noHint=recoveryBlocked=false;}
                 if(t.px>=178&&t.px<252){
                     if(t.py>=37&&t.py<61)cjSubmit(&g);
                     else if(t.py>=65&&t.py<89){g.len=0;peek=false;}

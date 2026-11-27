@@ -35,7 +35,7 @@ bool cjkAvailable(int locale){return locale>=0&&locale<3&&available[locale];}
 static u16 *surface;
 CjGame cjkGame;
 static int lang=-1, armed=-1;
-static bool peek, dirty=true, noHint=false,drag,suppress;
+static bool peek, dirty=true, noHint=false,recoveryBlocked=false,drag,suppress;
 static unsigned seed=1;
 static const uint16_t titles[3][5]={{0x7b80,0x4f53,0x4e2d,0x6587,0},{0x7e41,0x9ad4,0x4e2d,0x6587,0},{0x65e5,0x672c,0x8a9e,0,0}};
 #define RGB(r,cjkGame,b) ((u16)(0x8000|(r)|((cjkGame)<<5)|((b)<<10)))
@@ -93,8 +93,18 @@ static bool selected(int i){for(int k=0;k<cjkGame.len;k++)if(cjkGame.chain[k]==i
 static void button(int y,int id,u16 col){
     box(178,y,74,24,PANEL,col);nativeText(215-nativeWidth(id)/2,y+4,id,col);
 }
-static void start(void){peek=false;armed=-1;noHint=false;cjStart(&cjkGame,&lex,seed++);}
-static void hint(void){peek=false;armed=-1;noHint=!cjHint(&cjkGame);dirty=true;}
+static void start(void){peek=false;armed=-1;noHint=recoveryBlocked=false;cjStart(&cjkGame,&lex,seed++);}
+static void hint(void){
+    peek=false;armed=-1;recoveryBlocked=false;
+    if(cjComplete(&cjkGame)){noHint=false;dirty=true;return;}
+    if(noHint){
+        noHint=false;
+        if(!cjRecover(&cjkGame))recoveryBlocked=true;
+    }else if(!cjHint(&cjkGame)){
+        cjkGame.len=0;noHint=true;
+    }
+    dirty=true;
+}
 void cjkDraw(u16 *target,bool upper,int y0,int y1){
     if(!cjkPack)return;
     surface=target;clipLo=y0;clipHi=y1;
@@ -121,10 +131,13 @@ void cjkDraw(u16 *target,bool upper,int y0,int y1){
         for(int i=0;i<cjkGame.len;i++)glyph(lang,128-cjkGame.len*9+i*18,98,cjkGame.tile[cjkGame.chain[i]],idx>=0?GOLD:WHITE);
         if(idx>=0){const CjWord *w=&cjkGame.lex->words[idx];centered(120,w->reading,TEAL);centered(136,w->meaning,WHITE);}
         else nativeCenter(120,cjkGame.len<2?UI_LINK_TWO:UI_UNKNOWN,RED);
+    }else if(noHint||recoveryBlocked){
+        nativeCenter(105,recoveryBlocked?UI_RECOVERY_BLOCKED:UI_NO_HINT,RED);
+        if(noHint)nativeCenter(128,UI_RECOVERY_COST,GOLD);
     }else if(cjkGame.lastWord!=UINT16_MAX){
         const CjWord *w=&cjkGame.lex->words[cjkGame.lastWord];
         centered(100,w->reading,TEAL);centered(116,w->meaning,WHITE);
-    }else nativeCenter(105,noHint?UI_NO_HINT:UI_MAKE_WORD,noHint?RED:WHITE);
+    }else nativeCenter(105,UI_MAKE_WORD,WHITE);
     int remaining=0,covered=0;
     bool evidence=!cjComplete(&cjkGame)&&cjEvidence(&cjkGame,cjkGame.focus,&remaining,&covered);
     if(evidence){
@@ -149,7 +162,7 @@ void cjkDraw(u16 *target,bool upper,int y0,int y1){
     }
     sniprintf(msg,sizeof msg,"%lu",(unsigned long)cjkGame.score);nativeText(182,4,UI_SCORE,TEAL);ascii(182,23,msg,GOLD);
     button(37,UI_ACCEPT,cjSelected(&cjkGame)>=0?GOLD:WHITE);
-    button(65,UI_CLEAR,WHITE);button(93,UI_HINT,TEAL);
+    button(65,UI_CLEAR,WHITE);button(93,noHint?UI_RECOVER:UI_HINT,noHint?GOLD:TEAL);
     button(121,peek?UI_CANCEL:UI_OPEN,peek?GOLD:WHITE);
     button(149,cjComplete(&cjkGame)&&!dailyMode?UI_NEXT:UI_MENU,WHITE);
     ascii(5,178,"B: MENU   R: HINT   L: OPEN",TEAL);
@@ -200,13 +213,15 @@ bool cjkInput(u32 down,u32 held,u32 up,const touchPosition *t){
     dirty=false;
     if(down&(KEY_B|KEY_START))return false;
     if(down&(KEY_A|KEY_Y|KEY_R)){armed=-1;drag=false;suppress=true;peek=false;
-        if(down&KEY_A){if(cjComplete(&cjkGame)){if(dailyMode)return false;start();}else cjSubmit(&cjkGame);}
-        else if(down&KEY_Y){cjkGame.len=0;noHint=false;}
+        if(down&KEY_A){noHint=recoveryBlocked=false;if(cjComplete(&cjkGame)){if(dailyMode)return false;start();}else cjSubmit(&cjkGame);}
+        else if(down&KEY_Y){cjkGame.len=0;noHint=recoveryBlocked=false;}
         else hint();
         dirty=true;
     }
-    if(down&KEY_TOUCH){
-        suppress=false;drag=false;armed=-1;noHint=false;
+    if((down&KEY_TOUCH)&&!(down&(KEY_A|KEY_B|KEY_START|KEY_Y|KEY_R))){
+        suppress=false;drag=false;armed=-1;
+        bool hintTap=t->px>=178&&t->px<252&&t->py>=93&&t->py<117;
+        if(!hintTap){dirty|=noHint||recoveryBlocked;noHint=recoveryBlocked=false;}
         if(t->px>=178&&t->px<252){
             if(t->py>=37&&t->py<61)cjSubmit(&cjkGame);
             else if(t->py>=65&&t->py<89){cjkGame.len=0;peek=false;}

@@ -20,6 +20,8 @@ jobs:
           /usr/bin/python3 gen_assets.py
           gcc -std=c11 -O2 -Wall -Wextra -Werror -Isource -Igenerated test_core.c source/cjk_core.c -o /tmp/cjk-test
           /tmp/cjk-test
+          gcc -std=c11 -O2 -Wall -Wextra -Werror -fsanitize=address,undefined -Isource -Igenerated test_recovery.c source/cjk_core.c -o /tmp/cjk-recovery
+          /tmp/cjk-recovery
           cp /usr/share/doc/fonts-noto-cjk/copyright generated/FONT-NOTICE.txt
       - uses: actions/upload-artifact@v7
         with:

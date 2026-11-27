@@ -118,3 +118,31 @@ bool cjHint(CjGame *g){
             }
     return false;
 }
+
+bool cjRecover(CjGame *g){
+    if(!g||!g->lex||!g->lex->words||!g->lex->count||cjComplete(g))return false;
+    CjGame probe=*g;
+    if(cjHint(&probe))return false;
+    // Pick only from public unopened geometry. Never use hidden positions
+    // or password characters to decide which cells or word to plant.
+    int a=-1,b=-1;
+    unsigned first=(next(&probe)>>8)%CJ_CELLS;
+    for(unsigned k=0;k<CJ_CELLS&&a<0;k++){
+        int i=(int)((first+k)%CJ_CELLS);
+        if(g->opened[i])continue;
+        for(int j=0;j<CJ_CELLS;j++)if(!g->opened[j]&&cjAdjacent(i,j)){
+            a=i;b=j;break;
+        }
+    }
+    if(a<0)return false;
+    unsigned start=(next(&probe)>>8)%g->lex->count;
+    for(unsigned k=0;k<g->lex->count;k++){
+        const CjWord *w=&g->lex->words[(start+k)%g->lex->count];
+        if(w->len!=2)continue;
+        g->tile[a]=w->text[0];g->tile[b]=w->text[1];
+        g->chain[0]=(uint8_t)a;g->chain[1]=(uint8_t)b;g->len=2;
+        g->rng=probe.rng;g->turns++;
+        return true;
+    }
+    return false;
+}
