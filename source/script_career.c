@@ -1,9 +1,12 @@
 #include "script_career.h"
+#include "script_daily.h"
 #include <stdio.h>
 #include <string.h>
 
 ScriptCareer scriptCareer[2];
 bool scriptCareerSaveError[2];
+ScriptDailyCareer scriptDailyCareer[2];
+bool scriptDailySaveError[2];
 #define CAREER_MAX 999999999u
 #define CAREER_PATH 128
 static uint32_t get32(const uint8_t *p)
@@ -47,7 +50,7 @@ bool scriptCareerDecode(unsigned lang,const uint8_t *b,size_t n,ScriptCareer *ou
     if(!valid(&r)) return false;
     *out=r; return true;
 }
-static bool pathFor(const char *cfg,unsigned lang,unsigned slot,char path[CAREER_PATH])
+static bool pathFor(const char *cfg,unsigned lang,unsigned slot,char kind,char path[CAREER_PATH])
 {
     if(!cfg || lang>1 || slot>1) return false;
     const char *slash=strrchr(cfg,'/');
@@ -55,6 +58,7 @@ static bool pathFor(const char *cfg,unsigned lang,unsigned slot,char path[CAREER
     size_t n=(size_t)(slash-cfg)+1;
     char leaf[]="WPRU.C0";
     if(lang) {leaf[2]='U';leaf[3]='K';}
+    leaf[5]=kind;
     leaf[6]=(char)('0'+slot);
     if(n>CAREER_PATH-sizeof leaf) return false;
     memcpy(path,cfg,n); memcpy(path+n,leaf,sizeof leaf);
@@ -63,7 +67,7 @@ static bool pathFor(const char *cfg,unsigned lang,unsigned slot,char path[CAREER
 static bool readSlot(const char *cfg,unsigned lang,unsigned slot,ScriptCareer *r)
 {
     char path[CAREER_PATH]; uint8_t data[SCRIPT_CAREER_BYTES+1];
-    if(!pathFor(cfg,lang,slot,path)) return false;
+    if(!pathFor(cfg,lang,slot,'C',path)) return false;
     FILE *f=fopen(path,"rb"); if(!f) return false;
     size_t n=fread(data,1,sizeof data,f);
     bool ok=!ferror(f); if(fclose(f)) ok=false;
@@ -79,11 +83,17 @@ static int newest(const char *cfg,unsigned lang,ScriptCareer *r)
     }
     *r=a; return 0;
 }
+static int dailyNewest(const char *cfg,unsigned lang,ScriptDailyCareer *r);
 void scriptCareerLoad(const char *cfg)
 {
     memset(scriptCareer,0,sizeof scriptCareer);
     memset(scriptCareerSaveError,0,sizeof scriptCareerSaveError);
-    if(cfg) for(unsigned i=0;i<2;++i) (void)newest(cfg,i,&scriptCareer[i]);
+    memset(scriptDailyCareer,0,sizeof scriptDailyCareer);
+    memset(scriptDailySaveError,0,sizeof scriptDailySaveError);
+    if(cfg) for(unsigned i=0;i<2;++i) {
+        (void)newest(cfg,i,&scriptCareer[i]);
+        (void)dailyNewest(cfg,i,&scriptDailyCareer[i]);
+    }
 }
 bool scriptCareerStore(const char *cfg,unsigned lang)
 {
@@ -93,7 +103,7 @@ bool scriptCareerStore(const char *cfg,unsigned lang)
     next.serial=slot<0?1:old.serial+1;
     unsigned target=slot==0?1:0;
     char path[CAREER_PATH];uint8_t data[SCRIPT_CAREER_BYTES];
-    bool ok=pathFor(cfg,lang,target,path) && scriptCareerEncode(lang,&next,data);
+    bool ok=pathFor(cfg,lang,target,'C',path) && scriptCareerEncode(lang,&next,data);
     if(ok) {
         FILE *f=fopen(path,"wb");
         if(!f) ok=false;
@@ -131,4 +141,106 @@ void scriptCareerFinish(const char *cfg,unsigned lang,unsigned score,unsigned sh
     r->revealed=plus(r->revealed,revealed);
     if(score>r->bestScore) r->bestScore=score>CAREER_MAX?CAREER_MAX:score;
     if(cfg) (void)scriptCareerStore(cfg,lang);
+}
+
+// WDR1 retains the original Classic WCR1 format unchanged. In particular,
+// the durable playedDate reservation is independent of the last completed
+// score; a reset after claiming a date does not reopen that date.
+static bool dailyValid(const ScriptDailyCareer *r)
+{
+    return r && scriptDailyValidDate((int)r->playedDate) &&
+        (!r->lastDate || scriptDailyValidDate((int)r->lastDate)) &&
+        (!r->bestDate || scriptDailyValidDate((int)r->bestDate)) &&
+        r->bestDate<=r->lastDate && r->lastDate<=r->playedDate &&
+        r->lastScore<=r->bestScore && r->bestScore<=CAREER_MAX &&
+        r->streak<=9999 && r->streak<=r->results && r->results<=CAREER_MAX &&
+        (r->lastDate!=0)==(r->results!=0) &&
+        (r->bestDate!=0)==(r->results!=0);
+}
+static bool dailyRead(const char *cfg,unsigned lang,unsigned slot,ScriptDailyCareer *r)
+{
+    char path[CAREER_PATH];uint8_t data[SCRIPT_CAREER_BYTES+1];
+    if(!pathFor(cfg,lang,slot,'D',path)) return false;
+    FILE *f=fopen(path,"rb");
+    if(!f) return false;
+    size_t n=fread(data,1,sizeof data,f);
+    bool ok=!ferror(f);if(fclose(f)) ok=false;
+    if(!ok || n!=SCRIPT_CAREER_BYTES || memcmp(data,"WDR1",4) ||
+       data[4]!=lang || data[5] || data[6] || data[7] ||
+       get32(data+40)!=checksum(data,40)) return false;
+    ScriptDailyCareer d={get32(data+8),get32(data+12),get32(data+16),
+        get32(data+20),get32(data+24),get32(data+28),get32(data+32),get32(data+36)};
+    if(!dailyValid(&d)) return false;
+    *r=d;return true;
+}
+static int dailyNewest(const char *cfg,unsigned lang,ScriptDailyCareer *r)
+{
+    ScriptDailyCareer a,b;
+    bool ha=dailyRead(cfg,lang,0,&a),hb=dailyRead(cfg,lang,1,&b);
+    if(!ha && !hb) return -1;
+    if(hb && (!ha || (b.serial-a.serial && b.serial-a.serial<0x80000000u))) {
+        *r=b;return 1;
+    }
+    *r=a;return 0;
+}
+static bool dailyStore(const char *cfg,unsigned lang)
+{
+    if(!cfg || lang>1) return false;
+    ScriptDailyCareer old,next=scriptDailyCareer[lang],verify;
+    int slot=dailyNewest(cfg,lang,&old);
+    next.serial=slot<0?1:old.serial+1;
+    unsigned target=slot==0?1:0;
+    char path[CAREER_PATH];uint8_t data[SCRIPT_CAREER_BYTES];
+    bool ok=pathFor(cfg,lang,target,'D',path) && dailyValid(&next);
+    if(ok) {
+        memcpy(data,"WDR1",4);
+        data[4]=(uint8_t)lang;data[5]=data[6]=data[7]=0;
+        const uint32_t v[8]={next.serial,next.playedDate,next.lastDate,
+            next.lastScore,next.bestScore,next.bestDate,next.streak,next.results};
+        for(unsigned i=0;i<8;++i) put32(data+8+4*i,v[i]);
+        put32(data+40,checksum(data,40));
+        FILE *f=fopen(path,"wb");
+        if(!f) ok=false;
+        else {
+            ok=fwrite(data,1,sizeof data,f)==sizeof data;
+            if(fclose(f)) ok=false;
+        }
+    }
+    if(ok) ok=dailyRead(cfg,lang,target,&verify) && !memcmp(&verify,&next,sizeof next);
+    scriptDailySaveError[lang]=!ok;
+    if(ok) scriptDailyCareer[lang].serial=next.serial;
+    return ok;
+}
+bool scriptDailyCareerClaim(const char *cfg,unsigned lang,int date)
+{
+    if(!cfg || lang>1 || !scriptDailyValidDate(date)) return false;
+    ScriptDailyCareer *r=&scriptDailyCareer[lang];
+    if((unsigned)date<=r->playedDate) return false;
+    r->playedDate=(unsigned)date;
+    // Even if the verification fails, refuse another scored attempt in
+    // this session: the write may already have reached the card.
+    return dailyStore(cfg,lang);
+}
+static bool consecutive(unsigned a,unsigned b)
+{
+    if(!a || b<=a) return false;
+    if(b==a+1) return true;
+    if(scriptDailyValidDate((int)(a+1))) return false;
+    unsigned month=a/100%100;
+    unsigned next=month==12?(a/10000+1)*10000+101:(a/100+1)*100+1;
+    return b==next;
+}
+bool scriptDailyCareerFinish(const char *cfg,unsigned lang,int date,unsigned score)
+{
+    if(!cfg || lang>1 || !scriptDailyValidDate(date)) return false;
+    ScriptDailyCareer *r=&scriptDailyCareer[lang];
+    if(r->playedDate!=(unsigned)date || r->lastDate>=(unsigned)date) return false;
+    if(score>CAREER_MAX) score=CAREER_MAX;
+    r->streak=consecutive(r->lastDate,(unsigned)date)?
+        (r->streak<9999?r->streak+1:9999):1;
+    r->lastDate=(unsigned)date;
+    r->lastScore=score;
+    if(!r->bestDate || score>r->bestScore) {r->bestScore=score;r->bestDate=(unsigned)date;}
+    r->results=plus(r->results,1);
+    return dailyStore(cfg,lang);
 }
