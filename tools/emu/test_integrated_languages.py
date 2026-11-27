@@ -117,6 +117,15 @@ def main(rom, elf, output):
     wait_state(9,0)
     assert not integer("scriptPreviewTraining") and not integer("scriptPreviewDaily")
     assert rule("burnEvery")==1 and rule("heatThreshold")==6
+    # Actual framebuffer fast path: all 56 fresh ordinary gems use the
+    # Unicode atlas, and steady play must not regenerate any composites.
+    e.run(12)
+    count=integer("scriptCompositeBuilds")
+    assert count>=1 and integer("scriptCompositeTilesLast")==56
+    e.run(120)
+    assert integer("scriptCompositeBuilds")==count
+    assert integer("scriptCompositeTilesLast")==56
+    e.shot(str(out/"ru-vram-cache.png"))
     board=symbol(elf,"scriptPreviewBoard")
     offsets=member_offsets(elf,"scriptPreviewBoard",("back","passLen","chainLen","chainC","chainR","state"))
     def touch_action(row):
@@ -197,12 +206,18 @@ def main(rom, elf, output):
     assert bytes(e.mem.unsigned[board:board+228])==stable
     assert integer("scriptPreviewTraining")==1
     # Change languages inside the tutorial: preserve the lesson, not score.
+    count=integer("scriptCompositeBuilds")
     e.press("X",settle=18)
     wait_state(9,0)
     assert preference()==11 and integer("scriptPreviewTraining")==1
+    e.run(8)
+    assert integer("scriptCompositeBuilds")==count+1
+    assert integer("scriptCompositeTilesLast")>0
     e.press("X",settle=18)
     wait_state(9,1)
     assert preference()==12 and integer("scriptPreviewTraining")==1
+    e.run(8)
+    assert integer("scriptCompositeBuilds")==count+2
     e.press("START",settle=20)
     wait_state(ST_TITLE)
     assert daily(0)==daily(1)==(0,)*8
