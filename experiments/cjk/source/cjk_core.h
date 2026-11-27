@@ -34,5 +34,7 @@ int cjClue(const CjGame *g,int cell);
 bool cjEvidence(const CjGame *g,int cell,int *remaining,int *covered);
 int cjPeel(CjGame *g,int cell);
 bool cjHint(CjGame *g);
+// Paid rescue only when no bounded hint exists; leaves password evidence intact.
+bool cjRecover(CjGame *g);
 bool cjComplete(const CjGame *g);
 #endif

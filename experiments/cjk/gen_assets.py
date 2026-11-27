@@ -28,6 +28,9 @@ UI = {
     "OPEN_PROMPT": ("点按并松开以揭开", "點按並放開以揭開", "マスに触れて離す"),
     "WORD_PROMPT": ("连词取线索，揭格找密码", "連詞取線索，揭格找密碼", "単語で手掛かりを得る"),
     "NO_HINT": ("没有找到词", "沒有找到詞", "単語が見つからない"),
+    "RECOVER": ("重排", "重排", "再配置"),
+    "RECOVERY_COST": ("再按重排，耗费一步", "再按重排，耗費一步", "再配置は一手消費"),
+    "RECOVERY_BLOCKED": ("没有相邻未开格", "沒有相鄰未開格", "隣接した未開封マスなし"),
 }
 
 def read_words():
@@ -86,7 +89,7 @@ def glyph_header(sets, path):
         for key, texts in UI.items():
             label = texts[i]
             assert 1 <= len(label) <= 14, (key, label)
-            if key in ('ACCEPT','CLEAR','HINT','OPEN','CANCEL','NEXT','MENU','SCORE'):
+            if key in ('ACCEPT','CLEAR','HINT','RECOVER','OPEN','CANCEL','NEXT','MENU','SCORE'):
                 assert len(label) <= 4, (key, label)
             out.append('        {' + ','.join(hex(ord(ch)) for ch in label) + ',0},')
         out.append('    },')
