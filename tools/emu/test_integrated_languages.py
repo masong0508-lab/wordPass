@@ -117,22 +117,53 @@ def main(rom, elf, output):
     wait_state(9,0)
     assert not integer("scriptPreviewTraining") and not integer("scriptPreviewDaily")
     assert rule("burnEvery")==1 and rule("heatThreshold")==6
-    e.press("R",settle=12)
-    e.press("A",settle=12)
+    board=symbol(elf,"scriptPreviewBoard")
+    offsets=member_offsets(elf,"scriptPreviewBoard",("back","passLen","chainLen","chainC","chainR","state"))
+    def touch_action(row):
+        e.tap(215,118+18*row,settle=12)
+    def board_byte(name):
+        return int(e.mem.unsigned[board+offsets[name]])
+    # Real touch hint, clear and submit share the existing word engine.
+    touch_action(2)
+    n=board_byte("chainLen")
+    assert 3<=n<=20 and integer("scriptPreviewHints")==1
+    path=[(int(e.mem.unsigned[board+offsets["chainC"]+i]),
+           int(e.mem.unsigned[board+offsets["chainR"]+i])) for i in range(n)]
+    touch_action(1)
+    assert board_byte("chainLen")==0 and integer("scriptPreviewTurns")==0
+    touch_action(2)
+    assert board_byte("chainLen")==0 and integer("scriptPreviewHints")==1
+    e.chain(path)
+    touch_action(0)
     assert integer("scriptPreviewTurns")==1 and integer("scriptPreviewScore")>0
     e.shot(str(out/"ru-classic.png"))
     # Play a real terminal shelf. Secret positions are a test-only fixture
     # read; all scored reveals still go through physical DS touch input.
-    board=symbol(elf,"scriptPreviewBoard")
-    offsets=member_offsets(elf,"scriptPreviewBoard",("back","passLen"))
     length=int(e.mem.unsigned[board+offsets["passLen"]])
     raw=bytes(e.mem.unsigned[board+offsets["back"]:board+offsets["back"]+56])
     for n in range(1,length+1):
         if career(0)[1]: break # a real scorch loss is also a terminal attempt
         c,r=divmod(raw.index(n),8)
-        e.hold("L")
-        e.tap(*e.center(c,r),settle=12)
-        e.hold("L",False)
+        if n==1:
+            touch_action(3)
+            assert integer("scriptPreviewTouchPeek")==1
+            prior=integer("scriptPreviewTurns")
+            e.emu.input.touch_set_pos(*e.center(c,r))
+            e.run(5)
+            assert integer("scriptPreviewTurns")==prior
+            e.emu.input.touch_set_pos(*e.center(c,(r+1)%8))
+            e.run(5)
+            e.emu.input.touch_release()
+            e.run(12)
+            assert integer("scriptPreviewTurns")==prior
+            assert integer("scriptPreviewTouchPeek")==1
+            e.tap(*e.center(c,r),settle=12)
+            assert integer("scriptPreviewTurns")==prior+1
+            assert integer("scriptPreviewTouchPeek")==0
+        else:
+            e.hold("L")
+            e.tap(*e.center(c,r),settle=12)
+            e.hold("L",False)
     assert career(0)[1]==1 and career(0)[3]>=1 and career(0)[6]>0,career(0)
     assert career(1)==(0,)*8
     ru=career(0)
@@ -197,8 +228,21 @@ def main(rom, elf, output):
     enter_daily(1,20261126,0)
     assert integer("scriptPreviewSeed")==seed
     assert bytes(e.mem.unsigned[board:board+228])==puzzle
-    e.press("R",settle=12)
-    e.press("A",settle=16)
+    # A free clue inspection while touch PEEK is active must not peel twice
+    # or spend its one-shot latch. Choose a blank on the fresh practice board.
+    backs=bytes(e.mem.unsigned[board+offsets["back"]:board+offsets["back"]+56])
+    states=bytes(e.mem.unsigned[board+offsets["state"]:board+offsets["state"]+56])
+    i=next(i for i,b in enumerate(backs) if b==0 and states[i]==1)
+    c,r=divmod(i,8)
+    touch_action(3)
+    e.tap(*e.center(c,r),settle=12)
+    assert integer("scriptPreviewTurns")==1 and integer("scriptPreviewTouchPeek")==0
+    touch_action(3)
+    e.tap(*e.center(c,r),settle=12)
+    assert integer("scriptPreviewTurns")==1 and integer("scriptPreviewTouchPeek")==1
+    touch_action(3)
+    assert integer("scriptPreviewTouchPeek")==0
+    e.shot(str(out/"uk-touch-clue.png"))
     leave_daily()
     assert daily(1)==first,"practice changed scored results"
     enter_daily(1,20261127,1)
