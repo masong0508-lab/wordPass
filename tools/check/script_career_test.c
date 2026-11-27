@@ -42,9 +42,46 @@ int main(void)
     scriptCareerLoad(cfg);
     assert(scriptCareer[0].serial==2 && scriptCareer[0].attempts==2);
     assert(scriptCareer[0].bestScore==555 && scriptCareer[0].bestShelf==2);
+    // Scored Daily reserves a date durably before any result exists.
+    assert(!scriptDailyCareerClaim(NULL,0,20280228));
+    assert(!scriptDailyCareerClaim(cfg,0,20280230));
+    assert(scriptDailyCareerClaim(cfg,0,20280228));
+    scriptCareerLoad(cfg);
+    assert(scriptDailyCareer[0].playedDate==20280228 && !scriptDailyCareer[0].lastDate);
+    assert(!scriptDailyCareerClaim(cfg,0,20280228));
+    assert(!scriptDailyCareerClaim(cfg,0,20280227));
+    assert(scriptDailyCareerFinish(cfg,0,20280228,0));
+    assert(!scriptDailyCareerFinish(cfg,0,20280228,900));
+    assert(scriptDailyCareerClaim(cfg,0,20280229));
+    assert(scriptDailyCareerFinish(cfg,0,20280229,400));
+    assert(scriptDailyCareerClaim(cfg,0,20280301));
+    assert(scriptDailyCareerFinish(cfg,0,20280301,250));
+    assert(scriptDailyCareer[0].streak==3 && scriptDailyCareer[0].bestScore==400);
+    assert(scriptDailyCareer[0].bestDate==20280229 && scriptDailyCareer[0].results==3);
+    assert(scriptDailyCareerClaim(cfg,1,20280301));
+    assert(scriptDailyCareerFinish(cfg,1,20280301,100));
+    assert(scriptDailyCareer[1].streak==1 && scriptDailyCareer[1].bestScore==100);
+    assert(scriptDailyCareerClaim(cfg,0,20280302));
+    scriptCareerLoad(cfg); // simulates reset with a consumed but unfinished day
+    assert(!scriptDailyCareerClaim(cfg,0,20280302));
+    assert(scriptDailyCareer[0].lastDate==20280301);
+    assert(scriptDailyCareerClaim(cfg,0,20280303));
+    assert(scriptDailyCareerFinish(cfg,0,20280303,500));
+    assert(scriptDailyCareer[0].streak==1 && scriptDailyCareer[0].bestScore==500);
+    // The new result is in D1; corrupt it and recover the D0 date claim.
+    snprintf(path,sizeof path,"%s/WPRU.D1",dir);
+    f=fopen(path,"wb");assert(f);
+    assert(fputc('W',f)!=EOF && !fclose(f));
+    scriptCareerLoad(cfg);
+    assert(scriptDailyCareer[0].playedDate==20280303);
+    assert(!scriptDailyCareerClaim(cfg,0,20280303));
+    assert(scriptDailyCareer[1].bestScore==100);
+    assert(scriptCareer[0].bestScore==555 && scriptCareer[1].bestScore==123);
     assert(access(cfg,F_OK)!=0); // never touch the Latin settings file
     for(unsigned lang=0;lang<2;++lang) for(unsigned slot=0;slot<2;++slot) {
         snprintf(path,sizeof path,"%s/WP%s.C%u",dir,lang?"UK":"RU",slot);
+        unlink(path);
+        snprintf(path,sizeof path,"%s/WP%s.D%u",dir,lang?"UK":"RU",slot);
         unlink(path);
     }
     assert(!rmdir(dir));
