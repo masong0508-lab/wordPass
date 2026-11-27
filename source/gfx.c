@@ -3051,7 +3051,13 @@ static void drawScriptPreviewTop(void)
         else msg = scriptPreviewLanguage ?
                    "ПОРАЗКА - A: ЗНОВУ" : "ПОРАЖЕНИЕ - A: СНОВА";
 #ifdef WP_CYR_MAIN
-        if(scriptPreviewDaily) msg=scriptPreviewLanguage?"ДЕНЬ ЗАВЕРШЕНО / A: МЕНЮ":"ДЕНЬ ЗАВЕРШЁН / A: МЕНЮ";
+        if(scriptPreviewDaily) {
+            if(scriptPreviewRules.failReason==SCRIPT_LOSS_SCORCH)
+                msg=scriptPreviewLanguage?"ПАРОЛЬ ЗГОРІВ / A: МЕНЮ":"ПАРОЛЬ СГОРЕЛ / A: МЕНЮ";
+            else if(scriptPreviewRules.failReason==SCRIPT_LOSS_FIRE)
+                msg=scriptPreviewLanguage?"ВОГОНЬ УНИЗУ / A: МЕНЮ":"ОГОНЬ ВНИЗУ / A: МЕНЮ";
+            else msg=scriptPreviewLanguage?"ПОРАЗКА / A: МЕНЮ":"ПОРАЖЕНИЕ / A: МЕНЮ";
+        }
 #endif
         drawTextCenter(128,169,msg,FIRE2,1);
     } else if (scriptPreviewDailyClockError)
