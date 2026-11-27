@@ -176,7 +176,26 @@ def main(rom, elf, output):
     e.power_cycle()
     wait_state(ST_TITLE)
     assert preference()==6 and e.state()["language"]==6
-    print("INTEGRATED 13 LANGUAGES OK: title, persisted RU/UK, tutorial, Classic, Daily practice, Latin return and FAT reboot",flush=True)
+    # The large Dutch pack is the worst retail RAM case. Exercise a real
+    # Latin shelf after returning from both Unicode packs, with the full
+    # composite cache in CPU-visible LCDC VRAM D.
+    e.start_classic()
+    wait_state(1)
+    e.set_tutor(1)
+    e.press("SELECT",settle=12)
+    g=symbol(elf,"G")
+    hints=member_offsets(elf,"G",("hintC","hintR"))
+    n=e.state()["hintLen"]
+    assert 3<=n<=20
+    path=[(int(e.mem.unsigned[g+hints["hintC"]+i]),
+           int(e.mem.unsigned[g+hints["hintR"]+i])) for i in range(n)]
+    e.chain(path)
+    assert e.state()["chainScore"]>0
+    e.press("A",settle=24)
+    assert e.state()["turn"]==1 and e.state()["score"]>0
+    e.shot(str(out/"nl-lcd-cache.png"))
+    assert any(e.mem.unsigned[0x06860000:0x06860000+26*960]),"LCDC gem cache is empty"
+    print("INTEGRATED 13 LANGUAGES OK: persisted selection, guide, career, Classic, Daily and Dutch VRAM rendering",flush=True)
 
 if __name__=="__main__":
     if len(sys.argv)!=4:
