@@ -2,6 +2,9 @@
 // and fire that punishes lazy words and careless peeling.
 #include "game.h"
 #include "script_preview.h"
+#ifdef WP_CYR_MAIN
+#include "script_career.h"
+#endif
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -922,6 +925,9 @@ static int trainingCardQueued;
 int main(void)
 {
     settingsInit();
+#ifdef WP_CYR_MAIN
+    scriptCareerLoad(settingsPersistent()?settingsCfgPath():NULL);
+#endif
     gfxInit();
     dictInit();
     poolsInit();
