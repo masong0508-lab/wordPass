@@ -1641,7 +1641,7 @@ static void drawTopTitle(void)
         char s[48];
 #ifdef WP_CYR_MAIN
         if (scriptMenu()) {
-            drawTextCenter(128,156,S.language==LANG_UK?"ДЕНЬ: БЕЗ РЕКОРДІВ":"ДЕНЬ: БЕЗ РЕКОРДОВ",DIM_TEXT,1);
+            drawTextCenter(128,156,S.language==LANG_UK?"ДЕНЬ: ОДНА ЗАЛІКОВА СПРОБА":"ДЕНЬ: ОДНА ЗАЧЁТНАЯ ПОПЫТКА",DIM_TEXT,1);
         } else
 #endif
         {
@@ -1655,10 +1655,22 @@ static void drawTopTitle(void)
 #ifdef WP_CYR_MAIN
         if (scriptMenu()) {
             bool uk=S.language==LANG_UK;
-            drawTextCenter(128,70,uk?"РЕКОРДИ КЛАСИКИ":"РЕКОРДЫ КЛАССИКИ",GOLD_LT,1);
-            drawTextCenter(128,95,uk?"ЗАВЕРШЕНІ СПРОБИ":"ЗАВЕРШЁННЫЕ ПОПЫТКИ",INK,1);
-            drawTextCenter(128,112,uk?"БЕЗ НАВЧАННЯ ТА ДНЯ":"БЕЗ ОБУЧЕНИЯ И ДНЯ",DIM_TEXT,1);
-            drawTextCenter(128,137,uk?"B / ДОТИК: НАЗАД":"B / КАСАНИЕ: НАЗАД",ACCENT,1);
+            const ScriptDailyCareer *d=&scriptDailyCareer[S.language-LANG_COUNT];
+            char num[16];
+            drawTextCenter(128,49,uk?"РЕКОРДИ ДНЯ":"РЕКОРДЫ ДНЯ",GOLD_LT,2);
+            drawText(20,82,uk?"РЕКОРД":"РЕКОРД",INK,1);
+            drawTextCenter(196,82,fmtScoreShort(num,(int)d->bestScore),GOLD_LT,1);
+            drawText(20,100,uk?"ОСТАННІ БАЛИ":"ПОСЛЕДНИЕ ОЧКИ",INK,1);
+            drawTextCenter(196,100,fmtScoreShort(num,(int)d->lastScore),WHITE,1);
+            drawText(20,118,uk?"СЕРІЯ ДНІВ":"СЕРИЯ ДНЕЙ",INK,1);
+            unsigned streak=d->streak;
+            if(!G.clockOk || !d->lastDate ||
+               settingsDayNumber(G.dailySeed)-settingsDayNumber((int)d->lastDate)>1 ||
+               G.dailySeed<(int)d->lastDate) streak=0;
+            drawTextCenter(196,118,fmtInt(num,(int)streak),WHITE,1);
+            drawText(20,136,uk?"ЗАЛІКОВІ ДНІ":"ЗАЧЁТНЫЕ ДНИ",INK,1);
+            drawTextCenter(196,136,fmtScoreShort(num,(int)d->results),WHITE,1);
+            drawTextCenter(128,160,uk?"B / ДОТИК: НАЗАД":"B / КАСАНИЕ: НАЗАД",ACCENT,1);
             return;
         }
 #endif
@@ -2785,7 +2797,11 @@ static void drawScriptPreviewBoard(void)
     drawText(px0 + 4, 135, scriptPreviewLanguage ? "Y ОЧИСТИТИ" : "Y СБРОС", WHITE, 1);
     drawText(px0 + 4, 146, scriptPreviewLanguage ? "R ПІДКАЗКА" : "R ПОДСКАЗКА", WHITE, 1);
     drawText(px0 + 4, 157, scriptPreviewLanguage ? "X МОВА" : "X ЯЗЫК", WHITE, 1);
-    drawText(px0 + 4, 168, scriptPreviewDaily ?
+    drawText(px0+4,168,
+#ifdef WP_CYR_MAIN
+             scriptPreviewDailyRanked==1?(scriptPreviewLanguage?"1 СПРОБА":"1 ПОПЫТКА"):
+#endif
+             scriptPreviewDaily ?
              (scriptPreviewLanguage ? "SEL ЗНОВУ" : "SEL ЗАНОВО") :
              (scriptPreviewLanguage ? "SEL НОВА" : "SEL НОВАЯ"), WHITE, 1);
     drawText(px0 + 4, 179, scriptPreviewLanguage ? "START ВИХІД" : "START ВЫХОД", ACCENT, 1);
@@ -2844,9 +2860,14 @@ static void drawScriptPreviewTop(void)
     else if (scriptPreviewDaily) {
         char dateLabel[48];
         int ymd = scriptPreviewDailyDate;
-        sniprintf(dateLabel, sizeof dateLabel, scriptPreviewLanguage ?
-                 "УКРАЇНСЬКА %04d-%02d-%02d" : "РУССКИЙ %04d-%02d-%02d",
-                 ymd / 10000, ymd / 100 % 100, ymd % 100);
+        sniprintf(dateLabel,sizeof dateLabel,
+#ifdef WP_CYR_MAIN
+                 "%s %04d-%02d-%02d",scriptPreviewDailyRanked?
+                 (scriptPreviewLanguage?"ЗАЛІК":"ЗАЧЁТ"):"ПРАКТИКА",
+#else
+                 scriptPreviewLanguage?"УКРАЇНСЬКА %04d-%02d-%02d":"РУССКИЙ %04d-%02d-%02d",
+#endif
+                 ymd/10000,ymd/100%100,ymd%100);
         drawTextCenter(128, 31, dateLabel, DIM_TEXT, 1);
     } else drawTextCenter(128,31,scriptPreviewLanguage ?
 #ifdef WP_CYR_MAIN
@@ -3008,8 +3029,13 @@ static void drawScriptPreviewTop(void)
     } else if (scriptPreviewRules.status == SCRIPT_PASSED) {
         char msg[96];
         if (scriptPreviewDaily)
-            sniprintf(msg, sizeof msg, scriptPreviewLanguage ?
-                     "ДЕНЬ ЗАВЕРШЕНО +%d" : "ДЕНЬ ЗАВЕРШЁН +%d", scriptPreviewRules.lastBonus);
+            sniprintf(msg,sizeof msg,scriptPreviewLanguage ?
+#ifdef WP_CYR_MAIN
+                     "ДЕНЬ +%d / A: МЕНЮ" : "ДЕНЬ +%d / A: МЕНЮ",
+#else
+                     "ДЕНЬ ЗАВЕРШЕНО +%d" : "ДЕНЬ ЗАВЕРШЁН +%d",
+#endif
+                     scriptPreviewRules.lastBonus);
         else sniprintf(msg, sizeof msg, scriptPreviewLanguage ?
                       "ПОЛИЦЮ ВРЯТОВАНО +%d - A: ДАЛІ" :
                       "ПОЛКА СПАСЕНА +%d - A: ДАЛЬШЕ", scriptPreviewRules.lastBonus);
@@ -3024,7 +3050,10 @@ static void drawScriptPreviewTop(void)
                   "ВОГОНЬ УНИЗУ - A: ЗНОВУ" : "ОГОНЬ ВНИЗУ - A: СНОВА";
         else msg = scriptPreviewLanguage ?
                    "ПОРАЗКА - A: ЗНОВУ" : "ПОРАЖЕНИЕ - A: СНОВА";
-        drawTextCenter(128, 169, msg, FIRE2, 1);
+#ifdef WP_CYR_MAIN
+        if(scriptPreviewDaily) msg=scriptPreviewLanguage?"ДЕНЬ ЗАВЕРШЕНО / A: МЕНЮ":"ДЕНЬ ЗАВЕРШЁН / A: МЕНЮ";
+#endif
+        drawTextCenter(128,169,msg,FIRE2,1);
     } else if (scriptPreviewDailyClockError)
         drawTextCenter(128, 169, scriptPreviewLanguage ?
                        "ВСТАНОВІТЬ ДАТУ НА DS" : "УСТАНОВИТЕ ДАТУ НА DS", FIRE2, 1);
@@ -3040,9 +3069,12 @@ static void drawScriptPreviewTop(void)
                                                   "НЕТ СВОБОДНОГО МЕСТА"),
                        FIRE2, 1);
     else if (scriptPreviewDaily)
-        drawTextCenter(128, 169, scriptPreviewLanguage ?
-                       "L+Y: ПРАВИЛА / SEL: ЗНОВУ" :
-                       "L+Y: ПРАВИЛА / SEL: ЗАНОВО", ACCENT, 1);
+        drawTextCenter(128,169,
+#ifdef WP_CYR_MAIN
+                       scriptPreviewDailyRanked==1?
+                       (scriptPreviewLanguage?"ОДНА СПРОБА / L+Y: ПРАВИЛА":"ОДНА ПОПЫТКА / L+Y: ПРАВИЛА"):
+#endif
+                       scriptPreviewLanguage?"L+Y: ПРАВИЛА / SEL: ЗНОВУ":"L+Y: ПРАВИЛА / SEL: ЗАНОВО",ACCENT,1);
     else drawTextCenter(128, 169, scriptPreviewLanguage ?
                         "L+Y: ПРАВИЛА / L+SEL: ДЕНЬ" :
                         "L+Y: ПРАВИЛА / L+SEL: ДЕНЬ", ACCENT, 1);
@@ -3431,9 +3463,11 @@ static void drawTitle(const Game *g)
     char d1[24], d2[24];
 #ifdef WP_CYR_MAIN
     if (S.language>=LANG_COUNT) {
-        // Separate unranked Daily practice, never the Latin record.
-        drawTextCenter(BX(120),TB_Y+3,menuLabel(UI_T_DAILY),ACCENT,1);
-        drawTextCenter(BX(120),TB_Y+12,menuLabel(g->clockOk?UI_T_PRACTICE:UI_T_SETCLOCK),INK,1);
+        const ScriptDailyCareer *d=&scriptDailyCareer[S.language-LANG_COUNT];
+        bool scored=g->clockOk && settingsPersistent() && (unsigned)g->dailySeed>d->playedDate;
+        drawTextCenter(BX(120),TB_Y+3,menuLabel(UI_T_DAILY),scored?GOLD_LT:ACCENT,1);
+        drawTextCenter(BX(120),TB_Y+12,!g->clockOk?menuLabel(UI_T_SETCLOCK):
+            scored?(S.language==LANG_UK?"ЗАЛІК":"ЗАЧЁТ"):menuLabel(UI_T_PRACTICE),INK,1);
     } else
 #endif
     if (!g->clockOk) {
@@ -3565,8 +3599,8 @@ static void drawStats(const Game *g)
             statRow(45+i*14,labels[i],fmtScoreShort(val,(int)vals[i]),i>=5?GOLD_LT:WHITE);
         }
         drawTextCenter(BX(86),148,!settingsPersistent()?menuLabel(UI_OP_NOSAVE):
-            scriptCareerSaveError[lang]?menuLabel(UI_OP_SAVEFAIL):menuLabel(UI_OP_SAVED),
-            scriptCareerSaveError[lang]?FIRE2:DIM_TEXT,1);
+            scriptCareerSaveError[lang]||scriptDailySaveError[lang]?menuLabel(UI_OP_SAVEFAIL):menuLabel(UI_OP_SAVED),
+            scriptCareerSaveError[lang]||scriptDailySaveError[lang]?FIRE2:DIM_TEXT,1);
         rectOutline(BX(54),162,64,20,DIM);
         drawTextCenter(BX(86),168,menuLabel(UI_OP_BACK),INK,1);
         return;
@@ -4094,7 +4128,10 @@ static void topSigs(const Game *g, u32 sig[4])
         h0 = hmix(h0, scriptPreviewTraining);
         h0 = hmix(h0, scriptPreviewLanguage);
         h0 = hmix(h0, scriptPreviewDaily);
-        h0 = hmix(h0, scriptPreviewDailyDate);
+        h0 = hmix(h0,scriptPreviewDailyDate);
+#ifdef WP_CYR_MAIN
+        h0 = hmix(h0,scriptPreviewDailyRanked);
+#endif
         h0 = hmix(h0, scriptPreviewHelp);
         h0 = hmix(h0, b->passTheme); // theme starts at row 47, crossing slices
         // Switching the manual on/off invalidates every 48-row top LCD slice.
@@ -4130,7 +4167,10 @@ static void topSigs(const Game *g, u32 sig[4])
         h3 = hmix(h3, scriptPreviewRules.failReason);
         h3 = hmix(h3, scriptPreviewRules.lastBonus);
         h3 = hmix(h3, scriptPreviewDaily);
-        h3 = hmix(h3, scriptPreviewDailyClockError);
+        h3 = hmix(h3,scriptPreviewDailyClockError);
+#ifdef WP_CYR_MAIN
+        h3 = hmix(h3,scriptPreviewDailyRanked);
+#endif
         h3 = hmix(h3, scriptPreviewLedger.combo);
         h3 = hmix(h3, scriptPreviewLedger.lastRepeat);
         h3 = hmix(h3, scriptPreviewRescues);
