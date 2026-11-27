@@ -26,6 +26,13 @@ int scriptPreviewDaily, scriptPreviewDailyDate, scriptPreviewDailyClockError;
 #ifdef WP_CYR_MAIN
 int scriptPreviewDailyRanked; // 0 practice, 1 scored attempt, 2 recorded/closed
 int scriptPreviewTouchPeek;
+int scriptPreviewTouchRescue;
+bool scriptPreviewCanTouchRescue(void)
+{
+    return scriptPreviewHints && scriptPreviewTurns && !scriptPreviewRescues &&
+           !scriptPreviewTraining && !scriptPreviewBoard.chainLen &&
+           scriptPreviewRules.status==SCRIPT_RUNNING;
+}
 static void finishRankedDaily(void)
 {
     if(scriptPreviewDailyRanked!=1) return;
@@ -157,6 +164,7 @@ void scriptPreviewClose(void)
     finishRankedDaily();
     scriptPreviewDailyRanked=0;
     scriptPreviewTouchPeek=0;
+    scriptPreviewTouchRescue=0;
 #endif
     for (unsigned i = 0; i < 3; i++) {
         free(images[i]);
@@ -249,6 +257,7 @@ static bool startPass(unsigned shelf, uint32_t seed, int bankedScore)
     scriptPreviewBoard = nextBoard;
 #ifdef WP_CYR_MAIN
     scriptPreviewTouchPeek=0;
+    scriptPreviewTouchRescue=0;
 #endif
     scriptPreviewPassApostrophe = passMask;
     scriptPreviewOpeningWords = openingWords;
