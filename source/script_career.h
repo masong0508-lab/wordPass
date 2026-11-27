@@ -17,4 +17,14 @@ void scriptCareerLoad(const char *settingsPath);
 bool scriptCareerStore(const char *settingsPath,unsigned language);
 void scriptCareerFinish(const char *settingsPath,unsigned language,unsigned score,unsigned shelf,
                         unsigned words,unsigned peels,unsigned revealed,bool passed);
+// A separate dated score file uses the same two-slot storage discipline.
+typedef struct {
+    uint32_t serial, playedDate, lastDate, lastScore, bestScore, bestDate, streak, results;
+} ScriptDailyCareer;
+extern ScriptDailyCareer scriptDailyCareer[2];
+extern bool scriptDailySaveError[2];
+// Claim only after the board was generated and the date write is verified.
+// No card or repeated/backdated attempt => practice, never a scored attempt.
+bool scriptDailyCareerClaim(const char *cfg,unsigned language,int date);
+bool scriptDailyCareerFinish(const char *cfg,unsigned language,int date,unsigned score);
 #endif

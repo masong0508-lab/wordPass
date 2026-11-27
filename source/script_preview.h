@@ -27,7 +27,10 @@ extern int scriptPreviewRescueError;  // 0 none, 1 too early, 2 used, 3 blocked
 extern int scriptPreviewShelf;
 extern ScriptRules scriptPreviewRules;
 extern ScriptLedger scriptPreviewLedger;
-extern int scriptPreviewDaily;     // 0 classic-style demo; 1 unranked Daily practice
+extern int scriptPreviewDaily; // Classic or a deterministic Daily shelf
+#ifdef WP_CYR_MAIN
+extern int scriptPreviewDailyRanked; // practice, live scored, terminal scored
+#endif
 extern int scriptPreviewDailyDate; // YYYYMMDD, independent of retail Daily records
 extern int scriptPreviewDailyClockError; // unset RTC feedback, no save writes
 extern int scriptPreviewHelp; // localized instructions overlay (top LCD only)
