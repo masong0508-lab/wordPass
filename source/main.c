@@ -397,7 +397,13 @@ static void cycleOption(int row, int dir)
         case 3: S.hand = !S.hand; break;
         case 4: S.fire = (S.fire + FIRE_COUNT + dir) % FIRE_COUNT; break;
         case 5: S.music = !S.music; break;
-        case 6: S.library = (S.library + LIB_COUNT + dir) % LIB_COUNT; break;
+        case 6:
+#ifdef WP_CYR_MAIN
+            // The sourced Unicode engine currently accepts its full pack.
+            // Do not advertise a common-only filter it does not implement.
+            if (selectedLanguage()>=LANG_COUNT) break;
+#endif
+            S.library = (S.library + LIB_COUNT + dir) % LIB_COUNT; break;
         case 7: if (selectedLanguage() == LANG_EN) S.spelling = (S.spelling + SPELL_COUNT + dir) % SPELL_COUNT; break;   // ENGLISH ONLY: other languages ignore it
         case 8: cycleLanguage(dir); break;
     }
@@ -1128,6 +1134,11 @@ int main(void)
                     bool wasDaily = scriptPreviewDaily != 0;
 #ifdef WP_CYR_MAIN
                     bool wasTraining=scriptPreviewTraining!=0;
+                    // Loading real dictionaries and committing the preference
+                    // can take many scans. Show a clear transition and resample
+                    // the released key before accepting the next action.
+                    musicHush();
+                    gfxLoading(next ? "УКРАЇНСЬКА" : "РУССКИЙ");
 #endif
                     int date = scriptPreviewDailyDate;
                     if (!scriptPreviewOpen(next, seedCounter)) {
@@ -1144,6 +1155,7 @@ int main(void)
                         S.language=(u8)(LANG_COUNT+next);
                         settingsSave();
                     }
+                    scanKeys(); // reconcile keypad state after synchronous I/O
 #endif
                     break;
                 }
