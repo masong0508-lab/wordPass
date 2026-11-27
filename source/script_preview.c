@@ -25,6 +25,7 @@ ScriptLedger scriptPreviewLedger;
 int scriptPreviewDaily, scriptPreviewDailyDate, scriptPreviewDailyClockError;
 #ifdef WP_CYR_MAIN
 int scriptPreviewDailyRanked; // 0 practice, 1 scored attempt, 2 recorded/closed
+int scriptPreviewTouchPeek;
 static void finishRankedDaily(void)
 {
     if(scriptPreviewDailyRanked!=1) return;
@@ -155,6 +156,7 @@ void scriptPreviewClose(void)
 #ifdef WP_CYR_MAIN
     finishRankedDaily();
     scriptPreviewDailyRanked=0;
+    scriptPreviewTouchPeek=0;
 #endif
     for (unsigned i = 0; i < 3; i++) {
         free(images[i]);
@@ -245,6 +247,9 @@ static bool startPass(unsigned shelf, uint32_t seed, int bankedScore)
     // Generate both the hidden password and a playable word before replacing
     // a live shelf. A refused generation must not erase its score or state.
     scriptPreviewBoard = nextBoard;
+#ifdef WP_CYR_MAIN
+    scriptPreviewTouchPeek=0;
+#endif
     scriptPreviewPassApostrophe = passMask;
     scriptPreviewOpeningWords = openingWords;
     scriptPreviewRules = nextRules;

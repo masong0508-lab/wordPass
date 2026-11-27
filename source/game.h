@@ -440,6 +440,9 @@ int  gfxCellAt(int px, int py, int *c, int *r);
 bool gfxScriptClueHit(int px, int py, int c, int r);
 bool gfxScriptTrainingHit(int px, int py);
 int gfxScriptPracticeAction(int px,int py);
+#ifdef WP_CYR_MAIN
+int gfxScriptPlayAction(int px,int py);
+#endif
 #endif
 bool gfxInTrainingHint(int px,int py);
 bool gfxInSubmit(int px, int py);

@@ -2603,6 +2603,15 @@ int gfxScriptPracticeAction(int px,int py)
     if (py>=156 && py<177) return 3;
     return 0;
 }
+#ifdef WP_CYR_MAIN
+// Four full-width touch controls occupy the same panel on either hand layout.
+int gfxScriptPlayAction(int px,int py)
+{
+    if(px<panelX+4 || px>=panelX+74 || py<110 || py>=180) return 0;
+    int row=(py-110)/18;
+    return (py-110)%18<16?row+1:0;
+}
+#endif
 bool gfxScriptClueHit(int px, int py, int c, int r)
 {
     if (c < 0 || c >= SCRIPT_COLS || r < 0 || r >= SCRIPT_ROWS)
@@ -2651,6 +2660,15 @@ static void drawScriptPreviewBoard(void)
             u16 fg = state == SCRIPT_DIAMOND ? C(4,6,10) : WHITE;
             drawGlyph(x + 8, y + 5, glyph, pal->dark, 2);
             drawGlyph(x + 7, y + 4, glyph, fg, 2);
+#ifdef WP_CYR_MAIN
+            // PEEK shows only public flame hazards, never back-layer letters.
+            if(scriptPreviewTouchPeek || (keysHeld() & KEY_L)) {
+                if(state==SCRIPT_BURN || (r>0 && b->state[c][r-1]==SCRIPT_BURN)) {
+                    rectOutline(x,y,TILE_W,TILE_H,FIRE2);
+                    drawChar(x+2,y+2,'!',FIRE2,1);
+                }
+            }
+#endif
             // Never mark an unopened password location. The old gold bar
             // explicitly exposed b->back[c][r] and spoiled the puzzle.
             // Only an earned word endpoint may show a numbered badge.
@@ -2785,6 +2803,33 @@ static void drawScriptPreviewBoard(void)
         drawTextCenter(panelX+39,179,uk?"START ВИХІД":"START ВЫХОД",ACCENT,1);
         return;
     }
+#ifdef WP_CYR_MAIN
+    {
+        bool uk=scriptPreviewLanguage!=0;
+        bool running=scriptPreviewRules.status==SCRIPT_RUNNING;
+        const char *actions[4]={
+            running?(uk?"ПРИЙНЯТИ":"ПРИНЯТЬ"):
+                scriptPreviewDaily?"МЕНЮ":
+                scriptPreviewRules.status==SCRIPT_PASSED?(uk?"ДАЛІ":"ДАЛЕЕ"):(uk?"ЗНОВУ":"СНОВА"),
+            uk?"ОЧИСТИТИ":"СБРОС",
+            uk?"ПІДКАЗКА":"ПОДСКАЗКА",
+            scriptPreviewTouchPeek?(uk?"СКАСУВАТИ":"ОТМЕНА"):(uk?"ВІДКРИТИ":"ОТКРЫТЬ")
+        };
+        for(int i=0;i<4;++i) {
+            bool active=i==0?(!running || (chainValidNow && !scriptPreviewTouchPeek)):
+                running && (i!=2 || !scriptPreviewHints);
+            int y=110+18*i;
+            bool selected=i==3 && scriptPreviewTouchPeek;
+            u16 outline=selected?GOLD_LT:active?ACCENT:DIM_TEXT;
+            if(i==0 && active) outline=lerp15(GOLD_LT,WHITE,tri16(frame,40)/3);
+            roundRect(panelX+4,y,70,16,selected?lerp15(BLACK,ACCENT,6):DIM);
+            rectOutline(panelX+4,y,70,16,outline);
+            drawTextCenter(panelX+39,y+5,actions[i],active?WHITE:DIM_TEXT,1);
+        }
+        drawTextCenter(panelX+39,182,"L+Y: ?",ACCENT,1);
+        return;
+    }
+#endif
     // Give each action its own readable row instead of an English
     // controller-code cram. Full outcome text already lives on the top LCD.
     // Contextual control: the very same peel action is L+touch when the
@@ -3074,6 +3119,11 @@ static void drawScriptPreviewTop(void)
                          (scriptPreviewLanguage ? "НЕМАЄ ВІЛЬНОГО МІСЦЯ" :
                                                   "НЕТ СВОБОДНОГО МЕСТА"),
                        FIRE2, 1);
+#ifdef WP_CYR_MAIN
+    else if(scriptPreviewTouchPeek)
+        drawTextCenter(128,169,scriptPreviewLanguage?
+            "ДОТИК, ВІДПУСТІТЬ / !: ВОГОНЬ":"КАСАНИЕ, ОТПУСТИТЕ / !: ОГОНЬ",GOLD_LT,1);
+#endif
     else if (scriptPreviewDaily)
         drawTextCenter(128,169,
 #ifdef WP_CYR_MAIN
@@ -4176,6 +4226,7 @@ static void topSigs(const Game *g, u32 sig[4])
         h3 = hmix(h3,scriptPreviewDailyClockError);
 #ifdef WP_CYR_MAIN
         h3 = hmix(h3,scriptPreviewDailyRanked);
+        h3 = hmix(h3,scriptPreviewTouchPeek);
 #endif
         h3 = hmix(h3, scriptPreviewLedger.combo);
         h3 = hmix(h3, scriptPreviewLedger.lastRepeat);
