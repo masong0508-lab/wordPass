@@ -65,7 +65,9 @@ The integrated Russian/Ukrainian tutorial also uses the regular four-button
 touch panel: submit, clear, hint and open/cancel. After the first word,
 tap Open and release on the indicated tile; dragging away cancels for free.
 Every lesson is playable without a shoulder button, while L+touch and
-controller shortcuts remain available. The separate engineering ROM
+controller shortcuts remain available. The localized Rules footer also opens
+the full eight-page guide by touch from a live shelf or tutorial, preserving
+the selected word and score. The separate engineering ROM
 retains its original three-button tutorial.
 The integrated renderer uses one bounded word-selection mask and subtle
 flame/valid-word edge animation. The shared

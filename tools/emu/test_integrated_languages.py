@@ -66,7 +66,7 @@ def main(rom, elf, output):
     select(11)
     assert not any(buffers()),"menu must not retain Unicode pack heap"
     e.shot(str(out/"ru-title.png"))
-    def guide_pages(tag,return_state):
+    def guide_pages(tag,return_state,touch_back=False):
         wait_state(7)
         assert e.state()["guidePage"]==0
         for page in range(8):
@@ -74,7 +74,8 @@ def main(rom, elf, output):
             e.run(12)
             e.shot(str(out/f"{tag}-guide-{page+1}.png"))
             if page<7: e.press("RIGHT",settle=8)
-        e.press("B",settle=12)
+        if touch_back: e.tap(230,15,settle=12)
+        else: e.press("B",settle=12)
         wait_state(return_state)
     e.press("B",settle=12)
     guide_pages("ru",ST_TITLE)
@@ -224,6 +225,14 @@ def main(rom, elf, output):
     touch_action(2)
     n=board_byte("chainLen")
     assert 3<=n<=20 and integer("scriptPreviewHints")==1
+    # Rules can be opened and dismissed by stylus during normal play.
+    stable=bytes(e.mem.unsigned[board:board+228])
+    e.tap(215,185,settle=12)
+    wait_state(7)
+    e.tap(230,15,settle=12)
+    wait_state(9,0)
+    assert bytes(e.mem.unsigned[board:board+228])==stable
+    assert integer("scriptPreviewTurns")==0 and integer("scriptPreviewHints")==1
     path=[(int(e.mem.unsigned[board+offsets["chainC"]+i]),
            int(e.mem.unsigned[board+offsets["chainR"]+i])) for i in range(n)]
     touch_action(1)
@@ -287,10 +296,8 @@ def main(rom, elf, output):
     # The guide must work in a live tutorial without destroying progress.
     e.press("R",settle=12)
     stable=bytes(e.mem.unsigned[board:board+228])
-    e.hold("L")
-    e.press("Y",settle=12)
-    e.hold("L",False)
-    guide_pages("uk-live",9)
+    e.tap(215,185,settle=12)
+    guide_pages("uk-live",9,touch_back=True)
     assert bytes(e.mem.unsigned[board:board+228])==stable
     assert integer("scriptPreviewTraining")==1
     # Change languages inside the tutorial: preserve the lesson, not score.

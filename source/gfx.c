@@ -2652,7 +2652,8 @@ int gfxScriptPracticeAction(int px,int py)
 // Four full-width touch controls occupy the same panel on either hand layout.
 int gfxScriptPlayAction(int px,int py)
 {
-    if(px<panelX+4 || px>=panelX+74 || py<110 || py>=180) return 0;
+    if(px<panelX+4 || px>=panelX+74 || py<110 || py>=190) return 0;
+    if(py>=180) return 5; // visible rules footer, shared by tutorial and play
     int row=(py-110)/18;
     return (py-110)%18<16?row+1:0;
 }
@@ -2889,7 +2890,9 @@ static void drawScriptPreviewBoard(void)
             rectOutline(panelX+4,y,70,16,selected?GOLD_LT:active?ACCENT:DIM_TEXT);
             drawTextCenter(panelX+39,y+5,actions[i],active?WHITE:DIM_TEXT,1);
         }
-        drawTextCenter(panelX+39,182,"L+Y: ?",ACCENT,1);
+        fillRect(panelX+4,180,70,10,DIM);
+        rectOutline(panelX+4,180,70,10,GOLD_LT);
+        drawTextCenter(panelX+39,182,"ПРАВИЛА",WHITE,1);
 #else
         for (int i=0;i<3;++i) {
             int y=110+23*i;
@@ -2931,7 +2934,9 @@ static void drawScriptPreviewBoard(void)
             rectOutline(panelX+4,y,70,16,outline);
             drawTextCenter(panelX+39,y+5,actions[i],active?WHITE:DIM_TEXT,1);
         }
-        drawTextCenter(panelX+39,182,"L+Y: ?",ACCENT,1);
+        fillRect(panelX+4,180,70,10,DIM);
+        rectOutline(panelX+4,180,70,10,GOLD_LT);
+        drawTextCenter(panelX+39,182,"ПРАВИЛА",WHITE,1);
         return;
     }
 #endif

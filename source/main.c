@@ -1105,6 +1105,18 @@ int main(void)
                     }
                     if (!(down & KEY_START)) break;
                 }
+#ifdef WP_CYR_MAIN
+                // Read the same full guide with a stylus, in either mode.
+                // Do not lose the chain, spend a turn or arm a peel.
+                if ((down & KEY_TOUCH) && !scriptKeyAction &&
+                    gfxScriptPlayAction(t.px,t.py)==5) {
+                    scriptDropPeekStroke();
+                    scriptWordStrokeSuppressed=true;
+                    scriptPreviewTouchPeek=0;
+                    openGuide(ST_SCRIPT_PREVIEW);
+                    break;
+                }
+#endif
                 // Visible practice button and controller shortcut. A fresh
                 // contact never leaks into the newly generated lesson.
                 if (!scriptPreviewHelp &&
