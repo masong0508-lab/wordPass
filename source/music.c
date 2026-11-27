@@ -47,9 +47,16 @@ typedef struct {
     int  vibDelay, vibDiv;  // active vibrato (the Inst's, or a chime sound effect's)
 } Voice;
 
+// Integrated DS: these sequencer fields are ARM9-only. Sound commands
+// pass scalar values, not pointers to these arrays, to the PSG hardware.
+#ifdef WP_CYR_MAIN
+static DTCM_BSS Voice V[NVOICE];
+static DTCM_BSS u16 noteHz[128];
+#else
 static Voice V[NVOICE];
-static s16 lastSent[NVOICE];            // the volume last written to each channel
 static u16 noteHz[128];
+#endif
+static s16 lastSent[NVOICE];            // the volume last written to each channel
 static int songOfRole(int role, int n);
 static int stepTimer, step, lastStep = 255, lastSection;
 static int stepFrames = 8, calmBars;
