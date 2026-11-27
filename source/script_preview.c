@@ -3,6 +3,9 @@
 // The normal wordPass language menu, saves and gameplay remain unchanged.
 #include "script_preview.h"
 #ifdef WP_CYR_PREVIEW
+#ifdef WP_CYR_MAIN
+#include "game.h"
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -178,6 +181,10 @@ static bool startPass(unsigned shelf, uint32_t seed, int bankedScore)
     ScriptBoard nextBoard;
     ScriptRules nextRules;
     scriptRulesStart(&nextRules, shelf, seed);
+#ifdef WP_CYR_MAIN
+    if (!scriptPreviewDaily && !scriptPreviewTraining)
+        scriptRulesApplyFireMode(&nextRules,S.fire);
+#endif
     // Scale password length across shelves using only attested words from
     // the selected theme. Small draft pools fall back to their nearest
     // available length; sourced RU/UK packs can exercise 4..9-letter passes.
