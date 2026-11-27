@@ -125,9 +125,38 @@ def main(rom, elf, output):
     e.run(120)
     assert integer("scriptCompositeBuilds")==count
     assert integer("scriptCompositeTilesLast")==56
-    e.shot(str(out/"ru-vram-cache.png"))
     board=symbol(elf,"scriptPreviewBoard")
-    offsets=member_offsets(elf,"scriptPreviewBoard",("back","passLen","chainLen","chainC","chainR","state"))
+    offsets=member_offsets(elf,"scriptPreviewBoard",("back","passLen","chainLen","chainC","chainR","state","tile"))
+    def check_atlas_pixels(tag):
+        # The 35 Latin composites precede the 64 Unicode slots. Check the
+        # actual touch LCD, not only the reported number of cache hits.
+        # Settle the flip and compare interior pixels, avoiding clue badges
+        # and selection borders. Fresh boards contain no active overlays.
+        e.run(120)
+        assert integer("scriptCompositeTilesLast")==56
+        pixels=e.pixels()
+        atlas=0x06860000+35*960
+        ids=bytes(e.mem.unsigned[board+offsets["tile"]:board+offsets["tile"]+56])
+        states=bytes(e.mem.unsigned[board+offsets["state"]:board+offsets["state"]+56])
+        checked=set()
+        for i,id in enumerate(ids):
+            if states[i]!=1 or id in checked: continue
+            c,r=divmod(i,8)
+            x,y,_,_=e.cell_rect(c,r)
+            data=bytes(e.mem.unsigned[atlas+id*960:atlas+(id+1)*960])
+            assert any(data),(tag,id,"empty VRAM sprite")
+            for yy in range(4,17):
+                for xx in range(6,15):
+                    j=2*((yy-1)*24+xx)
+                    v=int.from_bytes(data[j:j+2],"little")
+                    expected=(v&31,(v>>5)&31,(v>>10)&31)
+                    actual=tuple(ch>>3 for ch in pixels[x+xx,y+yy])
+                    assert actual==expected,(tag,c,r,id,xx,yy,actual,expected)
+            checked.add(id)
+            if len(checked)==6: break
+        assert len(checked)>=4,(tag,checked)
+        e.shot(str(out/f"{tag}-vram-cache.png"))
+    check_atlas_pixels("ru")
     def touch_action(row):
         e.tap(215,118+18*row,settle=12)
     def board_byte(name):
@@ -222,6 +251,7 @@ def main(rom, elf, output):
     wait_state(ST_TITLE)
     assert daily(0)==daily(1)==(0,)*8
     enter_daily(1,20261126,1)
+    check_atlas_pixels("uk")
     assert rule("burnEvery")==4 and rule("heatThreshold")==8,"Daily must ignore fire preference"
     assert daily(1)[1:]==(20261126,0,0,0,0,0,0)
     puzzle=bytes(e.mem.unsigned[board:board+228])
