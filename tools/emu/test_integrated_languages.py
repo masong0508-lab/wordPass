@@ -50,6 +50,18 @@ def main(rom, elf, output):
     def career(lang):
         a=symbol(elf,"scriptCareer")+32*lang
         return tuple(int.from_bytes(bytes(e.mem.unsigned[a+i:a+i+4]),"little") for i in range(0,32,4))
+    def daily(lang):
+        a=symbol(elf,"scriptDailyCareer")+32*lang
+        return tuple(int.from_bytes(bytes(e.mem.unsigned[a+i:a+i+4]),"little") for i in range(0,32,4))
+    def enter_daily(lang,date,rank):
+        e.set_clock(date)
+        e.tap(120,147,settle=18)
+        wait_state(9,lang)
+        assert integer("scriptPreviewDaily")==1 and integer("scriptPreviewDailyDate")==date
+        assert integer("scriptPreviewDailyRanked")==rank,(lang,date,rank,daily(lang))
+    def leave_daily():
+        e.press("START",settle=20)
+        wait_state(ST_TITLE)
     assert e.state()["state"]==ST_LANGPICK
     select(11)
     assert not any(buffers()),"menu must not retain Unicode pack heap"
@@ -162,20 +174,75 @@ def main(rom, elf, output):
     assert preference()==12 and integer("scriptPreviewTraining")==1
     e.press("START",settle=20)
     wait_state(ST_TITLE)
-    e.set_clock(20261126)
-    e.tap(120,147,settle=18)
-    wait_state(9,1)
-    assert integer("scriptPreviewDaily")==1 and integer("scriptPreviewDailyDate")==20261126
+    assert daily(0)==daily(1)==(0,)*8
+    enter_daily(1,20261126,1)
     assert rule("burnEvery")==4 and rule("heatThreshold")==8,"Daily must ignore fire preference"
+    assert daily(1)[1:]==(20261126,0,0,0,0,0,0)
+    puzzle=bytes(e.mem.unsigned[board:board+228])
+    seed=integer("scriptPreviewSeed")
+    e.press("SELECT",settle=16)
+    assert bytes(e.mem.unsigned[board:board+228])==puzzle
+    assert integer("scriptPreviewSeed")==seed and integer("scriptPreviewDailyRanked")==1
+    e.press("R",settle=12)
+    e.press("A",settle=16)
+    points=integer("scriptPreviewScore")
+    assert points>0
     e.shot(str(out/"uk-daily.png"))
-    assert career(0)==ru and career(1)==(0,)*8,"Daily must not contaminate Classic records"
-    e.press("START",settle=20)
+    leave_daily()
+    first=daily(1)
+    assert first[1:]==(20261126,20261126,points,points,20261126,1,1),first
+    e.power_cycle()
     wait_state(ST_TITLE)
+    assert daily(1)==first
+    enter_daily(1,20261126,0)
+    assert integer("scriptPreviewSeed")==seed
+    assert bytes(e.mem.unsigned[board:board+228])==puzzle
+    e.press("R",settle=12)
+    e.press("A",settle=16)
+    leave_daily()
+    assert daily(1)==first,"practice changed scored results"
+    enter_daily(1,20261127,1)
+    e.power_cycle() # consume the date even when powered off mid-attempt
+    wait_state(ST_TITLE)
+    assert daily(1)[1]==20261127 and daily(1)[2:]==first[2:]
+    entered=daily(1)
+    enter_daily(1,20261127,0)
+    leave_daily()
+    enter_daily(1,20261126,0)
+    leave_daily()
+    assert daily(1)==entered
+    # Russian can score its own Daily on the same date.
+    select(11)
+    enter_daily(0,20261127,1)
+    e.press("R",settle=12)
+    e.press("A",settle=16)
+    raw=bytes(e.mem.unsigned[board+offsets["back"]:board+offsets["back"]+56])
+    length=int(e.mem.unsigned[board+offsets["passLen"]])
+    for n in range(1,length+1):
+        if integer("scriptPreviewDailyRanked")==2: break
+        c,r=divmod(raw.index(n),8)
+        e.hold("L")
+        e.tap(*e.center(c,r),settle=12)
+        e.hold("L",False)
+    assert integer("scriptPreviewDailyRanked")==2
+    result=daily(0)
+    assert result[1]==result[2]==20261127 and result[7]==1
+    e.run(60)
+    assert daily(0)==result and daily(1)==entered
+    e.press("A",settle=24)
+    wait_state(ST_TITLE)
+    e.press("X",settle=16)
+    wait_state(6)
+    e.shot(str(out/"ru-daily-ledger.png"))
+    e.press("B",settle=16)
+    wait_state(ST_TITLE)
+    assert career(0)==ru and career(1)==(0,)*8,"Daily must not contaminate Classic records"
     select(6)
     assert e.state()["language"]==6 and not any(buffers())
     e.power_cycle()
     wait_state(ST_TITLE)
     assert preference()==6 and e.state()["language"]==6
+    assert daily(0)==result and daily(1)==entered
     # The large Dutch pack is the worst retail RAM case. Exercise a real
     # Latin shelf after returning from both Unicode packs, with the full
     # composite cache in CPU-visible LCDC VRAM D.
