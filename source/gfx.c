@@ -446,10 +446,19 @@ typedef struct { u32 w[TILE_W / 2]; } GemRow;
 // gem + glyph path for the rest. The common 56-cell plain-tile path stays
 // unchanged, and no dictionary or password content is removed.
 #if defined(WP_CYR_MAIN)
-#define DIAMOND_CACHE_SLOTS 2
-#define LETTER_CACHE_SLOTS 20
-static u8 letterSlot[26];
-static int cacheLanguage=-1;
+// Bank D is otherwise unused by the dual-screen bitmap renderer.
+// In LCDC mode its 128 KiB is directly accessible to ARM9. The existing
+// aligned word-copy blitter works unchanged, with no main-RAM allocation.
+#define DIAMOND_CACHE_SLOTS POOL_MAX_LEN
+#define LETTER_CACHE_SLOTS 26
+typedef struct {
+    GemRow letters[LETTER_CACHE_SLOTS][COMP_ROWS];
+    GemRow diamonds[DIAMOND_CACHE_SLOTS][COMP_ROWS];
+} IntegratedGemCache;
+_Static_assert(sizeof(IntegratedGemCache)<=128*1024,"gem cache fits VRAM D");
+#define INTEGRATED_CACHE ((IntegratedGemCache *)0x06860000u)
+#define gemLetter (INTEGRATED_CACHE->letters)
+#define diamondLetter (INTEGRATED_CACHE->diamonds)
 #else
 #define LETTER_CACHE_SLOTS 26
 #ifdef WP_CYR_PREVIEW
@@ -457,13 +466,9 @@ static int cacheLanguage=-1;
 #else
 #define DIAMOND_CACHE_SLOTS POOL_MAX_LEN
 #endif
-#endif
 static ALIGN(4) GemRow gemLetter[LETTER_CACHE_SLOTS][COMP_ROWS], diamondLetter[DIAMOND_CACHE_SLOTS][COMP_ROWS];
-#ifdef WP_CYR_MAIN
-#define LETTER_SLOT(l) letterSlot[(l)]
-#else
-#define LETTER_SLOT(l) (l)
 #endif
+#define LETTER_SLOT(l) (l)
 static u8 diamondSlot[27];
 static u32 diamondCacheMask;
 
@@ -521,21 +526,6 @@ static void buildGemCache(void)
     clearScratch(PLAQUE_W, PLAQUE_H);
     drawGemSized(0, 0, PLAQUE_W, PLAQUE_H, &GEM_DIAMOND, false);
     for (int j = 0; j < PLAQUE_H; j++) for (int k = 0; k < PLAQUE_W; k++) plaqueCache[j][k] = cur[j * SCREEN_W + k];
-#ifdef WP_CYR_MAIN
-    // Cache the most frequently dealt Latin letters for the active pack.
-    // Six less frequent letters use the original gem + glyph draw path.
-    // This recovers 5760 bytes for the two new localized menus.
-    memset(letterSlot,255,sizeof letterSlot);
-    cacheLanguage=-1;
-    for (int slot=0;slot<LETTER_CACHE_SLOTS;++slot) {
-        int best=-1;
-        for (int l=0;l<26;++l)
-            if (letterSlot[l]==255 && (best<0 || langWeight(l)>langWeight(best)))
-                best=l;
-        letterSlot[best]=(u8)slot;
-        if (langWeight(best)>0) cacheLanguage=langCur();
-    }
-#endif
     for (int l = 0; l < 26; l++) {
         if (LETTER_SLOT(l)>=LETTER_CACHE_SLOTS) continue;
         const GemPal *p = GEM_PALS[palOf[l]];
@@ -3961,6 +3951,9 @@ void gfxInit(void)
     vramSetBankA(VRAM_A_MAIN_BG_0x06000000);   // front/back bitmap pair for the touch screen
     vramSetBankB(VRAM_B_MAIN_BG_0x06020000);
     vramSetBankC(VRAM_C_SUB_BG);
+#ifdef WP_CYR_MAIN
+    vramSetBankD(VRAM_D_LCD); // independent ARM9-readable composite storage
+#endif
     bgMain = bgInit(3, BgType_Bmp16, BgSize_B16_256x256, 0, 0);
     int bgs = bgInitSub(3, BgType_Bmp16, BgSize_B16_256x256, 0, 0);
     vramSub = bgGetGfxPtr(bgs);
@@ -4174,9 +4167,6 @@ void gfxFrame(const Game *g)
         frameMid = accent; frameDk = lerp15(accent, BLACK, 9); frameLt = lerp15(accent, WHITE, 8);
         buildHeatTables();
     }
-#ifdef WP_CYR_MAIN
-    if (cacheLanguage!=langCur()) buildGemCache();
-#endif
     if (g->state == ST_PLAY || g->state == ST_PAUSE || g->state == ST_PASSED || g->state == ST_FAIL)
         refreshDiamondCache(g);
     boardChainWord(g, chainWordNow);
