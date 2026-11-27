@@ -1654,11 +1654,11 @@ static void drawTopTitle(void)
     drawLogo(16, 16, 2);
 #ifdef WP_CJK_MAIN
     if(cjkMenu() && G.state!=ST_OPTIONS){
-        drawTextCenter(128,58,"CJK PRACTICE BETA",GOLD_LT,1);
+        drawTextCenter(128,58,"CJK CLASSIC BETA",GOLD_LT,1);
         drawTextCenter(128,85,"CONNECT TWO OR MORE CHARACTERS",WHITE,1);
         drawTextCenter(128,108,"WORDS REVEAL PASSWORD CLUES",ACCENT,1);
         drawTextCenter(128,130,"DAILY IS UNRANKED PRACTICE",INK,1);
-        drawTextCenter(128,153,"FIRE AND CAREER NOT YET ENABLED",DIM_TEXT,1);
+        drawTextCenter(128,153,"TRAINING HAS NO FIRE",DIM_TEXT,1);
         drawText(16,175,WP_BUILD_LABEL,DIM_TEXT,1);
         drawText(192,175,WP_BUILD_FLAVOR,DIM_TEXT,1);
         if(G.msg[0])drawTextCenter(128,164,G.msg,FIRE2,1);
@@ -3638,7 +3638,7 @@ static const char *menuLabel(int id)
 {
 #ifdef WP_CJK_MAIN
     if(cjkMenu()){
-        if(id==UI_T_CLASSIC)return "PRACTICE";
+        if(id==UI_T_CLASSIC)return "CLASSIC";
         if(id==UI_TR_START)return "CJK PRACTICE (L+A)";
         if(id==UI_T_NEWHERE)return "START WITH PRACTICE";
     }

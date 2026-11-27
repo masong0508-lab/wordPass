@@ -7,6 +7,8 @@
 #define CJ_ROWS 6
 #define CJ_CELLS (CJ_COLS*CJ_ROWS)
 #define CJ_MAX 6
+enum { CJ_FIRE_OFF=-1,CJ_FIRE_RELAXED=0,CJ_FIRE_NORMAL=1,CJ_FIRE_FAST=2 };
+enum { CJ_LOSS_NONE=0,CJ_LOSS_FIRE=1 };
 typedef struct {
     uint16_t text[CJ_MAX];
     uint8_t len;
@@ -22,9 +24,21 @@ typedef struct {
     int8_t focus;
     uint16_t lastWord;
     uint32_t rng, score, turns;
+    uint32_t dealSeed, bankedScore;
+    uint16_t shelf;
+    int8_t fireMode;
+    uint8_t heat, heatLimit, burnEvery, burnTick, loss;
+    uint8_t flame[CJ_CELLS];
 } CjGame;
 bool cjAdjacent(int a,int b);
 bool cjStart(CjGame *g,const CjLexicon *lex,uint32_t seed);
+bool cjStartMode(CjGame *g,const CjLexicon *lex,uint32_t seed,int mode,unsigned shelf,uint32_t score);
+bool cjNextShelf(CjGame *g);
+bool cjRetryShelf(CjGame *g);
+int cjWordHeat(int len);
+int cjHeatCost(const CjGame *g,int base);
+bool cjPeelBlocked(const CjGame *g,int cell);
+bool cjEnded(const CjGame *g);
 int cjLookup(const CjLexicon *lex,const uint16_t *text,int len);
 int cjSelected(const CjGame *g);
 bool cjAdd(CjGame *g,int cell);

@@ -31,6 +31,11 @@ UI = {
     "RECOVER": ("重排", "重排", "再配置"),
     "RECOVERY_COST": ("再按重排，耗费一步", "再按重排，耗費一步", "再配置は一手消費"),
     "RECOVERY_BLOCKED": ("没有相邻未开格", "沒有相鄰未開格", "隣接した未開封マスなし"),
+    "SHELF": ("关卡", "關卡", "棚"),
+    "HEAT": ("热度", "熱度", "熱量"),
+    "FIRE_WARN": ("先灭火再揭开", "先滅火再揭開", "消火してから開く"),
+    "FIRE_LOST": ("火势蔓延，失败", "火勢蔓延，失敗", "火が最下段に到達"),
+    "RETRY": ("重试", "重試", "再挑戦"),
 }
 
 def read_words():
@@ -89,7 +94,7 @@ def glyph_header(sets, path):
         for key, texts in UI.items():
             label = texts[i]
             assert 1 <= len(label) <= 14, (key, label)
-            if key in ('ACCEPT','CLEAR','HINT','RECOVER','OPEN','CANCEL','NEXT','MENU','SCORE'):
+            if key in ('ACCEPT','CLEAR','HINT','RECOVER','OPEN','CANCEL','NEXT','MENU','SCORE','RETRY'):
                 assert len(label) <= 4, (key, label)
             out.append('        {' + ','.join(hex(ord(ch)) for ch in label) + ',0},')
         out.append('    },')

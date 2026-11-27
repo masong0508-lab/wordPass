@@ -363,7 +363,7 @@ static void startSelectedGame(int mode,bool training,u32 seed)
         }
         (void)langLoad(LANG_EN);
         gfxLoading(idx==LANG_JA?"JAPANESE":"CHINESE");
-        if(cjkEnter(idx-LANG_ZH_HANS,seed,mode==MODE_DAILY)){
+        if(cjkEnter(idx-LANG_ZH_HANS,seed,mode==MODE_DAILY,training,S.fire)){
             G.state=ST_CJK_PLAY;G.mode=mode;G.training=0;
         }else setMsg("CJK PACK LOAD FAILED",180);
         return;
