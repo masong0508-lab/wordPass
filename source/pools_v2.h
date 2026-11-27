@@ -13,9 +13,9 @@
 
 typedef struct {
     const uint8_t *image;                        // bytes owned by caller
-    const char *name[WPP2_MAX_THEMES];           // NUL-terminated UTF-8
-    const uint8_t *base[WPP2_MAX_THEMES][WPP2_LENGTHS];
-    uint16_t count[WPP2_MAX_THEMES][WPP2_LENGTHS];
+    // One validated byte offset per theme, not six host pointers.
+    // Immutable name/count records remain in the already-owned image.
+    uint32_t themeOffset[WPP2_MAX_THEMES];
     uint8_t themes, symbols;
 } V4Pools;
 

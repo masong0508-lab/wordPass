@@ -87,23 +87,21 @@ bool v4PoolsOpen(V4Pools *pools, const uint8_t *data, size_t size,
         for (unsigned prev = 0; prev < t; prev++)
             if (!strcmp((const char *)(headers + prev * WPP2_THEME_HEADER),
                         (const char *)h)) return false;
-        pools->name[t] = (const char *)h;
         unsigned countTotal = 0;
-        for (unsigned k = 0; k < WPP2_LENGTHS; k++) {
-            unsigned n = le16(h + WPP2_NAME_BYTES + k * 2u);
-            pools->count[t][k] = (uint16_t)n;
-            countTotal += n;
-        }
+        for (unsigned k = 0; k < WPP2_LENGTHS; k++)
+            countTotal += le16(h + WPP2_NAME_BYTES + k * 2u);
         if (countTotal == 0) return false;  // no unplayable empty theme
     }
     bool hasApostrophe = false;
     for (unsigned t = 0; t < themes; t++) {
+        const uint8_t *h = headers + t * WPP2_THEME_HEADER;
+        // The earlier size cap (2 MiB) guarantees a lossless offset.
+        pools->themeOffset[t] = (uint32_t)offset;
         for (unsigned k = 0; k < WPP2_LENGTHS; k++) {
             unsigned len = WPP2_MIN_LEN + k;
-            unsigned count = pools->count[t][k];
+            unsigned count = le16(h + WPP2_NAME_BYTES + k * 2u);
             if (offset > size || count > (size - offset) / len)
                 return false;
-            pools->base[t][k] = data + offset;
             const uint8_t *previous = NULL;
             for (unsigned i = 0; i < count; i++) {
                 const uint8_t *word = data + offset + (size_t)i * len;
@@ -138,24 +136,36 @@ bool v4PoolsMatches(const V4Pools *pools, const V4Dict *dictionary)
         if (le32(alphabet + 4u * i) != dictionary->alphabet[i]) return false;
     return true;
 }
+// Called only with a validated theme index and an immutable open image.
+static const uint8_t *themeHeader(const V4Pools *pools, int theme)
+{
+    return pools->image + WPP2_HEADER + 4u * pools->symbols +
+           (size_t)theme * WPP2_THEME_HEADER;
+}
 int v4PoolsCount(const V4Pools *pools, int theme, int len)
 {
     if (!pools || !pools->image || theme < 0 || theme >= pools->themes ||
         len < WPP2_MIN_LEN || len > WPP2_MAX_LEN) return 0;
-    return pools->count[theme][len - WPP2_MIN_LEN];
+    return le16(themeHeader(pools, theme) + WPP2_NAME_BYTES +
+                2u * (len - WPP2_MIN_LEN));
 }
 const char *v4PoolsName(const V4Pools *pools, int theme)
 {
     if (!pools || !pools->image || theme < 0 || theme >= pools->themes)
         return "";
-    return pools->name[theme];
+    return (const char *)themeHeader(pools, theme);
 }
 bool v4PoolsWord(const V4Pools *pools, int theme, int len, int index,
                  uint8_t out[WPP2_MAX_LEN])
 {
     if (!out || index < 0 || index >= v4PoolsCount(pools, theme, len))
         return false;
-    memcpy(out, pools->base[theme][len - WPP2_MIN_LEN] +
-           (size_t)index * len, (size_t)len);
+    // At most five prior lengths. Word selection is not a frame operation.
+    const uint8_t *counts = themeHeader(pools, theme) + WPP2_NAME_BYTES;
+    size_t offset = pools->themeOffset[theme];
+    for (int previous = WPP2_MIN_LEN; previous < len; previous++)
+        offset += (size_t)previous *
+                  le16(counts + 2u * (previous - WPP2_MIN_LEN));
+    memcpy(out, pools->image + offset + (size_t)index * len, (size_t)len);
     return true;
 }
