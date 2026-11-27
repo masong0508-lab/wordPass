@@ -102,10 +102,61 @@ def main(rom, elf, output):
     def rule(name): return int(e.mem.unsigned[ra+ro[name]])
     assert rule("burnEvery")==4 and rule("heatThreshold")==8
     assert any(buffers()) and preference()==11
-    e.press("R",settle=12)
-    e.press("A",settle=12)
-    assert integer("scriptPreviewTurns")==1 and integer("scriptPreviewScore")>0
-    e.shot(str(out/"ru-tutorial.png"))
+    def complete_touch_tutorial(tag):
+        # Complete the actual lesson on the touch LCD, without L or A.
+        b=symbol(elf,"scriptPreviewBoard")
+        o=member_offsets(elf,"scriptPreviewBoard",("state","chainLen","passLen","clueC","clueR"))
+        def byte(name): return int(e.mem.unsigned[b+o[name]])
+        def tile(c,r): return int(e.mem.unsigned[b+o["state"]+c*8+r])
+        def action(row): e.tap(215,118+18*row,settle=12)
+        def reveal(c,r):
+            action(3)
+            assert integer("scriptPreviewTouchPeek")==1
+            prior=integer("scriptPreviewTurns")
+            e.tap(*e.center(c,r),settle=12)
+            assert integer("scriptPreviewTurns")==prior+1
+            assert integer("scriptPreviewTouchPeek")==0
+        action(3) # opening is unavailable until the word has been accepted
+        assert integer("scriptPreviewTouchPeek")==0
+        action(2)
+        assert byte("chainLen")>=3
+        action(0)
+        assert integer("scriptPreviewTurns")==1 and integer("scriptPreviewScore")>0
+        e.shot(str(out/f"{tag}-tutorial.png"))
+        action(3)
+        assert integer("scriptPreviewTouchPeek")==1
+        e.emu.input.touch_set_pos(*e.center(6,0))
+        e.run(5)
+        e.emu.input.touch_set_pos(*e.center(6,1))
+        e.run(5)
+        e.emu.input.touch_release()
+        e.run(12)
+        assert integer("scriptPreviewTurns")==1
+        assert integer("scriptPreviewTouchPeek")==1
+        action(3) # visible cancel button
+        assert integer("scriptPreviewTouchPeek")==0
+        reveal(6,0)
+        assert tile(6,0)==0
+        reveal(6,1)
+        assert tile(6,1)==3
+        e.shot(str(out/f"{tag}-tutorial-deduction.png"))
+        reveal(0,7)
+        assert tile(0,7)==0
+        # The final-stage hint exposes only public neighbor evidence.
+        for _ in range(byte("passLen")-1):
+            action(2)
+            c,r=byte("clueC"),byte("clueR")
+            assert tile(c,r)==0
+            covered=[(cc,rr) for cc,rr in e.neighbors(c,r) if tile(cc,rr)==1]
+            assert covered
+            reveal(*covered[-1])
+        assert integer("scriptPreviewTurns")==byte("passLen")+3
+        assert integer("scriptPreviewPeels")==byte("passLen")+2
+        e.shot(str(out/f"{tag}-tutorial-complete.png"))
+        action(0)
+        assert integer("scriptPreviewTraining")==0
+        assert integer("scriptPreviewTurns")==0 and integer("scriptPreviewScore")==0
+    complete_touch_tutorial("ru")
     e.press("START",settle=20)
     wait_state(ST_TITLE)
     assert preference()==11 and not any(buffers())
@@ -255,6 +306,7 @@ def main(rom, elf, output):
     assert preference()==12 and integer("scriptPreviewTraining")==1
     e.run(8)
     assert integer("scriptCompositeBuilds")==count+2
+    complete_touch_tutorial("uk")
     e.press("START",settle=20)
     wait_state(ST_TITLE)
     assert daily(0)==daily(1)==(0,)*8

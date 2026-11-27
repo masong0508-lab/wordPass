@@ -61,6 +61,12 @@ bank now caches all ordinary gem glyphs in the active Unicode alphabet,
 plus the existing password-plaque sprite and heat-bar gradients. All use
 aligned halfword/word access; the whole layout fits inside 128 KiB.
 The Unicode atlas is regenerated on a language or theme change, not each frame.
+The integrated Russian/Ukrainian tutorial also uses the regular four-button
+touch panel: submit, clear, hint and open/cancel. After the first word,
+tap Open and release on the indicated tile; dragging away cancels for free.
+Every lesson is playable without a shoulder button, while L+touch and
+controller shortcuts remain available. The separate engineering ROM
+retains its original three-button tutorial.
 The integrated renderer uses one bounded word-selection mask and subtle
 flame/valid-word edge animation. The shared
 eight-page guide is localized in both languages and accessible from the title
