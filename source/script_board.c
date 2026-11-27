@@ -695,24 +695,31 @@ bool scriptBoardPassComplete(const ScriptBoard *b)
 
 // Bounded DFS: unlike a naive 56*(6^6) brute force, reject impossible
 // Unicode prefixes via WPD4 binary searches. This is run ONLY when the
-// user presses R, never from the frame renderer. A 12k-node limit protects
-// the original DS's single-core 60 Hz budget on large imported word lists.
+// user requests a hint, never from the frame renderer. An ordinary search
+// keeps its existing 12k-node cap per length. If fire is present, a separate
+// 3k-node pass per length first seeks a word through the lowest flame.
 typedef struct {
     const ScriptBoard *b;
     const V4Dict *dict;
     const V4Tiles *tiles;
     uint8_t pathC[SCRIPT_HINT_MAX], pathR[SCRIPT_HINT_MAX];
     bool used[SCRIPT_COLS][SCRIPT_ROWS];
-    int target, nodes;
+    int target, nodes, limit, fireRow;
 } HintSearch;
 // The parent call supplies exactly the WPD4 record interval sharing its
 // prefix. Carry it into the recursion so each new letter searches only that
 // narrowed span. The leaf interval itself proves a complete dictionary word.
-// No per-frame work, heap, persistent cache or change to the 12k-node cap.
+// No per-frame work, heap or persistent cache.
 static bool hintWalk(HintSearch *h, int col, int row, int depth,
-                     uint32_t lo, uint32_t hi)
+                     uint32_t lo, uint32_t hi, bool hitFire)
 {
-    if (h->nodes >= 12000 || !inside(col, row) || h->used[col][row])
+    if (h->nodes >= h->limit || !inside(col, row) || h->used[col][row])
+        return false;
+    // A hex step changes row by at most one. Prune paths that cannot
+    // possibly reach the required flame before their word ends.
+    int remaining = h->target - depth - 1;
+    if (!hitFire && h->fireRow >= 0 &&
+        (row + remaining < h->fireRow || row - remaining > h->fireRow))
         return false;
     int state = h->b->state[col][row];
     int id = h->b->tile[col][row];
@@ -728,34 +735,58 @@ static bool hintWalk(HintSearch *h, int col, int row, int depth,
     h->used[col][row] = true;
     h->pathC[depth] = (uint8_t)col;
     h->pathR[depth] = (uint8_t)row;
+    hitFire = hitFire || (state == SCRIPT_BURN && row == h->fireRow);
     int n = depth + 1;
-    if (n == h->target) return true;
+    if (n == h->target) {
+        if (h->fireRow < 0 || hitFire) return true;
+        h->used[col][row] = false;
+        return false;
+    }
     int nc[6] = {col, col, col - 1, col - 1, col + 1, col + 1};
     int nr[6] = {row + 1, row - 1, row, row + ((col & 1) ? 1 : -1),
                  row, row + ((col & 1) ? 1 : -1)};
     for (int i = 0; i < 6; i++)
-        if (hintWalk(h, nc[i], nr[i], n, lo, hi)) return true;
+        if (hintWalk(h, nc[i], nr[i], n, lo, hi, hitFire)) return true;
     h->used[col][row] = false;
     return false;
 }
-int scriptBoardHint(const ScriptBoard *b, const V4Dict *dict,
-                    const V4Tiles *tiles, uint8_t outC[SCRIPT_HINT_MAX],
-                    uint8_t outR[SCRIPT_HINT_MAX])
+static int hintSearch(const ScriptBoard *b, const V4Dict *dict,
+                      const V4Tiles *tiles, uint8_t *outC, uint8_t *outR,
+                      int fireRow)
 {
-    if (!b || !sameAlphabet(dict, tiles) || !outC || !outR) return 0;
     for (int length = SCRIPT_HINT_MAX; length >= WPD4_MIN_WORD; length--) {
         if (!dict->count[length]) continue;
         HintSearch search;
         memset(&search, 0, sizeof search);
         search.b = b; search.dict = dict; search.tiles = tiles;
         search.target = length;
+        search.fireRow = fireRow;
+        search.limit = fireRow >= 0 ? 3000 : 12000;
         for (int c = 0; c < SCRIPT_COLS; c++)
             for (int r = 0; r < SCRIPT_ROWS; r++)
-                if (hintWalk(&search, c, r, 0, 0u, dict->count[length])) {
+                if (hintWalk(&search, c, r, 0, 0u, dict->count[length], false)) {
                     memcpy(outC, search.pathC, (size_t)length);
                     memcpy(outR, search.pathR, (size_t)length);
                     return length;
                 }
     }
     return 0;
+}
+
+int scriptBoardHint(const ScriptBoard *b, const V4Dict *dict,
+                    const V4Tiles *tiles, uint8_t outC[SCRIPT_HINT_MAX],
+                    uint8_t outR[SCRIPT_HINT_MAX])
+{
+    if (!b || !sameAlphabet(dict, tiles) || !outC || !outR) return 0;
+    int lowest = -1;
+    for (int c = 0; c < SCRIPT_COLS; c++)
+        for (int r = 0; r < SCRIPT_ROWS; r++)
+            if (b->state[c][r] == SCRIPT_BURN && r > lowest) lowest = r;
+    if (lowest >= 0) {
+        int n = hintSearch(b, dict, tiles, outC, outR, lowest);
+        if (n) return n;
+    }
+    // If the urgent flame is unreachable within the small extra budget,
+    // retain the complete former ordinary search and its determinism.
+    return hintSearch(b, dict, tiles, outC, outR, -1);
 }

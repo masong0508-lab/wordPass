@@ -134,6 +134,31 @@ static void hintTargetRegression(void)
             CHECK(scriptBoardAdd(&b, cols[i], rows[i]), "hint path is adjacent and nonrepeating");
         CHECK(scriptBoardPreview(&b, &d, &t, NULL) > 0, "targeted hint scores a real word");
     }
+    // Two identical legal paths, but only the far path can extinguish
+    // the lowest flame. A hint must not blindly pick the earlier column.
+    b = before;
+    for (int r = 0; r < 6; r++) b.tile[0][r] = 1;
+    b.state[0][0] = SCRIPT_BURN;
+    b.state[SCRIPT_COLS - 1][5] = SCRIPT_BURN;
+    ScriptBoard fireBoard = b;
+    length = scriptBoardHint(&b, &d, &t, cols, rows);
+    bool savesFlame = false;
+    for (int i = 0; i < length; i++)
+        if (cols[i] == SCRIPT_COLS - 1 && rows[i] == 5) savesFlame = true;
+    CHECK(length == 6 && savesFlame, "hint prioritizes the lowest reachable flame");
+    CHECK(!memcmp(&b, &fireBoard, sizeof b), "fire-priority hint is read-only");
+    // Add a lower flame that cannot be in any valid word. The bounded
+    // priority search must fall back to a legal ordinary hint.
+    b.state[3][7] = SCRIPT_BURN;
+    fireBoard = b;
+    length = scriptBoardHint(&b, &d, &t, cols, rows);
+    CHECK(length == 6 && !memcmp(&b, &fireBoard, sizeof b),
+          "unreachable flame does not suppress an ordinary hint");
+    if (length == 6) {
+        for (int i = 0; i < length; i++)
+            CHECK(scriptBoardAdd(&b, cols[i], rows[i]), "fallback hint path stays legal");
+        CHECK(scriptBoardPreview(&b, &d, &t, NULL) > 0, "fallback hint scores a real word");
+    }
     b = before;
     b.state[SCRIPT_COLS - 1][2] = SCRIPT_HOLE;
     before = b;
