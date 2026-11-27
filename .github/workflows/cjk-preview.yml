@@ -1,0 +1,51 @@
+name: WordPass CJK practice preview
+on:
+  pull_request:
+    paths:
+      - 'experiments/cjk/**'
+      - '.github/workflows/cjk-preview.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Prepare regional glyph rasterizer
+        run: sudo apt-get update && sudo apt-get install -y python3-pil fonts-noto-cjk
+      - name: Validate starter vocabulary and generate native-script glyphs
+        working-directory: experiments/cjk
+        run: |
+          /usr/bin/python3 gen_assets.py
+          gcc -std=c11 -O2 -Wall -Wextra -Werror -Isource -Igenerated test_core.c source/cjk_core.c -o /tmp/cjk-test
+          /tmp/cjk-test
+          cp /usr/share/doc/fonts-noto-cjk/copyright generated/FONT-NOTICE.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cjk-generated-assets
+          path: experiments/cjk/generated/
+  nds:
+    needs: native
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitarm:20240511
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          name: cjk-generated-assets
+          path: experiments/cjk/generated
+      - name: Build standalone CJK practice ROM
+        working-directory: experiments/cjk
+        run: |
+          make
+          test -s wordPass-cjk-preview.nds
+          sha256sum wordPass-cjk-preview.nds > wordPass-cjk-preview.nds.sha256
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wordPass-CJK-practice-preview
+          path: |
+            experiments/cjk/wordPass-cjk-preview.nds
+            experiments/cjk/wordPass-cjk-preview.nds.sha256
+            experiments/cjk/generated/FONT-NOTICE.txt
+            experiments/cjk/README.md

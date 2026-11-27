@@ -1,0 +1,5 @@
+generated/
+build/
+*.nds
+*.elf
+*.sha256
