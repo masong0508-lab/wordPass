@@ -41,4 +41,14 @@ int scriptRulesRescueTurn(ScriptRules *rules, ScriptBoard *board,
                           const V4Tiles *tiles);
 // Derive heat for a valid word; longer words feed the fire less.
 int scriptRulesWordHeat(int letters);
+// Shared calculation for the actual turn and the live HUD heat quote.
+// turns is the count AFTER the proposed action.
+static inline int scriptRulesOvertime(const ScriptRules *rules, int turns)
+{
+    return turns - (12 + rules->shelf / 3);
+}
+static inline int scriptRulesOvertimeHeat(int overtime)
+{
+    return overtime > 0 ? 1 + overtime / 4 : 0;
+}
 #endif

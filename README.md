@@ -72,7 +72,11 @@ retains its original three-button tutorial.
 In integrated Classic and Daily, the top LCD explains how to earn the first
 clue, then displays the focused published clue as remaining password letters
 over covered neighbors, with actionable + / - / compare guidance. A live word
-selection takes precedence. This uses the same public inference as training.
+selection takes precedence. The integrated word readout shows the minimum
+three-letter length, the accepted-word score and added heat (including
+overtime), with a warning color when the meter reaches its ignition threshold.
+The normal hint button explicitly indicates when its allowance is spent.
+This uses the same public inference as training.
 The integrated renderer uses one bounded word-selection mask and subtle
 flame/valid-word edge animation. The shared
 eight-page guide is localized in both languages and accessible from the title

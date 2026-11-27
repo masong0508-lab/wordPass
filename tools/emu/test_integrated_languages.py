@@ -239,9 +239,29 @@ def main(rom, elf, output):
     assert board_byte("chainLen")==0 and integer("scriptPreviewTurns")==0
     touch_action(2)
     assert board_byte("chainLen")==0 and integer("scriptPreviewHints")==1
-    e.chain(path)
+    def word_feedback():
+        e.run(12)
+        px=e.pixels()
+        return tuple(px[x,y] for y in range(147,154) for x in range(20,236))
+    e.tap(*e.center(*path[0]),settle=12)
+    assert board_byte("chainLen")==1
+    one=word_feedback()
+    assert len(set(one))>1,"missing minimum-length feedback"
+    touch_action(1)
+    e.chain(path[:2])
+    assert board_byte("chainLen")==2
+    two=word_feedback()
+    assert two!=one,"two-letter feedback not updated"
     touch_action(0)
-    assert integer("scriptPreviewTurns")==1 and integer("scriptPreviewScore")>0
+    assert integer("scriptPreviewTurns")==0 and integer("scriptPreviewScore")==0
+    touch_action(1)
+    e.chain(path)
+    quoted=integer("chainScoreNow")
+    assert quoted>0
+    assert word_feedback()!=two,"missing score/heat quote"
+    e.shot(str(out/"ru-word-heat-quote.png"))
+    touch_action(0)
+    assert integer("scriptPreviewTurns")==1 and integer("scriptPreviewScore")==quoted
     e.shot(str(out/"ru-classic.png"))
     # Play a real terminal shelf. Secret positions are a test-only fixture
     # read; all scored reveals still go through physical DS touch input.
