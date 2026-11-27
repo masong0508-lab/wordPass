@@ -180,7 +180,7 @@ check:
 	$(BUILD)/script_pass_check $(BUILD)/cyr-source-intake/ru/dict.bin $(BUILD)/cyr-source-intake/uk/dict.bin $(BUILD)/cyr-source-intake/ru/tiles.bin $(BUILD)/cyr-source-intake/uk/tiles.bin $(BUILD)/cyr-source-intake/ru/pools.bin $(BUILD)/cyr-source-intake/uk/pools.bin
 	gcc -std=gnu11 -O2 -Wall -Wextra -Wshadow -I source tools/check/script_fire_test.c source/script_rules.c source/script_board.c source/pools_v2.c source/tiles_v2.c source/dict_v4.c -o $(BUILD)/script_fire_check
 	$(BUILD)/script_fire_check $(BUILD)/wpd4_ru.bin $(BUILD)/wpd4_uk.bin $(BUILD)/wpl2_ru.bin $(BUILD)/wpl2_uk.bin $(BUILD)/wpp2_ru.bin $(BUILD)/wpp2_uk.bin
-	gcc -std=gnu11 -O2 -Wall -Wextra -Wshadow -I source tools/check/script_career_test.c source/script_career.c -o $(BUILD)/script_career_check
+	gcc -std=gnu11 -O2 -Wall -Wextra -Wshadow -I source tools/check/script_career_test.c source/script_career.c source/script_daily.c -o $(BUILD)/script_career_check
 	$(BUILD)/script_career_check
 	gcc -std=gnu11 -O2 -Wall -Wextra -Wshadow -DWP_CYR_PREVIEW -I source tools/check/script_preview_test.c source/script_preview.c source/script_rules.c source/script_board.c source/script_ledger.c source/script_daily.c source/script_checkpoint.c source/pools_v2.c source/tiles_v2.c source/dict_v4.c -o $(BUILD)/script_preview_check
 	$(BUILD)/script_preview_check $(BUILD)/cyrpreview/ru/dict.bin $(BUILD)/cyrpreview/uk/dict.bin $(BUILD)/cyrpreview/ru/tiles.bin $(BUILD)/cyrpreview/uk/tiles.bin $(BUILD)/cyrpreview/ru/pools.bin $(BUILD)/cyrpreview/uk/pools.bin
