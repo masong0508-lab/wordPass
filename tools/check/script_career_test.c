@@ -68,8 +68,8 @@ int main(void)
     assert(scriptDailyCareerClaim(cfg,0,20280303));
     assert(scriptDailyCareerFinish(cfg,0,20280303,500));
     assert(scriptDailyCareer[0].streak==1 && scriptDailyCareer[0].bestScore==500);
-    // The new result is in D1; corrupt it and recover the D0 date claim.
-    snprintf(path,sizeof path,"%s/WPRU.D1",dir);
+    // D0 holds serial 9 (result); D1 holds serial 8 (date reservation).
+    snprintf(path,sizeof path,"%s/WPRU.D0",dir);
     f=fopen(path,"wb");assert(f);
     assert(fputc('W',f)!=EOF && !fclose(f));
     scriptCareerLoad(cfg);
