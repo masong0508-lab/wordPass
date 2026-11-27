@@ -10,8 +10,8 @@ ARCH := -march=armv5te -mtune=arm946e-s
 CFLAGS := -g -Wall -Wextra -Wshadow -O2 -ffunction-sections -fdata-sections $(ARCH) $(INCLUDE) -DARM9
 LDFLAGS = -specs=ds_arm9.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 LIBS := -lnds9
-LIBDIRS := $(LIBNDS)
 include $(DEVKITARM)/ds_rules
+LIBDIRS := $(LIBNDS)
 ifneq ($(BUILD),$(notdir $(CURDIR)))
 export OUTPUT := $(CURDIR)/$(TARGET)
 export VPATH := $(foreach dir,$(SOURCES),$(CURDIR)/$(dir))
