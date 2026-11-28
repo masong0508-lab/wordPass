@@ -60,6 +60,9 @@ static bool pathFor(const char *cfg,unsigned lang,unsigned slot,char kind,char p
     static const char suffix[SCRIPT_CAREER_COUNT][2]={{'R','U'},{'U','K'},
 #ifdef WP_CJK_MAIN
         {'Z','S'},{'Z','T'},{'J','A'},
+#ifdef WP_20_MAIN
+        {'K','O'},{'H','I'},{'I','D'},{'T','R'},
+#endif
 #endif
     };
     leaf[2]=suffix[lang][0];leaf[3]=suffix[lang][1];

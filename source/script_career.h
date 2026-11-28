@@ -6,7 +6,9 @@
 #include <stdbool.h>
 #include <stddef.h>
 #define SCRIPT_CAREER_BYTES 44
-#ifdef WP_CJK_MAIN
+#if defined(WP_20_MAIN)
+#define SCRIPT_CAREER_COUNT 9
+#elif defined(WP_CJK_MAIN)
 #define SCRIPT_CAREER_COUNT 5
 #else
 #define SCRIPT_CAREER_COUNT 2

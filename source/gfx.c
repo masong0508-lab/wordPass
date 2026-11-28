@@ -1668,7 +1668,7 @@ static void drawTopTitle(void)
             drawTextCenter(128,160,"B / TAP: BACK",ACCENT,1);
             return;
         }
-        drawTextCenter(128,58,"CJK CLASSIC BETA",GOLD_LT,1);
+        drawTextCenter(128,58,"NATIVE SCRIPT CLASSIC",GOLD_LT,1);
         drawTextCenter(128,85,"CONNECT TWO OR MORE CHARACTERS",WHITE,1);
         drawTextCenter(128,108,"WORDS REVEAL PASSWORD CLUES",ACCENT,1);
         drawTextCenter(128,130,"ONE SCORED DAILY PER DATE",INK,1);
@@ -3648,7 +3648,7 @@ static const char *menuLanguageName(void)
     if (S.language==LANG_RU) return "РУССКИЙ";
     if (S.language==LANG_UK) return "УКРАЇНСЬКА";
 #ifdef WP_CJK_MAIN
-    if(cjkMenu())return S.language==LANG_JA?"JAPANESE":S.language==LANG_ZH_HANS?"ZH-HANS":"ZH-HANT";
+    if(cjkMenu())return cjkLocaleName(S.language-LANG_ZH_HANS);
 #endif
 #endif
     return langName(langCur());
@@ -3658,7 +3658,7 @@ static const char *menuLabel(int id)
 #ifdef WP_CJK_MAIN
     if(cjkMenu()){
         if(id==UI_T_CLASSIC)return "CLASSIC";
-        if(id==UI_TR_START)return "CJK PRACTICE (L+A)";
+        if(id==UI_TR_START)return "TRAINING (L+A)";
         if(id==UI_T_NEWHERE)return "START WITH PRACTICE";
     }
 #endif
@@ -4301,10 +4301,17 @@ static void drawPauseCard(const Game *g)
 int gfxLangPickRowAt(int x, int y)
 {
 #ifdef WP_CJK_MAIN
+#ifdef WP_20_MAIN
+    if(x>=174&&x<252&&y>=23&&y<23+23*CJ_LOCALE_COUNT){
+        int r=(y-23)/23;
+        return (y-23)%23<21?LANG_ZH_HANS+r:-1;
+    }
+#else
     if(x>=174&&x<252&&y>=28&&y<148){
         int r=(y-28)/40;
         if((y-28)%40<35)return LANG_ZH_HANS+r;
     }
+#endif
 #endif
     if (x < 12 || x >= 160 || y < PICK_Y0) return -1;
     int r = (y - PICK_Y0) / PICK_DY;
@@ -4347,6 +4354,17 @@ static void drawLangPick(const Game *g)
 #ifdef WP_CYR_MAIN
     drawTextCenter(86,181,g->msgTimer>0?g->msg:"RU/UK BETA",g->msgTimer>0?FIRE2:DIM_TEXT,1);
 #ifdef WP_CJK_MAIN
+#ifdef WP_20_MAIN
+    drawTextCenter(213,12,"MORE LANGS",GOLD_LT,1);
+    for(int i=0;i<CJ_LOCALE_COUNT;i++){
+        int y=23+23*i;bool on=g->langPick==LANG_ZH_HANS+i;
+        u16 fg=cjkAvailable(i)?WHITE:DIM_TEXT;
+        fillRect(174,y,78,21,on?DIM:BLACK);
+        rectOutline(174,y,78,21,on?GOLD_LT:ACCENT);
+        drawTextCenter(213,y+7,cjkLocaleName(i),fg,1);
+        if(S.language==LANG_ZH_HANS+i)drawChar(176,y+2,'*',GOLD_LT,1);
+    }
+#else
     drawTextCenter(213,12,"CJK BETA",GOLD_LT,1);
     for(int i=0;i<3;i++){
         int y=28+i*40;bool on=g->langPick==LANG_ZH_HANS+i;
@@ -4357,6 +4375,7 @@ static void drawLangPick(const Game *g)
         drawTextCenter(213,y+17,i==0?"SIMPLIFIED":i==1?"TRADITIONAL":"KANA/KANJI",fg,1);
         if(S.language==LANG_ZH_HANS+i)drawChar(176,y+27,'*',GOLD_LT,1);
     }
+#endif
 #endif
 #else
     drawTextCenter(86,181,"RU/UK: TEST WORDS",DIM_TEXT,1);

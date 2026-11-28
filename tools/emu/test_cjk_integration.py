@@ -6,7 +6,9 @@ from fatrig import FatEmu, patch_dldi, make_card
 from wp import symbol
 from elf_abi import member_offsets
 
-def main(rom,elf,output):
+def main(rom,elf,output,flavor="16"):
+    twenty=flavor=="20"
+    last=20 if twenty else 16
     out=Path(output);out.mkdir(parents=True,exist_ok=True)
     dldi=patch_dldi(rom,str(out/"wordPass-integrated.nds"))
     card=str(out/"integrated-card.img")
@@ -34,17 +36,21 @@ def main(rom,elf,output):
     def select(i):
         if e.state()["state"]==0:e.tap(55,14,settle=12)
         wait(8)
-        if i>=13:e.tap(213,28+40*(i-13)+12,settle=12)
+        if i>=13:e.tap(213,(23+23*(i-13)+10) if twenty else (28+40*(i-13)+12),settle=12)
         else:e.tap(80,23+i*12+5,settle=12)
         wait(0)
         assert int(e.mem.unsigned[symbol(elf,"S")+so["language"]])==i
     wait(8)
     expected={}
-    for i in range(13,16):
+    for i in range(13,last):
         lang=i-11
         assert records("scriptCareer",lang)==(0,)*8
         select(i);e.tap(52,147,settle=18);wait(10)
-        assert read("tile",2)>255
+        cp=read("tile",2)
+        if i==16:assert 0xac00<=cp<=0xd7a3
+        elif i==17:assert 0xe000<=cp<0xf000
+        elif i>=18:assert 0x61<=cp<=0x17f
+        else:assert cp>255
         # Both cached VRAM banks must display the same settled board.
         e.run(20);first=e.emu.screenshot().convert("RGB").tobytes()
         e.run(1);second=e.emu.screenshot().convert("RGB").tobytes()
@@ -141,13 +147,13 @@ def main(rom,elf,output):
     for lang,(career,daily) in expected.items():
         assert records("scriptCareer",lang)==career
         actual=records("scriptDailyCareer",lang)
-        if lang==4:
+        if lang==last-12:
             assert actual[1]==20261128 and actual[2:]==daily[2:]
         else:assert actual==daily
     e.set_clock(20261128);e.tap(120,147,settle=18);wait(10)
     assert ranked()==0
     e.press("B",settle=12);wait(0)
-    assert int(e.mem.unsigned[symbol(elf,"S")+so["language"]])==15
+    assert int(e.mem.unsigned[symbol(elf,"S")+so["language"]])==last-1
     select(0);e.tap(52,147,settle=18);wait(1)
-    print("CJK INTEGRATION OK: words, peels, fire, retry, progression, training, five independent careers, ranked Daily reservation, replay and reboot")
+    print("CJK INTEGRATION OK: words, peels, fire, retry, progression, training, independent careers, ranked Daily reservation, replay and reboot")
 if __name__=="__main__":main(*sys.argv[1:])

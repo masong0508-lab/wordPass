@@ -95,7 +95,7 @@ def main():
     lines.extend([
         "## Automated checks",
         "",
-        "- `make check` tests all 4,235 locale entries for glyphs, "
+        "- `make check` tests all 4,477 locale entries for glyphs, "
         "pixel bounds, formatting and a critical vocabulary subset.",
         "- Every one of the 400 non-English packed ROM theme names must match its source.",
         "- Native checks cover dictionaries, tiles, language switching and corrupt-pack fallback.",

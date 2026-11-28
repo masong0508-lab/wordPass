@@ -44,6 +44,10 @@ CFLAGS   := -g -Wall -Wextra -Wshadow -O2 -ffunction-sections -fdata-sections\
 # The regular ROM keeps its 11-language picker and settings format.
 # The integrated development candidate must use the real, validated source
 # packs. Never silently promote the small engineering fixture vocabulary.
+ifeq ($(WP_20_MAIN),1)
+override WP_CJK_MAIN := 1
+CFLAGS += -DWP_20_MAIN
+endif
 ifeq ($(WP_CJK_MAIN),1)
 override WP_CYR_MAIN := 1
 ifeq ($(strip $(CJK_ASSETS_DIR)),)
@@ -133,7 +137,7 @@ $(BUILD):
 	        python3 tools/lang/install_cyr_preview.py --input-root "$(CYR_EXTERNAL_DIR)" --output-root "$(NITRO)/cyrpreview"; \
 	    else python3 tools/lang/build_preview.py $(NITRO)/cyrpreview; fi; \
 	else rm -rf $(NITRO)/cyrpreview; fi
-	@if [ "$(WP_CJK_MAIN)" = "1" ]; then mkdir -p $(NITRO)/cjk; cp "$(CJK_ASSETS_DIR)"/[012].bin $(NITRO)/cjk/; else rm -rf $(NITRO)/cjk; fi
+	@if [ "$(WP_CJK_MAIN)" = "1" ]; then rm -rf $(NITRO)/cjk; mkdir -p $(NITRO)/cjk; if [ "$(WP_20_MAIN)" = "1" ]; then cp "$(CJK_ASSETS_DIR)"/[0123456].bin $(NITRO)/cjk/; else cp "$(CJK_ASSETS_DIR)"/[012].bin $(NITRO)/cjk/; fi; else rm -rf $(NITRO)/cjk; fi
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
 # Regenerate the dictionary from a word list, marking COMMON words as the common tier:
@@ -199,6 +203,8 @@ check:
 	$(BUILD)/script_career_check
 	gcc -std=gnu11 -O2 -Wall -Wextra -Werror -DWP_CJK_MAIN -I source tools/check/cjk_records_test.c source/script_career.c source/script_daily.c -o $(BUILD)/cjk_records_check
 	$(BUILD)/cjk_records_check
+	gcc -std=gnu11 -O2 -Wall -Wextra -Werror -DWP_CJK_MAIN -DWP_20_MAIN -I source tools/check/cjk_records_test.c source/script_career.c source/script_daily.c -o $(BUILD)/extended_records_check
+	$(BUILD)/extended_records_check
 	gcc -std=gnu11 -O2 -Wall -Wextra -Wshadow -DWP_CYR_PREVIEW -I source tools/check/script_preview_test.c source/script_preview.c source/script_rules.c source/script_board.c source/script_ledger.c source/script_daily.c source/script_checkpoint.c source/pools_v2.c source/tiles_v2.c source/dict_v4.c -o $(BUILD)/script_preview_check
 	$(BUILD)/script_preview_check $(BUILD)/cyrpreview/ru/dict.bin $(BUILD)/cyrpreview/uk/dict.bin $(BUILD)/cyrpreview/ru/tiles.bin $(BUILD)/cyrpreview/uk/tiles.bin $(BUILD)/cyrpreview/ru/pools.bin $(BUILD)/cyrpreview/uk/pools.bin
 	gcc -std=gnu11 -O2 -Wall -Wextra -Wshadow -I source tools/check/script_ledger_test.c source/script_ledger.c -o $(BUILD)/script_ledger_check

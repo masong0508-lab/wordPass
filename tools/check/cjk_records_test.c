@@ -11,20 +11,25 @@ int main(void)
     assert(mkdtemp(dir));
     snprintf(cfg,sizeof cfg,"%s/wordPass.cfg",dir);
     scriptCareerLoad(cfg);
-    const char *names[]={"RU","UK","ZS","ZT","JA"};
-    for(unsigned lang=0;lang<5;lang++) {
+    const char *names[]={"RU","UK","ZS","ZT","JA",
+#ifdef WP_20_MAIN
+        "KO","HI","ID","TR",
+#endif
+    };
+    assert(sizeof names/sizeof *names==SCRIPT_CAREER_COUNT);
+    for(unsigned lang=0;lang<SCRIPT_CAREER_COUNT;lang++) {
         ScriptCareer r={1,1,1,3,4,2,100+lang,1},out;
         uint8_t b[SCRIPT_CAREER_BYTES];
         assert(scriptCareerEncode(lang,&r,b));
         assert(scriptCareerDecode(lang,b,sizeof b,&out));
         assert(out.bestScore==100+lang);
-        assert(!scriptCareerDecode((lang+1)%5,b,sizeof b,&out));
+        assert(!scriptCareerDecode((lang+1)%SCRIPT_CAREER_COUNT,b,sizeof b,&out));
         scriptCareerFinish(cfg,lang,100+lang,1,3,4,2,true);
         assert(scriptDailyCareerClaim(cfg,lang,20261127));
         assert(scriptDailyCareerFinish(cfg,lang,20261127,200+lang));
     }
     scriptCareerLoad(cfg);
-    for(unsigned lang=0;lang<5;lang++){
+    for(unsigned lang=0;lang<SCRIPT_CAREER_COUNT;lang++){
         assert(scriptCareer[lang].attempts==1&&scriptCareer[lang].bestScore==100+lang);
         assert(scriptDailyCareer[lang].results==1&&scriptDailyCareer[lang].bestScore==200+lang);
         assert(!scriptDailyCareerClaim(cfg,lang,20261127));
@@ -47,13 +52,13 @@ int main(void)
     assert(!scriptDailyCareerClaim(NULL,4,20261129));
     scriptCareerFinish(NULL,4,999,2,1,1,1,true);
     assert(scriptCareer[4].bestScore==999);
-    assert(!scriptCareerStore(cfg,5));
-    assert(!scriptDailyCareerClaim(cfg,5,20261129));
+    assert(!scriptCareerStore(cfg,SCRIPT_CAREER_COUNT));
+    assert(!scriptDailyCareerClaim(cfg,SCRIPT_CAREER_COUNT,20261129));
     assert(access(cfg,F_OK)!=0);
-    for(unsigned lang=0;lang<5;lang++)for(unsigned slot=0;slot<2;slot++){
+    for(unsigned lang=0;lang<SCRIPT_CAREER_COUNT;lang++)for(unsigned slot=0;slot<2;slot++){
         snprintf(path,sizeof path,"%s/WP%s.C%u",dir,names[lang],slot);unlink(path);
         snprintf(path,sizeof path,"%s/WP%s.D%u",dir,names[lang],slot);unlink(path);
     }
     assert(!rmdir(dir));
-    puts("CJK CAREER OK: five isolated locales, persistent records, date claims and torn-slot recovery");
+    printf("SCRIPT CAREER OK: %d isolated locales, persistent records, date claims and torn-slot recovery\n",SCRIPT_CAREER_COUNT);
 }

@@ -15,33 +15,47 @@ static const CjGlyph *glyphs;
 static unsigned glyphCount;
 static const uint16_t (*uiLabels)[15];
 static const uint8_t (*ascii8)[10];
-static bool available[3],dailyMode;
+static bool available[CJ_LOCALE_COUNT],dailyMode;
 static const char *recordPath;
 static int dailyDate;
 int cjkDailyRanked;
 static bool recorded;
 static int clipLo,clipHi;
 unsigned cjkEpoch;
-static const char *const packPaths[]={"nitro:/cjk/0.bin","nitro:/cjk/1.bin","nitro:/cjk/2.bin"};
+static const char *const packPaths[CJ_LOCALE_COUNT]={"nitro:/cjk/0.bin","nitro:/cjk/1.bin","nitro:/cjk/2.bin",
+#ifdef WP_20_MAIN
+    "nitro:/cjk/3.bin","nitro:/cjk/4.bin","nitro:/cjk/5.bin","nitro:/cjk/6.bin",
+#endif
+};
+const char *cjkLocaleName(int locale){
+    static const char *const names[CJ_LOCALE_COUNT]={"ZH-HANS","ZH-HANT","JAPANESE",
+#ifdef WP_20_MAIN
+        "KOREAN","HINDI","INDONESIAN","TURKISH",
+#endif
+    };
+    return locale>=0&&locale<CJ_LOCALE_COUNT?names[locale]:"LANGUAGE";
+}
 static unsigned rd16(const unsigned char *b){return b[0]|((unsigned)b[1]<<8);}
 static uint32_t rd32(const unsigned char *b){return rd16(b)|((uint32_t)rd16(b+2)<<16);}
 static uint32_t hash(const unsigned char *p,size_t n){
     uint32_t h=2166136261u;while(n--)h=(h^*p++)*16777619u;return h;
 }
 void cjkProbe(void){
-    for(int i=0;i<3;i++){
+    for(int i=0;i<CJ_LOCALE_COUNT;i++){
         FILE *f=fopen(packPaths[i],"rb");char magic[4];
         available[i]=f&&fread(magic,1,4,f)==4&&!memcmp(magic,"CJK1",4);
         if(f)fclose(f);
     }
 }
-bool cjkAvailable(int locale){return locale>=0&&locale<3&&available[locale];}
+bool cjkAvailable(int locale){return locale>=0&&locale<CJ_LOCALE_COUNT&&available[locale];}
 
 static u16 *surface;
 CjGame cjkGame;
 static int lang=-1, armed=-1;
 static bool peek, dirty=true, noHint=false,recoveryBlocked=false,drag,suppress,peelBlocked;
+#ifndef WP_20_MAIN
 static const uint16_t titles[3][5]={{0x7b80,0x4f53,0x4e2d,0x6587,0},{0x7e41,0x9ad4,0x4e2d,0x6587,0},{0x65e5,0x672c,0x8a9e,0,0}};
+#endif
 #define RGB(r,cjkGame,b) ((u16)(0x8000|(r)|((cjkGame)<<5)|((b)<<10)))
 #define BG RGB(2,3,5)
 #define PANEL RGB(5,7,10)
@@ -95,13 +109,38 @@ static void ascii(int x,int y,const char *s,u16 color){
 static void centered(int y,const char *s,u16 color){
     int x=128-(int)strlen(s)*4;if(x<0)x=0;ascii(x,y,s,color);
 }
+static int glyphIndex(uint16_t cp){
+    unsigned lo=0,hi=glyphCount;
+    while(lo<hi){unsigned m=(lo+hi)/2;if(glyphs[m].code<cp)lo=m+1;else hi=m;}
+    return lo<glyphCount&&glyphs[lo].code==cp?(int)lo:-1;
+}
+static bool glyphPresent(uint16_t cp){
+    int i=glyphIndex(cp);if(i<0)return false;
+    for(int r=0;r<16;r++)if(glyphs[i].rows[r])return true;
+    return false;
+}
+static bool tileCodeOK(int locale,unsigned cp){
+#ifdef WP_20_MAIN
+    if(locale==3)return cp>=0xac00&&cp<=0xd7a3;
+    if(locale==4)return cp>=0xe000&&cp<0xf000;
+    if(locale==5)return cp>='a'&&cp<='z';
+    if(locale==6)return (cp>='a'&&cp<='z')||cp==0xe7||cp==0x11f||cp==0x131||cp==0xf6||cp==0x15f||cp==0xfc||cp==0xe2||cp==0xee||cp==0xfb;
+#else
+    (void)locale;
+#endif
+    return cp>=0x3000&&cp<=0xffff&&!(cp>=0xd800&&cp<=0xdfff);
+}
 static int nativeWidth(int id){int n=0;while(uiLabels[id][n])n++;return n*16;}
 static void nativeText(int x,int y,int id,u16 color){
     for(int i=0;uiLabels[id][i];i++)glyph(lang,x+i*16,y,uiLabels[id][i],color);
 }
 static void nativeCenter(int y,int id,u16 color){nativeText(128-nativeWidth(id)/2,y,id,color);}
 static void nativeTitle(int locale,int x,int y,u16 color){
+#ifdef WP_20_MAIN
+    (void)locale;(void)x;nativeCenter(y,UI_LOCALE_TITLE,color);
+#else
     for(int i=0;i<4&&titles[locale][i];i++)glyph(locale,x+i*17,y,titles[locale][i],color);
+#endif
 }
 static void origin(int i,int *x,int *y){int c=i/CJ_ROWS,r=i%CJ_ROWS;*x=5+28*c;*y=10+25*r+((c&1)?12:0);}
 static int hit(int x,int y){
@@ -158,7 +197,7 @@ void cjkDraw(u16 *target,bool upper,int y0,int y1){
     const int lesson=cjTrainingStep(&cjkGame);
     if(upper){
     box(4,4,248,184,BG,GOLD);
-    centered(10,dailyMode?(cjkDailyRanked?"CJK DAILY SCORED":"CJK DAILY PRACTICE"):cjkGame.heatLimit?"WORDPASS - CJK CLASSIC":"WORDPASS - CJK PRACTICE",GOLD);
+    centered(10,dailyMode?(cjkDailyRanked?"DAILY SCORED":"DAILY PRACTICE"):cjkGame.heatLimit?"WORDPASS - CLASSIC":"WORDPASS - TRAINING",GOLD);
     nativeTitle(lang,96,27,TEAL);
     int found=0;for(int i=0;i<cjkGame.passLen;i++)found+=(cjkGame.foundMask>>i)&1u;
     int x=128-12*cjkGame.passLen;
@@ -277,7 +316,7 @@ bool cjkEnter(int locale,u32 initialSeed,int date,bool training,int difficulty,c
         const unsigned char *r=cjkPack+16+76*i;
         unsigned n=r[12];if(n<2||n>CJ_MAX||r[13]||!memchr(r+14,0,31)||!memchr(r+45,0,31))goto bad;
         for(unsigned j=0;j<n;j++){
-            unsigned cp=rd16(r+2*j);if(cp<0x3000||(cp>=0xd800&&cp<=0xdfff))goto bad;
+            unsigned cp=rd16(r+2*j);if(!tileCodeOK(locale,cp))goto bad;
             words[i].text[j]=(uint16_t)cp;
         }
         words[i].len=(uint8_t)n;words[i].reading=(const char *)r+14;words[i].meaning=(const char *)r+45;
@@ -285,9 +324,14 @@ bool cjkEnter(int locale,u32 initialSeed,int date,bool training,int difficulty,c
     glyphs=(const CjGlyph *)(cjkPack+16+76*count);glyphCount=ng;
     for(unsigned i=1;i<ng;i++)if(glyphs[i-1].code>=glyphs[i].code)goto bad;
     uiLabels=(const uint16_t (*)[15])(cjkPack+16+76*count+34*ng);
-    for(unsigned i=0;i<nu;i++)if(!uiLabels[i][0]||uiLabels[i][14])goto bad;
+    for(unsigned i=0;i<count;i++)for(unsigned j=0;j<words[i].len;j++)
+        if(!glyphPresent(words[i].text[j]))goto bad;
+    for(unsigned i=0;i<nu;i++){
+        if(!uiLabels[i][0]||uiLabels[i][14])goto bad;
+        for(unsigned j=0;uiLabels[i][j];j++)if(glyphIndex(uiLabels[i][j])<0)goto bad;
+    }
     ascii8=(const uint8_t (*)[10])(cjkPack+16+76*count+34*ng+30*nu);
-    lex.words=words;lex.count=(uint16_t)cjDailyVocabulary(count,date);
+    lex.words=words;lex.count=(uint16_t)(locale<3?cjDailyVocabulary(count,date):count);
     bool daily=date!=0;
     if(!cjStartMode(&cjkGame,&lex,initialSeed,training?CJ_FIRE_OFF:daily?CJ_FIRE_NORMAL:difficulty,1,0))goto bad;
     lang=locale;dailyMode=daily;dailyDate=date;recordPath=cfg;recorded=false;

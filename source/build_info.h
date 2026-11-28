@@ -7,7 +7,9 @@
 #define WP_BUILD_REV "source"
 #endif
 #define WP_BUILD_LABEL "BUILD " WP_BUILD_REV
-#if defined(WP_CJK_MAIN)
+#if defined(WP_20_MAIN)
+#define WP_BUILD_FLAVOR "20 LANG"
+#elif defined(WP_CJK_MAIN)
 #define WP_BUILD_FLAVOR "16 LANG"
 #elif defined(WP_CYR_MAIN)
 #define WP_BUILD_FLAVOR "13 LANG"
