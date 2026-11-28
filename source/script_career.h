@@ -7,7 +7,7 @@
 #include <stddef.h>
 #define SCRIPT_CAREER_BYTES 44
 #ifdef WP_CJK_MAIN
-#define SCRIPT_CAREER_COUNT 5
+#define SCRIPT_CAREER_COUNT 9
 #else
 #define SCRIPT_CAREER_COUNT 2
 #endif

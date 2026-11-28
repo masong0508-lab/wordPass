@@ -38,6 +38,9 @@ on:
       - 'source/build_info.h'
       - 'Makefile'
       - 'tools/emu/test_integrated_languages.py'
+      - 'tools/emu/test_cjk_integration.py'
+      - 'experiments/cjk/**'
+      - 'tools/check/cjk_records_test.c'
       - '.github/workflows/sourced-cyr-preview.yml'
   workflow_dispatch:
 
@@ -280,15 +283,18 @@ jobs:
           retention-days: 7
 
   cjk-assets:
-    if: github.event_name == 'workflow_dispatch' || contains(github.head_ref, '16-language')
+    if: github.event_name == 'workflow_dispatch' || contains(github.head_ref, '16-language') || contains(github.head_ref, '20-language')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Generate and test CJK assets
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-pil fonts-noto-cjk
+          sudo apt-get install -y python3-pil fonts-noto-cjk fonts-noto-core fontconfig
           /usr/bin/python3 experiments/cjk/gen_assets.py --pack-dir cjk-packs
+          /usr/bin/python3 experiments/cjk/gen_extra_assets.py --pack-dir cjk-packs
           gcc -std=c11 -O2 -Wall -Wextra -Werror -Iexperiments/cjk/source -Iexperiments/cjk/generated experiments/cjk/test_core.c experiments/cjk/source/cjk_core.c -o /tmp/cjk-test
           /tmp/cjk-test
           gcc -std=c11 -O2 -Wall -Wextra -Werror -fsanitize=address,undefined -Iexperiments/cjk/source -Iexperiments/cjk/generated experiments/cjk/test_recovery.c experiments/cjk/source/cjk_core.c -o /tmp/cjk-recovery
@@ -297,7 +303,14 @@ jobs:
           /tmp/cjk-fire
           gcc -std=c11 -O2 -Wall -Wextra -Werror -DCJ_HINT_TEST -Iexperiments/cjk/source -Iexperiments/cjk/generated experiments/cjk/test_optimization.c experiments/cjk/source/cjk_core.c -o /tmp/cjk-optimization
           /tmp/cjk-optimization
+          gcc -std=c11 -O2 -Wall -Wextra -Werror -DWP_EXTRA_WORDS -Iexperiments/cjk/source -Iexperiments/cjk/generated experiments/cjk/test_core.c experiments/cjk/source/cjk_core.c -o /tmp/extra-core
+          /tmp/extra-core
+          gcc -std=c11 -O2 -Wall -Wextra -Werror -DWP_EXTRA_WORDS -Iexperiments/cjk/source -Iexperiments/cjk/generated experiments/cjk/test_recovery.c experiments/cjk/source/cjk_core.c -o /tmp/extra-recovery
+          /tmp/extra-recovery
+          gcc -std=gnu11 -O2 -Wall -Wextra -Werror -DWP_CJK_MAIN -Isource tools/check/cjk_records_test.c source/script_career.c source/script_daily.c -o /tmp/extra-records
+          /tmp/extra-records
           cp /usr/share/doc/fonts-noto-cjk/copyright cjk-packs/FONT-NOTICE.txt
+          cp /usr/share/doc/fonts-noto-core/copyright cjk-packs/FONT-NOTO-CORE-NOTICE.txt
       - uses: actions/upload-artifact@v7
         with:
           name: wordPass-CJK-integration-assets
@@ -308,6 +321,8 @@ jobs:
     container: devkitpro/devkitarm:20240511
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/download-artifact@v7
         with:
           name: wordPass-ru-uk-sourced-lexicons
@@ -316,11 +331,11 @@ jobs:
         with:
           name: wordPass-CJK-integration-assets
           path: cjk-packs
-      - name: Build combined 16-language candidate
+      - name: Build combined 20-language candidate
         run: |
           make clean
           make WP_CJK_MAIN=1 CYR_EXTERNAL_DIR=sourced-preview CJK_ASSETS_DIR=cjk-packs
-          test "$(find nitrofiles/cjk -name '*.bin' | wc -l)" -eq 3
+          test "$(find nitrofiles/cjk -name '*.bin' | wc -l)" -eq 7
           python3 tools/check/rom_budget.py --rom wordPass.nds --elf wordPass.elf --mode preview --preview-root nitrofiles/cyrpreview --nm "$DEVKITARM/bin/arm-none-eabi-nm" --forbid-float-printf --output build/rom-budget-integrated.json
           python3 - <<'PY'
           import json
@@ -331,17 +346,20 @@ jobs:
               assert budget["linker_heap_span_bytes"]-p.stat().st_size-24*n >= 65536
           PY
           sha256sum wordPass.nds > wordPass.nds.sha256
+          git rev-parse HEAD > wordPass.commit
       - uses: actions/upload-artifact@v7
         with:
-          name: wordPass-16-language-main-candidate
+          name: wordPass-20-language-main-candidate
           path: |
             wordPass.nds
             wordPass.elf
             wordPass.nds.sha256
+            wordPass.commit
             build/rom-budget-integrated.json
             sourced-preview/ru/LICENSE-SOURCE.txt
             sourced-preview/uk/LICENSE-SOURCE.txt
             cjk-packs/FONT-NOTICE.txt
+            cjk-packs/FONT-NOTO-CORE-NOTICE.txt
   cjk-integrated-emulator:
     needs: cjk-integrated-rom
     runs-on: ubuntu-latest
@@ -350,17 +368,22 @@ jobs:
       SDL_AUDIODRIVER: dummy
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/download-artifact@v7
         with:
-          name: wordPass-16-language-main-candidate
+          name: wordPass-20-language-main-candidate
           path: .
       - run: python3 -m pip install py-desmume pillow numpy
       - name: Existing integrated language regression
-        run: python3 tools/emu/test_integrated_languages.py wordPass.nds wordPass.elf cjk-regression
-      - name: Play all three new language choices
+        run: |
+          sha256sum -c wordPass.nds.sha256
+          test "$(cat wordPass.commit)" = "$(git rev-parse HEAD)"
+          python3 tools/emu/test_integrated_languages.py wordPass.nds wordPass.elf cjk-regression
+      - name: Play all seven native-tile language choices
         run: python3 tools/emu/test_cjk_integration.py wordPass.nds wordPass.elf cjk-screens
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: wordPass-16-language-screens
+          name: wordPass-20-language-screens
           path: cjk-screens/

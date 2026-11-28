@@ -133,7 +133,7 @@ $(BUILD):
 	        python3 tools/lang/install_cyr_preview.py --input-root "$(CYR_EXTERNAL_DIR)" --output-root "$(NITRO)/cyrpreview"; \
 	    else python3 tools/lang/build_preview.py $(NITRO)/cyrpreview; fi; \
 	else rm -rf $(NITRO)/cyrpreview; fi
-	@if [ "$(WP_CJK_MAIN)" = "1" ]; then mkdir -p $(NITRO)/cjk; cp "$(CJK_ASSETS_DIR)"/[012].bin $(NITRO)/cjk/; else rm -rf $(NITRO)/cjk; fi
+	@if [ "$(WP_CJK_MAIN)" = "1" ]; then rm -rf $(NITRO)/cjk; mkdir -p $(NITRO)/cjk; cp "$(CJK_ASSETS_DIR)"/[0-6].bin $(NITRO)/cjk/; else rm -rf $(NITRO)/cjk; fi
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
 # Regenerate the dictionary from a word list, marking COMMON words as the common tier:

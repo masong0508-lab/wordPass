@@ -1668,7 +1668,7 @@ static void drawTopTitle(void)
             drawTextCenter(128,160,"B / TAP: BACK",ACCENT,1);
             return;
         }
-        drawTextCenter(128,58,"CJK CLASSIC BETA",GOLD_LT,1);
+        drawTextCenter(128,58,"LANGUAGE CLASSIC BETA",GOLD_LT,1);
         drawTextCenter(128,85,"CONNECT TWO OR MORE CHARACTERS",WHITE,1);
         drawTextCenter(128,108,"WORDS REVEAL PASSWORD CLUES",ACCENT,1);
         drawTextCenter(128,130,"ONE SCORED DAILY PER DATE",INK,1);
@@ -3648,7 +3648,7 @@ static const char *menuLanguageName(void)
     if (S.language==LANG_RU) return "РУССКИЙ";
     if (S.language==LANG_UK) return "УКРАЇНСЬКА";
 #ifdef WP_CJK_MAIN
-    if(cjkMenu())return S.language==LANG_JA?"JAPANESE":S.language==LANG_ZH_HANS?"ZH-HANS":"ZH-HANT";
+    if(cjkMenu())return cjkLocaleName(S.language-LANG_ZH_HANS);
 #endif
 #endif
     return langName(langCur());
@@ -3658,7 +3658,7 @@ static const char *menuLabel(int id)
 #ifdef WP_CJK_MAIN
     if(cjkMenu()){
         if(id==UI_T_CLASSIC)return "CLASSIC";
-        if(id==UI_TR_START)return "CJK PRACTICE (L+A)";
+        if(id==UI_TR_START)return "PRACTICE (L+A)";
         if(id==UI_T_NEWHERE)return "START WITH PRACTICE";
     }
 #endif
@@ -4301,9 +4301,9 @@ static void drawPauseCard(const Game *g)
 int gfxLangPickRowAt(int x, int y)
 {
 #ifdef WP_CJK_MAIN
-    if(x>=174&&x<252&&y>=28&&y<148){
-        int r=(y-28)/40;
-        if((y-28)%40<35)return LANG_ZH_HANS+r;
+    if(x>=174&&x<252&&y>=23&&y<23+23*CJ_LOCALES){
+        int r=(y-23)/23;
+        if((y-23)%23<22)return LANG_ZH_HANS+r;
     }
 #endif
     if (x < 12 || x >= 160 || y < PICK_Y0) return -1;
@@ -4347,15 +4347,17 @@ static void drawLangPick(const Game *g)
 #ifdef WP_CYR_MAIN
     drawTextCenter(86,181,g->msgTimer>0?g->msg:"RU/UK BETA",g->msgTimer>0?FIRE2:DIM_TEXT,1);
 #ifdef WP_CJK_MAIN
-    drawTextCenter(213,12,"CJK BETA",GOLD_LT,1);
-    for(int i=0;i<3;i++){
-        int y=28+i*40;bool on=g->langPick==LANG_ZH_HANS+i;
+    drawTextCenter(213,12,"LANG BETA",GOLD_LT,1);
+    static const char *const names[CJ_LOCALES]={"CHINESE","CHINESE","JAPANESE","KOREAN","HINDI","GREEK","TURKISH"};
+    static const char *const scripts[CJ_LOCALES]={"SIMPLIFIED","TRADITIONAL","KANA/KANJI","HANGUL","DEVANAGARI","ELLINIKA","TURKCE"};
+    for(int i=0;i<CJ_LOCALES;i++){
+        int y=23+i*23;bool on=g->langPick==LANG_ZH_HANS+i;
         u16 fg=cjkAvailable(i)?WHITE:DIM_TEXT;
-        fillRect(174,y,78,35,on?DIM:BLACK);
-        rectOutline(174,y,78,35,on?GOLD_LT:ACCENT);
-        drawTextCenter(213,y+5,i==2?"JAPANESE":"CHINESE",fg,1);
-        drawTextCenter(213,y+17,i==0?"SIMPLIFIED":i==1?"TRADITIONAL":"KANA/KANJI",fg,1);
-        if(S.language==LANG_ZH_HANS+i)drawChar(176,y+27,'*',GOLD_LT,1);
+        fillRect(174,y,78,22,on?DIM:BLACK);
+        rectOutline(174,y,78,22,on?GOLD_LT:ACCENT);
+        drawTextCenter(213,y+2,names[i],fg,1);
+        drawTextCenter(213,y+12,scripts[i],fg,1);
+        if(S.language==LANG_ZH_HANS+i)drawChar(176,y+2,'*',GOLD_LT,1);
     }
 #endif
 #else
