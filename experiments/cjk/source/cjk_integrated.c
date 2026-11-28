@@ -15,27 +15,32 @@ static const CjGlyph *glyphs;
 static unsigned glyphCount;
 static const uint16_t (*uiLabels)[15];
 static const uint8_t (*ascii8)[10];
-static bool available[3],dailyMode;
+static bool available[CJ_LOCALES],dailyMode;
 static const char *recordPath;
 static int dailyDate;
 int cjkDailyRanked;
 static bool recorded;
 static int clipLo,clipHi;
 unsigned cjkEpoch;
-static const char *const packPaths[]={"nitro:/cjk/0.bin","nitro:/cjk/1.bin","nitro:/cjk/2.bin"};
+static const char *const packPaths[CJ_LOCALES]={"nitro:/cjk/0.bin","nitro:/cjk/1.bin","nitro:/cjk/2.bin",
+    "nitro:/cjk/3.bin","nitro:/cjk/4.bin","nitro:/cjk/5.bin","nitro:/cjk/6.bin"};
+const char *cjkLocaleName(int locale){
+    static const char *const names[CJ_LOCALES]={"ZH-HANS","ZH-HANT","JAPANESE","KOREAN","HINDI","GREEK","TURKISH"};
+    return locale>=0&&locale<CJ_LOCALES?names[locale]:"LANGUAGE";
+}
 static unsigned rd16(const unsigned char *b){return b[0]|((unsigned)b[1]<<8);}
 static uint32_t rd32(const unsigned char *b){return rd16(b)|((uint32_t)rd16(b+2)<<16);}
 static uint32_t hash(const unsigned char *p,size_t n){
     uint32_t h=2166136261u;while(n--)h=(h^*p++)*16777619u;return h;
 }
 void cjkProbe(void){
-    for(int i=0;i<3;i++){
+    for(int i=0;i<CJ_LOCALES;i++){
         FILE *f=fopen(packPaths[i],"rb");char magic[4];
         available[i]=f&&fread(magic,1,4,f)==4&&!memcmp(magic,"CJK1",4);
         if(f)fclose(f);
     }
 }
-bool cjkAvailable(int locale){return locale>=0&&locale<3&&available[locale];}
+bool cjkAvailable(int locale){return locale>=0&&locale<CJ_LOCALES&&available[locale];}
 
 static u16 *surface;
 CjGame cjkGame;
@@ -95,9 +100,13 @@ static void ascii(int x,int y,const char *s,u16 color){
 static void centered(int y,const char *s,u16 color){
     int x=128-(int)strlen(s)*4;if(x<0)x=0;ascii(x,y,s,color);
 }
-static int nativeWidth(int id){int n=0;while(uiLabels[id][n])n++;return n*16;}
+// Greek and Turkish glyphs are rasterized into at most 12 pixels of ink.
+// Retain original spacing for Han, kana, Hangul and shaped Hindi tiles.
+static int nativeStep(void){return lang>=5?12:16;}
+static int nativeWidth(int id){int n=0;while(uiLabels[id][n])n++;return n*nativeStep();}
 static void nativeText(int x,int y,int id,u16 color){
-    for(int i=0;uiLabels[id][i];i++)glyph(lang,x+i*16,y,uiLabels[id][i],color);
+    int step=nativeStep();
+    for(int i=0;uiLabels[id][i];i++)glyph(lang,x+i*step-(16-step)/2,y,uiLabels[id][i],color);
 }
 static void nativeCenter(int y,int id,u16 color){nativeText(128-nativeWidth(id)/2,y,id,color);}
 static void nativeTitle(int locale,int x,int y,u16 color){
@@ -112,7 +121,7 @@ static int selectionOrder(int i){for(int k=0;k<cjkGame.len;k++)if(cjkGame.chain[
 static void button(int y,int id,u16 col){
     box(178,y,74,24,PANEL,col);nativeText(215-nativeWidth(id)/2,y+4,id,col);
 }
-// RU/UK remain record IDs 0/1. CJK IDs 2/3/4 use different files.
+// RU/UK remain record IDs 0/1; original CJK IDs 2/3/4 and new IDs 5..8 are independent.
 static unsigned recordLanguage(void){return (unsigned)(lang+2);}
 static void finishRecord(bool leaving){
     if(lang<0||!cjkGame.lex||!cjkGame.heatLimit||recorded)return;
@@ -158,8 +167,8 @@ void cjkDraw(u16 *target,bool upper,int y0,int y1){
     const int lesson=cjTrainingStep(&cjkGame);
     if(upper){
     box(4,4,248,184,BG,GOLD);
-    centered(10,dailyMode?(cjkDailyRanked?"CJK DAILY SCORED":"CJK DAILY PRACTICE"):cjkGame.heatLimit?"WORDPASS - CJK CLASSIC":"WORDPASS - CJK PRACTICE",GOLD);
-    nativeTitle(lang,96,27,TEAL);
+    centered(10,dailyMode?(cjkDailyRanked?"DAILY SCORED":"DAILY PRACTICE"):cjkGame.heatLimit?"WORDPASS - CLASSIC":"WORDPASS - PRACTICE",GOLD);
+    if(lang<3)nativeTitle(lang,96,27,TEAL);else centered(30,cjkLocaleName(lang),TEAL);
     int found=0;for(int i=0;i<cjkGame.passLen;i++)found+=(cjkGame.foundMask>>i)&1u;
     int x=128-12*cjkGame.passLen;
     for(int i=0;i<cjkGame.passLen;i++){
@@ -277,7 +286,7 @@ bool cjkEnter(int locale,u32 initialSeed,int date,bool training,int difficulty,c
         const unsigned char *r=cjkPack+16+76*i;
         unsigned n=r[12];if(n<2||n>CJ_MAX||r[13]||!memchr(r+14,0,31)||!memchr(r+45,0,31))goto bad;
         for(unsigned j=0;j<n;j++){
-            unsigned cp=rd16(r+2*j);if(cp<0x3000||(cp>=0xd800&&cp<=0xdfff))goto bad;
+            unsigned cp=rd16(r+2*j);if(cp<0x3000||(cp>=0xd800&&cp<=0xdfff)||(locale>=3&&(cp<0xe000||cp>=0xe400)))goto bad;
             words[i].text[j]=(uint16_t)cp;
         }
         words[i].len=(uint8_t)n;words[i].reading=(const char *)r+14;words[i].meaning=(const char *)r+45;
@@ -286,8 +295,18 @@ bool cjkEnter(int locale,u32 initialSeed,int date,bool training,int difficulty,c
     for(unsigned i=1;i<ng;i++)if(glyphs[i-1].code>=glyphs[i].code)goto bad;
     uiLabels=(const uint16_t (*)[15])(cjkPack+16+76*count+34*ng);
     for(unsigned i=0;i<nu;i++)if(!uiLabels[i][0]||uiLabels[i][14])goto bad;
+    // Check every referenced tile ID against the sorted atlas before play.
+    for(unsigned i=0;i<count+nu;i++){
+        const uint16_t *codes=i<count?words[i].text:uiLabels[i-count];
+        unsigned n=i<count?words[i].len:14;
+        for(unsigned j=0;j<n&&codes[j];j++){
+            unsigned lo=0,hi=ng;
+            while(lo<hi){unsigned m=(lo+hi)/2;if(glyphs[m].code<codes[j])lo=m+1;else hi=m;}
+            if(lo==ng||glyphs[lo].code!=codes[j])goto bad;
+        }
+    }
     ascii8=(const uint8_t (*)[10])(cjkPack+16+76*count+34*ng+30*nu);
-    lex.words=words;lex.count=(uint16_t)cjDailyVocabulary(count,date);
+    lex.words=words;lex.count=(uint16_t)(locale<3?cjDailyVocabulary(count,date):count);
     bool daily=date!=0;
     if(!cjStartMode(&cjkGame,&lex,initialSeed,training?CJ_FIRE_OFF:daily?CJ_FIRE_NORMAL:difficulty,1,0))goto bad;
     lang=locale;dailyMode=daily;dailyDate=date;recordPath=cfg;recorded=false;

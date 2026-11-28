@@ -59,7 +59,7 @@ static bool pathFor(const char *cfg,unsigned lang,unsigned slot,char kind,char p
     char leaf[]="WPRU.C0";
     static const char suffix[SCRIPT_CAREER_COUNT][2]={{'R','U'},{'U','K'},
 #ifdef WP_CJK_MAIN
-        {'Z','S'},{'Z','T'},{'J','A'},
+        {'Z','S'},{'Z','T'},{'J','A'},{'K','O'},{'H','I'},{'E','L'},{'T','R'},
 #endif
     };
     leaf[2]=suffix[lang][0];leaf[3]=suffix[lang][1];

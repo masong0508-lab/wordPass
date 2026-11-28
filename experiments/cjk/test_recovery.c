@@ -1,12 +1,16 @@
 #include "cjk_core.h"
+#ifdef WP_EXTRA_WORDS
+#include "extra_words_generated.h"
+#else
 #include "words_generated.h"
+#endif
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
 extern bool cjRecover(CjGame *g);
 int main(void){
     unsigned tested=0;
-    for(int lang=0;lang<3;lang++){
+    for(int lang=0;lang<(int)(sizeof lexicons/sizeof lexicons[0]);lang++){
         const CjLexicon *lex=&lexicons[lang];
         for(unsigned seed=1;seed<=128;seed++){
             CjGame g,before,repeat;

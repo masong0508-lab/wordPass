@@ -34,13 +34,13 @@ def main(rom,elf,output):
     def select(i):
         if e.state()["state"]==0:e.tap(55,14,settle=12)
         wait(8)
-        if i>=13:e.tap(213,28+40*(i-13)+12,settle=12)
+        if i>=13:e.tap(213,23+23*(i-13)+10,settle=12)
         else:e.tap(80,23+i*12+5,settle=12)
         wait(0)
         assert int(e.mem.unsigned[symbol(elf,"S")+so["language"]])==i
     wait(8)
     expected={}
-    for i in range(13,16):
+    for i in range(13,20):
         lang=i-11
         assert records("scriptCareer",lang)==(0,)*8
         select(i);e.tap(52,147,settle=18);wait(10)
@@ -141,13 +141,13 @@ def main(rom,elf,output):
     for lang,(career,daily) in expected.items():
         assert records("scriptCareer",lang)==career
         actual=records("scriptDailyCareer",lang)
-        if lang==4:
+        if lang==8:
             assert actual[1]==20261128 and actual[2:]==daily[2:]
         else:assert actual==daily
     e.set_clock(20261128);e.tap(120,147,settle=18);wait(10)
     assert ranked()==0
     e.press("B",settle=12);wait(0)
-    assert int(e.mem.unsigned[symbol(elf,"S")+so["language"]])==15
+    assert int(e.mem.unsigned[symbol(elf,"S")+so["language"]])==19
     select(0);e.tap(52,147,settle=18);wait(1)
-    print("CJK INTEGRATION OK: words, peels, fire, retry, progression, training, five independent careers, ranked Daily reservation, replay and reboot")
+    print("CJK INTEGRATION OK: words, peels, fire, retry, progression, training, nine independent careers, ranked Daily reservation, replay and reboot")
 if __name__=="__main__":main(*sys.argv[1:])

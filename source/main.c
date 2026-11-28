@@ -362,11 +362,11 @@ static void startSelectedGame(int mode,bool training,u32 seed)
             seed=(u32)G.dailySeed;
         }
         (void)langLoad(LANG_EN);
-        gfxLoading(idx==LANG_JA?"JAPANESE":"CHINESE");
+        gfxLoading(cjkLocaleName(idx-LANG_ZH_HANS));
         if(cjkEnter(idx-LANG_ZH_HANS,seed,mode==MODE_DAILY?G.dailySeed:0,training,S.fire,
                     settingsPersistent()?settingsCfgPath():NULL)){
             G.state=ST_CJK_PLAY;G.mode=mode;G.training=0;
-        }else setMsg("CJK PACK LOAD FAILED",180);
+        }else setMsg("LANGUAGE PACK LOAD FAILED",180);
         return;
     }
 #endif

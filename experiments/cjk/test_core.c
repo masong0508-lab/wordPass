@@ -1,13 +1,21 @@
 #include "cjk_core.h"
+#ifdef WP_EXTRA_WORDS
+#include "extra_words_generated.h"
+#else
 #include "words_generated.h"
+#endif
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
 int main(void){
     unsigned boards=0;
-    for(int lang=0;lang<3;lang++){
+    for(int lang=0;lang<(int)(sizeof lexicons/sizeof lexicons[0]);lang++){
         const CjLexicon *lex=&lexicons[lang];
+        #ifdef WP_EXTRA_WORDS
+        assert(lex->count>=64);
+#else
         assert(lex->count>=252);
+#endif
         for(unsigned i=0;i<lex->count;i++){
             const CjWord *w=&lex->words[i];
             assert(cjLookup(lex,w->text,w->len)==(int)i);
