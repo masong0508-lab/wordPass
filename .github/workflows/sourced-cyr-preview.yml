@@ -406,6 +406,7 @@ jobs:
           make clean
           make WP_20_MAIN=1 CYR_EXTERNAL_DIR=sourced-preview CJK_ASSETS_DIR=twenty-packs
           test "$(find nitrofiles/cjk -name '*.bin' | wc -l)" -eq 7
+          python3 tools/check/audit_rom_languages.py wordPass.nds wordPass.elf --nm "$DEVKITARM/bin/arm-none-eabi-nm" --expected 20 --output build/language-packed-audit.json
           python3 tools/check/rom_budget.py --rom wordPass.nds --elf wordPass.elf --mode preview --preview-root nitrofiles/cyrpreview --nm "$DEVKITARM/bin/arm-none-eabi-nm" --forbid-float-printf --output build/rom-budget-integrated.json
           sha256sum wordPass.nds > wordPass.nds.sha256
       - uses: actions/upload-artifact@v7
@@ -420,6 +421,7 @@ jobs:
             sourced-preview/uk/LICENSE-SOURCE.txt
             twenty-packs/*NOTICE.txt
             twenty-packs/EXTENDED-MANIFEST.json
+            build/language-packed-audit.json
   twenty-emulator:
     needs: twenty-rom
     runs-on: ubuntu-latest

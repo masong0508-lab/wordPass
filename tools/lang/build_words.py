@@ -155,7 +155,7 @@ def build(code, raw, work, cap=CAP):
             continue
         if not any(c in vowels for c in w) or re.search(r"(.)\1\1", w):
             continue
-        if "q" in w and "qu" not in w:
+        if "q" in w.replace("qu", ""):
             continue
         final[w] = n
     ranked = sorted(final, key=lambda w: (-final[w], w))

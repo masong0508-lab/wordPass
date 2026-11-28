@@ -45,7 +45,7 @@ def read_words(src):
             w = line.strip().lower()
             if w.isalpha() and w.isascii() and MIN_LEN <= len(w) <= MAX_LEN:
                 # Qu tiles: a lone q followed by anything but u can never be spelled.
-                if "q" in w and "qu" not in w:
+                if "q" in w.replace("qu", ""):
                     continue
                 words.add(w)
     return words

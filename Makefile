@@ -132,6 +132,7 @@ endif
 $(BUILD):
 	@mkdir -p $@
 	@if [ -n "$(strip $(NITRO))" ]; then rm -rf $(NITRO)/lang && mkdir -p $(NITRO)/lang && cp -r data/lang/. $(NITRO)/lang/ && rm -f $(NITRO)/lang/manifest.txt $(NITRO)/lang/NOTICE; fi
+	@if [ -n "$(strip $(NITRO))" ]; then python3 tools/lang/sanitize_retail.py $(NITRO)/lang; fi
 	@if [ "$(WP_CYR_PREVIEW)" = "1" ]; then \
 	    if [ -n "$(strip $(CYR_EXTERNAL_DIR))" ]; then \
 	        python3 tools/lang/install_cyr_preview.py --input-root "$(CYR_EXTERNAL_DIR)" --output-root "$(NITRO)/cyrpreview"; \
@@ -185,6 +186,7 @@ check:
 	gcc -std=gnu11 -O2 -Wall -Wextra -Wshadow -I source tools/check/script_board_test.c source/script_board.c source/tiles_v2.c source/dict_v4.c source/pools_v2.c -o $(BUILD)/script_board_check
 	$(BUILD)/script_board_check $(BUILD)/wpd4_ru.bin $(BUILD)/wpd4_uk.bin $(BUILD)/wpl2_ru.bin $(BUILD)/wpl2_uk.bin
 	python3 tools/lang/pools_v2.py --selftest $(BUILD)
+	python3 tools/lang/sanitize_retail.py --selftest
 	python3 tools/lang/check_cyr_seeds.py
 	python3 tools/lang/audit_sourced_cyr.py --out $(BUILD)/cyr-editorial-preview
 	python3 tools/lang/fetch_cyr_upstream.py --selftest
