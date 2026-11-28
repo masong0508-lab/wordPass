@@ -2,6 +2,12 @@
 #define WORDPASS_CJK_INTEGRATED_H
 #include <nds.h>
 #include <stdbool.h>
+#ifdef WP_20_MAIN
+#define CJ_LOCALE_COUNT 7
+#else
+#define CJ_LOCALE_COUNT 3
+#endif
+const char *cjkLocaleName(int locale);
 void cjkProbe(void);
 bool cjkAvailable(int locale);
 bool cjkEnter(int locale,u32 seed,int dailyDate,bool training,int difficulty,const char *cfg);

@@ -483,6 +483,9 @@ enum { LANG_EN = 0, LANG_ES, LANG_FR, LANG_DE, LANG_IT, LANG_PT, LANG_NL, LANG_S
 enum { LANG_RU = LANG_COUNT, LANG_UK,
 #ifdef WP_CJK_MAIN
        LANG_ZH_HANS, LANG_ZH_HANT, LANG_JA,
+#ifdef WP_20_MAIN
+       LANG_KO, LANG_HI, LANG_ID, LANG_TR,
+#endif
 #endif
        LANG_PICK_COUNT };
 #else
